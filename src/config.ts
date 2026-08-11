@@ -7,10 +7,14 @@ export const LIST_TAG = "picture-badges-list";
 export const FORM_TAG = "picture-badge-form";
 export const CARD_TYPE = "custom:picture-badges";
 
-/** One placed badge: opaque content plus the position we own. */
-export interface PictureBadgeItem {
-  badge: BadgeConfig;
+/**
+ * One placed item. The `type` discriminant is "badge" today; a second variant
+ * (e.g. "element") can be added later without restructuring.
+ */
+export interface PictureItem {
+  type: "badge";
   position: Position;
+  config: BadgeConfig;
 }
 
 export interface PictureBadgesConfig {
@@ -24,7 +28,7 @@ export interface PictureBadgesConfig {
   aspect_ratio?: string;
   filter?: string;
   fit_mode?: "cover" | "contain" | "fill";
-  badges: PictureBadgeItem[];
+  items: PictureItem[];
 }
 
 const STUB_IMAGE = "https://demo.home-assistant.io/stub_config/floorplan.png";
@@ -42,31 +46,58 @@ const normalisePosition = (raw: unknown): Position => {
 /**
  * Validate and fill in defaults. Returns a fresh object: the config handed to
  * setConfig is frozen by Home Assistant and must never be mutated.
+ *
+ * Migration: a config with `badges[]` and no `items[]` is converted on read.
+ * When both are present, `items` wins and `badges` is dropped.
  */
 export const normaliseConfig = (raw: unknown): PictureBadgesConfig => {
   if (!isRecord(raw)) {
     throw new Error("picture-badges: config must be an object");
   }
-  const rawBadges = raw.badges ?? [];
-  if (!Array.isArray(rawBadges)) {
-    throw new Error("picture-badges: `badges` must be a list");
+
+  // Prefer `items` when present (even if falsy); fall back to legacy `badges`.
+  const rawItems = "items" in raw ? raw.items : (raw.badges ?? []);
+  if (!Array.isArray(rawItems)) {
+    throw new Error("picture-badges: `items` must be a list");
   }
 
-  const badges = rawBadges.map((entry, index) => {
-    if (!isRecord(entry) || !isRecord(entry.badge)) {
-      throw new Error(`picture-badges: badges[${index}] must have a \`badge\` object`);
+  const items = rawItems.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(`picture-badges: items[${index}] must be an object`);
     }
+
+    // Default a missing `type` to "badge"; any other value is an error.
+    const type = entry.type ?? "badge";
+    if (type !== "badge") {
+      throw new Error(`picture-badges: items[${index}] has unsupported type "${String(type)}"`);
+    }
+
+    // New shape: config under `config`. Legacy shape: config under `badge`.
+    const config = isRecord(entry.config)
+      ? entry.config
+      : isRecord(entry.badge)
+        ? entry.badge
+        : null;
+    if (config === null) {
+      throw new Error(`picture-badges: items[${index}] must have a \`config\` object`);
+    }
+
     return {
-      badge: entry.badge as BadgeConfig,
+      type: "badge" as const,
+      config: config as BadgeConfig,
       position: normalisePosition(entry.position),
     };
   });
 
-  return { ...(raw as Omit<PictureBadgesConfig, "badges">), badges };
+  // Build a clean base: strip the legacy `badges` key and the raw `items` key
+  // (we add back the normalised items below). Never mutates the input.
+  const base = { ...(raw as Record<string, unknown>) };
+  delete base.badges;
+  return { ...base, items } as PictureBadgesConfig;
 };
 
 export const stubConfig = (): PictureBadgesConfig => ({
   type: CARD_TYPE,
   image: STUB_IMAGE,
-  badges: [],
+  items: [],
 });

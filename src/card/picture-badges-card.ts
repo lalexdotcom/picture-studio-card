@@ -3,8 +3,8 @@ import { activeEditor, subscribeEditors } from "../broker";
 import {
   EDITOR_TAG,
   normaliseConfig,
-  type PictureBadgeItem,
   type PictureBadgesConfig,
+  type PictureItem,
   stubConfig,
 } from "../config";
 import { positionStyle } from "../position";
@@ -140,10 +140,10 @@ export class PictureBadgesCard extends LitElement {
    */
   private async _syncBadges(): Promise<void> {
     const layer = this._layer;
-    const items = this._config?.badges ?? [];
+    const items = this._config?.items ?? [];
     if (!layer) return;
 
-    const types = items.map((item) => String(item.badge.type ?? ""));
+    const types = items.map((item) => String(item.config.type ?? ""));
     const sameShape =
       types.length === this._renderedTypes.length &&
       types.every((t, i) => t === this._renderedTypes[i]);
@@ -159,7 +159,7 @@ export class PictureBadgesCard extends LitElement {
         wrapper.className = "item";
         wrapper.dataset.index = String(index);
 
-        const badge = helpers.createBadgeElement(item.badge);
+        const badge = helpers.createBadgeElement(item.config);
         if (this._hass) badge.hass = this._hass;
         wrapper.append(badge);
         layer.append(wrapper);
@@ -172,7 +172,7 @@ export class PictureBadgesCard extends LitElement {
       items.forEach((item, index) => {
         const badge = this._elements[index];
         if (!badge) return;
-        badge.setConfig(item.badge);
+        badge.setConfig(item.config);
         if (this._hass) badge.hass = this._hass;
       });
     }
@@ -180,7 +180,7 @@ export class PictureBadgesCard extends LitElement {
     this._applyPositions(items);
   }
 
-  private _applyPositions(items: PictureBadgeItem[]): void {
+  private _applyPositions(items: PictureItem[]): void {
     const dragging = this._drag.draggingIndex();
     items.forEach((item, index) => {
       // Leave the badge under the cursor alone: its styles are live pixels

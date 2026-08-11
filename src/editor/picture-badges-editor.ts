@@ -55,8 +55,8 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
   patchPosition(index: number, position: Position): void {
     const config = this._config;
     if (!config) return;
-    const badges = config.badges.map((item, i) => (i === index ? { ...item, position } : item));
-    this._commit({ ...config, badges });
+    const items = config.items.map((item, i) => (i === index ? { ...item, position } : item));
+    this._commit({ ...config, items });
   }
 
   /** Convergence point: drag, dialogs and forms all end here. */
@@ -87,10 +87,10 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config || !this.hass) return;
     const badge = await stubBadgeConfig(ev.detail.type, this.hass);
-    this._commit({ ...config, badges: addItem(config.badges, badge) });
+    this._commit({ ...config, items: addItem(config.items, badge) });
     // Open the new badge's form straight away: a stub config is rarely usable
     // as-is, and this is what the native picker does after a pick.
-    this._editingIndex = config.badges.length;
+    this._editingIndex = config.items.length;
   };
 
   private _editBadge = (ev: CustomEvent<{ index: number }>): void => {
@@ -103,7 +103,7 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
     if (!config || this._editingIndex === undefined) return;
     this._commit({
       ...config,
-      badges: replaceBadge(config.badges, this._editingIndex, ev.detail.badge),
+      items: replaceBadge(config.items, this._editingIndex, ev.detail.badge),
     });
   };
 
@@ -112,14 +112,14 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
     if (!config) return;
     this._commit({
       ...config,
-      badges: moveItem(config.badges, ev.detail.oldIndex, ev.detail.newIndex),
+      items: moveItem(config.items, ev.detail.oldIndex, ev.detail.newIndex),
     });
   };
 
   private _removeBadge = (ev: CustomEvent<{ index: number }>): void => {
     const config = this._config;
     if (!config) return;
-    this._commit({ ...config, badges: removeItem(config.badges, ev.detail.index) });
+    this._commit({ ...config, items: removeItem(config.items, ev.detail.index) });
     this._editingIndex = undefined;
   };
 
@@ -127,14 +127,13 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config || !this.hass) return nothing;
 
-    const editing =
-      this._editingIndex !== undefined ? config.badges[this._editingIndex] : undefined;
+    const editing = this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
 
     if (editing) {
       return html`
         <picture-badge-form
           .hass=${this.hass}
-          .badge=${editing.badge}
+          .badge=${editing.config}
           @badge-changed=${this._badgeChanged}
           @go-back=${() => {
             this._editingIndex = undefined;
@@ -153,7 +152,7 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
       ></ha-form>
       <picture-badges-list
         .hass=${this.hass}
-        .items=${config.badges}
+        .items=${config.items}
         @item-add=${this._addBadge}
         @item-edit=${this._editBadge}
         @item-moved=${this._moveBadge}

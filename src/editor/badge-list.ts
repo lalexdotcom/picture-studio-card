@@ -1,6 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import type { PictureBadgeItem } from "../config";
+import type { PictureItem } from "../config";
 import type { HomeAssistant } from "../types";
 import { type BadgeChoice, badgeCatalog } from "./badge-catalog";
 
@@ -12,9 +12,9 @@ const PENCIL_PATH =
 const TRASH_PATH =
   "M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z";
 
-const label = (item: PictureBadgeItem): string => {
-  const badge = item.badge as { entity?: string; type?: string; name?: string };
-  return badge.name ?? badge.entity ?? badge.type ?? "badge";
+const label = (item: PictureItem): string => {
+  const config = item.config as { entity?: string; type?: string; name?: string };
+  return config.name ?? config.entity ?? config.type ?? "badge";
 };
 
 const choiceLabel = (choice: BadgeChoice): string => choice.name ?? choice.type;
@@ -26,7 +26,7 @@ export class PictureBadgesList extends LitElement {
   };
 
   declare hass?: HomeAssistant;
-  declare items: PictureBadgeItem[];
+  declare items: PictureItem[];
 
   constructor() {
     super();

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "@rstest/core";
-import type { PictureBadgeItem } from "../config";
+import type { PictureItem } from "../config";
 import { addItem, moveItem, removeItem, replaceBadge } from "./badge-items";
 
-const item = (entity: string, top: number, left: number): PictureBadgeItem => ({
-  badge: { type: "entity", entity },
+const item = (entity: string, top: number, left: number): PictureItem => ({
+  type: "badge",
+  config: { type: "entity", entity },
   position: { top, left },
 });
 
@@ -12,7 +13,7 @@ describe("addItem", () => {
     const out = addItem([item("light.a", 10, 20)], { type: "entity", entity: "light.b" });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });
-    expect(out[1]?.badge).toEqual({ type: "entity", entity: "light.b" });
+    expect(out[1]?.config).toEqual({ type: "entity", entity: "light.b" });
   });
 
   it("gives each added badge its own position object", () => {
@@ -22,7 +23,7 @@ describe("addItem", () => {
 
   it("passes a custom badge config through untouched", () => {
     const custom = { type: "custom:mushroom-template-badge", content: "{{ x }}", nested: { a: 1 } };
-    expect(addItem([], custom)[0]?.badge).toEqual(custom);
+    expect(addItem([], custom)[0]?.config).toEqual(custom);
   });
 
   it("does not mutate the input", () => {
@@ -36,7 +37,7 @@ describe("replaceBadge", () => {
   it("swaps the badge and keeps the position", () => {
     const items = [item("light.a", 10, 20), item("light.b", 30, 40)];
     const out = replaceBadge(items, 1, { type: "entity", entity: "light.CHANGED" });
-    expect(out[1]?.badge).toEqual({ type: "entity", entity: "light.CHANGED" });
+    expect(out[1]?.config).toEqual({ type: "entity", entity: "light.CHANGED" });
     expect(out[1]?.position).toEqual({ top: 30, left: 40 });
     expect(out[0]).toEqual(items[0]);
   });
@@ -49,7 +50,7 @@ describe("replaceBadge", () => {
   it("does not mutate the input", () => {
     const items = [item("light.a", 10, 20)];
     replaceBadge(items, 0, { type: "entity", entity: "light.z" });
-    expect(items[0]?.badge).toEqual({ type: "entity", entity: "light.a" });
+    expect(items[0]?.config).toEqual({ type: "entity", entity: "light.a" });
   });
 });
 
@@ -57,7 +58,7 @@ describe("moveItem", () => {
   it("moves a pair as a unit, so reordering never disturbs positions", () => {
     const items = [item("light.a", 10, 10), item("light.b", 20, 20), item("light.c", 30, 30)];
     const out = moveItem(items, 0, 2);
-    expect(out.map((i) => i.badge.entity)).toEqual(["light.b", "light.c", "light.a"]);
+    expect(out.map((i) => i.config.entity)).toEqual(["light.b", "light.c", "light.a"]);
     expect(out[2]).toEqual(items[0]);
   });
 
@@ -69,7 +70,7 @@ describe("moveItem", () => {
   it("does not mutate the input", () => {
     const items = [item("light.a", 10, 10), item("light.b", 20, 20)];
     moveItem(items, 0, 1);
-    expect(items.map((i) => i.badge.entity)).toEqual(["light.a", "light.b"]);
+    expect(items.map((i) => i.config.entity)).toEqual(["light.a", "light.b"]);
   });
 });
 

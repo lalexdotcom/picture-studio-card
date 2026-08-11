@@ -38,9 +38,10 @@ dark_mode_image: /local/floorplan-dark.png   # optional
 aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
 fit_mode: cover                    # optional: "cover" | "contain" | "fill"
-badges:
-  - badge:
-      type: entity                 # any Lovelace badge config
+items:
+  - type: badge                  # family discriminant; defaults to "badge" when omitted
+    config:
+      type: entity               # any Lovelace badge config
       entity: sensor.temperature
     position:
       top: 30      # 0 = flush top, 50 = centred, 100 = flush bottom
@@ -50,6 +51,10 @@ badges:
 ### Position anchoring
 
 `top` and `left` are numbers from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centred; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions. This is different from `picture-elements`, where `top`/`left` mark the badge's centre point.
+
+### Migration from earlier builds
+
+If you have a config written against an earlier build that uses `badges[]` instead of `items[]`, the card reads and converts it automatically on load. No manual edit is required; the YAML editor will show the new shape after the next save.
 
 ### Custom badges
 
