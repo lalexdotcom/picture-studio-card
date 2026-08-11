@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { activeEditor, subscribeEditors } from "../broker";
 import {
+  BACKGROUND_KEYS,
   EDITOR_TAG,
   normaliseConfig,
   type PictureBadgesConfig,
@@ -8,7 +9,7 @@ import {
   stubConfig,
 } from "../config";
 import { positionStyle } from "../position";
-import type { HomeAssistant, LovelaceBadgeElement } from "../types";
+import type { HomeAssistant, LovelaceBadgeElement, LovelaceElementElement } from "../types";
 import { createDragController } from "./drag-layer";
 
 export class PictureBadgesCard extends LitElement {
@@ -27,6 +28,7 @@ export class PictureBadgesCard extends LitElement {
   declare _config?: PictureBadgesConfig;
 
   private _hass?: HomeAssistant;
+  private _bgElement?: LovelaceElementElement;
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
   private _renderedTypes: string[] = [];
@@ -52,6 +54,7 @@ export class PictureBadgesCard extends LitElement {
 
   set hass(hass: HomeAssistant) {
     this._hass = hass;
+    if (this._bgElement) this._bgElement.hass = hass;
     for (const el of this._elements) {
       el.hass = hass;
     }
@@ -126,11 +129,49 @@ export class PictureBadgesCard extends LitElement {
 
   protected updated(): void {
     this._syncEditingAndDrag();
+    void this._syncBackground();
     void this._syncBadges();
   }
 
   private get _layer(): HTMLElement | null {
     return this.renderRoot.querySelector(".layer");
+  }
+
+  /** Build the config object forwarded to the hui-image-element. */
+  private _bgConfig(config: PictureBadgesConfig): Record<string, unknown> {
+    const out: Record<string, unknown> = { type: "image" };
+    for (const key of BACKGROUND_KEYS) {
+      const value = config[key];
+      if (value !== undefined) out[key] = value;
+    }
+    return out;
+  }
+
+  /**
+   * Create the background hui-image-element once and reuse it thereafter.
+   * Recreating on every update would restart camera streams and lose image state.
+   */
+  private async _syncBackground(): Promise<void> {
+    const root = this.renderRoot.querySelector(".root");
+    if (!root) return;
+
+    if (!this._bgElement) {
+      const helpers = await window.loadCardHelpers();
+      // Double-check: a concurrent call may have created the element while
+      // we awaited. If so, fall through to the setConfig call below.
+      if (!this._bgElement) {
+        const el = helpers.createHuiElement({ type: "image" });
+        el.className = "background";
+        this._bgElement = el;
+        root.insertBefore(el, root.querySelector(".layer"));
+      }
+    }
+
+    // Always sync the latest config — _config may have changed since this
+    // call was scheduled or during the loadCardHelpers await.
+    const config = this._config;
+    if (config) this._bgElement.setConfig(this._bgConfig(config));
+    if (this._hass) this._bgElement.hass = this._hass;
   }
 
   /**
@@ -199,23 +240,11 @@ export class PictureBadgesCard extends LitElement {
   }
 
   protected render() {
-    const config = this._config;
-    if (!config) return nothing;
+    if (!this._config) return nothing;
 
     return html`
       <ha-card>
         <div class="root ${this.editing ? "editing" : ""}">
-          <hui-image
-            .hass=${this._hass}
-            .image=${config.image}
-            .cameraImage=${config.camera_image}
-            .cameraView=${config.camera_view}
-            .stateImage=${config.state_image}
-            .darkModeImage=${config.dark_mode_image}
-            .aspectRatio=${config.aspect_ratio}
-            .filter=${config.filter}
-            .fitMode=${config.fit_mode}
-          ></hui-image>
           <div class="layer"></div>
         </div>
       </ha-card>
@@ -226,14 +255,19 @@ export class PictureBadgesCard extends LitElement {
     ha-card {
       overflow: hidden;
     }
-    /* .root holds only hui-image in normal flow, so the drag surface matches
-       the image's aspect ratio exactly. */
+    /* .root holds only the background element in normal flow, so the drag
+       surface matches the image's aspect ratio exactly. */
     .root {
       position: relative;
     }
-    hui-image {
+    .background {
       display: block;
       width: 100%;
+    }
+    /* While editing, pointer events must not reach the background — otherwise a
+       click on the image during badge positioning would fire tap_action. */
+    .editing .background {
+      pointer-events: none;
     }
     /* The layer is transparent to pointers; only the wrappers catch them, so
        the image stays clickable between badges. */

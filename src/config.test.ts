@@ -29,25 +29,40 @@ describe("normaliseConfig", () => {
     expect(out.items[0]?.position).toEqual({ top: 50, left: 50 });
   });
 
-  it("passes hui-image keys through untouched", () => {
+  it("passes image-element keys through untouched", () => {
+    const tapAction = { action: "navigate", navigation_path: "/lovelace" };
     const out = normaliseConfig({
       type: CARD_TYPE,
+      entity: "light.living",
+      image_entity: "image.front",
       camera_image: "camera.front",
       camera_view: "live",
       aspect_ratio: "16:9",
-      fit_mode: "contain",
       filter: "blur(2px)",
+      state_filter: { on: "brightness(1.2)" },
       dark_mode_image: "/local/night.png",
+      dark_mode_filter: "brightness(0.5)",
       state_image: { on: "/local/on.png" },
+      title: "Front door",
+      tap_action: tapAction,
+      hold_action: { action: "more-info" },
+      double_tap_action: { action: "none" },
       items: [],
     });
+    expect(out.entity).toBe("light.living");
+    expect(out.image_entity).toBe("image.front");
     expect(out.camera_image).toBe("camera.front");
     expect(out.camera_view).toBe("live");
     expect(out.aspect_ratio).toBe("16:9");
-    expect(out.fit_mode).toBe("contain");
     expect(out.filter).toBe("blur(2px)");
+    expect(out.state_filter).toEqual({ on: "brightness(1.2)" });
     expect(out.dark_mode_image).toBe("/local/night.png");
+    expect(out.dark_mode_filter).toBe("brightness(0.5)");
     expect(out.state_image).toEqual({ on: "/local/on.png" });
+    expect(out.title).toBe("Front door");
+    expect(out.tap_action).toBe(tapAction);
+    expect(out.hold_action).toEqual({ action: "more-info" });
+    expect(out.double_tap_action).toEqual({ action: "none" });
   });
 
   it("never mutates the input", () => {

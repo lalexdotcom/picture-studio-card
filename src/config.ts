@@ -19,15 +19,26 @@ export interface PictureItem {
 
 export interface PictureBadgesConfig {
   type: string;
-  /** hui-image passthrough, snake_case as it appears in YAML. */
+  /**
+   * hui-image-element passthrough keys, snake_case as they appear in YAML.
+   * The element handles the camelCase binding internally.
+   */
+  entity?: string;
+  image_entity?: string;
   image?: string;
   camera_image?: string;
   camera_view?: "auto" | "live";
   state_image?: Record<string, string>;
+  state_filter?: Record<string, string>;
   dark_mode_image?: string;
+  dark_mode_filter?: string;
   aspect_ratio?: string;
   filter?: string;
-  fit_mode?: "cover" | "contain" | "fill";
+  title?: string;
+  /** Typed as unknown: we never read these, only forward them to the element. */
+  tap_action?: unknown;
+  hold_action?: unknown;
+  double_tap_action?: unknown;
   items: PictureItem[];
 }
 
@@ -81,6 +92,28 @@ export const normaliseConfig = (raw: unknown): PictureBadgesConfig => {
 
   return { ...(raw as Record<string, unknown>), items } as PictureBadgesConfig;
 };
+
+/**
+ * Keys forwarded verbatim from the card config to the hui-image-element config.
+ * Excludes `type` (overridden to "image") and `items` (badge list, not an element key).
+ */
+export const BACKGROUND_KEYS = [
+  "entity",
+  "image_entity",
+  "image",
+  "camera_image",
+  "camera_view",
+  "state_image",
+  "state_filter",
+  "dark_mode_image",
+  "dark_mode_filter",
+  "aspect_ratio",
+  "filter",
+  "title",
+  "tap_action",
+  "hold_action",
+  "double_tap_action",
+] as const satisfies ReadonlyArray<keyof PictureBadgesConfig>;
 
 export const stubConfig = (): PictureBadgesConfig => ({
   type: CARD_TYPE,

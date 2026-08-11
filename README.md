@@ -31,13 +31,24 @@ type: custom:picture-badges
 image: /local/floorplan.png
 camera_image: camera.front_door   # optional, instead of image
 camera_view: auto                  # optional: "auto" | "live"
-state_image:                       # optional: entity-state → image URL map
+entity: light.living_room          # optional — required for state_image / state_filter
+state_image:                       # optional: entity-state → image URL map (needs entity)
   "on": /local/on.png
   "off": /local/off.png
+state_filter:                      # optional: entity-state → CSS filter map (needs entity)
+  "off": brightness(0.5)
 dark_mode_image: /local/floorplan-dark.png   # optional
+dark_mode_filter: brightness(0.7)  # optional CSS filter applied in dark mode
 aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
-fit_mode: cover                    # optional: "cover" | "contain" | "fill"
+title: My floorplan                # optional tooltip on the image
+tap_action:                        # optional — any Lovelace action config
+  action: navigate
+  navigation_path: /lovelace
+hold_action:                       # optional
+  action: more-info
+double_tap_action:                 # optional
+  action: none
 items:
   - type: badge                  # family discriminant; defaults to "badge" when omitted
     config:

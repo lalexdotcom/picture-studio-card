@@ -20,8 +20,15 @@ export interface LovelaceBadgeElement extends HTMLElement {
   setConfig(config: BadgeConfig): void;
 }
 
+/** A Lovelace picture-elements element (hui-image-element, etc.). */
+export interface LovelaceElementElement extends HTMLElement {
+  hass?: HomeAssistant;
+  setConfig(config: Record<string, unknown>): void;
+}
+
 export interface CardHelpers {
   createBadgeElement(config: BadgeConfig): LovelaceBadgeElement;
+  createHuiElement(config: Record<string, unknown>): LovelaceElementElement;
 }
 
 export interface CustomBadgeEntry {
