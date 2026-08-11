@@ -77,7 +77,7 @@ The visual editor mirrors the `picture-elements` form: title, image, dark mode i
 
 ### Card size in sections views
 
-The card declares `columns: 12`, `rows: "auto"` and `min_columns: 3`, so its height follows the image's aspect ratio. Overriding `rows` with a number in `grid_options` pins the card to a fixed height: the image keeps its ratio and whatever does not fit is clipped, along with any badge sitting in the clipped area. Leaving `rows` on `auto` avoids that entirely.
+The card declares `columns: 12`, `rows: "auto"` and `min_columns: 3`, so its height follows the image's aspect ratio. Overriding `rows` with a number in `grid_options` pins the card to a fixed height; the image keeps its ratio, and the part that no longer fits stays reachable by scrolling the card vertically. Leaving `rows` on `auto` avoids the scrollbar entirely.
 
 ### Custom badges
 

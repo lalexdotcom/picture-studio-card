@@ -297,16 +297,20 @@ export class PictureBadgesCard extends LitElement {
   static styles = css`
     /* hui-card is height: 100%, so a card that does not claim that height renders
        at its natural size and spills out of the cell. With a fixed row count in
-       grid_options the cell is shorter than the image, and without these two rules
-       the image is drawn over whatever sits below. Claiming the height and clipping
-       keeps the overflow inside the card. */
+       grid_options the cell is shorter than the image, and without these rules the
+       image is drawn over whatever sits below.
+       The vertical overflow scrolls rather than being clipped, so the bottom of the
+       image — and any badge on it — stays reachable. Horizontally there is nothing
+       to reach: positions are clamped to the image width, and a scrollbar there
+       would only come from the card's own rounding. */
     :host {
       display: block;
       height: 100%;
     }
     ha-card {
       height: 100%;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     /* .root holds only the background element in normal flow, so the drag
        surface matches the image's aspect ratio exactly. */
