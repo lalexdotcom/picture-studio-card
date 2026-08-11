@@ -3,3 +3,5 @@ node_modules/
 .pnpm-store/
 dist/
 .ha/
+.serena/cache/
+.serena/project.local.yml
