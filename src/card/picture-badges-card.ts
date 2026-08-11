@@ -48,8 +48,7 @@ export class PictureBadgesCard extends LitElement {
     return stubConfig();
   }
 
-  static async getConfigElement(): Promise<HTMLElement> {
-    await import("../editor/picture-badges-editor");
+  static getConfigElement(): HTMLElement {
     return document.createElement(EDITOR_TAG);
   }
 

@@ -1230,11 +1230,12 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
 In `src/card/picture-badges-card.ts`, add to the class:
 
 ```ts
-  static async getConfigElement(): Promise<HTMLElement> {
-    await import("../editor/picture-badges-editor");
+  static getConfigElement(): HTMLElement {
     return document.createElement(EDITOR_TAG);
   }
 ```
+
+Do **not** make this an `async` method that awaits `import("../editor/picture-badges-editor")`. `src/index.ts` already imports the editor statically in order to register it, so the element is defined before any card instance exists and the dynamic import buys nothing — but it does make rspack split the bundle, leaving `picture-badges.js` with a static `import … from "./612.js"`. Since releases ship only `picture-badges.js`, that chunk would be missing and the module would die at its first line, taking the card down with it, not just the editor.
 
 and extend its config import to include `EDITOR_TAG`: `import { EDITOR_TAG, normaliseConfig, stubConfig, ... } from "../config";`. The card does not need `CARD_TAG` — registration lives in `src/index.ts`.
 
