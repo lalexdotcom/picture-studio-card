@@ -1,5 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
-import { activeEditor } from "../broker";
+import { activeEditor, subscribeEditors } from "../broker";
 import {
   EDITOR_TAG,
   normaliseConfig,
@@ -15,7 +15,10 @@ export class PictureBadgesCard extends LitElement {
   static properties = {
     hass: { attribute: false },
     preview: { type: Boolean },
-    editing: { type: Boolean },
+    // Derived from `preview` and the broker, never set from outside. Declaring
+    // it as a plain property would expose an `editing` attribute that anything
+    // could flip.
+    editing: { state: true },
     _config: { state: true },
   };
 
@@ -27,6 +30,7 @@ export class PictureBadgesCard extends LitElement {
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
   private _renderedTypes: string[] = [];
+  private _unsubscribe?: () => void;
 
   private _drag = createDragController({
     getIndexedWrapper: (target) => {
@@ -86,19 +90,42 @@ export class PictureBadgesCard extends LitElement {
     this.editing = editing;
   }
 
-  disconnectedCallback(): void {
-    super.disconnectedCallback();
-    this._drag.detach();
-  }
-
-  protected updated(): void {
+  /**
+   * Reconcile the drag layer with the current editing state.
+   *
+   * Called from two places on purpose. `updated()` covers our own render cycle;
+   * the broker subscription covers the editor mounting or unmounting, which
+   * happens outside it. Before the subscription existed, a card only re-derived
+   * this when it happened to render for some other reason — so the dialog could
+   * open with the drag unarmed, or close leaving it armed.
+   */
+  private _syncEditingAndDrag(): void {
     this._syncEditing();
-    const layer = this._layer;
+    // renderRoot does not exist before the first update; _syncEditing has
+    // already flipped the reactive flag, so updated() will attach on the render
+    // it schedules.
+    const layer = this.hasUpdated ? this._layer : null;
     if (this.editing && layer) {
       this._drag.attach(layer);
     } else {
       this._drag.detach();
     }
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    this._unsubscribe = subscribeEditors(() => this._syncEditingAndDrag());
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._unsubscribe?.();
+    this._unsubscribe = undefined;
+    this._drag.detach();
+  }
+
+  protected updated(): void {
+    this._syncEditingAndDrag();
     void this._syncBadges();
   }
 
