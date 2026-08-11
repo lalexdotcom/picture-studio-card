@@ -1,0 +1,59 @@
+{
+	"enabledPlugins": {
+		"superpowers@superpowers-marketplace": true,
+		"mempalace@mempalace": true
+	},
+	"env": {
+		"CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+		"CLAUDE_CODE_EFFORT_LEVEL": "high"
+	},
+	"permissions": {
+		"deny": ["Bash(sudo *)", "Bash(rm -rf /*)"],
+		"defaultMode": "bypassPermissions"
+	},
+	"model": "opus",
+	"hooks": {
+		"PreToolUse": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "serena-hooks remind --client=claude-code"
+					}
+				]
+			},
+			{
+				"matcher": "mcp__serena__*",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "serena-hooks auto-approve --client=claude-code"
+					}
+				]
+			}
+		],
+		"SessionStart": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "serena-hooks activate --client=claude-code"
+					}
+				]
+			}
+		],
+		"SessionEnd": [
+			{
+				"matcher": "",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "serena-hooks cleanup --client=claude-code"
+					}
+				]
+			}
+		]
+	}
+}

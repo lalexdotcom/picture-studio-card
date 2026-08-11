@@ -1,0 +1,27 @@
+{
+	"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
+	"js/ts.preferences.useAliasesForRenames": true,
+	"js/ts.updateImportsOnFileMove.enabled": "always",
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "biomejs.biome",
+	"[typescript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"files.associations": {
+		"*.css": "css"
+	},
+	"files.watcherExclude": {
+		"**/dist/**": true,
+		"**/node_modules/**": true
+	},
+	"search.exclude": {
+		"**/dist": true,
+		"**/node_modules": true
+	},
+	"claudeCode.allowDangerouslySkipPermissions": true,
+	"claudeCode.initialPermissionMode": "bypassPermissions",
+	"github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions": true
+}
