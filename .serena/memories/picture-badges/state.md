@@ -15,9 +15,6 @@ into CI, Biome clean, single-file build `dist/picture-badges.js`
 
 - Spec (authoritative, amended several times): `docs/superpowers/specs/2026-08-11-picture-badges-design.md`
 - Plan: `docs/superpowers/plans/2026-08-11-picture-badges.md`
-- Execution ledger, findings, per-task briefs and reports:
-  `.superpowers/sdd/2026-08-11-picture-badges/progress.md` — full history of the
-  first eight tasks, including every deferred minor finding and adjudication.
 - Local HA for testing: `docker compose` in the repo, container
   `picture-badges-ha` (image `:stable`, currently 2026.8.1),
   http://localhost:8123, resource at `/local/picture-badges/picture-badges.js?v=1`.
