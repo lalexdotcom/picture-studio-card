@@ -27,8 +27,9 @@ forms — has been available since 2024.8.
 
 ```yaml
 type: custom:picture-badges
-# One of image or camera_image is required
+# One of image, image_entity or camera_image is required
 image: /local/floorplan.png
+image_entity: image.floorplan      # optional, an image or person entity instead of image
 camera_image: camera.front_door   # optional, instead of image
 camera_view: auto                  # optional: "auto" | "live"
 entity: light.living_room          # optional — required for state_image / state_filter
@@ -41,14 +42,7 @@ dark_mode_image: /local/floorplan-dark.png   # optional
 dark_mode_filter: brightness(0.7)  # optional CSS filter applied in dark mode
 aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
-title: My floorplan                # optional tooltip on the image
-tap_action:                        # optional — any Lovelace action config
-  action: navigate
-  navigation_path: /lovelace
-hold_action:                       # optional
-  action: more-info
-double_tap_action:                 # optional
-  action: none
+title: My floorplan                # optional card header
 items:
   - type: badge                  # family discriminant; defaults to "badge" when omitted
     config:
@@ -59,9 +53,31 @@ items:
       left: 60     # 0 = flush left, 50 = centred, 100 = flush right
 ```
 
+`image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
+
+```yaml
+image:
+  media_content_id: media-source://media_source/local/floorplan.png
+  media_content_type: image/png
+```
+
+Both forms render identically; the editor displays either one.
+
 ### Position anchoring
 
 `top` and `left` are numbers from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centred; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions. This is different from `picture-elements`, where `top`/`left` mark the badge's centre point.
+
+### Background actions
+
+The background image has no `tap_action` / `hold_action` / `double_tap_action`, exactly as in `picture-elements`, whose card config has never carried any. Actions belong to the badges themselves, inside their own `config`.
+
+### YAML-only keys
+
+The visual editor mirrors the `picture-elements` form: title, image, dark mode image, camera entity, camera view, state filter and dark mode filter. `entity`, `image_entity`, `state_image`, `aspect_ratio` and `filter` are set in YAML only — the same split `picture-elements` makes. Field labels come from Home Assistant's own translations, so they follow the interface language.
+
+### Card size in sections views
+
+The card declares `columns: 12`, `rows: "auto"` and `min_columns: 3`, so its height follows the image's aspect ratio. Overriding `rows` with a number in `grid_options` pins the card to a fixed height: the image keeps its ratio and whatever does not fit is clipped, along with any badge sitting in the clipped area. Leaving `rows` on `auto` avoids that entirely.
 
 ### Custom badges
 
@@ -114,6 +130,8 @@ If HA serves a stale bundle after a rebuild, increment the `?v=` query parameter
 pnpm run ha:logs   # follow Home Assistant logs
 pnpm run ha:down   # stop the container
 pnpm build         # production build into dist/
-pnpm test          # run the test suite
-pnpm lint          # lint and type-check
+pnpm test          # run the test suite (src/tests/)
+pnpm lint          # Biome check
+pnpm format        # Biome check --write
+pnpm typecheck     # tsc --noEmit
 ```

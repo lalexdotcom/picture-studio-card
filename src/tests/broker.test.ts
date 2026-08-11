@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import { activeEditor, registerEditor, subscribeEditors } from "./broker";
+import { activeEditor, registerEditor, subscribeEditors } from "../broker";
 
 const channel = () => ({ patchPosition: () => undefined });
 

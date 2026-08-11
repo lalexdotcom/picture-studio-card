@@ -1,4 +1,4 @@
-import type { BadgeConfig, CustomBadgeEntry, HomeAssistant } from "../types";
+import type { BadgeConfig, CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
 
 export interface BadgeChoice {
   type: string;
@@ -49,6 +49,17 @@ export const badgeCatalog = (custom?: CustomBadgeEntry[]): BadgeChoice[] => [
     isCustom: true,
   })),
 ];
+
+/**
+ * A custom badge carries the name its library registered. A core one has none, so
+ * we borrow HA's own — `ui.panel.lovelace.editor.badge.entity.name` is "Entity" in
+ * every language HA ships — and fall back to the raw type if the key ever moves.
+ */
+export const choiceLabel = (localize: LocalizeFunc, choice: BadgeChoice): string => {
+  if (choice.name) return choice.name;
+  if (choice.isCustom) return choice.type;
+  return localize(`ui.panel.lovelace.editor.badge.${choice.type}.name`) || choice.type;
+};
 
 /**
  * The badge's own class, which is what knows how to build its config form.

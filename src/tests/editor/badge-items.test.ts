@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@rstest/core";
-import type { PictureItem } from "../config";
-import { addItem, moveItem, removeItem, replaceBadge } from "./badge-items";
+import type { PictureItem } from "../../config";
+import { addItem, moveItem, removeItem, replaceBadge } from "../../editor/badge-items";
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",

@@ -2,11 +2,12 @@ import { html, LitElement, nothing } from "lit";
 import { type EditorChannel, registerEditor } from "../broker";
 import { CARD_TYPE, normaliseConfig, type PictureBadgesConfig } from "../config";
 import type { Position } from "../position";
-import type { BadgeConfig, HomeAssistant } from "../types";
+import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
-  BACKGROUND_SCHEMA,
   type BackgroundData,
   backgroundData,
+  backgroundLabel,
+  backgroundSchema,
   mergeBackground,
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
@@ -30,6 +31,19 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
   private _unregister?: () => void;
   /** Guards against a native child's config-changed echoing our own push. */
   private _applying = false;
+  /**
+   * The schema now depends on `localize`, so it can no longer be a module constant.
+   * Rebuilding it on every render would hand ha-form a new object each time; cache it
+   * against the localize function, which HA replaces when the language changes.
+   */
+  private _schemaCache?: { localize: LocalizeFunc; schema: ReturnType<typeof backgroundSchema> };
+
+  private _schema(localize: LocalizeFunc): ReturnType<typeof backgroundSchema> {
+    if (this._schemaCache?.localize !== localize) {
+      this._schemaCache = { localize, schema: backgroundSchema(localize) };
+    }
+    return this._schemaCache.schema;
+  }
 
   constructor() {
     super();
@@ -125,14 +139,15 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
 
   protected render() {
     const config = this._config;
-    if (!config || !this.hass) return nothing;
+    const hass = this.hass;
+    if (!config || !hass) return nothing;
 
     const editing = this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
 
     if (editing) {
       return html`
         <picture-badge-form
-          .hass=${this.hass}
+          .hass=${hass}
           .badge=${editing.config}
           @badge-changed=${this._badgeChanged}
           @go-back=${() => {
@@ -144,14 +159,14 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
 
     return html`
       <ha-form
-        .hass=${this.hass}
+        .hass=${hass}
         .data=${backgroundData(config)}
-        .schema=${BACKGROUND_SCHEMA}
-        .computeLabel=${(s: { name: string }) => s.name.replace(/_/g, " ")}
+        .schema=${this._schema(hass.localize)}
+        .computeLabel=${(s: { name: string }) => backgroundLabel(hass.localize, s.name)}
         @value-changed=${this._backgroundChanged}
       ></ha-form>
       <picture-badges-list
-        .hass=${this.hass}
+        .hass=${hass}
         .items=${config.items}
         @item-add=${this._addBadge}
         @item-edit=${this._editBadge}

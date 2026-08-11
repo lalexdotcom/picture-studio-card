@@ -1,8 +1,9 @@
 import { css, html, LitElement } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import type { PictureItem } from "../config";
-import type { HomeAssistant } from "../types";
-import { type BadgeChoice, badgeCatalog } from "./badge-catalog";
+import { localiseOwn } from "../strings";
+import type { HomeAssistant, LocalizeFunc } from "../types";
+import { badgeCatalog, choiceLabel } from "./badge-catalog";
 
 const HANDLE_PATH =
   "M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z";
@@ -16,8 +17,6 @@ const label = (item: PictureItem): string => {
   const config = item.config as { entity?: string; type?: string; name?: string };
   return config.name ?? config.entity ?? config.type ?? "badge";
 };
-
-const choiceLabel = (choice: BadgeChoice): string => choice.name ?? choice.type;
 
 export class PictureBadgesList extends LitElement {
   static properties = {
@@ -45,9 +44,12 @@ export class PictureBadgesList extends LitElement {
 
   protected render() {
     const choices = badgeCatalog(window.customBadges);
+    // Rendered before hass lands on the first paint; degrade to the raw key, as HA does.
+    const localize: LocalizeFunc = this.hass?.localize ?? (() => "");
 
     return html`
-      <p class="hint">Lower in the list is drawn on top.</p>
+      <h3>${localize("ui.panel.lovelace.editor.badges.name") || "Badges"}</h3>
+      <p class="hint">${localiseOwn(this.hass, "stacking_hint")}</p>
       <ha-sortable
         handle-selector=".handle"
         @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
@@ -64,12 +66,12 @@ export class PictureBadgesList extends LitElement {
                 <div class="handle"><ha-svg-icon .path=${HANDLE_PATH}></ha-svg-icon></div>
                 <span class="label">${label(item)}</span>
                 <ha-icon-button
-                  .label=${"Edit"}
+                  .label=${localize("ui.panel.lovelace.editor.badges.edit") || "Edit badge"}
                   .path=${PENCIL_PATH}
                   @click=${() => this._fire("item-edit", { index })}
                 ></ha-icon-button>
                 <ha-icon-button
-                  .label=${"Delete"}
+                  .label=${localize("ui.panel.lovelace.editor.badges.remove") || "Remove badge"}
                   .path=${TRASH_PATH}
                   @click=${() => this._fire("item-removed", { index })}
                 ></ha-icon-button>
@@ -81,20 +83,26 @@ export class PictureBadgesList extends LitElement {
       <ha-dropdown class="add" @wa-select=${this._add}>
         <ha-button slot="trigger" appearance="filled" size="s">
           <ha-svg-icon .path=${PLUS_PATH} slot="start"></ha-svg-icon>
-          Add badge
+          ${localize("ui.panel.lovelace.editor.edit_badge.add") || "Add badge"}
         </ha-button>
         ${choices.map(
-          (c) => html`<ha-dropdown-item .value=${c.type}>${choiceLabel(c)}</ha-dropdown-item>`,
+          (c) =>
+            html`<ha-dropdown-item .value=${c.type}>${choiceLabel(localize, c)}</ha-dropdown-item>`,
         )}
       </ha-dropdown>
     `;
   }
 
   static styles = css`
+    /* Otherwise unstyled, as picture-elements' "Elements" heading is: only the
+       gap below is dropped, so the hint reads as its caption. */
+    h3 {
+      margin-bottom: var(--ha-space-1);
+    }
     .hint {
       color: var(--secondary-text-color);
-      font-size: 0.9em;
-      margin: 8px 0;
+      font-size: var(--ha-font-size-s);
+      margin: 0 0 var(--ha-space-2);
     }
     .rows {
       display: flex;

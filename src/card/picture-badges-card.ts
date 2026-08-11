@@ -3,13 +3,19 @@ import { activeEditor, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
+  imagePath,
   normaliseConfig,
   type PictureBadgesConfig,
   type PictureItem,
   stubConfig,
 } from "../config";
 import { positionStyle } from "../position";
-import type { HomeAssistant, LovelaceBadgeElement, LovelaceElementElement } from "../types";
+import type {
+  HomeAssistant,
+  LovelaceBadgeElement,
+  LovelaceElementElement,
+  LovelaceGridOptions,
+} from "../types";
 import { createDragController } from "./drag-layer";
 
 export class PictureBadgesCard extends LitElement {
@@ -83,6 +89,25 @@ export class PictureBadgesCard extends LitElement {
   }
 
   /**
+   * Without this, the layout tab shows "does not fully support resizing yet":
+   * hui-card returns {} for a card that declares neither getGridOptions nor the
+   * deprecated getLayoutOptions, and the editor warns on an empty object.
+   *
+   * `rows: "auto"` is the only defensible height here — a number would add the
+   * grid's `fit-rows` class, pinning the card to `rows × 64 - 8` px while the image
+   * keeps its own aspect ratio. The drag surface is `.layer`, stretched over the
+   * background element in normal flow; it stays glued to the image only as long as
+   * nothing forces the card's height. Same reasoning as hui-entities-card, whose
+   * height is likewise content-driven; hui-iframe-card pins rows because an iframe
+   * has no intrinsic height.
+   *
+   * These are defaults only: `grid_options` in the card config is merged on top.
+   */
+  getGridOptions(): LovelaceGridOptions {
+    return { columns: 12, rows: "auto", min_columns: 3 };
+  }
+
+  /**
    * Editing means: shown as a preview AND an editor is mounted. `preview` alone
    * is also true in the card-picker gallery, where no editor exists — so the
    * broker discriminates the two with no extra signal.
@@ -139,10 +164,25 @@ export class PictureBadgesCard extends LitElement {
 
   /** Build the config object forwarded to the hui-image-element. */
   private _bgConfig(config: PictureBadgesConfig): Record<string, unknown> {
-    const out: Record<string, unknown> = { type: "image" };
+    // Both actions must be pinned to "none": hui-image-element.setConfig defaults a
+    // missing one to more-info, which makes the background clickable and makes
+    // computeTooltip invent a "Tap to show more info" hover tooltip. The
+    // picture-elements background carries no action at all.
+    const out: Record<string, unknown> = {
+      type: "image",
+      tap_action: { action: "none" },
+      hold_action: { action: "none" },
+    };
     for (const key of BACKGROUND_KEYS) {
       const value = config[key];
       if (value !== undefined) out[key] = value;
+    }
+    // hui-image-element unwraps a media selector value for `image` only; it hands
+    // `dark_mode_image` to hui-image untouched, where an object is not a path.
+    // Unwrap both here so the two behave alike.
+    if (config.image !== undefined) out.image = imagePath(config.image);
+    if (config.dark_mode_image !== undefined) {
+      out.dark_mode_image = imagePath(config.dark_mode_image);
     }
     return out;
   }
@@ -246,7 +286,7 @@ export class PictureBadgesCard extends LitElement {
     if (!this._config) return nothing;
 
     return html`
-      <ha-card>
+      <ha-card .header=${this._config.title}>
         <div class="root ${this.editing ? "editing" : ""}">
           <div class="layer"></div>
         </div>
@@ -255,7 +295,17 @@ export class PictureBadgesCard extends LitElement {
   }
 
   static styles = css`
+    /* hui-card is height: 100%, so a card that does not claim that height renders
+       at its natural size and spills out of the cell. With a fixed row count in
+       grid_options the cell is shorter than the image, and without these two rules
+       the image is drawn over whatever sits below. Claiming the height and clipping
+       keeps the overflow inside the card. */
+    :host {
+      display: block;
+      height: 100%;
+    }
     ha-card {
+      height: 100%;
       overflow: hidden;
     }
     /* .root holds only the background element in normal flow, so the drag

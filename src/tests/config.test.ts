@@ -1,5 +1,22 @@
 import { describe, expect, it } from "@rstest/core";
-import { CARD_TYPE, normaliseConfig, stubConfig } from "./config";
+import { CARD_TYPE, imagePath, normaliseConfig, stubConfig } from "../config";
+
+describe("imagePath", () => {
+  it("keeps a hand-written path as-is", () => {
+    expect(imagePath("/local/plan.png")).toBe("/local/plan.png");
+  });
+
+  it("unwraps the object the media selector writes", () => {
+    expect(
+      imagePath({ media_content_id: "media-source://x", media_content_type: "image/png" }),
+    ).toBe("media-source://x");
+  });
+
+  it("returns undefined for an absent or empty value", () => {
+    expect(imagePath(undefined)).toBeUndefined();
+    expect(imagePath({})).toBeUndefined();
+  });
+});
 
 describe("normaliseConfig", () => {
   it("keeps a well-formed config intact", () => {
@@ -30,7 +47,6 @@ describe("normaliseConfig", () => {
   });
 
   it("passes image-element keys through untouched", () => {
-    const tapAction = { action: "navigate", navigation_path: "/lovelace" };
     const out = normaliseConfig({
       type: CARD_TYPE,
       entity: "light.living",
@@ -44,9 +60,6 @@ describe("normaliseConfig", () => {
       dark_mode_filter: "brightness(0.5)",
       state_image: { on: "/local/on.png" },
       title: "Front door",
-      tap_action: tapAction,
-      hold_action: { action: "more-info" },
-      double_tap_action: { action: "none" },
       items: [],
     });
     expect(out.entity).toBe("light.living");
@@ -60,9 +73,6 @@ describe("normaliseConfig", () => {
     expect(out.dark_mode_filter).toBe("brightness(0.5)");
     expect(out.state_image).toEqual({ on: "/local/on.png" });
     expect(out.title).toBe("Front door");
-    expect(out.tap_action).toBe(tapAction);
-    expect(out.hold_action).toEqual({ action: "more-info" });
-    expect(out.double_tap_action).toEqual({ action: "none" });
   });
 
   it("never mutates the input", () => {

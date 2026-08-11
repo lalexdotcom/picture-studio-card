@@ -1,5 +1,28 @@
 import { describe, expect, it } from "@rstest/core";
-import { badgeCatalog, CORE_BADGES } from "./badge-catalog";
+import { badgeCatalog, CORE_BADGES, choiceLabel } from "../../editor/badge-catalog";
+import type { LocalizeFunc } from "../../types";
+
+const echo: LocalizeFunc = (key) => key;
+const missing: LocalizeFunc = () => "";
+
+describe("choiceLabel", () => {
+  it("borrows HA's own name for a core badge", () => {
+    expect(choiceLabel(echo, { type: "entity", isCustom: false })).toBe(
+      "ui.panel.lovelace.editor.badge.entity.name",
+    );
+  });
+
+  it("falls back to the type when HA has no such key", () => {
+    expect(choiceLabel(missing, { type: "entity", isCustom: false })).toBe("entity");
+  });
+
+  it("keeps the name a custom badge registered, and never localises its type", () => {
+    expect(choiceLabel(echo, { type: "custom:mushroom", name: "Mushroom", isCustom: true })).toBe(
+      "Mushroom",
+    );
+    expect(choiceLabel(echo, { type: "custom:mushroom", isCustom: true })).toBe("custom:mushroom");
+  });
+});
 
 describe("CORE_BADGES", () => {
   it("mirrors Home Assistant's coreBadges: entity and shortcut", () => {

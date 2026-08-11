@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import { clampPx, DEFAULT_POSITION, positionStyle, toPercent } from "./position";
+import { clampPx, DEFAULT_POSITION, positionStyle, toPercent } from "../position";
 
 describe("clampPx", () => {
   it("keeps a value inside the free span", () => {
