@@ -27,7 +27,8 @@ native equivalent, and as little else as possible.
 - Any Lovelace badge, including third-party badges registered in
   `window.customBadges` (Mushroom and similar).
 - Drag positioning on the preview, percentage-based, resolution-independent.
-- Add / edit badges through the **native** badge picker and edit dialogs.
+- Add badges through our own picker, mirroring what the native one offers, and
+  edit each one through **its own native config form** (§5.2).
 - Reorder badges by drag, which also determines stacking order.
 - Neutralising badge actions while editing. Not a feature — a precondition:
   without it, clicking a badge in the editor toggles the light.
@@ -56,7 +57,7 @@ Each of these was weighed against at least one rejected alternative.
 **Rejected:** keep `elements[]` and add a `custom:badge-element` type, so the
 config stays a valid `picture-elements` config.
 
-**Chosen:** a dedicated `badges[]` schema (§5).
+**Chosen:** a dedicated `items[]` schema (§6).
 
 The entire cost of this project sits in the editor. A `picture-elements`
 superset forces that editor to cover every native element type — `icon`,
@@ -66,8 +67,8 @@ by rewriting N sub-forms. It also forces the drag layer to handle heterogeneous
 items, including `conditional` elements, which shift index alignment and are not
 draggable.
 
-A single item type collapses all of that: one native picker, one native edit
-dialog, homogeneous drag. The separation between content and position becomes
+A single item type collapses all of that: one picker, one native config form per
+badge type, homogeneous drag. The separation between content and position becomes
 structural rather than something to enforce — badge configs have no notion of
 position, so the native form cannot see or damage it.
 
@@ -133,9 +134,11 @@ Two coexisting Lit copies are harmless — a console warning, nothing more —
 because we share no base class with Home Assistant.
 
 The reuse that matters is not Lit. `ha-form`, `ha-sortable`, `ha-icon-button`
-and the badge dialogs are already in the global `customElements` registry; we
-consume them by creating tags, with no import and no version coupling. Our
-bundled Lit serves only our two components.
+are already in the global `customElements` registry; we consume them by creating
+tags, with no import and no version coupling. Our bundled Lit serves only our own
+components. (The badge dialogs are the exception that proves the rule — they are
+lazily loaded and therefore *not* in that registry, which is why §5.2 does not
+use them.)
 
 ### 2.6 Toolchain: Rslib + Rstest
 
@@ -145,8 +148,8 @@ layer built on it and emits exactly what we need — a single ES file.
 is left out of the bundle.
 
 `custom-card-helpers` is **not** used. It lags the current frontend and knows
-nothing of `customBadges` or the badge dialogs. We declare the handful of
-interfaces we need and take `HassEntity` from `home-assistant-js-websocket`.
+nothing of `customBadges`. We declare the handful of interfaces we need and take
+`HassEntity` from `home-assistant-js-websocket`.
 
 ---
 
@@ -218,7 +221,8 @@ src/
   editor/picture-badges-editor.ts   hub: _commit / _reemit / _applying
   editor/badge-list.ts          ha-sortable rows, add button
   editor/background-schema.ts   ha-form schema for the background
-  editor/native-dialogs.ts      shim building and absorption             ← pure, tested
+  editor/badge-items.ts         add / move / remove on items[]           ← pure, tested
+  editor/badge-catalog.ts       core + custom badge choices, class lookup
 ```
 
 ---
@@ -288,52 +292,66 @@ instantiating that component: its add menu is hard-coded to `entity` and
 
 The list is labelled so that "lower in the list is on top" is explicit.
 
-### 5.2 Add and edit are delegated to the native dialogs
+### 5.2 Add and edit, without the native dialogs
+
+An earlier draft of this spec delegated both to `showCreateBadgeDialog` and
+`showEditBadgeDialog`. **That is not reachable**, and the browser pre-flight
+proved it. The reasoning is recorded here so nobody re-derives it.
+
+Those helpers are thin wrappers over
+`fireEvent(el, "show-dialog", { dialogTag, dialogImport, dialogParams })`, and
+everything hangs on `dialogImport` — a closure whose target Home Assistant's
+bundler resolved at build time, carrying the name of the chunk to load. Our
+bundle cannot fabricate one: it would have to name a chunk of their build, whose
+name is hashed and unstable. Worse, their dialog manager fails closed:
 
 ```ts
-// outward: a synthetic Lovelace config
-const shim = { views: [{ badges: this._config.badges.map((b) => b.badge) }] };
-
-showCreateBadgeDialog(this, { lovelaceConfig: shim, path: [0], saveConfig: this._absorb });
-showEditBadgeDialog(this, { lovelaceConfig: shim, path: [0], badgeIndex: i, saveConfig: this._absorb });
-
-// inward: keep views[0].badges, re-pair by index
-private _absorb = (next: LovelaceConfig) => {
-  const badges = next.views[0].badges ?? [];
-  this._commit({
-    ...this._config,
-    badges: badges.map((badge, i) => ({
-      badge,
-      position: this._config.badges[i]?.position ?? { top: 50, left: 50 },
-    })),
-  });
-};
+if (!(dialogTag in LOADED)) {
+  if (!dialogImport) {
+    if (__DEV__) console.warn("Asked to show dialog that's not loaded and can't be imported");
+    return false;        // production: nothing happens, silently
+  }
 ```
 
-Both dialogs are `fireEvent(el, "show-dialog", …)`, so they reach Home
-Assistant's dialog manager from our editor without instantiating any private
-API. Both funnel through our `saveConfig`: the picker either calls
-`addBadge(lovelaceConfig, path, config)` directly (entity suggestion) or hands
-off to `showEditBadgeDialog` with `badgeConfig`, which ends the same way.
+The guard tests `LOADED`, the manager's own registry, which is only populated by
+a call that supplied a `dialogImport`. So the dialogs work **only** if the user
+happened to open the native badge picker earlier in the same page load — an
+"Add badge" button that works or not depending on unrelated prior actions, and
+fails without a word when it doesn't. Rejected.
 
-Index re-pairing is safe because the only mutations Home Assistant applies are
-`addBadge` (appends) and `replaceBadge` (constant index). A newly added badge
-therefore lands at the centre of the image, ready to be dragged.
+**What we do instead**, which keeps the part that actually matters:
 
-Delete and reorder never take this path. They are ours, and act directly on
-`badges[]`, moving each `{badge, position}` pair as a unit — so a reorder
-changes stacking without disturbing any position.
+- **Add** — our own picker. The native one is `coreBadges` plus
+  `window.customBadges` plus entity suggestions, and `coreBadges` is two entries
+  (`entity`, `shortcut`). We mirror those two and read `window.customBadges` for
+  the rest, so third-party badges appear exactly as they do natively. Initial
+  config comes from the badge class's own `getStubConfig` when it has one.
+- **Edit** — each badge class exposes `static async getConfigElement()` and
+  imports its own editor. This is precisely what Home Assistant's internal
+  `HuiBadgeElementEditor` does (`getBadgeElementClass(type)` then
+  `elClass.getConfigElement()`), and it needs no dialog. We reach the class
+  without private APIs: `createBadgeElement({type})` forces the load, then
+  `customElements.get("hui-<type>-badge")`; for `custom:` types, the tag is
+  already defined by the third-party library.
+- The form mounts **in place of the list** inside our editor, with a back
+  button — the same shape as `hui-sub-element-editor`, which we cannot reuse
+  because its type union covers `row`, `header`, `footer`, `element`, `feature`
+  and `heading-badge`, but not `badge`.
 
-For no form code, this yields: the native picker with its "Custom" section fed
-by `window.customBadges`, entity suggestions, each badge type's own form, the
-GUI/YAML toggle, live preview and dirty-state tracking. Third-party badges take
-this path with no special handling.
+What this costs, stated plainly: no modal, no GUI/YAML toggle, no dirty-state
+tracking, no fuzzy search, no entity suggestions. What it keeps: the real,
+per-type, native config form for every badge, custom ones included — which was
+the whole point of choosing badge vocabulary.
+
+Add, edit, delete and reorder all act directly on `items[]`, moving each item
+as a unit, so a reorder changes stacking without disturbing any position. A newly added badge lands at the centre of the image,
+ready to be dragged.
 
 ### 5.3 Convergence
 
-Drag (`patchPosition`), dialogs (`_absorb`) and the background `ha-form` all end
-in `_commit`, whose single exit toward Home Assistant is `_reemit`. One
-authority, one emission point.
+Drag (`patchPosition`), the badge form, the list operations and the background
+`ha-form` all end in `_commit`, whose single exit toward Home Assistant is
+`_reemit`. One authority, one emission point.
 
 ---
 
@@ -342,32 +360,50 @@ authority, one emission point.
 ```yaml
 type: custom:picture-badges
 image: /local/plan.png        # or camera_image / camera_view / state_image / dark_mode_image
-aspect_ratio: "16:9"          # plus filter, fit_mode — anything hui-image accepts
-badges:
-  - badge:                    # a Lovelace badge config, opaque to us
-      type: custom:mushroom-template-badge
-      entity: light.salon
-    position:
+aspect_ratio: "16:9"          # plus filter — anything hui-image accepts
+items:
+  - type: badge               # ours: which family this item belongs to
+    position:                 # ours: numbers 0–100
       top: 30
       left: 45
+    config:                   # the item's own config, opaque to us
+      type: custom:mushroom-template-badge
+      entity: light.salon
 ```
 
-**`badge` is opaque.** We never read, validate or rewrite its contents; it
-travels between the native dialog and `createBadgeElement` untouched. That is
-what makes third-party badges work with no code of ours, and what will make
-future native badges work too.
+**One list.** A single `items[]` rather than one array per family, because
+stacking order *is* list order — two arrays would mean two orders to reconcile
+for no gain.
 
-**`position` is separate, in numbers 0–100.** Separate, because that boundary is
-the whole justification for this vocabulary: the native form edits `badge` and
-cannot see `position`; the drag layer edits `position` and cannot damage
-`badge`. Numbers rather than CSS strings, because percentages are all we need —
-comparing, clamping and testing them stays trivial, and the YAML stays readable.
+**`type` discriminates the family, `config` carries the payload.** A flatter
+shape was considered, with the badge's own keys hoisted next to ours and a
+`kind` discriminant to avoid colliding with the badge's `type`. It reads better,
+but it puts our keys in the same namespace as a free-form map: a third-party
+badge with a key named `position` would silently lose it. Nesting under `config`
+removes the risk entirely and lets the discriminant stay `type`, since the two
+live at different levels.
 
-The `%` suffix and `translate(-left%, -top%)` are **derived at render time,
-never stored**. One source of truth, no possible drift between the two.
+Today only `type: badge` is accepted. `type: element`, for picture-elements
+elements, is why the discriminant exists at all, and is deliberately rejected
+until it is implemented and tested.
 
-No version key, no free-form `style`, no `z-index`. A badge without `position`
+**`position` is in numbers 0–100**, and the `%` suffix and
+`translate(-left%, -top%)` are **derived at render time, never stored**. One
+source of truth, no possible drift between the two.
+
+**`config` is opaque.** We never read, validate, reorder or rewrite its
+contents; it travels between the badge's own form and `createBadgeElement`
+untouched. That is what makes third-party badges work with no code of ours.
+
+No version key, no free-form `style`, no `z-index`. An item without `position`
 falls at the centre.
+
+**Not supported, and documented as such:** `visibility` on a badge. Home
+Assistant evaluates those conditions in the *container* — `hui-section` does it
+with `checkConditionsMet` — so a badge here would stay visible whatever its
+conditions say. Supporting it means reimplementing the condition evaluator and
+surfacing `ha-card-conditions-editor`; doing only one half would be worse than
+neither, since the form would save cleanly and change nothing.
 
 Storage-mode dashboards persist this as JSON in `.storage`; the dialog's YAML
 editor serialises it in block style, as above.
@@ -438,10 +474,11 @@ Rstest, on what is worth testing and testable without a DOM:
 
 - **Position conversion** — `L = 100·X/(W−w)`, clamping, two-decimal rounding,
   the degenerate `W == w`.
-- **`_absorb`** — position/badge re-pairing after the two mutations the dialogs
-  can produce: append and replace-at-index.
-- **Local list mutations** — delete and reorder never reach `_absorb`; they act
-  on our own `badges[]`, moving each `{badge, position}` pair as a unit.
+- **List operations** — add, replace-at-index, delete and reorder on `items[]`,
+  each moving an item as a unit, so a reorder never disturbs a position and an
+  added badge lands centred.
+- **Badge catalogue** — merging `CORE_BADGES` with `window.customBadges`,
+  including the empty and absent cases.
 
 The drag gesture itself and the integration with native dialogs are verified in
 the running Home Assistant instance. Simulating them would cost more than
@@ -451,38 +488,46 @@ watching them work.
 
 ## 10. Runtime verification tasks
 
-These depend on the target Home Assistant version and must be checked in
-devtools against the running instance, before or while wiring the code that
-relies on them.
+Settled against a running instance (Home Assistant `stable`, 2026-08):
 
-1. `hui-image`'s exact camelCase property names. The 1:1 mapping with config
-   keys (`image`, `camera_image`, `camera_view`, `state_image`, `aspect_ratio`,
-   `filter`, `dark_mode_image`) is stable; only the casing needs confirming.
-2. That the synthetic `{ views: [{ badges }] }` config satisfies
-   `findLovelaceContainer(config, [0])`, which both badge dialogs call on open.
-3. That `show-dialog` fired from our own `getConfigElement` reaches Home
-   Assistant's dialog manager.
-4. That `ha-sortable` is already defined when our editor mounts. It very likely
-   is — the card-edit dialog loads a great deal — otherwise force it with the
-   same warm-up used for other components: instantiate a native editor that uses
-   it, then `customElements.whenDefined`.
-5. That `preview` is set on the card in both contexts, and that `activeEditor()`
+1. ✅ `hui-image`'s properties are camelCase: `hass`, `entity`, `image`,
+   `stateImage`, `cameraImage`, `cameraView`, `aspectRatio`, `filter`,
+   `stateFilter`, `darkModeImage`, `darkModeFilter`, `fitMode`.
+2. ✅ `ha-sortable` **is** defined when a dashboard is in edit mode. No warm-up
+   needed.
+3. ❌ `hui-dialog-create-badge` and `hui-dialog-edit-badge` are **not** defined,
+   and cannot be loaded by us. See §5.2 — this is what forced the redesign.
+   They do become defined once the user opens the native badge picker, but that
+   is a per-page-load accident, not something to build on.
+4. ✅ Home Assistant serves our bundle at
+   `/local/picture-badges/picture-badges.js` with a byte-identical hash to
+   `dist/`, so the volume mount and resource path are proven.
+5. Whether `lovelace` reaches our editor element is **moot**: nothing we do
+   depends on it.
+
+Still to confirm in the browser, once the code exists:
+
+6. That `preview` is set on the card in both contexts, and that `activeEditor()`
    really is `undefined` in the card-picker gallery.
-6. Whether Home Assistant passes `lovelace` to our editor element.
+7. That a badge class's `getConfigElement()` mounts and behaves inside our
+   editor rather than inside a dialog — including a `custom:` badge from an
+   installed third-party library.
 
 ---
 
 ## 11. Accepted risks and known limitations
 
-- **Internal APIs.** `ha-form`, selectors, `ha-sortable`, `createBadgeElement`
-  and the badge dialogs are internal and non-contractual. In practice they are
-  the most depended-upon surface in the whole frontend; this is the bet the
-  entire custom-card ecosystem makes.
-- **A spurious toast.** The native dialog's `_save` calls
-  `showSaveSuccessToast`, so closing it shows "Saved" even though only an editor
-  draft changed. Not disableable, functionally harmless. Revisit later.
+- **Internal APIs.** `ha-form`, selectors, `ha-sortable` and `createBadgeElement`
+  are internal and non-contractual. In practice they are the most depended-upon
+  surface in the whole frontend; this is the bet the entire custom-card
+  ecosystem makes.
+- **A duplicated constant.** `coreBadges` (`entity`, `shortcut`) is a module
+  export we cannot reach, so the picker mirrors it in two lines with a comment
+  naming the source file. If Home Assistant adds a native badge type, our picker
+  will not offer it until we add it — and it stays usable from YAML regardless,
+  since rendering goes through `createBadgeElement` unfiltered.
+- **No dirty-state tracking.** Editing a badge writes straight through to the
+  config on every change, where the native dialog buffered until Save. Consistent
+  with how the rest of our editor already behaves.
 - **Two Lit copies.** A console warning about multiple Lit versions. No
   functional impact.
-- **Badge dialogs think in views.** They operate on a full Lovelace config at a
-  `path: [viewIndex]`. The shim is a deliberate workaround, and verification
-  task 2 covers it.

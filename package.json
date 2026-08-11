@@ -1,0 +1,36 @@
+{
+  "name": "picture-badges",
+  "version": "0.1.0",
+  "description": "Home Assistant Lovelace card: an image with badges you position by drag and drop",
+  "main": "index.js",
+  "scripts": {
+    "test": "rstest run",
+    "dev": "rslib build --watch",
+    "build": "rslib build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "ha:up": "mkdir -p dist .ha/config && docker compose up -d",
+    "ha:down": "docker compose down",
+    "ha:logs": "docker compose logs -f homeassistant"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.2",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "lit": "^3.3.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "@rslib/core": "^0.23.2",
+    "@rstest/core": "^0.11.6",
+    "home-assistant-js-websocket": "^9.6.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

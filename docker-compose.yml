@@ -1,0 +1,10 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: picture-badges-ha
+    volumes:
+      - ./.ha/config:/config
+      - ./dist:/config/www/picture-badges:ro
+    ports:
+      - "8123:8123"
+    restart: unless-stopped

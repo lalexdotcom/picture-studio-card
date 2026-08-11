@@ -1,0 +1,29 @@
+{
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {
+      "version": "1.0.5",
+      "resolved": "ghcr.io/anthropics/devcontainer-features/claude-code@sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a",
+      "integrity": "sha256:cfc2e7d3e9fd3b9b01f8d5cb158508a884c8c0ede2e23ed10f32dea5d4ffe69a"
+    },
+    "ghcr.io/devcontainers-extra/features/apt-get-packages:1": {
+      "version": "1.0.8",
+      "resolved": "ghcr.io/devcontainers-extra/features/apt-get-packages@sha256:776fa11c30c50fa91d5e1bf050444b0f130827457109c349db92e8e126b750ec",
+      "integrity": "sha256:776fa11c30c50fa91d5e1bf050444b0f130827457109c349db92e8e126b750ec"
+    },
+    "ghcr.io/devcontainers-extra/features/pnpm:2": {
+      "version": "2.0.5",
+      "resolved": "ghcr.io/devcontainers-extra/features/pnpm@sha256:694c2b6182435c9e9c06f6071728b087c1181b38c18cecf0defe2ab8c11cddd6",
+      "integrity": "sha256:694c2b6182435c9e9c06f6071728b087c1181b38c18cecf0defe2ab8c11cddd6"
+    },
+    "ghcr.io/devcontainers-extra/features/uv:1": {
+      "version": "1.0.2",
+      "resolved": "ghcr.io/devcontainers-extra/features/uv@sha256:1ac5b9f17a9e9e745933d0ac2ecf758e06ed3da4423cd22c94cce4d482fd2dd8",
+      "integrity": "sha256:1ac5b9f17a9e9e745933d0ac2ecf758e06ed3da4423cd22c94cce4d482fd2dd8"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:3.0.0": {
+      "version": "3.0.0",
+      "resolved": "ghcr.io/devcontainers/features/docker-in-docker@sha256:256ffdbc156ffddd4c54b917176b5ddba379335706da7234e338bdd97bb4d771",
+      "integrity": "sha256:256ffdbc156ffddd4c54b917176b5ddba379335706da7234e338bdd97bb4d771"
+    }
+  }
+}

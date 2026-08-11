@@ -32,7 +32,11 @@ These were confirmed against `home-assistant/frontend@dev` while writing the spe
 
 - `createBadgeElement(config)` routes `custom:` types through `_customCreate`, so any badge in `window.customBadges` renders with no code of ours. A missing one yields `hui-error-badge` with a 2 s grace period.
 - `hui-image` properties are camelCase: `hass`, `entity`, `image`, `stateImage`, `cameraImage`, `cameraView`, `aspectRatio`, `filter`, `stateFilter`, `darkModeImage`, `darkModeFilter`, `fitMode`.
-- `showCreateBadgeDialog` / `showEditBadgeDialog` are `fireEvent(el, "show-dialog", …)`. Both funnel into the caller's `saveConfig`, receiving a whole Lovelace config produced by `addBadge` (append) or `replaceBadge` (constant index).
+- The native badge dialogs are **unreachable** from a custom card. `showCreateBadgeDialog` / `showEditBadgeDialog` fire `show-dialog` with a `dialogImport` closure that only Home Assistant's bundler can produce, and their dialog manager returns `false` silently in production when it is missing. Confirmed in the browser: both dialog tags are undefined on a fresh page load. Task 6 goes through each badge class's own `getConfigElement()` instead — see the Task 6 header and spec §5.2.
+- `ha-sortable` **is** defined when a dashboard is in edit mode. No warm-up needed.
+- Each badge class exposes `static async getConfigElement()` and imports its own editor; `hui-entity-badge` also exposes `getStubConfig`. Home Assistant's own `HuiBadgeElementEditor` uses exactly this route.
+- The native picker's core list is `coreBadges` in `src/panels/lovelace/editor/lovelace-badges.ts`: **two** entries, `entity` and `shortcut`. Everything else it shows comes from `window.customBadges` or entity suggestions.
+- `hui-sub-element-editor` handles `row`, `header`, `footer`, `element`, `feature`, `heading-badge` — **not** `badge`, so it cannot host a badge form.
 - `ha-sortable` wraps SortableJS. Attributes `handle-selector`, `draggable-selector`, `filter`, `group`, `disabled`; events `item-moved` (`{oldIndex,newIndex}`), `item-added`, `item-removed`, `drag-start`, `drag-end`.
 
 Where the spec's §10 verification tasks landed: **#1** (`hui-image` casing) is
@@ -55,7 +59,9 @@ do depends on it. The editor declares the property and ignores it.
 | `src/broker.ts` | Editor registry and the card→editor channel |
 | `src/card/picture-badges-card.ts` | `hui-image`, badge children, hass propagation, lifecycle |
 | `src/card/drag-layer.ts` | Pointer capture, live pixel nudge, commit on release |
-| `src/editor/native-dialogs.ts` | Lovelace shim construction and absorption — **pure, unit-tested** |
+| `src/editor/badge-items.ts` | add / replace / move / remove on `badges[]` — **pure, unit-tested** |
+| `src/editor/badge-catalog.ts` | core + custom badge choices, badge class and stub lookup |
+| `src/editor/badge-form.ts` | hosts the badge's own native config form |
 | `src/editor/background-schema.ts` | `ha-form` schema for the background section |
 | `src/editor/badge-list.ts` | `ha-sortable` rows, add button |
 | `src/editor/picture-badges-editor.ts` | Hub: `_commit` / `_reemit` / `_applying` |
@@ -1230,11 +1236,12 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
 In `src/card/picture-badges-card.ts`, add to the class:
 
 ```ts
-  static async getConfigElement(): Promise<HTMLElement> {
-    await import("../editor/picture-badges-editor");
+  static getConfigElement(): HTMLElement {
     return document.createElement(EDITOR_TAG);
   }
 ```
+
+Do **not** make this an `async` method that awaits `import("../editor/picture-badges-editor")`. `src/index.ts` already imports the editor statically in order to register it, so the element is defined before any card instance exists and the dynamic import buys nothing — but it does make rspack split the bundle, leaving `picture-badges.js` with a static `import … from "./612.js"`. Since releases ship only `picture-badges.js`, that chunk would be missing and the module would die at its first line, taking the card down with it, not just the editor.
 
 and extend its config import to include `EDITOR_TAG`: `import { EDITOR_TAG, normaliseConfig, stubConfig, ... } from "../config";`. The card does not need `CARD_TAG` — registration lives in `src/index.ts`.
 
@@ -1268,113 +1275,88 @@ git commit -m "feat: editor hub, broker and background form"
 ```
 
 ---
+## Task 6: Badge list, picker and per-badge form
 
-## Task 6: Badge list with the native dialogs
+> **Rewritten 2026-08-11 after the browser pre-flight.** The original task
+> delegated add and edit to `showCreateBadgeDialog` / `showEditBadgeDialog`.
+> Those dialogs are lazily loaded through a `dialogImport` closure that only
+> Home Assistant's own bundle can produce, and their dialog manager fails
+> **silently** in production when it is missing (`return false`, warning only in
+> dev builds). Confirmed in a running instance: `hui-dialog-create-badge` and
+> `hui-dialog-edit-badge` are undefined on a fresh page load, while
+> `ha-sortable` is defined. See spec §5.2 for the full reasoning. Do not
+> reintroduce the dialogs.
 
 **Files:**
-- Create: `src/editor/native-dialogs.ts`, `src/editor/badge-list.ts`
-- Test: `src/editor/native-dialogs.test.ts`
+- Create: `src/editor/badge-items.ts`, `src/editor/badge-catalog.ts`, `src/editor/badge-list.ts`, `src/editor/badge-form.ts`
+- Test: `src/editor/badge-items.test.ts`, `src/editor/badge-catalog.test.ts`
 - Modify: `src/editor/picture-badges-editor.ts`, `src/index.ts`
 
 **Interfaces:**
-- Consumes: `PictureBadgeItem` from `src/config.ts`; `BadgeConfig`, `LovelaceShim` from `src/types.ts`; `DEFAULT_POSITION` from `src/position.ts`
+- Consumes: `PictureBadgeItem`, `LIST_TAG` from `src/config.ts`; `BadgeConfig`, `CustomBadgeEntry`, `HomeAssistant`, `LovelaceBadgeElement` from `src/types.ts`; `DEFAULT_POSITION` from `src/position.ts`
 - Produces:
-  - `buildShim(items: PictureBadgeItem[]): LovelaceShim`
-  - `absorb(previous: PictureBadgeItem[], next: BadgeConfig[]): PictureBadgeItem[]`
-  - `moveItem(items: PictureBadgeItem[], from: number, to: number): PictureBadgeItem[]`
-  - `removeItem(items: PictureBadgeItem[], index: number): PictureBadgeItem[]`
-  - `showCreateBadgeDialog(el: HTMLElement, params)`, `showEditBadgeDialog(el: HTMLElement, params)`
-  - `class PictureBadgesList extends LitElement` — property `.items`, `.hass`; events `item-moved` (`{oldIndex,newIndex}`), `item-removed` (`{index}`), `item-edit` (`{index}`), `item-add`
+  - `src/editor/badge-items.ts` — `addItem(items, badge): PictureBadgeItem[]`, `replaceBadge(items, index, badge): PictureBadgeItem[]`, `moveItem(items, from, to): PictureBadgeItem[]`, `removeItem(items, index): PictureBadgeItem[]`
+  - `src/editor/badge-catalog.ts` — `interface BadgeChoice { type: string; name?: string; description?: string; isCustom: boolean }`, `CORE_BADGES: BadgeChoice[]`, `badgeCatalog(custom?: CustomBadgeEntry[]): BadgeChoice[]`, `resolveBadgeClass(type): Promise<BadgeClass | undefined>`, `stubBadgeConfig(type, hass): Promise<BadgeConfig>`
+  - `src/editor/badge-list.ts` — `class PictureBadgesList`, property `.items`, `.hass`; events `item-moved` (`{oldIndex,newIndex}`), `item-removed` (`{index}`), `item-edit` (`{index}`), `item-add` (`{type}`)
+  - `src/editor/badge-form.ts` — `class PictureBadgeForm`, property `.hass`, `.badge`; event `badge-changed` (`{badge}`), `go-back`
 
-- [ ] **Pre-flight: confirm the native badge dialogs are reachable**
+- [ ] **Step 1: Write the failing list-operations test**
 
-This is the one real risk in the plan, and it is cheap to settle before writing
-code. `showCreateBadgeDialog` normally ships a `dialogImport` pointing at an
-internal module we cannot import. We rely on the dialog element already being
-registered, so check whether it is.
-
-With a dashboard in edit mode, run in the browser console:
-
-```js
-[...document.querySelectorAll("*")], // force nothing; just inspect the registry
-console.log(
-  !!customElements.get("hui-dialog-create-badge"),
-  !!customElements.get("hui-dialog-edit-badge"),
-  !!customElements.get("ha-sortable"),
-);
-```
-
-Check it twice: once right after a fresh page load with the card-edit dialog
-open, and once after adding a badge to a view through the native UI.
-
-- **Both true on a fresh load** → proceed as written.
-- **Only true after using the native badge UI** → the chunk is lazy. Add a
-  warm-up in the editor's `firstUpdated`: fire `show-dialog` for
-  `hui-dialog-create-badge` once and close it immediately, or gate the "Add
-  badge" button behind `customElements.whenDefined` with a 2 s timeout and a
-  clear message. Record which was chosen in the README.
-- **Never true** → stop and report. The fallback is an `object` selector in
-  `ha-form` for badge configs, which loses the native picker and is a separate
-  design decision, not a silent substitution.
-
-- [ ] **Step 1: Write the failing test**
-
-`src/editor/native-dialogs.test.ts`:
+`src/editor/badge-items.test.ts`:
 
 ```ts
 import { describe, expect, it } from "@rstest/core";
 import type { PictureBadgeItem } from "../config";
-import { absorb, buildShim, moveItem, removeItem } from "./native-dialogs";
+import { addItem, moveItem, removeItem, replaceBadge } from "./badge-items";
 
 const item = (entity: string, top: number, left: number): PictureBadgeItem => ({
   badge: { type: "entity", entity },
   position: { top, left },
 });
 
-describe("buildShim", () => {
-  it("exposes bare badge configs under a single view", () => {
-    const shim = buildShim([item("light.a", 10, 20), item("light.b", 30, 40)]);
-    expect(shim.views).toHaveLength(1);
-    expect(shim.views[0]?.badges).toEqual([
-      { type: "entity", entity: "light.a" },
-      { type: "entity", entity: "light.b" },
-    ]);
-  });
-
-  it("hides positions from the native dialogs entirely", () => {
-    expect(JSON.stringify(buildShim([item("light.a", 10, 20)]))).not.toContain("position");
-  });
-});
-
-describe("absorb", () => {
-  it("keeps positions when a badge is replaced at a constant index", () => {
-    const previous = [item("light.a", 10, 20), item("light.b", 30, 40)];
-    const out = absorb(previous, [
-      { type: "entity", entity: "light.a" },
-      { type: "entity", entity: "light.CHANGED" },
-    ]);
-    expect(out[1]?.badge).toEqual({ type: "entity", entity: "light.CHANGED" });
-    expect(out[1]?.position).toEqual({ top: 30, left: 40 });
-    expect(out[0]?.position).toEqual({ top: 10, left: 20 });
-  });
-
-  it("centres a badge appended by the picker", () => {
-    const out = absorb([item("light.a", 10, 20)], [
-      { type: "entity", entity: "light.a" },
-      { type: "custom:mushroom-template-badge", entity: "light.b" },
-    ]);
+describe("addItem", () => {
+  it("appends the badge centred on the image", () => {
+    const out = addItem([item("light.a", 10, 20)], { type: "entity", entity: "light.b" });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });
+    expect(out[1]?.badge).toEqual({ type: "entity", entity: "light.b" });
+  });
+
+  it("gives each added badge its own position object", () => {
+    const out = addItem(addItem([], { type: "entity" }), { type: "entity" });
+    expect(out[0]?.position).not.toBe(out[1]?.position);
   });
 
   it("passes a custom badge config through untouched", () => {
     const custom = { type: "custom:mushroom-template-badge", content: "{{ x }}", nested: { a: 1 } };
-    const out = absorb([], [custom]);
-    expect(out[0]?.badge).toEqual(custom);
+    expect(addItem([], custom)[0]?.badge).toEqual(custom);
   });
 
-  it("returns an empty list for an empty result", () => {
-    expect(absorb([item("light.a", 10, 20)], [])).toEqual([]);
+  it("does not mutate the input", () => {
+    const items = [item("light.a", 10, 20)];
+    addItem(items, { type: "entity" });
+    expect(items).toHaveLength(1);
+  });
+});
+
+describe("replaceBadge", () => {
+  it("swaps the badge and keeps the position", () => {
+    const items = [item("light.a", 10, 20), item("light.b", 30, 40)];
+    const out = replaceBadge(items, 1, { type: "entity", entity: "light.CHANGED" });
+    expect(out[1]?.badge).toEqual({ type: "entity", entity: "light.CHANGED" });
+    expect(out[1]?.position).toEqual({ top: 30, left: 40 });
+    expect(out[0]).toEqual(items[0]);
+  });
+
+  it("leaves the list untouched for an out-of-range index", () => {
+    const items = [item("light.a", 10, 20)];
+    expect(replaceBadge(items, 5, { type: "entity" })).toEqual(items);
+  });
+
+  it("does not mutate the input", () => {
+    const items = [item("light.a", 10, 20)];
+    replaceBadge(items, 0, { type: "entity", entity: "light.z" });
+    expect(items[0]?.badge).toEqual({ type: "entity", entity: "light.a" });
   });
 });
 
@@ -1415,41 +1397,37 @@ describe("removeItem", () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `pnpm test`
-Expected: FAIL — cannot resolve `./native-dialogs`.
+Expected: FAIL — cannot resolve `./badge-items`.
 
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 3: Write the list operations**
 
-`src/editor/native-dialogs.ts`:
+`src/editor/badge-items.ts`:
 
 ```ts
 import type { PictureBadgeItem } from "../config";
 import { DEFAULT_POSITION } from "../position";
-import type { BadgeConfig, LovelaceShim } from "../types";
+import type { BadgeConfig } from "../types";
 
 /**
- * The native badge dialogs think in whole Lovelace configs at a view path. We
- * hand them a synthetic one holding only our badges, and read the result back.
- * Positions never enter the shim, so the native form cannot see or damage them.
+ * Every operation moves a {badge, position} pair as a unit, which is what makes
+ * reordering change stacking order without disturbing any position. None of
+ * them mutates its input: Home Assistant freezes the config we are handed.
  */
-export const buildShim = (items: PictureBadgeItem[]): LovelaceShim => ({
-  views: [{ badges: items.map((item) => item.badge) }],
-});
 
-/**
- * Re-pair badges with positions after a dialog wrote back.
- *
- * Index alignment is safe because the only mutations Home Assistant applies are
- * addBadge (appends) and replaceBadge (constant index). Delete and reorder never
- * take this path — they are ours, see moveItem and removeItem.
- */
-export const absorb = (
-  previous: PictureBadgeItem[],
-  next: BadgeConfig[],
+/** A new badge lands centred, ready to be dragged. Its own position object. */
+export const addItem = (
+  items: PictureBadgeItem[],
+  badge: BadgeConfig,
+): PictureBadgeItem[] => [...items, { badge, position: { ...DEFAULT_POSITION } }];
+
+export const replaceBadge = (
+  items: PictureBadgeItem[],
+  index: number,
+  badge: BadgeConfig,
 ): PictureBadgeItem[] =>
-  next.map((badge, index) => ({
-    badge,
-    position: previous[index]?.position ?? { ...DEFAULT_POSITION },
-  }));
+  index < 0 || index >= items.length
+    ? items
+    : items.map((item, i) => (i === index ? { ...item, badge } : item));
 
 export const moveItem = (
   items: PictureBadgeItem[],
@@ -1465,38 +1443,143 @@ export const moveItem = (
 
 export const removeItem = (items: PictureBadgeItem[], index: number): PictureBadgeItem[] =>
   items.filter((_, i) => i !== index);
-
-interface BadgeDialogParams {
-  lovelaceConfig: LovelaceShim;
-  saveConfig: (config: LovelaceShim) => void;
-  path: [number];
-}
-
-const showDialog = (element: HTMLElement, dialogTag: string, dialogParams: unknown): void => {
-  element.dispatchEvent(
-    new CustomEvent("show-dialog", {
-      detail: { dialogTag, dialogImport: undefined, dialogParams },
-      bubbles: true,
-      composed: true,
-    }),
-  );
-};
-
-export const showCreateBadgeDialog = (element: HTMLElement, params: BadgeDialogParams): void =>
-  showDialog(element, "hui-dialog-create-badge", params);
-
-export const showEditBadgeDialog = (
-  element: HTMLElement,
-  params: BadgeDialogParams & { badgeIndex: number },
-): void => showDialog(element, "hui-dialog-edit-badge", params);
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [ ] **Step 4: Write the failing catalogue test**
+
+`src/editor/badge-catalog.test.ts`:
+
+```ts
+import { describe, expect, it } from "@rstest/core";
+import { CORE_BADGES, badgeCatalog } from "./badge-catalog";
+
+describe("CORE_BADGES", () => {
+  it("mirrors Home Assistant's coreBadges: entity and shortcut", () => {
+    expect(CORE_BADGES.map((b) => b.type)).toEqual(["entity", "shortcut"]);
+    expect(CORE_BADGES.every((b) => b.isCustom === false)).toBe(true);
+  });
+});
+
+describe("badgeCatalog", () => {
+  it("returns only the core badges when no custom badges are registered", () => {
+    expect(badgeCatalog(undefined).map((b) => b.type)).toEqual(["entity", "shortcut"]);
+    expect(badgeCatalog([]).map((b) => b.type)).toEqual(["entity", "shortcut"]);
+  });
+
+  it("appends custom badges after the core ones, flagged as custom", () => {
+    const out = badgeCatalog([
+      { type: "custom:mushroom-template-badge", name: "Mushroom Template" },
+    ]);
+    expect(out).toHaveLength(3);
+    expect(out[2]).toMatchObject({
+      type: "custom:mushroom-template-badge",
+      name: "Mushroom Template",
+      isCustom: true,
+    });
+  });
+
+  it("keeps a custom badge with no name, so it stays selectable", () => {
+    const out = badgeCatalog([{ type: "custom:nameless-badge" }]);
+    expect(out[2]?.type).toBe("custom:nameless-badge");
+  });
+
+  it("does not mutate the registry it is given", () => {
+    const registry = [{ type: "custom:a" }];
+    badgeCatalog(registry);
+    expect(registry).toEqual([{ type: "custom:a" }]);
+  });
+});
+```
+
+- [ ] **Step 5: Run the test to verify it fails**
 
 Run: `pnpm test`
-Expected: PASS.
+Expected: FAIL — cannot resolve `./badge-catalog`.
 
-- [ ] **Step 5: Write the list component**
+- [ ] **Step 6: Write the catalogue**
+
+`src/editor/badge-catalog.ts`:
+
+```ts
+import type { BadgeConfig, CustomBadgeEntry, HomeAssistant } from "../types";
+
+export interface BadgeChoice {
+  type: string;
+  name?: string;
+  description?: string;
+  isCustom: boolean;
+}
+
+interface BadgeClass {
+  getConfigElement?(): Promise<HTMLElement>;
+  getStubConfig?(
+    hass: HomeAssistant,
+    entities: string[],
+    entitiesFallback: string[],
+  ): BadgeConfig | Promise<BadgeConfig>;
+}
+
+/**
+ * Mirrors `coreBadges` in home-assistant/frontend,
+ * src/panels/lovelace/editor/lovelace-badges.ts — two entries as of 2026-08.
+ * It is a module export we cannot reach from our bundle, so it is duplicated
+ * here. If Home Assistant adds a native badge type, add it here too; until then
+ * that type stays usable from YAML, since rendering does not filter on this list.
+ */
+export const CORE_BADGES: BadgeChoice[] = [
+  { type: "entity", isCustom: false },
+  { type: "shortcut", isCustom: false },
+];
+
+/** What the native picker shows, minus fuzzy search and entity suggestions. */
+export const badgeCatalog = (custom?: CustomBadgeEntry[]): BadgeChoice[] => [
+  ...CORE_BADGES,
+  ...(custom ?? []).map((entry) => ({
+    type: entry.type,
+    name: entry.name,
+    description: entry.description,
+    isCustom: true,
+  })),
+];
+
+const CUSTOM_PREFIX = "custom:";
+
+/**
+ * The badge's own class, which is what knows how to build its config form.
+ * This is the same route Home Assistant's HuiBadgeElementEditor takes
+ * (getBadgeElementClass then elClass.getConfigElement); we reach the class
+ * without private APIs by letting createBadgeElement force the load.
+ */
+export const resolveBadgeClass = async (type: string): Promise<BadgeClass | undefined> => {
+  if (type.startsWith(CUSTOM_PREFIX)) {
+    // A third-party library registers its own tag; nothing to load on our side.
+    return customElements.get(type.slice(CUSTOM_PREFIX.length)) as BadgeClass | undefined;
+  }
+  const helpers = await window.loadCardHelpers();
+  helpers.createBadgeElement({ type }); // forces the lazy import of the badge module
+  const tag = `hui-${type}-badge`;
+  await customElements.whenDefined(tag);
+  return customElements.get(tag) as BadgeClass | undefined;
+};
+
+/** Initial config for a freshly picked badge, from the class when it offers one. */
+export const stubBadgeConfig = async (
+  type: string,
+  hass: HomeAssistant,
+): Promise<BadgeConfig> => {
+  const cls = await resolveBadgeClass(type);
+  if (!cls?.getStubConfig) return { type };
+  const entities = Object.keys(hass.states);
+  return { ...(await cls.getStubConfig(hass, entities, entities)), type };
+};
+```
+
+- [ ] **Step 7: Run both tests to verify they pass**
+
+Run: `pnpm test`
+Expected: PASS, including the earlier suites.
+
+- [ ] **Step 8: Write the list component**
 
 `src/editor/badge-list.ts`:
 
@@ -1505,11 +1588,21 @@ import { LitElement, css, html } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import type { PictureBadgeItem } from "../config";
 import type { HomeAssistant } from "../types";
+import { type BadgeChoice, badgeCatalog } from "./badge-catalog";
+
+const HANDLE_PATH =
+  "M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z";
+const PENCIL_PATH =
+  "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z";
+const TRASH_PATH =
+  "M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z";
 
 const label = (item: PictureBadgeItem): string => {
   const badge = item.badge as { entity?: string; type?: string; name?: string };
   return badge.name ?? badge.entity ?? badge.type ?? "badge";
 };
+
+const choiceLabel = (choice: BadgeChoice): string => choice.name ?? choice.type;
 
 export class PictureBadgesList extends LitElement {
   static properties = {
@@ -1529,7 +1622,16 @@ export class PictureBadgesList extends LitElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
+  private _add(ev: Event): void {
+    const select = ev.target as HTMLSelectElement;
+    const type = select.value;
+    select.value = "";
+    if (type) this._fire("item-add", { type });
+  }
+
   protected render() {
+    const choices = badgeCatalog(window.customBadges);
+
     return html`
       <p class="hint">Lower in the list is drawn on top.</p>
       <ha-sortable
@@ -1545,18 +1647,16 @@ export class PictureBadgesList extends LitElement {
             (_item, index) => index,
             (item, index) => html`
               <div class="row">
-                <div class="handle">
-                  <ha-svg-icon .path=${"M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z"}></ha-svg-icon>
-                </div>
+                <div class="handle"><ha-svg-icon .path=${HANDLE_PATH}></ha-svg-icon></div>
                 <span class="label">${label(item)}</span>
                 <ha-icon-button
                   .label=${"Edit"}
-                  .path=${"M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"}
+                  .path=${PENCIL_PATH}
                   @click=${() => this._fire("item-edit", { index })}
                 ></ha-icon-button>
                 <ha-icon-button
                   .label=${"Delete"}
-                  .path=${"M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"}
+                  .path=${TRASH_PATH}
                   @click=${() => this._fire("item-removed", { index })}
                 ></ha-icon-button>
               </div>
@@ -1564,7 +1664,10 @@ export class PictureBadgesList extends LitElement {
           )}
         </div>
       </ha-sortable>
-      <ha-button @click=${() => this._fire("item-add")}>Add badge</ha-button>
+      <select class="add" @change=${this._add}>
+        <option value="">Add badge…</option>
+        ${choices.map((c) => html`<option value=${c.type}>${choiceLabel(c)}</option>`)}
+      </select>
     `;
   }
 
@@ -1595,52 +1698,167 @@ export class PictureBadgesList extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .add {
+      margin-top: 12px;
+      width: 100%;
+      padding: 8px;
+    }
   `;
 }
 ```
 
-- [ ] **Step 6: Wire the list into the editor**
+- [ ] **Step 9: Write the per-badge form**
+
+`src/editor/badge-form.ts`:
+
+```ts
+import { LitElement, css, html, nothing } from "lit";
+import type { BadgeConfig, HomeAssistant } from "../types";
+import { resolveBadgeClass } from "./badge-catalog";
+
+const BACK_PATH = "M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z";
+
+type BadgeEditorElement = HTMLElement & {
+  hass?: HomeAssistant;
+  setConfig(config: BadgeConfig): void;
+};
+
+/**
+ * Hosts the badge's own native config form, obtained from the badge class via
+ * getConfigElement(). Home Assistant's badge dialogs are unreachable from a
+ * custom card (see the task header), so the form lives here instead, in place
+ * of the list, with a back button — the shape hui-sub-element-editor uses.
+ */
+export class PictureBadgeForm extends LitElement {
+  static properties = {
+    hass: { attribute: false },
+    badge: { attribute: false },
+  };
+
+  declare hass?: HomeAssistant;
+  declare badge?: BadgeConfig;
+
+  private _editor?: BadgeEditorElement;
+  /** The type the mounted editor was built for; a type change needs a new one. */
+  private _editorType?: string;
+
+  protected updated(): void {
+    void this._syncEditor();
+  }
+
+  private async _syncEditor(): Promise<void> {
+    const badge = this.badge;
+    const host = this.renderRoot.querySelector(".form");
+    if (!badge?.type || !host) return;
+
+    if (this._editorType !== badge.type) {
+      host.replaceChildren();
+      this._editor = undefined;
+      this._editorType = badge.type;
+
+      const cls = await resolveBadgeClass(badge.type);
+      if (!cls?.getConfigElement) return;
+
+      const editor = (await cls.getConfigElement()) as BadgeEditorElement;
+      editor.addEventListener("config-changed", this._onChange);
+      this._editor = editor;
+      host.append(editor);
+    }
+
+    if (!this._editor) return;
+    if (this.hass) this._editor.hass = this.hass;
+    this._editor.setConfig(badge);
+  }
+
+  private _onChange = (ev: Event): void => {
+    ev.stopPropagation();
+    const config = (ev as CustomEvent<{ config: BadgeConfig }>).detail?.config;
+    if (!config) return;
+    this.dispatchEvent(
+      new CustomEvent("badge-changed", {
+        detail: { badge: config },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
+  protected render() {
+    if (!this.badge) return nothing;
+    return html`
+      <div class="header">
+        <ha-icon-button
+          .label=${"Back"}
+          .path=${BACK_PATH}
+          @click=${() =>
+            this.dispatchEvent(
+              new CustomEvent("go-back", { bubbles: true, composed: true }),
+            )}
+        ></ha-icon-button>
+        <span class="title">${this.badge.type}</span>
+      </div>
+      <div class="form"></div>
+      ${this._editorType && !this._editor
+        ? html`<p class="fallback">
+            This badge does not provide a visual editor. Edit it in the YAML tab.
+          </p>`
+        : nothing}
+    `;
+  }
+
+  static styles = css`
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .title {
+      font-weight: 500;
+    }
+    .fallback {
+      color: var(--secondary-text-color);
+    }
+  `;
+}
+```
+
+- [ ] **Step 10: Wire both into the editor**
 
 In `src/editor/picture-badges-editor.ts`, add the imports:
 
 ```ts
-import { LIST_TAG } from "../config";
-import {
-  absorb,
-  buildShim,
-  moveItem,
-  removeItem,
-  showCreateBadgeDialog,
-  showEditBadgeDialog,
-} from "./native-dialogs";
+import type { BadgeConfig } from "../types";
+import { addItem, moveItem, removeItem, replaceBadge } from "./badge-items";
+import { stubBadgeConfig } from "./badge-catalog";
 import "./badge-list";
+import "./badge-form";
 ```
 
-Add these handlers to the class:
+Add `_editingIndex` to the reactive state (`_editingIndex: { state: true }`, declared `number | undefined`, starting `undefined`), and these handlers:
 
 ```ts
-  /** Both dialogs hand back a whole Lovelace config; keep only the badges. */
-  private _absorb = (next: { views: { badges?: unknown[] }[] }): void => {
+  private _addBadge = async (ev: CustomEvent<{ type: string }>): Promise<void> => {
     const config = this._config;
-    if (!config) return;
-    const badges = (next.views[0]?.badges ?? []) as BadgeConfig[];
-    this._commit({ ...config, badges: absorb(config.badges, badges) });
-  };
-
-  private _dialogParams() {
-    return {
-      lovelaceConfig: buildShim(this._config?.badges ?? []),
-      saveConfig: this._absorb,
-      path: [0] as [number],
-    };
-  }
-
-  private _addBadge = (): void => {
-    showCreateBadgeDialog(this, this._dialogParams());
+    if (!config || !this.hass) return;
+    const badge = await stubBadgeConfig(ev.detail.type, this.hass);
+    this._commit({ ...config, badges: addItem(config.badges, badge) });
+    // Open the new badge's form straight away: a stub config is rarely usable
+    // as-is, and this is what the native picker does after a pick.
+    this._editingIndex = config.badges.length;
   };
 
   private _editBadge = (ev: CustomEvent<{ index: number }>): void => {
-    showEditBadgeDialog(this, { ...this._dialogParams(), badgeIndex: ev.detail.index });
+    this._editingIndex = ev.detail.index;
+  };
+
+  private _badgeChanged = (ev: CustomEvent<{ badge: BadgeConfig }>): void => {
+    ev.stopPropagation();
+    const config = this._config;
+    if (!config || this._editingIndex === undefined) return;
+    this._commit({
+      ...config,
+      badges: replaceBadge(config.badges, this._editingIndex, ev.detail.badge),
+    });
   };
 
   private _moveBadge = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void => {
@@ -1656,10 +1874,32 @@ Add these handlers to the class:
     const config = this._config;
     if (!config) return;
     this._commit({ ...config, badges: removeItem(config.badges, ev.detail.index) });
+    this._editingIndex = undefined;
   };
 ```
 
-Import `BadgeConfig` from `../types`, and extend `render()` so the list follows the form:
+Extend `render()` so the editor shows either the badge form or the background
+form plus the list — never both:
+
+```ts
+    const editing =
+      this._editingIndex !== undefined ? config.badges[this._editingIndex] : undefined;
+
+    if (editing) {
+      return html`
+        <picture-badge-form
+          .hass=${this.hass}
+          .badge=${editing.badge}
+          @badge-changed=${this._badgeChanged}
+          @go-back=${() => {
+            this._editingIndex = undefined;
+          }}
+        ></picture-badge-form>
+      `;
+    }
+```
+
+and, after the existing `ha-form`:
 
 ```ts
       <picture-badges-list
@@ -1672,37 +1912,56 @@ Import `BadgeConfig` from `../types`, and extend `render()` so the list follows 
       ></picture-badges-list>
 ```
 
-Use the `LIST_TAG` constant in the registration, not the literal, in `src/index.ts`:
+- [ ] **Step 11: Register both components**
+
+In `src/index.ts`:
 
 ```ts
+import { PictureBadgeForm } from "./editor/badge-form";
 import { PictureBadgesList } from "./editor/badge-list";
-import { LIST_TAG } from "./config";
+import { FORM_TAG, LIST_TAG } from "./config";
 
 if (!customElements.get(LIST_TAG)) {
   customElements.define(LIST_TAG, PictureBadgesList);
 }
+if (!customElements.get(FORM_TAG)) {
+  customElements.define(FORM_TAG, PictureBadgeForm);
+}
 ```
 
-- [ ] **Step 7: Verify in Home Assistant**
+Add `FORM_TAG = "picture-badge-form"` alongside the other tag constants in
+`src/config.ts`, and use the constants rather than string literals in the
+templates above.
 
-Run: `pnpm build`, reload, edit the card.
+- [ ] **Step 12: Verify in Home Assistant**
+
+Run: `pnpm build`, reload the dashboard (bump `?v=` if cached), edit the card.
 
 Expected:
-- "Add badge" opens the **native** badge picker, including a "Custom" section if any custom-badge library is installed;
-- picking a badge opens its native form; saving adds it **centred** on the image;
-- the pencil reopens the native form for that badge and saving keeps its position;
+- the "Add badge…" list offers **Entity** and **Shortcut**, plus every badge
+  registered in `window.customBadges` by an installed library;
+- picking one appends it **centred** on the image and opens its form
+  immediately;
+- the form is the badge's **own native form** — for `entity`, the entity picker
+  and its options, not a raw YAML box;
+- editing a field updates the preview live and writes through to the YAML tab;
+- Back returns to the list;
+- the pencil reopens a badge's form and its position is unchanged on return;
 - the trash removes the right row;
-- dragging a row by its handle reorders the list, and a row moved lower is drawn **on top** on the preview, with every position unchanged;
-- a "Saved" toast appears when a dialog closes. This is the known, accepted verruca — not a bug.
+- dragging a row by its handle reorders the list, and a row moved lower is drawn
+  **on top** on the preview, with every position unchanged;
+- installing a custom badge library and picking one of its badges shows that
+  library's own form.
 
-If the picker does not open, check the console: this exercises verification tasks 2 and 3 from the spec (the shim satisfying `findLovelaceContainer`, and `show-dialog` reaching the dialog manager). If `ha-sortable` is undefined, apply the warm-up noted in spec §10.4.
+If a badge class has no `getConfigElement`, the fallback message must appear
+rather than an empty panel.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 pnpm lint && pnpm test
-git add src/editor/native-dialogs.ts src/editor/native-dialogs.test.ts src/editor/badge-list.ts src/editor/picture-badges-editor.ts src/index.ts
-git commit -m "feat: badge list backed by the native badge dialogs"
+git add src/editor/badge-items.ts src/editor/badge-items.test.ts src/editor/badge-catalog.ts src/editor/badge-catalog.test.ts src/editor/badge-list.ts src/editor/badge-form.ts src/editor/picture-badges-editor.ts src/config.ts src/index.ts
+git commit -m "feat: badge list, picker and per-badge native form"
 ```
 
 ---

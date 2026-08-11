@@ -14,8 +14,12 @@
 			"version": "latest"
 		}
 	},
+	"forwardPorts": [
+		8123
+	],
 	"mounts": [
-		"source=ai-tools-config-${devcontainerId},target=/ai-tools,type=volume"
+		"source=ai-tools-config-${devcontainerId},target=/ai-tools,type=volume",
+		"source=containerd-${devcontainerId},target=/var/lib/containerd,type=volume"
 	],
 	"containerEnv": {
 		"CLAUDE_CONFIG_DIR": "/ai-tools/.claude",
@@ -34,7 +38,14 @@
 				"bierner.markdown-preview-github-styles"
 			],
 			"settings": {
-				"js/ts.tsserver.experimental.enableProjectDiagnostics": true
+				"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
+				// Machine-scoped (the Claude Code extension declares both as `scope: machine`), so they
+				// cannot live in .vscode/settings.json. They belong here rather than in post-create.sh:
+				// VS Code writes these into ~/.vscode-server/data/Machine/settings.json BEFORE attaching,
+				// whereas postCreateCommand runs after the window is already attached — too late for the
+				// session that triggered the rebuild, which then starts without them.
+				"claudeCode.allowDangerouslySkipPermissions": true,
+				"claudeCode.initialPermissionMode": "bypassPermissions"
 			}
 		}
 	},

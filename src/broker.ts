@@ -1,0 +1,57 @@
+import type { Position } from "./position";
+
+/** The single card → editor hop. Everything coming back goes through Home Assistant. */
+export interface EditorChannel {
+  patchPosition(index: number, position: Position): void;
+}
+
+const editors = new Set<EditorChannel>();
+const listeners = new Set<() => void>();
+
+const notify = (): void => {
+  for (const listener of listeners) listener();
+};
+
+export const registerEditor = (channel: EditorChannel): (() => void) => {
+  editors.add(channel);
+  notify();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    editors.delete(channel);
+    notify();
+  };
+};
+
+/**
+ * Observe registry changes.
+ *
+ * Cards derive their editing state from `activeEditor()`, but the registry
+ * changes when an editor mounts or unmounts — events outside any card's own
+ * update cycle. Without this, a card computed its state only when it happened
+ * to render for some other reason: it could miss the editor appearing (drag
+ * never armed, badges still firing their actions) or disappearing (drag left
+ * armed on a dashboard card).
+ *
+ * The listener fires once on subscription as well, so a subscriber that arrives
+ * after the editor registered is not left holding a stale initial state — that
+ * would merely move the race rather than close it.
+ */
+export const subscribeEditors = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  listener();
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
+/**
+ * The active editor, if exactly one is mounted.
+ *
+ * This also discriminates the card-picker gallery from the edit dialog: Home
+ * Assistant sets `preview` in both, but only the dialog mounts an editor, so the
+ * drag layer stays inert in the gallery with no extra signal.
+ */
+export const activeEditor = (): EditorChannel | undefined =>
+  editors.size === 1 ? [...editors][0] : undefined;

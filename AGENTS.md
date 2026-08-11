@@ -52,3 +52,28 @@ task:
 
 Do not ask the user to describe the project — explore first, ask only what
 cannot be inferred.
+
+## Model & Effort Policy (binds superpowers § Model Selection)
+
+Superpowers names tiers, never models. This is the binding mapping, and it
+governs **every** subagent dispatch — superpowers or not.
+
+| Tier     | `model` | `effort` |
+| -------- | ------- | -------- |
+| cheap    | haiku   | low      |
+| standard | sonnet  | medium   |
+| capable  | opus    | high     |
+
+Use these short aliases, not full model IDs — the Agent tool's `model`
+parameter only accepts `sonnet`, `opus`, `haiku`, `fable`. Full IDs belong in
+`CLAUDE_CODE_SUBAGENT_MODEL`, aliases in dispatches.
+
+- **Never dispatch a subagent without an explicit `model`.** An omitted model
+  falls back to `CLAUDE_CODE_SUBAGENT_MODEL` — a default, not a decision.
+- **Always pass `effort` too.** An omitted effort inherits the session level
+  (`high`), cancelling most of the saving a cheap tier is chosen for.
+- Tier choice follows superpowers § Model Selection: complete-spec task over
+  1-2 files → cheap; multi-file integration, debugging, and all reviewers →
+  standard (mid-tier is the floor — turn count beats token price);
+  architecture, design, and the final whole-branch review → capable. Fix-loop
+  rounds 4-5 escalate one tier above the implementer that got stuck.
