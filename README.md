@@ -2,6 +2,16 @@
 
 A Home Assistant Lovelace card that displays an image with badges you position by drag and drop.
 
+## Requirements
+
+**Home Assistant 2025.12.0 or newer.** HACS enforces this and will refuse to
+install on an older version.
+
+The floor comes from `ha-dropdown`, the component behind the "Add badge" button,
+which arrived with Home Assistant's move to Web Awesome in 2025.12. Everything
+else the card relies on — view badges, `window.customBadges`, per-badge config
+forms — has been available since 2024.8.
+
 ## Installation
 
 ### HACS
