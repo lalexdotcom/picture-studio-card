@@ -1,5 +1,6 @@
 import { css, html, LitElement, nothing } from "lit";
 import {
+  EDITOR_TAG,
   normaliseConfig,
   type PictureBadgeItem,
   type PictureBadgesConfig,
@@ -45,6 +46,11 @@ export class PictureBadgesCard extends LitElement {
 
   static getStubConfig(): PictureBadgesConfig {
     return stubConfig();
+  }
+
+  static async getConfigElement(): Promise<HTMLElement> {
+    await import("../editor/picture-badges-editor");
+    return document.createElement(EDITOR_TAG);
   }
 
   /** Must be idempotent: Home Assistant reuses the preview instance. */
