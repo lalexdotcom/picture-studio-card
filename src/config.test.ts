@@ -86,21 +86,6 @@ describe("normaliseConfig", () => {
     expect(out.items[0]?.position).not.toBe(out.items[1]?.position);
   });
 
-  it("migrates a badges[] config to items[]", () => {
-    const out = normaliseConfig({
-      type: CARD_TYPE,
-      badges: [{ badge: { type: "entity", entity: "light.a" }, position: { top: 30, left: 45 } }],
-    });
-    expect(out.items).toEqual([
-      {
-        type: "badge",
-        position: { top: 30, left: 45 },
-        config: { type: "entity", entity: "light.a" },
-      },
-    ]);
-    expect("badges" in out).toBe(false);
-  });
-
   it("defaults a missing item type to badge", () => {
     const out = normaliseConfig({
       type: CARD_TYPE,
@@ -118,21 +103,10 @@ describe("normaliseConfig", () => {
     ).toThrow(/items\[1\]/);
   });
 
-  it("prefers items over badges when both are present", () => {
-    const out = normaliseConfig({
-      type: CARD_TYPE,
-      items: [
-        {
-          type: "badge",
-          config: { type: "entity", entity: "kept" },
-          position: { top: 1, left: 2 },
-        },
-      ],
-      badges: [{ badge: { type: "entity", entity: "dropped" }, position: { top: 3, left: 4 } }],
-    });
-    expect(out.items).toHaveLength(1);
-    expect(out.items[0]?.config).toEqual({ type: "entity", entity: "kept" });
-    expect("badges" in out).toBe(false);
+  it("rejects an item whose config is missing", () => {
+    expect(() =>
+      normaliseConfig({ type: CARD_TYPE, items: [{ position: { top: 1, left: 2 } }] }),
+    ).toThrow(/items\[0\]/);
   });
 });
 

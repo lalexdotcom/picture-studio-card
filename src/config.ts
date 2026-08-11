@@ -46,17 +46,13 @@ const normalisePosition = (raw: unknown): Position => {
 /**
  * Validate and fill in defaults. Returns a fresh object: the config handed to
  * setConfig is frozen by Home Assistant and must never be mutated.
- *
- * Migration: a config with `badges[]` and no `items[]` is converted on read.
- * When both are present, `items` wins and `badges` is dropped.
  */
 export const normaliseConfig = (raw: unknown): PictureBadgesConfig => {
   if (!isRecord(raw)) {
     throw new Error("picture-badges: config must be an object");
   }
 
-  // Prefer `items` when present (even if falsy); fall back to legacy `badges`.
-  const rawItems = "items" in raw ? raw.items : (raw.badges ?? []);
+  const rawItems = raw.items ?? [];
   if (!Array.isArray(rawItems)) {
     throw new Error("picture-badges: `items` must be a list");
   }
@@ -72,28 +68,18 @@ export const normaliseConfig = (raw: unknown): PictureBadgesConfig => {
       throw new Error(`picture-badges: items[${index}] has unsupported type "${String(type)}"`);
     }
 
-    // New shape: config under `config`. Legacy shape: config under `badge`.
-    const config = isRecord(entry.config)
-      ? entry.config
-      : isRecord(entry.badge)
-        ? entry.badge
-        : null;
-    if (config === null) {
+    if (!isRecord(entry.config)) {
       throw new Error(`picture-badges: items[${index}] must have a \`config\` object`);
     }
 
     return {
       type: "badge" as const,
-      config: config as BadgeConfig,
+      config: entry.config as BadgeConfig,
       position: normalisePosition(entry.position),
     };
   });
 
-  // Build a clean base: strip the legacy `badges` key and the raw `items` key
-  // (we add back the normalised items below). Never mutates the input.
-  const base = { ...(raw as Record<string, unknown>) };
-  delete base.badges;
-  return { ...base, items } as PictureBadgesConfig;
+  return { ...(raw as Record<string, unknown>), items } as PictureBadgesConfig;
 };
 
 export const stubConfig = (): PictureBadgesConfig => ({

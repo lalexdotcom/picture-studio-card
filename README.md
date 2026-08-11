@@ -52,10 +52,6 @@ items:
 
 `top` and `left` are numbers from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centred; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions. This is different from `picture-elements`, where `top`/`left` mark the badge's centre point.
 
-### Migration from earlier builds
-
-If you have a config written against an earlier build that uses `badges[]` instead of `items[]`, the card reads and converts it automatically on load. No manual edit is required; the YAML editor will show the new shape after the next save.
-
 ### Custom badges
 
 Any badge registered in `window.customBadges` by another frontend plugin appears automatically in the badge picker and renders on the card. That is the primary use-case for this card.
