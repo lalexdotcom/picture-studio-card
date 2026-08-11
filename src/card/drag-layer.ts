@@ -62,7 +62,14 @@ export const createDragController = (options: DragOptions) => {
     // Survive the cursor leaving the surface.
     hit.element.setPointerCapture(ev.pointerId);
     hit.element.style.cursor = "grabbing";
-    // Neutralise the stored transform so left/top are plain pixels while dragging.
+
+    // Switch to plain pixels for the gesture. Position and transform must move
+    // together: dropping translate(-L%, -T%) while left/top are still
+    // percentages shifts the badge down-right by a fraction of its own size —
+    // its full size at 100/100 — until the first pointermove writes pixels.
+    // These are the values the element already renders at, so nothing moves.
+    hit.element.style.left = `${state.x}px`;
+    hit.element.style.top = `${state.y}px`;
     hit.element.style.transform = "none";
     ev.preventDefault();
     ev.stopPropagation();
