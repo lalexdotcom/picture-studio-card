@@ -65,6 +65,17 @@ describe("normaliseConfig", () => {
       normaliseConfig({ type: CARD_TYPE, badges: [{ position: { top: 1, left: 2 } }] }),
     ).toThrow();
   });
+
+  it("two items with no position get distinct position objects", () => {
+    const out = normaliseConfig({
+      type: CARD_TYPE,
+      badges: [
+        { badge: { type: "entity", entity: "light.a" } },
+        { badge: { type: "entity", entity: "light.b" } },
+      ],
+    });
+    expect(out.badges[0]?.position).not.toBe(out.badges[1]?.position);
+  });
 });
 
 describe("stubConfig", () => {
