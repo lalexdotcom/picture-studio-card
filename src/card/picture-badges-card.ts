@@ -156,11 +156,14 @@ export class PictureBadgesCard extends LitElement {
     if (!root) return;
 
     if (!this._bgElement) {
+      const config = this._config;
+      if (!config) return;
+      const bgConfig = this._bgConfig(config);
       const helpers = await window.loadCardHelpers();
       // Double-check: a concurrent call may have created the element while
       // we awaited. If so, fall through to the setConfig call below.
       if (!this._bgElement) {
-        const el = helpers.createHuiElement({ type: "image" });
+        const el = helpers.createHuiElement(bgConfig);
         el.className = "background";
         this._bgElement = el;
         root.insertBefore(el, root.querySelector(".layer"));
