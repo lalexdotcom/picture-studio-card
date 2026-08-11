@@ -14,10 +14,15 @@ describe("badgeCatalog", () => {
     expect(badgeCatalog([]).map((b) => b.type)).toEqual(["entity", "shortcut"]);
   });
 
-  it("appends custom badges after the core ones, flagged as custom", () => {
-    const out = badgeCatalog([
-      { type: "custom:mushroom-template-badge", name: "Mushroom Template" },
-    ]);
+  /**
+   * The registry holds tag names, not config types — verified against the real
+   * Mushroom bundle, which pushes `{ type: "mushroom-template-badge" }`. An
+   * earlier version of these tests fed pre-prefixed types, which is not what any
+   * library actually registers, so they proved the assumption instead of the
+   * behaviour and missed a real bug.
+   */
+  it("prefixes registry entries so they are valid Lovelace config types", () => {
+    const out = badgeCatalog([{ type: "mushroom-template-badge", name: "Mushroom Template" }]);
     expect(out).toHaveLength(3);
     expect(out[2]).toMatchObject({
       type: "custom:mushroom-template-badge",
@@ -26,14 +31,27 @@ describe("badgeCatalog", () => {
     });
   });
 
+  it("carries the description through, which the picker shows", () => {
+    const out = badgeCatalog([
+      { type: "mushroom-template-badge", description: "Build your own badge using templates" },
+    ]);
+    expect(out[2]?.description).toBe("Build your own badge using templates");
+  });
+
+  it("does not double-prefix an entry that already carries one", () => {
+    const out = badgeCatalog([{ type: "custom:already-prefixed-badge" }]);
+    expect(out[2]?.type).toBe("custom:already-prefixed-badge");
+  });
+
   it("keeps a custom badge with no name, so it stays selectable", () => {
-    const out = badgeCatalog([{ type: "custom:nameless-badge" }]);
+    const out = badgeCatalog([{ type: "nameless-badge" }]);
     expect(out[2]?.type).toBe("custom:nameless-badge");
+    expect(out[2]?.name).toBeUndefined();
   });
 
   it("does not mutate the registry it is given", () => {
-    const registry = [{ type: "custom:a" }];
+    const registry = [{ type: "a-badge" }];
     badgeCatalog(registry);
-    expect(registry).toEqual([{ type: "custom:a" }]);
+    expect(registry).toEqual([{ type: "a-badge" }]);
   });
 });

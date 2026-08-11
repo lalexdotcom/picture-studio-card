@@ -23,23 +23,32 @@ interface BadgeClass {
  * here. If Home Assistant adds a native badge type, add it here too; until then
  * that type stays usable from YAML, since rendering does not filter on this list.
  */
+const CUSTOM_PREFIX = "custom:";
+
 export const CORE_BADGES: BadgeChoice[] = [
   { type: "entity", isCustom: false },
   { type: "shortcut", isCustom: false },
 ];
 
-/** What the native picker shows, minus fuzzy search and entity suggestions. */
+/**
+ * What the native picker shows, minus fuzzy search and entity suggestions.
+ *
+ * `window.customBadges` holds tag names, not config types: Mushroom registers
+ * `mushroom-template-badge`, while a Lovelace config must say
+ * `custom:mushroom-template-badge`. Home Assistant's own picker keeps the bare
+ * name in its list and prefixes it when it builds a config; we prefix here so
+ * everything downstream — the stub, the class lookup, the stored config — deals
+ * in one form. The guard is for a library that registers the prefix itself.
+ */
 export const badgeCatalog = (custom?: CustomBadgeEntry[]): BadgeChoice[] => [
   ...CORE_BADGES,
   ...(custom ?? []).map((entry) => ({
-    type: entry.type,
+    type: entry.type.startsWith(CUSTOM_PREFIX) ? entry.type : `${CUSTOM_PREFIX}${entry.type}`,
     name: entry.name,
     description: entry.description,
     isCustom: true,
   })),
 ];
-
-const CUSTOM_PREFIX = "custom:";
 
 /**
  * The badge's own class, which is what knows how to build its config form.
