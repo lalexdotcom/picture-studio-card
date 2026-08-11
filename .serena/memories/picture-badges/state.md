@@ -2,196 +2,202 @@
 
 A Home Assistant Lovelace custom card, `custom:picture-badges`: an image with
 Lovelace **badges** placed on it, positioned by **dragging them on the live
-preview** inside the normal card-edit dialog. Think "picture-elements, but the
-items are badges and you place them with the mouse".
+preview** inside the normal card-edit dialog. "picture-elements, but the items
+are badges and you place them with the mouse".
 
-Branch `feat/picture-badges`, ~28 commits, not merged. 55 unit tests,
-`tsc --noEmit` clean and wired into CI, Biome clean, single-file build
-`dist/picture-badges.js` (~57 kB / 15 kB gzip).
+**Merged.** `feat/picture-badges` was merged into `main` with `--no-ff`
+(merge commit `42dea4b`) and the branch was deleted. **Nothing is pushed** —
+`main` is ahead of `origin/main`. 78 unit tests, `tsc --noEmit` clean and wired
+into CI, Biome clean, single-file build `dist/picture-badges.js`
+(~61 kB / 16 kB gzip).
 
 ## Where things are
 
 - Spec (authoritative, amended several times): `docs/superpowers/specs/2026-08-11-picture-badges-design.md`
-- Plan (8 original tasks): `docs/superpowers/plans/2026-08-11-picture-badges.md`
+- Plan: `docs/superpowers/plans/2026-08-11-picture-badges.md`
 - Execution ledger, findings, per-task briefs and reports:
-  `.superpowers/sdd/2026-08-11-picture-badges/progress.md` — **read this for the
-  full history**, including every deferred minor finding and every adjudication.
+  `.superpowers/sdd/2026-08-11-picture-badges/progress.md` — full history of the
+  first eight tasks, including every deferred minor finding and adjudication.
 - Local HA for testing: `docker compose` in the repo, container
-  `picture-badges-ha`, http://localhost:8123, resource registered at
-  `/local/picture-badges/picture-badges.js?v=1`. Mushroom is installed as a
-  third-party badge provider at `/local/mushroom/mushroom.js`.
+  `picture-badges-ha` (image `:stable`, currently 2026.8.1),
+  http://localhost:8123, resource at `/local/picture-badges/picture-badges.js?v=1`.
+  Mushroom is installed as a third-party badge provider at `/local/mushroom/mushroom.js`.
+- The shipped frontend bundle is readable inside the container at
+  `/usr/local/lib/python3.14/site-packages/hass_frontend/frontend_latest/*.js`.
+  Grepping it is the fastest way to check what the user's HA actually does,
+  as opposed to what `dev` on GitHub does.
 
 ## Source layout
 
 ```
 src/position.ts        px <-> % conversion, clamping, style derivation (pure, tested)
-src/config.ts          config shape, normalisation, tag constants (pure, tested)
+src/config.ts          config shape, normalisation, ImageSource/imagePath, tags (pure, tested)
+src/strings.ts         our own en/fr catalogue — one string (pure, tested)
 src/broker.ts          editor registry + subscribeEditors (pure, tested)
-src/types.ts           hand-declared HA interfaces
+src/types.ts           hand-declared HA interfaces, incl. LocalizeFunc, LovelaceGridOptions
 src/card/picture-badges-card.ts   background element + badge children + lifecycle
 src/card/drag-layer.ts            pointer gesture, injected callbacks, no HA knowledge
 src/editor/picture-badges-editor.ts  hub: _commit / _reemit, the only exit to HA
-src/editor/background-schema.ts      ha-form schema for the background
-src/editor/badge-list.ts             ha-sortable rows + ha-dropdown add button
+src/editor/background-schema.ts      ha-form schema, labels, form <-> config mapping
+src/editor/badge-list.ts             header, hint, ha-sortable rows, ha-dropdown add button
 src/editor/badge-form.ts             hosts the badge's own native config form
-src/editor/badge-catalog.ts          core + custom badge choices, class lookup
+src/editor/badge-catalog.ts          core + custom badge choices, choiceLabel, class lookup
 src/editor/badge-items.ts            add / replace / move / remove (pure, tested)
 src/index.ts           registration
+src/tests/**           every test, mirroring the source tree
 ```
 
 ## Config shape (current)
 
 ```yaml
 type: custom:picture-badges
-image: /local/plan.png
-entity: light.salon            # needed for state_image / state_filter to resolve
+image: /local/plan.png          # or { media_content_id, media_content_type }
+entity: light.salon             # needed for state_image / state_filter to resolve
+title: My floorplan             # ha-card header
 items:
-  - type: badge                # discriminant; "element" is rejected, reserved for later
+  - type: badge                 # discriminant; "element" is rejected, reserved for later
     position: { top: 30, left: 45 }   # numbers 0-100
-    config:                    # the badge's own config, opaque to us
+    config:                     # the badge's own config, opaque to us
       type: custom:mushroom-template-badge
       entity: light.salon
 ```
 
-Background keys forwarded to the element: `title`, `entity`, `image_entity`,
+`BACKGROUND_KEYS` (forwarded to `hui-image-element`): `entity`, `image_entity`,
 `image`, `camera_image`, `camera_view`, `state_image`, `state_filter`,
-`dark_mode_image`, `dark_mode_filter`, `filter`, `aspect_ratio`, and currently
-`tap_action` / `hold_action` / `double_tap_action` (**being removed**, see
-"Next up").
+`dark_mode_image`, `dark_mode_filter`, `aspect_ratio`, `filter`. **Not** `title`
+(card header) and **no actions at all**.
 
 ## Decisions that must not be re-litigated
 
 - **Proportional anchoring.** `positionStyle` yields `top: L%`, `left: T%` and
-  `transform: translate(-left%, -top%)`. 0 is flush top-left, 50 centred, 100
-  flush bottom-right, so overflow is structurally impossible. The `%` and the
-  transform are **derived at render, never stored**. Rejected: the native
-  `translate(-50%,-50%)` centre model, whose clamp cannot survive a resize.
-- **Pixels during the drag, percentages on release.** `pointermove` mutates the
-  wrapper's own `style.left/top` in px, clamped to `[0, W-w]`; one commit per
-  gesture. Both the entry and the exit of the gesture must write position and
-  transform *together* — each was a separate bug.
+  `transform: translate(-left%, -top%)`. 0 flush top-left, 50 centred, 100 flush
+  bottom-right, so overflow is structurally impossible. The `%` and the transform
+  are **derived at render, never stored**.
+- **Pixels during the drag, percentages on release.** One commit per gesture.
+  Entry and exit must both write position and transform *together*.
 - **One `items[]` list with a `type` discriminant**, payload nested under
-  `config`. A flat shape (badge keys hoisted beside ours, `kind` discriminant)
-  was proposed and withdrawn: it puts our keys in the same namespace as a
-  free-form map, so a third-party badge with a `position` key would lose it.
-- **No `z-index`, ever.** Stacking is DOM order, which is list order, and the
-  list is reorderable.
-- **Single-file build.** `dist/` holds only `picture-badges.js` and its
-  `.LICENSE.txt`. A dynamic import once split the bundle and left
-  `picture-badges.js` with a static `import … from "./612.js"`; releases ship
-  only the one file, so the card died at its first line. Never reintroduce a
-  dynamic import.
+  `config`, so a third-party badge's own keys can never collide with ours.
+- **No `z-index`, ever.** Stacking is DOM order = list order, and the list is
+  reorderable. The editor says so, in the user's language.
+- **Single-file build.** Never reintroduce a dynamic import: it once split the
+  bundle and shipped a static `import … from "./612.js"` that killed the card.
 - **No TypeScript decorators.** Lit components use `static properties`.
 - **Lit is bundled**, never read off an HA prototype.
 - **`config` is opaque**: never read, validate, reorder or rewrite a badge's
   config. Reading `entity`/`name`/`type` for a row label is the one exception.
-- Minimum HA version declared in `hacs.json`: **2025.12.0**, set by `ha-dropdown`
-  (first commit 2025-11-12). Everything else dates from 2024.8.
+- **We stay on `hui-image-element`** even though picture-elements' card renders
+  `hui-image` directly. The element resolves `image_entity` (image/person) and
+  unwraps the media object for us, and `hui-image` has no public factory — we
+  would need `loadCardHelpers()` anyway just to pull its chunk in.
 
 ## Hard-won facts about Home Assistant (verified in their source)
 
 - **The native badge dialogs are unreachable.** `showCreateBadgeDialog` /
   `showEditBadgeDialog` fire `show-dialog` with a `dialogImport` closure their
-  bundler resolved at build time. `make-dialog-manager.ts` does
-  `if (!(tag in LOADED)) { if (!dialogImport) return false }` — **silent failure
-  in production**. Confirmed in the browser: both tags undefined on a fresh load.
-  We add badges with our own picker and edit them through the badge class's own
-  `static getConfigElement()`, the same route `HuiBadgeElementEditor` takes.
-- **`window.customBadges` holds tag names, not config types.** Mushroom
-  registers `mushroom-template-badge`; a config needs
-  `custom:mushroom-template-badge`. `badgeCatalog` prefixes at the boundary.
-- The native picker's core list is `coreBadges` in
-  `src/panels/lovelace/editor/lovelace-badges.ts`: exactly `entity` and
-  `shortcut`. Mirrored in `CORE_BADGES`, which cannot be imported.
-- `ha-sortable` **is** defined in the card-edit dialog; the badge dialogs are
-  not. Always check `customElements.get(...)` in the browser console before
-  depending on an HA component.
+  bundler resolved at build time; `make-dialog-manager.ts` silently returns
+  false in production. We add badges with our own picker and edit them through
+  the badge class's own `static getConfigElement()`.
+- **`window.customBadges` holds tag names, not config types.** `badgeCatalog`
+  prefixes `custom:` at the boundary.
+- Core badges are exactly `entity` and `shortcut` (`coreBadges`, not importable).
 - `hui-image` resolves `state_image` / `state_filter` against **its `entity`
   property**. Without `entity` they are inert.
-- `hui-image-element` (the picture-elements `image` type) forwards every key we
-  need plus `actionHandler`/`handleAction`, and has no layout styles, so it works
-  in normal flow. It does **not** forward `fit_mode` — and picture-elements does
-  not expose `fit_mode` either, deliberately: cropping breaks the correspondence
-  between percentages and image content.
-- `hui-image-element.setConfig` only rejects a falsy config, and defaults
-  `tap_action`/`hold_action` to `more-info` when absent.
+- **`hui-image-element.setConfig` defaults `tap_action` AND `hold_action` to
+  `more-info`** when absent, toggles a `clickable` class, and feeds
+  `computeTooltip`, which invents a "Tap to show more info" hover tooltip.
+  Both must be pinned to `{ action: "none" }`; pinning only one leaves the
+  hold tooltip behind.
+- **`title` means two different things.** picture-elements puts it in
+  `<ha-card .header>`; `hui-image-element` passes it to `computeTooltip`, i.e.
+  a hover tooltip. We render it as the header ourselves.
+- **`hui-image-element` unwraps `image.media_content_id` but not
+  `dark_mode_image`** — it hands the raw value to `hui-image`, which wants a
+  string. We unwrap both in `_bgConfig` via `imagePath`.
+- **`ha-selector-media` reads `value.media_content_id` and nothing else.** A
+  plain path shows an empty picker and opens the browse dialog with no
+  `defaultId`, so "manual entry" is blank too. Their editor wraps strings in
+  `_processData`; `backgroundData` does the same.
+- **Labels come from HA's catalogue, keyed on the field name**:
+  `ui.panel.lovelace.editor.card.generic.<name>`, except `dark_mode_image`,
+  `state_filter`, `dark_mode_filter`, which live under
+  `…card.picture-elements.<name>`. Always with their `|| name` fallback.
+  Reusable keys we already use: `editor.badges.name` / `.edit` / `.remove`,
+  `editor.edit_badge.add`, `editor.badge.<type>.name`,
+  `…picture-elements.card_options`, `…picture.content_id_helper`,
+  `…generic.camera_view_options.<value>`.
+- **No API lets a custom card register translations.** `localize` serves HA's
+  own keys, `loadBackendTranslation` needs an integration behind it,
+  `loadFragmentTranslation` is for HA's panels. Hence `src/strings.ts`.
+- An **undefined `ha-selector-*` tag proves nothing**: `ha-selector.ts` holds a
+  table of 58 dynamic loaders and pulls the sub-component itself. Test a
+  selector by rendering a form that uses it, not by probing `customElements`.
+- `ha-sortable` **is** defined in the card-edit dialog; the badge dialogs are not.
 - `hui-sub-element-editor` handles `row`, `header`, `footer`, `element`,
   `feature`, `heading-badge` — **not** `badge`.
 - **`visibility` on a badge does nothing here.** HA evaluates those conditions in
   the *container* (`checkConditionsMet`, internal). Documented as unsupported.
-  Editing it without evaluating it would be worse than nothing.
-- `applyThemesOnElement` is internal, so `theme` cannot be honoured.
+- `applyThemesOnElement` is internal, so `theme` cannot be honoured — which is
+  why the background form drops the field picture-elements has.
+- **Sections grid sizing** (`hui-grid-section.ts`): 12 columns × `column_span`,
+  `--row-height: 56px`, `--row-gap: 8px`. `rows: N` adds `.fit-rows`, i.e.
+  `height: N×64−8` px; `rows: "auto"` follows the content; `columns: "full"` is
+  `grid-column: 1 / -1`. `hui-card` is `height: 100%`, so a card that does not
+  claim that height spills out of its cell.
+- **`hui-picture-elements-card` declares neither `getGridOptions` nor
+  `getLayoutOptions`**, so it shows the same "does not fully support resizing"
+  banner we did. Verified in their source and in the shipped bundle. We declare
+  `{ columns: 12, rows: "auto", min_columns: 3 }` anyway — the one place we
+  deliberately do better than picture-elements.
+- `hui-image.fitMode` exists but `hui-image-element` does not forward it, and
+  picture-elements refuses to expose `fit_mode` on purpose: cropping breaks the
+  correspondence between percentages and image content.
 
 ## The recurring trap
 
-Three times now a key has been accepted and documented while doing nothing:
-`state_image` (no `entity`), `visibility` (never evaluated), and `theme` would
-have been the fourth. **Before exposing any config key, verify that something
-actually consumes it.** A form field that saves cleanly and changes nothing is
+Four times a key has been accepted and documented while doing nothing, or
+something else: `state_image` (no `entity`), `visibility` (never evaluated),
+`theme` (internal API), and `title` (tooltip, not header). **Before exposing any
+config key, verify that something actually consumes it, and that it consumes it
+the way the label claims.** A field that saves cleanly and changes nothing is
 worse than an absent one.
 
-## Next up — the config UI, aligned with picture-elements
+## Follow-ups
 
-The user wants our editor to mirror `hui-picture-elements-card-editor`. Its real
-schema, fetched from their source:
-
-```ts
-{ name: "", type: "expandable", title: "Card options", schema: [
-  { name: "title",            selector: { text: {} } },
-  { name: "image",            selector: { media: { accept: ["image/*"], clearable: true,
-                                                   image_upload: true, hide_content_type: true,
-                                                   content_id_helper: <localised> } } },
-  { name: "dark_mode_image",  selector: { media: { …identical… } } },
-  { name: "camera_image",     selector: { entity: { domain: "camera" } } },
-  { name: "camera_view",      selector: { select: { options: ["auto","live"], mode: "dropdown" } } },
-  { name: "theme",            selector: { theme: {} } },
-  { name: "state_filter",     selector: { object: {} } },
-  { name: "dark_mode_filter", selector: { object: {} } },
-]}
-```
-
-Decisions taken for our version:
-
-1. Reproduce that expandable "Card options" section **minus `theme`** (inert for
-   us, see above).
-2. A "Badges" section with a header and the existing note about list order
-   determining stacking.
-3. **Remove the actions entirely** — `PictureElementsCardConfig` has no
-   `tap_action`/`hold_action`/`double_tap_action` at all, not even in YAML, so
-   neither do we. Drop them from `PictureBadgesConfig`, from the background
-   schema, and from the README.
-   **Watch out:** `hui-image-element.setConfig` defaults `tap_action` and
-   `hold_action` to `more-info` when they are absent, and toggles a `clickable`
-   class. To match picture-elements, where the background has no action at all,
-   pass `tap_action: { action: "none" }` explicitly when building the element's
-   config.
-4. `entity`, `image_entity`, `state_image`, `aspect_ratio` and `filter` stay
-   YAML-only — picture-elements leaves them out of its form too.
-
-Checked and cleared: the console reported `false` for `ha-selector-media`,
-`ha-selector-object` and `ha-selector-theme`, but **that is a false negative**.
-`ha-selector.ts` holds a table of 58 dynamic loaders — `media`, `object`,
-`theme`, `select`, `text` are all in it — and loads the sub-component itself when
-a schema asks for it. HA owns the pointer to its own chunk and uses it on our
-behalf; the exact inverse of the badge dialogs, where *we* had to supply a
-`dialogImport` we could not build. Declaring `selector: { media: {} }` is enough.
-
-Generalise: an undefined `ha-selector-*` tag proves nothing. Test availability by
-rendering a form that uses the selector, not by probing `customElements`.
+1. **Nothing is pushed.** `main` is ahead of `origin/main` by the whole feature
+   plus three chores. No release tag, no HACS release.
+2. **The last batch is unverified in a browser**: `getGridOptions`, the
+   `:host`/`ha-card` height claim, and `overflow-y: auto` (scroll instead of
+   crop when `rows` is pinned). The media picker fix and the layout banner were
+   observed by the user; these three were not.
+3. **The declared minimum HA version (2025.12.0, `hacs.json`) is probably
+   understated now.** The background form uses media selector options
+   (`image_upload`, `content_id_helper`, `accept`, `hide_content_type`), the
+   badge list uses `--ha-space-*` design tokens, and the card declares
+   `getGridOptions`. None of those dates has been checked. Check before release.
+4. **`dark_mode_filter` is a plain CSS string** in `hui-image`, yet both HA's
+   form and ours expose it with an `object` selector (their label even says
+   "Dark mode state filter"). Kept for parity — the object selector is the
+   convenient code editor, which is why they use it.
+5. **`src/strings.ts` ships `en` and `fr` only.** Everything else falls back to
+   English. Adding a language is one line; adding a *string* is the thing to
+   avoid, since HA's catalogue is free and translated.
+6. Vertical overflow scrolling is the consumer's problem to avoid: pinning
+   `rows` is what creates it, `rows: "auto"` never does.
 
 ## How we work (project rules, see AGENTS.md)
 
 - Chat in **French**, everything else in English.
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
-  The user confirmed this workflow explicitly when offered the alternative.
-- Serena's symbolic tools are primary for code. `.serena/project.yml` originally
-  declared `language_servers: [bash]` (frozen when the repo held only shell
-  scripts), which silently broke `find_symbol` for every subagent; `typescript`
-  has been added.
-- Implementation goes through dispatched subagents with a written brief, then a
-  reviewer, then a scoped re-review of any fix. Model/effort per AGENTS.md:
-  sonnet/medium as the floor, opus/high for the final whole-branch review.
+- Serena's symbolic tools are primary for code. `.serena/project.yml` is now
+  tracked and declares `typescript` before `bash`; the cache and
+  `project.local.yml` are ignored. If `find_symbol` starts failing on `.ts`,
+  check `Active language servers` first — a stale activation only lists `bash`,
+  and restarting the MCP server fixes it.
+- Implementation went through dispatched subagents with a written brief, then a
+  reviewer, for the first eight tasks; the picture-elements alignment was done
+  inline. Model/effort per AGENTS.md.
 - **Never touch git while a subagent is running** — one commit swept up an
   implementer's staged file.
 - Review findings have twice been right in conclusion and wrong in mechanism.
-  Verify a claim in HA's source before dispatching a fix for it.
+  Verify a claim in HA's source before dispatching a fix for it. Grep the
+  container's bundle when the question is "what does *this* HA do".
