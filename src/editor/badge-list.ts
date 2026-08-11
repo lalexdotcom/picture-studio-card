@@ -6,6 +6,7 @@ import { type BadgeChoice, badgeCatalog } from "./badge-catalog";
 
 const HANDLE_PATH =
   "M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z";
+const PLUS_PATH = "M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z";
 const PENCIL_PATH =
   "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z";
 const TRASH_PATH =
@@ -36,10 +37,9 @@ export class PictureBadgesList extends LitElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
-  private _add(ev: Event): void {
-    const select = ev.target as HTMLSelectElement;
-    const type = select.value;
-    select.value = "";
+  /** ha-dropdown reports the chosen entry on wa-select, not on the trigger. */
+  private _add(ev: CustomEvent<{ item?: { value?: string } }>): void {
+    const type = ev.detail?.item?.value;
     if (type) this._fire("item-add", { type });
   }
 
@@ -78,10 +78,15 @@ export class PictureBadgesList extends LitElement {
           )}
         </div>
       </ha-sortable>
-      <select class="add" @change=${this._add}>
-        <option value="">Add badge…</option>
-        ${choices.map((c) => html`<option value=${c.type}>${choiceLabel(c)}</option>`)}
-      </select>
+      <ha-dropdown class="add" @wa-select=${this._add}>
+        <ha-button slot="trigger" appearance="filled" size="s">
+          <ha-svg-icon .path=${PLUS_PATH} slot="start"></ha-svg-icon>
+          Add badge
+        </ha-button>
+        ${choices.map(
+          (c) => html`<ha-dropdown-item .value=${c.type}>${choiceLabel(c)}</ha-dropdown-item>`,
+        )}
+      </ha-dropdown>
     `;
   }
 
@@ -112,10 +117,10 @@ export class PictureBadgesList extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* The trigger sizes itself; only the spacing is ours. */
     .add {
+      display: block;
       margin-top: 12px;
-      width: 100%;
-      padding: 8px;
     }
   `;
 }
