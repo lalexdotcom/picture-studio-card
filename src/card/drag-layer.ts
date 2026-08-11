@@ -39,6 +39,7 @@ export const createDragController = (options: DragOptions) => {
 
   const onPointerDown = (ev: PointerEvent): void => {
     if (ev.button !== 0) return;
+    if (state) return; // ignore a second pointer while a drag is in progress
     const hit = options.getIndexedWrapper(ev.target);
     const surface = options.getSurface();
     if (!hit || !surface) return;
@@ -127,6 +128,10 @@ export const createDragController = (options: DragOptions) => {
       root?.removeEventListener("pointercancel", onPointerUp);
       root = undefined;
       state = undefined;
+    },
+    /** The index of the badge currently being dragged, or undefined if idle. */
+    draggingIndex(): number | undefined {
+      return state?.hit.index;
     },
   };
 };

@@ -154,7 +154,14 @@ export class PictureBadgesCard extends LitElement {
   }
 
   private _applyPositions(items: PictureBadgeItem[]): void {
+    const dragging = this._drag.draggingIndex();
     items.forEach((item, index) => {
+      // Leave the badge under the cursor alone: its styles are live pixels
+      // managed by the drag controller. Writing the stored config position over
+      // them would jump the badge back toward its pre-drag location on every
+      // hass tick. Once the drag ends, onPointerUp restores the derived style
+      // and the next _applyPositions then matches it exactly — no flash.
+      if (index === dragging) return;
       const wrapper = this._wrappers[index];
       if (!wrapper) return;
       const style = positionStyle(item.position);
