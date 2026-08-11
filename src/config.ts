@@ -4,6 +4,7 @@ import type { BadgeConfig } from "./types";
 export const CARD_TAG = "picture-badges";
 export const EDITOR_TAG = "picture-badges-editor";
 export const LIST_TAG = "picture-badges-list";
+export const FORM_TAG = "picture-badge-form";
 export const CARD_TYPE = "custom:picture-badges";
 
 /** One placed badge: opaque content plus the position we own. */
