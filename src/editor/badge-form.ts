@@ -42,10 +42,26 @@ export class PictureBadgeForm extends LitElement {
       this._editor = undefined;
       this._editorType = badge.type;
 
+      // Capture the requested type before any suspension point so that stale
+      // resumptions (from a concurrent invocation triggered by a later render)
+      // can be detected and discarded after each await.
+      const requestedType = badge.type;
+
       const cls = await resolveBadgeClass(badge.type);
-      if (!cls?.getConfigElement) return;
+      if (this.badge?.type !== requestedType) return; // stale: a newer invocation handles this
+
+      if (!cls?.getConfigElement) {
+        // _editorType is a plain private field (non-reactive), so the assignment
+        // above did not schedule a render. Request one now so the fallback
+        // message becomes visible. The second pass sees _editorType === badge.type
+        // and exits before any await, so there is no loop.
+        this.requestUpdate();
+        return;
+      }
 
       const editor = (await cls.getConfigElement()) as BadgeEditorElement;
+      if (this.badge?.type !== requestedType) return; // stale: a newer invocation handles this
+
       editor.addEventListener("config-changed", this._onChange);
       this._editor = editor;
       host.append(editor);
