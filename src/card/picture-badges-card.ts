@@ -215,8 +215,16 @@ export class PictureBadgesCard extends LitElement {
       inset: 0;
       pointer-events: none;
     }
+    /* max-content, not shrink-to-fit: an absolutely positioned box with a left
+       and no right is sized against the space remaining to its right, which is
+       zero at left:100% — the badge would collapse to its minimum width and
+       wrap its text. The transform runs after layout, so it cannot give the
+       space back. Sizing to the content also keeps the width constant while
+       dragging, which the drag clamp relies on: it measures the badge once at
+       pointerdown and bounds the gesture to [0, W - w]. */
     .item {
       position: absolute;
+      width: max-content;
       pointer-events: auto;
     }
     /* While editing, the wrapper keeps the pointer and the badge never sees a
