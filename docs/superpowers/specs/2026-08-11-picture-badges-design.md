@@ -57,7 +57,7 @@ Each of these was weighed against at least one rejected alternative.
 **Rejected:** keep `elements[]` and add a `custom:badge-element` type, so the
 config stays a valid `picture-elements` config.
 
-**Chosen:** a dedicated `badges[]` schema (§5).
+**Chosen:** a dedicated `items[]` schema (§6).
 
 The entire cost of this project sits in the editor. A `picture-elements`
 superset forces that editor to cover every native element type — `icon`,
@@ -221,7 +221,7 @@ src/
   editor/picture-badges-editor.ts   hub: _commit / _reemit / _applying
   editor/badge-list.ts          ha-sortable rows, add button
   editor/background-schema.ts   ha-form schema for the background
-  editor/badge-items.ts         add / move / remove on badges[]          ← pure, tested
+  editor/badge-items.ts         add / move / remove on items[]           ← pure, tested
   editor/badge-catalog.ts       core + custom badge choices, class lookup
 ```
 
@@ -343,9 +343,8 @@ tracking, no fuzzy search, no entity suggestions. What it keeps: the real,
 per-type, native config form for every badge, custom ones included — which was
 the whole point of choosing badge vocabulary.
 
-Add, edit, delete and reorder all act directly on `badges[]`, moving each
-`{badge, position}` pair as a unit, so a reorder changes stacking without
-disturbing any position. A newly added badge lands at the centre of the image,
+Add, edit, delete and reorder all act directly on `items[]`, moving each item
+as a unit, so a reorder changes stacking without disturbing any position. A newly added badge lands at the centre of the image,
 ready to be dragged.
 
 ### 5.3 Convergence
@@ -361,32 +360,50 @@ Drag (`patchPosition`), the badge form, the list operations and the background
 ```yaml
 type: custom:picture-badges
 image: /local/plan.png        # or camera_image / camera_view / state_image / dark_mode_image
-aspect_ratio: "16:9"          # plus filter, fit_mode — anything hui-image accepts
-badges:
-  - badge:                    # a Lovelace badge config, opaque to us
-      type: custom:mushroom-template-badge
-      entity: light.salon
-    position:
+aspect_ratio: "16:9"          # plus filter — anything hui-image accepts
+items:
+  - type: badge               # ours: which family this item belongs to
+    position:                 # ours: numbers 0–100
       top: 30
       left: 45
+    config:                   # the item's own config, opaque to us
+      type: custom:mushroom-template-badge
+      entity: light.salon
 ```
 
-**`badge` is opaque.** We never read, validate or rewrite its contents; it
-travels between the native dialog and `createBadgeElement` untouched. That is
-what makes third-party badges work with no code of ours, and what will make
-future native badges work too.
+**One list.** A single `items[]` rather than one array per family, because
+stacking order *is* list order — two arrays would mean two orders to reconcile
+for no gain.
 
-**`position` is separate, in numbers 0–100.** Separate, because that boundary is
-the whole justification for this vocabulary: the native form edits `badge` and
-cannot see `position`; the drag layer edits `position` and cannot damage
-`badge`. Numbers rather than CSS strings, because percentages are all we need —
-comparing, clamping and testing them stays trivial, and the YAML stays readable.
+**`type` discriminates the family, `config` carries the payload.** A flatter
+shape was considered, with the badge's own keys hoisted next to ours and a
+`kind` discriminant to avoid colliding with the badge's `type`. It reads better,
+but it puts our keys in the same namespace as a free-form map: a third-party
+badge with a key named `position` would silently lose it. Nesting under `config`
+removes the risk entirely and lets the discriminant stay `type`, since the two
+live at different levels.
 
-The `%` suffix and `translate(-left%, -top%)` are **derived at render time,
-never stored**. One source of truth, no possible drift between the two.
+Today only `type: badge` is accepted. `type: element`, for picture-elements
+elements, is why the discriminant exists at all, and is deliberately rejected
+until it is implemented and tested.
 
-No version key, no free-form `style`, no `z-index`. A badge without `position`
+**`position` is in numbers 0–100**, and the `%` suffix and
+`translate(-left%, -top%)` are **derived at render time, never stored**. One
+source of truth, no possible drift between the two.
+
+**`config` is opaque.** We never read, validate, reorder or rewrite its
+contents; it travels between the badge's own form and `createBadgeElement`
+untouched. That is what makes third-party badges work with no code of ours.
+
+No version key, no free-form `style`, no `z-index`. An item without `position`
 falls at the centre.
+
+**Not supported, and documented as such:** `visibility` on a badge. Home
+Assistant evaluates those conditions in the *container* — `hui-section` does it
+with `checkConditionsMet` — so a badge here would stay visible whatever its
+conditions say. Supporting it means reimplementing the condition evaluator and
+surfacing `ha-card-conditions-editor`; doing only one half would be worse than
+neither, since the form would save cleanly and change nothing.
 
 Storage-mode dashboards persist this as JSON in `.storage`; the dialog's YAML
 editor serialises it in block style, as above.
@@ -457,9 +474,9 @@ Rstest, on what is worth testing and testable without a DOM:
 
 - **Position conversion** — `L = 100·X/(W−w)`, clamping, two-decimal rounding,
   the degenerate `W == w`.
-- **List operations** — add, replace-at-index, delete and reorder on `badges[]`,
-  each moving a `{badge, position}` pair as a unit, so a reorder never disturbs
-  a position and an added badge lands centred.
+- **List operations** — add, replace-at-index, delete and reorder on `items[]`,
+  each moving an item as a unit, so a reorder never disturbs a position and an
+  added badge lands centred.
 - **Badge catalogue** — merging `CORE_BADGES` with `window.customBadges`,
   including the empty and absent cases.
 
