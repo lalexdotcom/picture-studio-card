@@ -99,7 +99,7 @@ export class PictureBadgesCard extends LitElement {
     } else {
       this._drag.detach();
     }
-    this._syncBadges();
+    void this._syncBadges();
   }
 
   private get _layer(): HTMLElement | null {

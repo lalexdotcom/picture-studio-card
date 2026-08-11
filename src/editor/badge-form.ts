@@ -27,6 +27,10 @@ export class PictureBadgeForm extends LitElement {
   private _editor?: BadgeEditorElement;
   /** The type the mounted editor was built for; a type change needs a new one. */
   private _editorType?: string;
+  /** Monotonic counter; incremented on each rebuild so that stale async
+   * resumptions — including an A→B→A sequence where two "A" invocations both
+   * pass a type-string comparison — are detected and discarded. */
+  private _editorGen = 0;
 
   protected updated(): void {
     void this._syncEditor();
@@ -42,13 +46,14 @@ export class PictureBadgeForm extends LitElement {
       this._editor = undefined;
       this._editorType = badge.type;
 
-      // Capture the requested type before any suspension point so that stale
-      // resumptions (from a concurrent invocation triggered by a later render)
-      // can be detected and discarded after each await.
-      const requestedType = badge.type;
+      // Increment the generation counter at the start of the async rebuild.
+      // Capturing it locally and comparing after each await closes the A→B→A
+      // race: two "A" invocations both pass a type-string comparison, but only
+      // the second one sees the current generation value — the first bails out.
+      const gen = ++this._editorGen;
 
       const cls = await resolveBadgeClass(badge.type);
-      if (this.badge?.type !== requestedType) return; // stale: a newer invocation handles this
+      if (this._editorGen !== gen) return; // stale
 
       if (!cls?.getConfigElement) {
         // _editorType is a plain private field (non-reactive), so the assignment
@@ -60,7 +65,7 @@ export class PictureBadgeForm extends LitElement {
       }
 
       const editor = (await cls.getConfigElement()) as BadgeEditorElement;
-      if (this.badge?.type !== requestedType) return; // stale: a newer invocation handles this
+      if (this._editorGen !== gen) return; // stale
 
       editor.addEventListener("config-changed", this._onChange);
       this._editor = editor;

@@ -25,7 +25,7 @@ state_image:                       # optional: entity-state → image URL map
   "on": /local/on.png
   "off": /local/off.png
 dark_mode_image: /local/floorplan-dark.png   # optional
-aspect_ratio: "16x9"               # optional, e.g. "16x9" or "1x1"
+aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
 fit_mode: cover                    # optional: "cover" | "contain" | "fill"
 badges:

@@ -15,12 +15,6 @@ export interface BadgeConfig {
   [key: string]: unknown;
 }
 
-/** The synthetic Lovelace config we hand to the native badge dialogs. */
-export interface LovelaceShim {
-  views: { badges: BadgeConfig[] }[];
-  [key: string]: unknown;
-}
-
 export interface LovelaceBadgeElement extends HTMLElement {
   hass?: HomeAssistant;
   setConfig(config: BadgeConfig): void;
@@ -33,6 +27,7 @@ export interface CardHelpers {
 export interface CustomBadgeEntry {
   type: string;
   name?: string;
+  description?: string;
 }
 
 declare global {

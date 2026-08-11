@@ -7,6 +7,7 @@
     "test": "rstest run",
     "dev": "rslib build --watch",
     "build": "rslib build",
+    "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
     "ha:up": "mkdir -p dist .ha/config && docker compose up -d",
