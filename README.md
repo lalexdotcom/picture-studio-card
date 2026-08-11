@@ -6,7 +6,44 @@ A Home Assistant Lovelace card that displays an image with badges you position b
 
 ### HACS
 
-> HACS installation instructions will be added in a future release.
+1. In Home Assistant, open **HACS → ⋮ → Custom repositories**.
+2. Add `https://github.com/my-lalex/ha-extra-picture-elements` as a **Lovelace** plugin.
+3. Search for **Picture Badges** and install it.
+4. Go to **Settings → Dashboards → ⋮ → Resources → Add resource**.
+5. URL: `/hacsfiles/picture-badges/picture-badges.js` — Type: **JavaScript module**.
+6. Reload the page.
+
+## Configuration
+
+```yaml
+type: custom:picture-badges
+# One of image or camera_image is required
+image: /local/floorplan.png
+camera_image: camera.front_door   # optional, instead of image
+camera_view: auto                  # optional: "auto" | "live"
+state_image:                       # optional: entity-state → image URL map
+  "on": /local/on.png
+  "off": /local/off.png
+dark_mode_image: /local/floorplan-dark.png   # optional
+aspect_ratio: "16x9"               # optional, e.g. "16x9" or "1x1"
+filter: brightness(0.9)            # optional CSS filter
+fit_mode: cover                    # optional: "cover" | "contain" | "fill"
+badges:
+  - badge:
+      type: entity                 # any Lovelace badge config
+      entity: sensor.temperature
+    position:
+      top: 30      # 0 = flush top, 50 = centred, 100 = flush bottom
+      left: 60     # 0 = flush left, 50 = centred, 100 = flush right
+```
+
+### Position anchoring
+
+`top` and `left` are numbers from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centred; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions. This is different from `picture-elements`, where `top`/`left` mark the badge's centre point.
+
+### Custom badges
+
+Any badge registered in `window.customBadges` by another frontend plugin appears automatically in the badge picker and renders on the card. That is the primary use-case for this card.
 
 ## Development
 
