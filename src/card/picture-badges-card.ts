@@ -1,4 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
+import { activeEditor } from "../broker";
 import {
   EDITOR_TAG,
   normaliseConfig,
@@ -8,6 +9,7 @@ import {
 } from "../config";
 import { positionStyle } from "../position";
 import type { HomeAssistant, LovelaceBadgeElement } from "../types";
+import { createDragController } from "./drag-layer";
 
 export class PictureBadgesCard extends LitElement {
   static properties = {
@@ -25,6 +27,18 @@ export class PictureBadgesCard extends LitElement {
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
   private _renderedTypes: string[] = [];
+
+  private _drag = createDragController({
+    getIndexedWrapper: (target) => {
+      const wrapper = (target as HTMLElement | null)?.closest?.(".item") as HTMLElement | null;
+      const index = wrapper?.dataset.index;
+      return wrapper && index !== undefined
+        ? { element: wrapper, index: Number(index) }
+        : undefined;
+    },
+    getSurface: () => this.renderRoot.querySelector(".layer"),
+    onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
+  });
 
   constructor() {
     super();
@@ -61,7 +75,30 @@ export class PictureBadgesCard extends LitElement {
     return 4;
   }
 
+  /**
+   * Editing means: shown as a preview AND an editor is mounted. `preview` alone
+   * is also true in the card-picker gallery, where no editor exists — so the
+   * broker discriminates the two with no extra signal.
+   */
+  private _syncEditing(): void {
+    const editing = this.preview && activeEditor() !== undefined;
+    if (editing === this.editing) return;
+    this.editing = editing;
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._drag.detach();
+  }
+
   protected updated(): void {
+    this._syncEditing();
+    const layer = this._layer;
+    if (this.editing && layer) {
+      this._drag.attach(layer);
+    } else {
+      this._drag.detach();
+    }
     this._syncBadges();
   }
 
