@@ -1,6 +1,6 @@
 import { html, LitElement, nothing } from "lit";
 import { type EditorChannel, registerEditor } from "../broker";
-import { CARD_TYPE, normalizeConfig, type PictureStudioConfig } from "../config";
+import { CARD_TYPE, normalizeConfig, type PictureStudioConfig, storedConfig } from "../config";
 import type { Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
@@ -84,7 +84,8 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (this._applying) return;
     this.dispatchEvent(
       new CustomEvent("config-changed", {
-        detail: { config: { ...config, type: CARD_TYPE } },
+        // The one exit to HA, so the one place that serialises positions.
+        detail: { config: { ...storedConfig(config), type: CARD_TYPE } },
         bubbles: true,
         composed: true,
       }),

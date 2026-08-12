@@ -54,7 +54,7 @@ entity: light.salon             # needed for state_image / state_filter to resol
 title: My floorplan             # ha-card header
 items:
   - type: badge                 # discriminant; "element" is rejected, reserved for later
-    position: { top: 30, left: 45 }   # numbers 0-100
+    position: { top: 30%, left: 45% } # 0-100; a bare number is read too
     config:                     # the badge's own config, opaque to us
       type: custom:mushroom-template-badge
       entity: light.salon
@@ -73,6 +73,13 @@ items:
   are **derived at render, never stored**.
 - **Pixels during the drag, percentages on release.** One commit per gesture.
   Entry and exit must both write position and transform *together*.
+- **Percent strings in the stored config, numbers in the code.** `parsePercent`
+  reads `30`, `"30"` and `"30%"` and clamps to [0, 100]; `storedConfig`
+  serialises back to `"30%"` at `_reemit`, the single exit to HA. Accepting the
+  notation without also writing it would have been worse than not accepting it:
+  the first drag would silently rewrite what the user typed. Unquoted `top: 30%`
+  is a plain string in YAML — verified with the container's own PyYAML — while a
+  *leading* `%` would be a scanner error, which never happens here.
 - **One `items[]` list with a `type` discriminant**, payload nested under
   `config`, so a third-party badge's own keys can never collide with ours.
 - **No `z-index`, ever.** Stacking is DOM order = list order, and the list is

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import { CARD_TYPE, imagePath, normalizeConfig, stubConfig } from "../config";
+import { CARD_TYPE, imagePath, normalizeConfig, storedConfig, stubConfig } from "../config";
 
 describe("imagePath", () => {
   it("keeps a hand-written path as-is", () => {
@@ -144,5 +144,37 @@ describe("stubConfig", () => {
 
   it("has an image so the gallery preview is not an empty frame", () => {
     expect(stubConfig().image).toBeTruthy();
+  });
+});
+
+describe("storedConfig", () => {
+  it("writes positions as percentages", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "badge", config: { type: "entity" }, position: { top: 30, left: 60.5 } }],
+    });
+    const out = storedConfig(config) as { items: { position: unknown }[] };
+    expect(out.items[0]?.position).toEqual({ top: "30%", left: "60.5%" });
+  });
+
+  it("survives a round trip unchanged, so the editor never rewrites what it read", () => {
+    const raw = {
+      type: CARD_TYPE,
+      items: [
+        { type: "badge", config: { type: "entity" }, position: { top: "30%", left: "60.5%" } },
+      ],
+    };
+    const once = storedConfig(normalizeConfig(raw));
+    const twice = storedConfig(normalizeConfig(once));
+    expect(twice).toEqual(once);
+    expect((once as { items: { position: unknown }[] }).items[0]?.position).toEqual({
+      top: "30%",
+      left: "60.5%",
+    });
+  });
+
+  it("leaves the rest of the config alone", () => {
+    const config = normalizeConfig({ type: CARD_TYPE, image: "/local/plan.png", items: [] });
+    expect(storedConfig(config)).toEqual({ type: CARD_TYPE, image: "/local/plan.png", items: [] });
   });
 });

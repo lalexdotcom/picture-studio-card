@@ -1,4 +1,4 @@
-import { DEFAULT_POSITION, type Position } from "./position";
+import { DEFAULT_POSITION, type Position, parsePercent, storedPosition } from "./position";
 import type { BadgeConfig } from "./types";
 
 export const CARD_TAG = "picture-studio";
@@ -59,9 +59,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const normalizePosition = (raw: unknown): Position => {
   if (!isRecord(raw)) return { ...DEFAULT_POSITION };
-  const top = typeof raw.top === "number" ? raw.top : DEFAULT_POSITION.top;
-  const left = typeof raw.left === "number" ? raw.left : DEFAULT_POSITION.left;
-  return { top, left };
+  return {
+    top: parsePercent(raw.top, DEFAULT_POSITION.top),
+    left: parsePercent(raw.left, DEFAULT_POSITION.left),
+  };
 };
 
 /**
@@ -102,6 +103,17 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
 
   return { ...(raw as Record<string, unknown>), items } as PictureStudioConfig;
 };
+
+/**
+ * The shape written back to Home Assistant. Positions leave as "30%" strings:
+ * unquoted in YAML they stay strings, they say what the number means, and
+ * `normalizeConfig` reads them back to the same numbers — so a round trip
+ * through the editor changes nothing.
+ */
+export const storedConfig = (config: PictureStudioConfig): Record<string, unknown> => ({
+  ...config,
+  items: config.items.map((item) => ({ ...item, position: storedPosition(item.position) })),
+});
 
 /**
  * Keys forwarded verbatim from the card config to the hui-image-element config.
