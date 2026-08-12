@@ -25,7 +25,7 @@ English before that, and the "Add badge" button renders one size larger before
 ### HACS
 
 1. In Home Assistant, open **HACS → ⋮ → Custom repositories**.
-2. Add `https://github.com/my-lalex/ha-extra-picture-elements` as a **Lovelace** plugin.
+2. Add `https://github.com/lalexdotcom/picture-badges` as a **Lovelace** plugin.
 3. Search for **Picture Badges** and install it.
 4. Go to **Settings → Dashboards → ⋮ → Resources → Add resource**.
 5. URL: `/hacsfiles/picture-badges/picture-badges.js` — Type: **JavaScript module**.

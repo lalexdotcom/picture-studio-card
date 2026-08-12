@@ -187,33 +187,35 @@ worse than an absent one.
 
 ## Follow-ups
 
-1. **Nothing is pushed.** `main` is ahead of `origin/main` by the whole feature
-   plus the chores. No release tag, no HACS release. The release workflow fires
-   on `release: published`, builds, and attaches `dist/picture-badges.js` to that
-   release — and since `dist/` is git-ignored, that asset is the only thing HACS
-   can install from.
-2. **The README's HACS path is probably wrong.** It advertises
-   `/hacsfiles/picture-badges/picture-badges.js`, but HACS names the folder after
-   the *repository*: `/hacsfiles/ha-extra-picture-elements/picture-badges.js`.
-   Settle it at the first real install — the kind of detail that breaks
-   onboarding silently.
-3. ~~Unverified in a browser~~ — **all checked in the local HA on 2026-08-12 and
+**Repository: `lalexdotcom/picture-badges`** — renamed on 2026-08-12 from
+`ha-extra-picture-elements`, precisely so the HACS path reads
+`/hacsfiles/picture-badges/picture-badges.js`. HACS derives both the download
+folder and that namespace from the repository name alone
+(`full_name.split("/")[-1]` in `repositories/plugin.py`); no `hacs.json` key
+influences it. The local workspace directory still carries the old name, which
+affects nothing outside the devcontainer.
+
+1. **No release yet.** `main` is pushed, but there is no tag and no GitHub
+   release, therefore no asset. The workflow fires on `release: published`,
+   builds, and attaches `dist/picture-badges.js` to that release — and since
+   `dist/` is git-ignored, that asset is the only thing HACS can install from.
+2. ~~Unverified in a browser~~ — **all checked in the local HA on 2026-08-12 and
    behaving as expected**: actions pinned to `none` (no tooltip, not clickable),
    `title` as the card header, the media picker showing an existing path, the
    `dark_mode_image` unwrap, the localised labels, `getGridOptions` (no banner),
    and the height claim plus `overflow-y: auto` under a pinned `rows`.
    Useful for the next visual test: HA serves light/dark image pairs of its own,
    e.g. `/static/images/logo_nabu_casa.png` and `…_dark.png` — no network needed.
-4. ~~Minimum HA version~~ — **settled: `hacs.json` declares 2026.5.0.** See
+3. ~~Minimum HA version~~ — **settled: `hacs.json` declares 2026.5.0.** See
    "Version floor" below for the evidence and for what still degrades above it.
-5. **`dark_mode_filter` is a plain CSS string** in `hui-image`, yet both HA's
+4. **`dark_mode_filter` is a plain CSS string** in `hui-image`, yet both HA's
    form and ours expose it with an `object` selector (their label even says
    "Dark mode state filter"). Kept for parity — the object selector is the
    convenient code editor, which is why they use it.
-6. **`src/strings.ts` ships `en` and `fr` only.** Everything else falls back to
+5. **`src/strings.ts` ships `en` and `fr` only.** Everything else falls back to
    English. Adding a language is one line; adding a *string* is the thing to
    avoid, since HA's catalogue is free and translated.
-7. Vertical overflow scrolling is the consumer's problem to avoid: pinning
+6. Vertical overflow scrolling is the consumer's problem to avoid: pinning
    `rows` is what creates it, `rows: "auto"` never does.
 
 ## How we work (project rules, see AGENTS.md)
