@@ -149,6 +149,33 @@ items:
   picture-elements refuses to expose `fit_mode` on purpose: cropping breaks the
   correspondence between percentages and image content.
 
+## Version floor (settled 2026-08-12)
+
+Method, reusable: read the frontend build pinned in HA core's
+`homeassistant/components/frontend/manifest.json` at tag `<version>`, then read
+the frontend source at that tag. Both are plain `raw.githubusercontent.com`
+fetches, no auth. 2025.12.0 → 20251203.0, 2026.2.0 → 20260128.6,
+2026.5.0 → 20260429.3, 2026.7.0 → 20260624.3.
+
+Already present in 2025.12, so **not** constraining: `ha-dropdown` /
+`ha-dropdown-item`, `ha-button` with `appearance`, the `--ha-space-*` tokens
+(`src/resources/theme/core.globals.ts`), `getGridOptions` on `LovelaceCard`, and
+every media selector option we use (`image_upload`, `content_id_helper`,
+`accept`, `hide_content_type`, `clearable`).
+
+What actually constrains:
+
+| Dependency | From | Below it |
+| --- | --- | --- |
+| `editor.badges.name` / `.edit` / `.remove` keys | 2026.2 | English fallback |
+| **`shortcut` in `coreBadges`** | **2026.5** | **broken**: our picker offers a type the frontend cannot create |
+| `ha-button size="s"` (`small\|medium\|large` → `xs…xl`) | 2026.7 | button renders one size larger |
+
+`hacs.json` is set to **2026.5.0** for the `shortcut` reason. The rejected
+alternative was keeping 2025.12 and filtering `CORE_BADGES` at runtime through
+the class lookup `badge-catalog` already performs — more code and a conditional
+path to test, for users three versions behind.
+
 ## The recurring trap
 
 Four times a key has been accepted and documented while doing nothing, or
@@ -166,11 +193,8 @@ worse than an absent one.
    `:host`/`ha-card` height claim, and `overflow-y: auto` (scroll instead of
    crop when `rows` is pinned). The media picker fix and the layout banner were
    observed by the user; these three were not.
-3. **The declared minimum HA version (2025.12.0, `hacs.json`) is probably
-   understated now.** The background form uses media selector options
-   (`image_upload`, `content_id_helper`, `accept`, `hide_content_type`), the
-   badge list uses `--ha-space-*` design tokens, and the card declares
-   `getGridOptions`. None of those dates has been checked. Check before release.
+3. ~~Minimum HA version~~ — **settled: `hacs.json` declares 2026.5.0.** See
+   "Version floor" below for the evidence and for what still degrades above it.
 4. **`dark_mode_filter` is a plain CSS string** in `hui-image`, yet both HA's
    form and ours expose it with an `object` selector (their label even says
    "Dark mode state filter"). Kept for parity — the object selector is the

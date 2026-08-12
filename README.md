@@ -4,13 +4,21 @@ A Home Assistant Lovelace card that displays an image with badges you position b
 
 ## Requirements
 
-**Home Assistant 2025.12.0 or newer.** HACS enforces this and will refuse to
+**Home Assistant 2026.5.0 or newer.** HACS enforces this and will refuse to
 install on an older version.
 
-The floor comes from `ha-dropdown`, the component behind the "Add badge" button,
-which arrived with Home Assistant's move to Web Awesome in 2025.12. Everything
-else the card relies on — view badges, `window.customBadges`, per-badge config
-forms — has been available since 2024.8.
+The floor comes from the `shortcut` badge, which the badge picker offers: Home
+Assistant's own list of core badges held nothing but `entity` until 2026.5, so
+on an older version picking "Shortcut" would produce a badge type the frontend
+cannot create. Two earlier constraints sit below it — `ha-dropdown`, behind the
+"Add badge" button, arrived in 2025.12, and everything else the card relies on
+(view badges, `window.customBadges`, per-badge config forms) has been available
+since 2024.8.
+
+Above the floor, two details still follow the version: the badge section labels
+come from Home Assistant's catalogue only from 2026.2 onwards, falling back to
+English before that, and the "Add badge" button renders one size larger before
+2026.7, when the button component switched to `xs…xl` sizing.
 
 ## Installation
 
