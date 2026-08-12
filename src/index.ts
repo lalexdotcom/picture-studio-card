@@ -3,6 +3,7 @@ import { CARD_TAG, EDITOR_TAG, FORM_TAG, LIST_TAG } from "./config";
 import { PictureBadgeForm } from "./editor/badge-form";
 import { PictureBadgesList } from "./editor/badge-list";
 import { PictureBadgesEditor } from "./editor/picture-badges-editor";
+import { entitySuggestion } from "./suggestion";
 
 if (!customElements.get(CARD_TAG)) {
   customElements.define(CARD_TAG, PictureBadgesCard);
@@ -26,4 +27,7 @@ window.customCards.push({
   name: "Picture Badges",
   description: "An image with badges you position by drag and drop.",
   preview: true,
+  // HA passes (hass, entityId); hass is unused — the domain is enough to decide,
+  // and reading state would only make the answer flakier.
+  getEntitySuggestion: (_hass, entityId) => entitySuggestion(entityId),
 });

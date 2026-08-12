@@ -37,6 +37,15 @@ export interface LovelaceGridOptions {
   max_rows?: number;
 }
 
+/**
+ * A card configuration the picker offers for a chosen entity. `label` only matters
+ * when a provider returns several, to tell them apart.
+ */
+export interface CardSuggestion {
+  label?: string;
+  config: { type: string };
+}
+
 export interface LovelaceBadgeElement extends HTMLElement {
   hass?: HomeAssistant;
   setConfig(config: BadgeConfig): void;
@@ -68,6 +77,14 @@ declare global {
       description?: string;
       preview?: boolean;
       documentationURL?: string;
+      /**
+       * Consulted by the card picker's entity-first flow. Returning null means
+       * "not for this entity", which is how HA's own providers decline.
+       */
+      getEntitySuggestion?: (
+        hass: HomeAssistant,
+        entityId: string,
+      ) => CardSuggestion | CardSuggestion[] | null;
     }[];
     customBadges?: CustomBadgeEntry[];
   }
