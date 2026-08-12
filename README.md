@@ -81,8 +81,8 @@ items:
       type: entity               # any Lovelace badge config
       entity: sensor.temperature
     position:
-      top: 30      # 0 = flush top, 50 = centred, 100 = flush bottom
-      left: 60     # 0 = flush left, 50 = centred, 100 = flush right
+      top: 30      # 0 = flush top, 50 = centered, 100 = flush bottom
+      left: 60     # 0 = flush left, 50 = centered, 100 = flush right
 ```
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
@@ -97,7 +97,7 @@ Both forms render identically; the editor displays either one.
 
 ### Position anchoring
 
-`top` and `left` are numbers from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centred; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions.
+`top` and `left` are numbers from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centered; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions.
 
 ### YAML-only keys
 

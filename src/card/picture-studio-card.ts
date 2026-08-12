@@ -4,7 +4,7 @@ import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
   imagePath,
-  normaliseConfig,
+  normalizeConfig,
   type PictureItem,
   type PictureStudioConfig,
   stubConfig,
@@ -81,7 +81,7 @@ export class PictureStudioCard extends LitElement {
 
   /** Must be idempotent: Home Assistant reuses the preview instance. */
   setConfig(config: unknown): void {
-    this._config = normaliseConfig(config);
+    this._config = normalizeConfig(config);
   }
 
   getCardSize(): number {

@@ -28,8 +28,8 @@ into CI, Biome clean, single-file build `dist/picture-studio.js`
 
 ```
 src/position.ts        px <-> % conversion, clamping, style derivation (pure, tested)
-src/config.ts          config shape, normalisation, ImageSource/imagePath, tags (pure, tested)
-src/strings.ts         our own en/fr catalogue — one string (pure, tested)
+src/config.ts          config shape, normalization, ImageSource/imagePath, tags (pure, tested)
+src/strings.ts         our own en/fr catalog — one string (pure, tested)
 src/broker.ts          editor registry + subscribeEditors (pure, tested)
 src/types.ts           hand-declared HA interfaces, incl. LocalizeFunc, LovelaceGridOptions
 src/card/picture-studio-card.ts   background element + badge children + lifecycle
@@ -68,7 +68,7 @@ items:
 ## Decisions that must not be re-litigated
 
 - **Proportional anchoring.** `positionStyle` yields `top: L%`, `left: T%` and
-  `transform: translate(-left%, -top%)`. 0 flush top-left, 50 centred, 100 flush
+  `transform: translate(-left%, -top%)`. 0 flush top-left, 50 centered, 100 flush
   bottom-right, so overflow is structurally impossible. The `%` and the transform
   are **derived at render, never stored**.
 - **Pixels during the drag, percentages on release.** One commit per gesture.
@@ -115,7 +115,7 @@ items:
   plain path shows an empty picker and opens the browse dialog with no
   `defaultId`, so "manual entry" is blank too. Their editor wraps strings in
   `_processData`; `backgroundData` does the same.
-- **Labels come from HA's catalogue, keyed on the field name**:
+- **Labels come from HA's catalog, keyed on the field name**:
   `ui.panel.lovelace.editor.card.generic.<name>`, except `dark_mode_image`,
   `state_filter`, `dark_mode_filter`, which live under
   `…card.picture-elements.<name>`. Always with their `|| name` fallback.
@@ -215,7 +215,7 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
 2. ~~Unverified in a browser~~ — **all checked in the local HA on 2026-08-12 and
    behaving as expected**: actions pinned to `none` (no tooltip, not clickable),
    `title` as the card header, the media picker showing an existing path, the
-   `dark_mode_image` unwrap, the localised labels, `getGridOptions` (no banner),
+   `dark_mode_image` unwrap, the localized labels, `getGridOptions` (no banner),
    and the height claim plus `overflow-y: auto` under a pinned `rows`.
    Useful for the next visual test: HA serves light/dark image pairs of its own,
    e.g. `/static/images/logo_nabu_casa.png` and `…_dark.png` — no network needed.
@@ -227,7 +227,7 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    convenient code editor, which is why they use it.
 5. **`src/strings.ts` ships `en` and `fr` only.** Everything else falls back to
    English. Adding a language is one line; adding a *string* is the thing to
-   avoid, since HA's catalogue is free and translated.
+   avoid, since HA's catalog is free and translated.
 6. Vertical overflow scrolling is the consumer's problem to avoid: pinning
    `rows` is what creates it, `rows: "auto"` never does.
 

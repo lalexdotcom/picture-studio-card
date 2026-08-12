@@ -16,7 +16,7 @@ describe("choiceLabel", () => {
     expect(choiceLabel(missing, { type: "entity", isCustom: false })).toBe("entity");
   });
 
-  it("keeps the name a custom badge registered, and never localises its type", () => {
+  it("keeps the name a custom badge registered, and never localizes its type", () => {
     expect(choiceLabel(echo, { type: "custom:mushroom", name: "Mushroom", isCustom: true })).toBe(
       "Mushroom",
     );
@@ -42,7 +42,7 @@ describe("badgeCatalog", () => {
    * Mushroom bundle, which pushes `{ type: "mushroom-template-badge" }`. An
    * earlier version of these tests fed pre-prefixed types, which is not what any
    * library actually registers, so they proved the assumption instead of the
-   * behaviour and missed a real bug.
+   * behavior and missed a real bug.
    */
   it("prefixes registry entries so they are valid Lovelace config types", () => {
     const out = badgeCatalog([{ type: "mushroom-template-badge", name: "Mushroom Template" }]);

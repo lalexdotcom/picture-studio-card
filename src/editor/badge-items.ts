@@ -8,7 +8,7 @@ import type { BadgeConfig } from "../types";
  * None of them mutates its input: Home Assistant freezes the config we are handed.
  */
 
-/** A new badge lands centred, ready to be dragged. Its own position object. */
+/** A new badge lands centered, ready to be dragged. Its own position object. */
 export const addItem = (items: PictureItem[], badge: BadgeConfig): PictureItem[] => [
   ...items,
   { type: "badge", config: badge, position: { ...DEFAULT_POSITION } },

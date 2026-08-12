@@ -65,7 +65,7 @@ describe("positionStyle", () => {
 });
 
 describe("DEFAULT_POSITION", () => {
-  it("is the centre", () => {
+  it("is the center", () => {
     expect(DEFAULT_POSITION).toEqual({ top: 50, left: 50 });
   });
 });

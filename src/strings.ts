@@ -1,7 +1,7 @@
 import type { HomeAssistant } from "./types";
 
 /**
- * Home Assistant has no way for a custom card to register a translation catalogue:
+ * Home Assistant has no way for a custom card to register a translation catalog:
  * `localize` only serves the frontend's own keys, `loadBackendTranslation` needs an
  * integration behind it, and `loadFragmentTranslation` is reserved for HA's panels.
  * So anything HA has no key for ships here. Everything HA does have a key for goes
@@ -22,7 +22,7 @@ const languageOf = (hass?: HomeAssistant): string =>
  * `fr-CA` and the like fall back to the base language, then to English — the same
  * degradation HA applies, so a missing translation is never a missing string.
  */
-export const localiseOwn = (hass: HomeAssistant | undefined, key: StringKey): string => {
+export const localizeOwn = (hass: HomeAssistant | undefined, key: StringKey): string => {
   const language = languageOf(hass);
   const table: Partial<Record<StringKey, string>> =
     STRINGS[language as keyof typeof STRINGS] ??

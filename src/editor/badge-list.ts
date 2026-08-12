@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import type { PictureItem } from "../config";
-import { localiseOwn } from "../strings";
+import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
 import { badgeCatalog, choiceLabel } from "./badge-catalog";
 
@@ -49,7 +49,7 @@ export class PictureStudioBadgeList extends LitElement {
 
     return html`
       <h3>${localize("ui.panel.lovelace.editor.badges.name") || "Badges"}</h3>
-      <p class="hint">${localiseOwn(this.hass, "stacking_hint")}</p>
+      <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
       <ha-sortable
         handle-selector=".handle"
         @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {

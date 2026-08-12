@@ -57,7 +57,7 @@ const STUB_IMAGE = "https://demo.home-assistant.io/stub_config/floorplan.png";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const normalisePosition = (raw: unknown): Position => {
+const normalizePosition = (raw: unknown): Position => {
   if (!isRecord(raw)) return { ...DEFAULT_POSITION };
   const top = typeof raw.top === "number" ? raw.top : DEFAULT_POSITION.top;
   const left = typeof raw.left === "number" ? raw.left : DEFAULT_POSITION.left;
@@ -68,7 +68,7 @@ const normalisePosition = (raw: unknown): Position => {
  * Validate and fill in defaults. Returns a fresh object: the config handed to
  * setConfig is frozen by Home Assistant and must never be mutated.
  */
-export const normaliseConfig = (raw: unknown): PictureStudioConfig => {
+export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
   if (!isRecord(raw)) {
     throw new Error("picture-studio: config must be an object");
   }
@@ -96,7 +96,7 @@ export const normaliseConfig = (raw: unknown): PictureStudioConfig => {
     return {
       type: "badge" as const,
       config: entry.config as BadgeConfig,
-      position: normalisePosition(entry.position),
+      position: normalizePosition(entry.position),
     };
   });
 

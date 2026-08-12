@@ -1,6 +1,6 @@
 /**
  * Positions use proportional anchoring, the semantics of CSS background-position:
- * 0 is flush with the top-left corner, 50 is centred, 100 is flush with the
+ * 0 is flush with the top-left corner, 50 is centered, 100 is flush with the
  * bottom-right corner. This makes overflow structurally impossible at any
  * container size, with no runtime clamping.
  */

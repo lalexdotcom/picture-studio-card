@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import { CARD_TYPE, imagePath, normaliseConfig, stubConfig } from "../config";
+import { CARD_TYPE, imagePath, normalizeConfig, stubConfig } from "../config";
 
 describe("imagePath", () => {
   it("keeps a hand-written path as-is", () => {
@@ -18,7 +18,7 @@ describe("imagePath", () => {
   });
 });
 
-describe("normaliseConfig", () => {
+describe("normalizeConfig", () => {
   it("keeps a well-formed config intact", () => {
     const raw = {
       type: CARD_TYPE,
@@ -31,15 +31,15 @@ describe("normaliseConfig", () => {
         },
       ],
     };
-    expect(normaliseConfig(raw)).toEqual(raw);
+    expect(normalizeConfig(raw)).toEqual(raw);
   });
 
   it("defaults a missing items list to empty", () => {
-    expect(normaliseConfig({ type: CARD_TYPE, image: "/local/plan.png" }).items).toEqual([]);
+    expect(normalizeConfig({ type: CARD_TYPE, image: "/local/plan.png" }).items).toEqual([]);
   });
 
-  it("centres an item with no position", () => {
-    const out = normaliseConfig({
+  it("centers an item with no position", () => {
+    const out = normalizeConfig({
       type: CARD_TYPE,
       items: [{ type: "badge", config: { type: "entity", entity: "light.a" } }],
     });
@@ -47,7 +47,7 @@ describe("normaliseConfig", () => {
   });
 
   it("passes image-element keys through untouched", () => {
-    const out = normaliseConfig({
+    const out = normalizeConfig({
       type: CARD_TYPE,
       entity: "light.living",
       image_entity: "image.front",
@@ -78,22 +78,22 @@ describe("normaliseConfig", () => {
   it("never mutates the input", () => {
     const raw = { type: CARD_TYPE, items: [{ type: "badge", config: { type: "entity" } }] };
     const snapshot = JSON.parse(JSON.stringify(raw));
-    normaliseConfig(raw);
+    normalizeConfig(raw);
     expect(raw).toEqual(snapshot);
   });
 
   it("rejects a non-object config", () => {
-    expect(() => normaliseConfig(null)).toThrow();
-    expect(() => normaliseConfig("nope")).toThrow();
+    expect(() => normalizeConfig(null)).toThrow();
+    expect(() => normalizeConfig("nope")).toThrow();
   });
 
   it("rejects an items value that is not an array", () => {
-    expect(() => normaliseConfig({ type: CARD_TYPE, items: {} })).toThrow();
+    expect(() => normalizeConfig({ type: CARD_TYPE, items: {} })).toThrow();
   });
 
   it("rejects an item whose config is missing", () => {
     expect(() =>
-      normaliseConfig({
+      normalizeConfig({
         type: CARD_TYPE,
         items: [{ type: "badge", position: { top: 1, left: 2 } }],
       }),
@@ -101,7 +101,7 @@ describe("normaliseConfig", () => {
   });
 
   it("two items with no position get distinct position objects", () => {
-    const out = normaliseConfig({
+    const out = normalizeConfig({
       type: CARD_TYPE,
       items: [
         { type: "badge", config: { type: "entity", entity: "light.a" } },
@@ -112,7 +112,7 @@ describe("normaliseConfig", () => {
   });
 
   it("defaults a missing item type to badge", () => {
-    const out = normaliseConfig({
+    const out = normalizeConfig({
       type: CARD_TYPE,
       items: [{ config: { type: "entity" }, position: { top: 10, left: 20 } }],
     });
@@ -121,7 +121,7 @@ describe("normaliseConfig", () => {
 
   it("rejects an unsupported item type, naming the index", () => {
     expect(() =>
-      normaliseConfig({
+      normalizeConfig({
         type: CARD_TYPE,
         items: [{ config: {} }, { type: "element", config: {} }],
       }),
@@ -130,7 +130,7 @@ describe("normaliseConfig", () => {
 
   it("rejects an item whose config is missing", () => {
     expect(() =>
-      normaliseConfig({ type: CARD_TYPE, items: [{ position: { top: 1, left: 2 } }] }),
+      normalizeConfig({ type: CARD_TYPE, items: [{ position: { top: 1, left: 2 } }] }),
     ).toThrow(/items\[0\]/);
   });
 });

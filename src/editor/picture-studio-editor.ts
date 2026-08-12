@@ -1,6 +1,6 @@
 import { html, LitElement, nothing } from "lit";
 import { type EditorChannel, registerEditor } from "../broker";
-import { CARD_TYPE, normaliseConfig, type PictureStudioConfig } from "../config";
+import { CARD_TYPE, normalizeConfig, type PictureStudioConfig } from "../config";
 import type { Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
@@ -62,7 +62,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   }
 
   setConfig(config: unknown): void {
-    this._config = normaliseConfig(config);
+    this._config = normalizeConfig(config);
   }
 
   /** The single card → editor entry point. */

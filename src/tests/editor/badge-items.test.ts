@@ -9,7 +9,7 @@ const item = (entity: string, top: number, left: number): PictureItem => ({
 });
 
 describe("addItem", () => {
-  it("appends the badge centred on the image", () => {
+  it("appends the badge centered on the image", () => {
     const out = addItem([item("light.a", 10, 20)], { type: "entity", entity: "light.b" });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });

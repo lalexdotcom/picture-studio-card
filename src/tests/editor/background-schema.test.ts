@@ -42,7 +42,7 @@ describe("backgroundSchema", () => {
     );
   });
 
-  it("localises the camera_view options instead of showing raw values", () => {
+  it("localizes the camera_view options instead of showing raw values", () => {
     const cameraView = fields.find((f) => f.name === "camera_view");
     expect(cameraView?.selector.select.options).toEqual([
       {
