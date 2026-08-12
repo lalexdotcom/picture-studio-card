@@ -350,6 +350,24 @@ export class PictureStudioCard extends LitElement {
     .editing .item {
       cursor: grab;
       touch-action: none;
+      /* The ring below follows this radius; badges are pills, so match them. */
+      border-radius: var(--ha-badge-border-radius, 999px);
+      transition: box-shadow 120ms ease;
+    }
+    /* Nothing else says a badge can be moved: the cursor only shows up once the
+       pointer is already on it, and a still screenshot cannot show a cursor at
+       all. Two rings — one in the card background, one in the accent colour —
+       stay legible over any image, light or dark.
+       Deliberately not a transform: the wrapper's transform is the anchoring
+       translate, which the drag replaces with none mid-gesture. Animating it
+       here would fight that. */
+    .editing .item:hover {
+      box-shadow:
+        0 0 0 2px var(--card-background-color, #fff),
+        0 0 0 4px var(--primary-color);
+    }
+    .editing .item:active {
+      cursor: grabbing;
     }
     .editing .item > * {
       pointer-events: none;
