@@ -1,6 +1,6 @@
 import type { PictureItem } from "../config";
 import { DEFAULT_POSITION } from "../position";
-import type { BadgeConfig } from "../types";
+import type { BadgeConfig, HassEntity } from "../types";
 
 /**
  * Every operation moves a {type, config, position} triple as a unit, which is
@@ -33,3 +33,31 @@ export const moveItem = (items: PictureItem[], from: number, to: number): Pictur
 
 export const removeItem = (items: PictureItem[], index: number): PictureItem[] =>
   items.filter((_, i) => i !== index);
+
+/** What a list row shows for a placed badge. */
+export interface RowLabel {
+  primary: string;
+  secondary?: string;
+}
+
+/**
+ * An entity id is what the config carries, but not what anyone recognises: the
+ * row shows the entity's own name and keeps the id underneath, the way Home
+ * Assistant's own element list does.
+ *
+ * A `name` written into the badge wins over the entity's, being an explicit
+ * choice by whoever configured it. An entity missing from `states` — deleted, or
+ * not loaded yet — falls back to its id, which still says more than a blank row.
+ *
+ * Only `name`, `entity` and `type` are read: labelling is the one exception to
+ * treating a badge config as opaque.
+ */
+export const rowLabel = (item: PictureItem, states?: Record<string, HassEntity>): RowLabel => {
+  const config = item.config as { entity?: string; type?: string; name?: string };
+  const friendly = config.entity ? states?.[config.entity]?.attributes?.friendly_name : undefined;
+  const primary = config.name ?? friendly ?? config.entity ?? config.type ?? "badge";
+
+  if (config.entity && config.entity !== primary) return { primary, secondary: config.entity };
+  if (config.type && config.type !== primary) return { primary, secondary: config.type };
+  return { primary };
+};

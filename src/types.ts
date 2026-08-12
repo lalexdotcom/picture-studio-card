@@ -1,5 +1,7 @@
 import type { HassEntity } from "home-assistant-js-websocket";
 
+export type { HassEntity };
+
 /** Only the slice of hass we actually touch. */
 /**
  * HA's translation lookup. It returns "" for an unknown key, never throws, so every

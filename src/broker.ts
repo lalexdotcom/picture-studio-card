@@ -7,8 +7,11 @@ import type { Position } from "./position";
  */
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
-  /** Open a badge's own form, the same way the pencil in the list does. */
-  editItem(index: number): void;
+  /**
+   * Open a badge's own form, the same way the pencil in the list does, or clear
+   * the selection with undefined and fall back to the card's own form.
+   */
+  select(index: number | undefined): void;
   /** The badge whose form is open, if any. */
   selectedIndex(): number | undefined;
 }

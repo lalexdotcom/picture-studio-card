@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@rstest/core";
 import type { PictureItem } from "../../config";
-import { addItem, moveItem, removeItem, replaceBadge } from "../../editor/badge-items";
+import { addItem, moveItem, removeItem, replaceBadge, rowLabel } from "../../editor/badge-items";
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",
@@ -84,5 +84,46 @@ describe("removeItem", () => {
     const items = [item("light.a", 10, 10)];
     removeItem(items, 0);
     expect(items).toHaveLength(1);
+  });
+});
+
+describe("rowLabel", () => {
+  const badge = (config: Record<string, unknown>): PictureItem => ({
+    type: "badge",
+    config: config as never,
+    position: { top: 50, left: 50 },
+  });
+  const states = {
+    "light.ceiling_lights": { attributes: { friendly_name: "Open space" } },
+  } as never;
+
+  it("prefers the entity's name over its id", () => {
+    expect(rowLabel(badge({ type: "entity", entity: "light.ceiling_lights" }), states)).toEqual({
+      primary: "Open space",
+      secondary: "light.ceiling_lights",
+    });
+  });
+
+  it("lets a name written into the badge win over the entity's", () => {
+    const item = badge({ type: "entity", entity: "light.ceiling_lights", name: "Desks" });
+    expect(rowLabel(item, states).primary).toBe("Desks");
+  });
+
+  it("falls back to the id for an entity it cannot resolve", () => {
+    expect(rowLabel(badge({ type: "entity", entity: "light.gone" }), states)).toEqual({
+      primary: "light.gone",
+      secondary: "entity",
+    });
+  });
+
+  it("falls back to the badge type when there is no entity at all", () => {
+    expect(rowLabel(badge({ type: "custom:mushroom-template-badge" }))).toEqual({
+      primary: "custom:mushroom-template-badge",
+    });
+  });
+
+  it("never repeats itself across the two lines", () => {
+    const label = rowLabel(badge({ type: "entity", entity: "light.gone" }));
+    expect(label.primary).not.toBe(label.secondary);
   });
 });

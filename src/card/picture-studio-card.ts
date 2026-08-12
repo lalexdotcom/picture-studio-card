@@ -53,7 +53,7 @@ export class PictureStudioCard extends LitElement {
     },
     getSurface: () => this.renderRoot.querySelector(".layer"),
     onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
-    onSelect: (index) => activeEditor()?.editItem(index),
+    onSelect: (index) => activeEditor()?.select(index),
   });
 
   constructor() {
@@ -141,9 +141,14 @@ export class PictureStudioCard extends LitElement {
     // renderRoot does not exist before the first update; _syncEditing has
     // already flipped the reactive flag, so updated() will attach on the render
     // it schedules.
-    const layer = this.hasUpdated ? this._layer : null;
-    if (this.editing && layer) {
-      this._drag.attach(layer);
+    // Listeners go on .root, not on .layer: the layer is pointer-events: none,
+    // so a press on the image never reaches it — only the badges' own events
+    // bubble through. Listening one level up catches both, which is what lets a
+    // press on the image clear the selection. The geometry still comes from
+    // .layer, through getSurface.
+    const root = this.hasUpdated ? this.renderRoot.querySelector(".root") : null;
+    if (this.editing && root instanceof HTMLElement) {
+      this._drag.attach(root);
     } else {
       this._drag.detach();
     }
@@ -372,24 +377,25 @@ export class PictureStudioCard extends LitElement {
       cursor: grabbing;
     }
     /* Two independent channels, so a badge can carry both marks at once and stay
-       readable: the outline says "under the pointer", the halo says "this is the
-       one whose form is open". A single channel would have made hovering the
-       selected badge a no-op.
-       Outline rather than box-shadow for the hover, because outline-offset
-       leaves a real gap the image shows through; a ring flush against the badge
-       reads as part of it.
-       The dragging class repeats the hover rule for the length of the gesture:
-       pointer capture and the config round trip both cost the wrapper its :hover
-       for a frame or two, which showed up as the ring blinking on release. No
-       transition, for the same reason — a re-entry would fade in from zero and
-       turn that blink into a visible flash. */
-    .editing .item:hover,
+       readable — hovering the selected badge is not a no-op. The weights follow
+       the meanings: a soft halo for "under the pointer", which is transient and
+       needs no emphasis, and a hard ring for "this is the one whose form is
+       open", which is a state the eye should find without hunting.
+       The ring is an outline, not a box-shadow, because outline-offset leaves a
+       real gap the image shows through; a ring flush against the badge reads as
+       part of it.
+       The dragging class repeats the ring for the length of the gesture: the
+       selection arrives through a re-render, and pointer capture plus the config
+       round trip can each cost a frame. No transition anywhere, for the same
+       reason — a re-entry would fade in from zero and turn a one-frame gap into
+       a visible flash. */
+    .editing .item:hover {
+      box-shadow: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), 0.35);
+    }
+    .editing .item.selected,
     .editing .item.dragging {
       outline: 2px solid var(--primary-color);
       outline-offset: 1px;
-    }
-    .editing .item.selected {
-      box-shadow: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), 0.35);
     }
     .editing .item > * {
       pointer-events: none;

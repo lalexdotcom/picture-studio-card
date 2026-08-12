@@ -98,15 +98,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * so every change has to be announced, and routing them all through here is
    * what keeps that true.
    */
-  private _select(index: number | undefined): void {
+  select(index: number | undefined): void {
     if (this._editingIndex === index) return;
     this._editingIndex = index;
     notifyEditors();
-  }
-
-  /** Opening a badge's form, from the pencil in the list or from the preview. */
-  editItem(index: number): void {
-    this._select(index);
   }
 
   selectedIndex(): number | undefined {
@@ -126,11 +121,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit({ ...config, items: addItem(config.items, badge) });
     // Open the new badge's form straight away: a stub config is rarely usable
     // as-is, and this is what the native picker does after a pick.
-    this._select(config.items.length);
+    this.select(config.items.length);
   };
 
   private _editBadge = (ev: CustomEvent<{ index: number }>): void => {
-    this._select(ev.detail.index);
+    this.select(ev.detail.index);
   };
 
   private _badgeChanged = (ev: CustomEvent<{ badge: BadgeConfig }>): void => {
@@ -156,7 +151,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config) return;
     this._commit({ ...config, items: removeItem(config.items, ev.detail.index) });
-    this._select(undefined);
+    this.select(undefined);
   };
 
   protected render() {
@@ -172,7 +167,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
           .hass=${hass}
           .badge=${editing.config}
           @badge-changed=${this._badgeChanged}
-          @go-back=${() => this._select(undefined)}
+          @go-back=${() => this.select(undefined)}
         ></picture-studio-badge-form>
       `;
     }

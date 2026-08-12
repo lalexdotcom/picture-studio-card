@@ -23,8 +23,12 @@ interface DragOptions {
   /** The element whose box defines 100%: the same box hui-image fills. */
   getSurface(): HTMLElement | null;
   onCommit(index: number, position: Position): void;
-  /** Raised on pointerdown, so grabbing a badge selects it as surely as clicking it. */
-  onSelect(index: number): void;
+  /**
+   * Raised on pointerdown: with an index when a badge was hit, so grabbing one
+   * selects it as surely as clicking it, and with undefined when the press
+   * landed on the image, which clears the selection.
+   */
+  onSelect(index: number | undefined): void;
 }
 
 interface DragState {
@@ -60,8 +64,14 @@ export const createDragController = (options: DragOptions) => {
     if (ev.button !== 0) return;
     if (state) return; // ignore a second pointer while a drag is in progress
     const hit = options.getIndexedWrapper(ev.target);
+    // The listener sits on the whole surface, not just the badges, so a press on
+    // the image itself lands here with no hit — that is the deselect.
+    if (!hit) {
+      options.onSelect(undefined);
+      return;
+    }
     const surface = options.getSurface();
-    if (!hit || !surface) return;
+    if (!surface) return;
 
     const box = hit.element.getBoundingClientRect();
     const surfaceBox = surface.getBoundingClientRect();
