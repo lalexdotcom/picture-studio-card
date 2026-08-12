@@ -62,6 +62,9 @@ export const createDragController = (options: DragOptions) => {
     // Survive the cursor leaving the surface.
     hit.element.setPointerCapture(ev.pointerId);
     hit.element.style.cursor = "grabbing";
+    // Holds the ring for the whole gesture; :hover alone drops out for a frame
+    // under pointer capture and again when the config round trip rebuilds it.
+    hit.element.classList.add("dragging");
 
     // Switch to plain pixels for the gesture. Position and transform must move
     // together: dropping translate(-L%, -T%) while left/top are still
@@ -101,6 +104,7 @@ export const createDragController = (options: DragOptions) => {
 
     hit.element.releasePointerCapture(ev.pointerId);
     hit.element.style.cursor = "";
+    hit.element.classList.remove("dragging");
 
     const position: Position = {
       left: toPercent(x, surface.width, width),
