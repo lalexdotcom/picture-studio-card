@@ -15,7 +15,7 @@ type BadgeEditorElement = HTMLElement & {
  * custom card (see the task header), so the form lives here instead, in place
  * of the list, with a back button — the shape hui-sub-element-editor uses.
  */
-export class PictureBadgeForm extends LitElement {
+export class PictureStudioBadgeForm extends LitElement {
   static properties = {
     hass: { attribute: false },
     badge: { attribute: false },

@@ -1,4 +1,4 @@
-import type { ImageSource, PictureBadgesConfig } from "../config";
+import type { ImageSource, PictureStudioConfig } from "../config";
 import type { LocalizeFunc } from "../types";
 
 /** The media selector picture-elements uses for both of its image fields. */
@@ -62,7 +62,7 @@ export const backgroundLabel = (localize: LocalizeFunc, name: string): string =>
 };
 
 export type BackgroundData = Pick<
-  PictureBadgesConfig,
+  PictureStudioConfig,
   | "title"
   | "image"
   | "dark_mode_image"
@@ -91,7 +91,7 @@ const FORM_KEYS = [
 const asMediaValue = (value: ImageSource | undefined): ImageSource | undefined =>
   typeof value === "string" ? { media_content_id: value } : value;
 
-export const backgroundData = (config: PictureBadgesConfig): BackgroundData => ({
+export const backgroundData = (config: PictureStudioConfig): BackgroundData => ({
   title: config.title,
   image: asMediaValue(config.image),
   dark_mode_image: asMediaValue(config.dark_mode_image),
@@ -103,10 +103,10 @@ export const backgroundData = (config: PictureBadgesConfig): BackgroundData => (
 
 /** Keys the form leaves empty are dropped, so they do not linger in the YAML. */
 export const mergeBackground = (
-  config: PictureBadgesConfig,
+  config: PictureStudioConfig,
   data: BackgroundData,
-): PictureBadgesConfig => {
-  const next: PictureBadgesConfig = { ...config, ...data };
+): PictureStudioConfig => {
+  const next: PictureStudioConfig = { ...config, ...data };
   for (const key of FORM_KEYS) {
     if (next[key] === undefined || next[key] === "") delete next[key];
   }

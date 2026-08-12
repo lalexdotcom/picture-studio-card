@@ -18,7 +18,7 @@ const label = (item: PictureItem): string => {
   return config.name ?? config.entity ?? config.type ?? "badge";
 };
 
-export class PictureBadgesList extends LitElement {
+export class PictureStudioBadgeList extends LitElement {
   static properties = {
     hass: { attribute: false },
     items: { attribute: false },

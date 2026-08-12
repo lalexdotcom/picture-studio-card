@@ -1,11 +1,11 @@
 import { DEFAULT_POSITION, type Position } from "./position";
 import type { BadgeConfig } from "./types";
 
-export const CARD_TAG = "picture-badges";
-export const EDITOR_TAG = "picture-badges-editor";
-export const LIST_TAG = "picture-badges-list";
-export const FORM_TAG = "picture-badge-form";
-export const CARD_TYPE = "custom:picture-badges";
+export const CARD_TAG = "picture-studio";
+export const EDITOR_TAG = "picture-studio-editor";
+export const LIST_TAG = "picture-studio-badge-list";
+export const FORM_TAG = "picture-studio-badge-form";
+export const CARD_TYPE = "custom:picture-studio";
 
 /**
  * One placed item. The `type` discriminant is "badge" today; a second variant
@@ -30,7 +30,7 @@ export type ImageSource =
 export const imagePath = (value: ImageSource | undefined): string | undefined =>
   typeof value === "object" ? value.media_content_id : value;
 
-export interface PictureBadgesConfig {
+export interface PictureStudioConfig {
   type: string;
   /**
    * hui-image-element passthrough keys, snake_case as they appear in YAML.
@@ -68,29 +68,29 @@ const normalisePosition = (raw: unknown): Position => {
  * Validate and fill in defaults. Returns a fresh object: the config handed to
  * setConfig is frozen by Home Assistant and must never be mutated.
  */
-export const normaliseConfig = (raw: unknown): PictureBadgesConfig => {
+export const normaliseConfig = (raw: unknown): PictureStudioConfig => {
   if (!isRecord(raw)) {
-    throw new Error("picture-badges: config must be an object");
+    throw new Error("picture-studio: config must be an object");
   }
 
   const rawItems = raw.items ?? [];
   if (!Array.isArray(rawItems)) {
-    throw new Error("picture-badges: `items` must be a list");
+    throw new Error("picture-studio: `items` must be a list");
   }
 
   const items = rawItems.map((entry, index) => {
     if (!isRecord(entry)) {
-      throw new Error(`picture-badges: items[${index}] must be an object`);
+      throw new Error(`picture-studio: items[${index}] must be an object`);
     }
 
     // Default a missing `type` to "badge"; any other value is an error.
     const type = entry.type ?? "badge";
     if (type !== "badge") {
-      throw new Error(`picture-badges: items[${index}] has unsupported type "${String(type)}"`);
+      throw new Error(`picture-studio: items[${index}] has unsupported type "${String(type)}"`);
     }
 
     if (!isRecord(entry.config)) {
-      throw new Error(`picture-badges: items[${index}] must have a \`config\` object`);
+      throw new Error(`picture-studio: items[${index}] must have a \`config\` object`);
     }
 
     return {
@@ -100,7 +100,7 @@ export const normaliseConfig = (raw: unknown): PictureBadgesConfig => {
     };
   });
 
-  return { ...(raw as Record<string, unknown>), items } as PictureBadgesConfig;
+  return { ...(raw as Record<string, unknown>), items } as PictureStudioConfig;
 };
 
 /**
@@ -121,9 +121,9 @@ export const BACKGROUND_KEYS = [
   "dark_mode_filter",
   "aspect_ratio",
   "filter",
-] as const satisfies ReadonlyArray<keyof PictureBadgesConfig>;
+] as const satisfies ReadonlyArray<keyof PictureStudioConfig>;
 
-export const stubConfig = (): PictureBadgesConfig => ({
+export const stubConfig = (): PictureStudioConfig => ({
   type: CARD_TYPE,
   image: STUB_IMAGE,
   items: [],

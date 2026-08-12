@@ -1,6 +1,6 @@
 import { html, LitElement, nothing } from "lit";
 import { type EditorChannel, registerEditor } from "../broker";
-import { CARD_TYPE, normaliseConfig, type PictureBadgesConfig } from "../config";
+import { CARD_TYPE, normaliseConfig, type PictureStudioConfig } from "../config";
 import type { Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
@@ -15,7 +15,7 @@ import { addItem, moveItem, removeItem, replaceBadge } from "./badge-items";
 import "./badge-form";
 import "./badge-list";
 
-export class PictureBadgesEditor extends LitElement implements EditorChannel {
+export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
     hass: { attribute: false },
     lovelace: { attribute: false },
@@ -25,7 +25,7 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
 
   declare hass?: HomeAssistant;
   declare lovelace?: unknown;
-  declare _config?: PictureBadgesConfig;
+  declare _config?: PictureStudioConfig;
   declare _editingIndex: number | undefined;
 
   private _unregister?: () => void;
@@ -74,13 +74,13 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
   }
 
   /** Convergence point: drag, dialogs and forms all end here. */
-  protected _commit(next: PictureBadgesConfig): void {
+  protected _commit(next: PictureStudioConfig): void {
     this._config = next;
     this._reemit(next);
   }
 
   /** Sole exit toward Home Assistant. */
-  private _reemit(config: PictureBadgesConfig): void {
+  private _reemit(config: PictureStudioConfig): void {
     if (this._applying) return;
     this.dispatchEvent(
       new CustomEvent("config-changed", {
@@ -146,14 +146,14 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
 
     if (editing) {
       return html`
-        <picture-badge-form
+        <picture-studio-badge-form
           .hass=${hass}
           .badge=${editing.config}
           @badge-changed=${this._badgeChanged}
           @go-back=${() => {
             this._editingIndex = undefined;
           }}
-        ></picture-badge-form>
+        ></picture-studio-badge-form>
       `;
     }
 
@@ -165,14 +165,14 @@ export class PictureBadgesEditor extends LitElement implements EditorChannel {
         .computeLabel=${(s: { name: string }) => backgroundLabel(hass.localize, s.name)}
         @value-changed=${this._backgroundChanged}
       ></ha-form>
-      <picture-badges-list
+      <picture-studio-badge-list
         .hass=${hass}
         .items=${config.items}
         @item-add=${this._addBadge}
         @item-edit=${this._editBadge}
         @item-moved=${this._moveBadge}
         @item-removed=${this._removeBadge}
-      ></picture-badges-list>
+      ></picture-studio-badge-list>
     `;
   }
 }

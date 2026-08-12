@@ -21,4 +21,4 @@ jobs:
       - run: pnpm build
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/picture-badges.js
+          files: dist/picture-studio.js

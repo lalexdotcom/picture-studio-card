@@ -5,8 +5,8 @@ import {
   EDITOR_TAG,
   imagePath,
   normaliseConfig,
-  type PictureBadgesConfig,
   type PictureItem,
+  type PictureStudioConfig,
   stubConfig,
 } from "../config";
 import { positionStyle } from "../position";
@@ -18,7 +18,7 @@ import type {
 } from "../types";
 import { createDragController } from "./drag-layer";
 
-export class PictureBadgesCard extends LitElement {
+export class PictureStudioCard extends LitElement {
   static properties = {
     hass: { attribute: false },
     preview: { type: Boolean },
@@ -31,7 +31,7 @@ export class PictureBadgesCard extends LitElement {
 
   declare preview: boolean;
   declare editing: boolean;
-  declare _config?: PictureBadgesConfig;
+  declare _config?: PictureStudioConfig;
 
   private _hass?: HomeAssistant;
   private _bgElement?: LovelaceElementElement;
@@ -71,7 +71,7 @@ export class PictureBadgesCard extends LitElement {
     return this._hass;
   }
 
-  static getStubConfig(): PictureBadgesConfig {
+  static getStubConfig(): PictureStudioConfig {
     return stubConfig();
   }
 
@@ -163,7 +163,7 @@ export class PictureBadgesCard extends LitElement {
   }
 
   /** Build the config object forwarded to the hui-image-element. */
-  private _bgConfig(config: PictureBadgesConfig): Record<string, unknown> {
+  private _bgConfig(config: PictureStudioConfig): Record<string, unknown> {
     // Both actions must be pinned to "none": hui-image-element.setConfig defaults a
     // missing one to more-info, which makes the background clickable and makes
     // computeTooltip invent a "Tap to show more info" hover tooltip. The

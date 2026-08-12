@@ -1,6 +1,6 @@
-# picture-badges — where the project stands
+# picture-studio — where the project stands
 
-A Home Assistant Lovelace custom card, `custom:picture-badges`: an image with
+A Home Assistant Lovelace custom card, `custom:picture-studio`: an image with
 Lovelace **badges** placed on it, positioned by **dragging them on the live
 preview** inside the normal card-edit dialog. "picture-elements, but the items
 are badges and you place them with the mouse".
@@ -8,7 +8,7 @@ are badges and you place them with the mouse".
 **Merged.** `feat/picture-badges` was merged into `main` with `--no-ff`
 (merge commit `42dea4b`) and the branch was deleted. **Nothing is pushed** —
 `main` is ahead of `origin/main`. 78 unit tests, `tsc --noEmit` clean and wired
-into CI, Biome clean, single-file build `dist/picture-badges.js`
+into CI, Biome clean, single-file build `dist/picture-studio.js`
 (~61 kB / 16 kB gzip).
 
 ## Where things are
@@ -16,8 +16,8 @@ into CI, Biome clean, single-file build `dist/picture-badges.js`
 - Spec (authoritative, amended several times): `docs/superpowers/specs/2026-08-11-picture-badges-design.md`
 - Plan: `docs/superpowers/plans/2026-08-11-picture-badges.md`
 - Local HA for testing: `docker compose` in the repo, container
-  `picture-badges-ha` (image `:stable`, currently 2026.8.1),
-  http://localhost:8123, resource at `/local/picture-badges/picture-badges.js?v=1`.
+  `picture-studio-ha` (image `:stable`, currently 2026.8.1),
+  http://localhost:8123, resource at `/local/picture-studio/picture-studio.js?v=1`.
   Mushroom is installed as a third-party badge provider at `/local/mushroom/mushroom.js`.
 - The shipped frontend bundle is readable inside the container at
   `/usr/local/lib/python3.14/site-packages/hass_frontend/frontend_latest/*.js`.
@@ -32,22 +32,23 @@ src/config.ts          config shape, normalisation, ImageSource/imagePath, tags 
 src/strings.ts         our own en/fr catalogue — one string (pure, tested)
 src/broker.ts          editor registry + subscribeEditors (pure, tested)
 src/types.ts           hand-declared HA interfaces, incl. LocalizeFunc, LovelaceGridOptions
-src/card/picture-badges-card.ts   background element + badge children + lifecycle
+src/card/picture-studio-card.ts   background element + badge children + lifecycle
 src/card/drag-layer.ts            pointer gesture, injected callbacks, no HA knowledge
-src/editor/picture-badges-editor.ts  hub: _commit / _reemit, the only exit to HA
+src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/background-schema.ts      ha-form schema, labels, form <-> config mapping
 src/editor/badge-list.ts             header, hint, ha-sortable rows, ha-dropdown add button
 src/editor/badge-form.ts             hosts the badge's own native config form
 src/editor/badge-catalog.ts          core + custom badge choices, choiceLabel, class lookup
 src/editor/badge-items.ts            add / replace / move / remove (pure, tested)
-src/index.ts           registration
+src/suggestion.ts      entity-first card picker suggestion (pure, tested)
+src/index.ts           registration + the window.customCards entry
 src/tests/**           every test, mirroring the source tree
 ```
 
 ## Config shape (current)
 
 ```yaml
-type: custom:picture-badges
+type: custom:picture-studio
 image: /local/plan.png          # or { media_content_id, media_content_type }
 entity: light.salon             # needed for state_image / state_filter to resolve
 title: My floorplan             # ha-card header
@@ -187,17 +188,29 @@ worse than an absent one.
 
 ## Follow-ups
 
-**Repository: `lalexdotcom/picture-badges`** — renamed on 2026-08-12 from
-`ha-extra-picture-elements`, precisely so the HACS path reads
-`/hacsfiles/picture-badges/picture-badges.js`. HACS derives both the download
+**Repository: `lalexdotcom/picture-studio-card`**, card type `custom:picture-studio`,
+bundle `picture-studio.js` — renamed on 2026-08-12 from `ha-extra-picture-elements`
+and `picture-badges`, so the HACS path reads
+`/hacsfiles/picture-studio-card/picture-studio.js`. HACS derives both the download
 folder and that namespace from the repository name alone
 (`full_name.split("/")[-1]` in `repositories/plugin.py`); no `hacs.json` key
-influences it. The local workspace directory still carries the old name, which
-affects nothing outside the devcontainer.
+influences it, and `hacs.json.filename` alone decides the file. The local
+workspace directory still carries the very first name, which affects nothing
+outside the devcontainer.
+
+Why this name, so it is not reopened: `picture-badges` would have become a lie
+the day `items[]` accepts an `element`, and the type of a card should say what
+it *is*, not how it is configured — so no `visual-*` either. A `*-picture-elements`
+name was rejected for taking on a promise we have not kept: it would lead users to
+expect `state-icon`, `state-label`, `service-button` and `conditional`. The
+lineage and the drag live in the description instead, where they are searched:
+the card picker filters on name **and** description. The `-card` suffix on the
+repository is the HACS convention (`button-card`, `mini-graph-card`,
+`advanced-camera-card`) and its only effect is the doubled word in the path.
 
 1. **No release yet.** `main` is pushed, but there is no tag and no GitHub
    release, therefore no asset. The workflow fires on `release: published`,
-   builds, and attaches `dist/picture-badges.js` to that release — and since
+   builds, and attaches `dist/picture-studio.js` to that release — and since
    `dist/` is git-ignored, that asset is the only thing HACS can install from.
 2. ~~Unverified in a browser~~ — **all checked in the local HA on 2026-08-12 and
    behaving as expected**: actions pinned to `none` (no tooltip, not clickable),

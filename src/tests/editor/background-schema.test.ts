@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import type { PictureBadgesConfig } from "../../config";
+import type { PictureStudioConfig } from "../../config";
 import { CARD_TYPE } from "../../config";
 import {
   type BackgroundData,
@@ -15,7 +15,7 @@ const echo: LocalizeFunc = (key) => key;
 /** HA returns "" for a key it does not know. */
 const missing: LocalizeFunc = () => "";
 
-const config = (over: Partial<PictureBadgesConfig> = {}): PictureBadgesConfig => ({
+const config = (over: Partial<PictureStudioConfig> = {}): PictureStudioConfig => ({
   type: CARD_TYPE,
   items: [],
   ...over,

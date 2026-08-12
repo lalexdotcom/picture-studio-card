@@ -1,9 +1,9 @@
-import { CARD_TYPE, type PictureBadgesConfig } from "./config";
+import { CARD_TYPE, type PictureStudioConfig } from "./config";
 
 /** What HA's card picker expects back from a suggestion provider. */
 export interface CardSuggestion {
   label?: string;
-  config: PictureBadgesConfig;
+  config: PictureStudioConfig;
 }
 
 /**

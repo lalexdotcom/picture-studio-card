@@ -2,7 +2,7 @@ import { defineConfig } from "@rslib/core";
 
 export default defineConfig({
   source: {
-    entry: { "picture-badges": "./src/index.ts" },
+    entry: { "picture-studio": "./src/index.ts" },
   },
   lib: [
     {
