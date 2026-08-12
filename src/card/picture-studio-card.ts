@@ -26,11 +26,14 @@ export class PictureStudioCard extends LitElement {
     // it as a plain property would expose an `editing` attribute that anything
     // could flip.
     editing: { state: true },
+    // The badge whose form is open in the editor, mirrored here to mark it.
+    selected: { state: true },
     _config: { state: true },
   };
 
   declare preview: boolean;
   declare editing: boolean;
+  declare selected: number | undefined;
   declare _config?: PictureStudioConfig;
 
   private _hass?: HomeAssistant;
@@ -50,6 +53,7 @@ export class PictureStudioCard extends LitElement {
     },
     getSurface: () => this.renderRoot.querySelector(".layer"),
     onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
+    onSelect: (index) => activeEditor()?.editItem(index),
   });
 
   constructor() {
@@ -113,7 +117,12 @@ export class PictureStudioCard extends LitElement {
    * broker discriminates the two with no extra signal.
    */
   private _syncEditing(): void {
-    const editing = this.preview && activeEditor() !== undefined;
+    const editor = activeEditor();
+    const editing = this.preview && editor !== undefined;
+    // The selection lives in the editor and never reaches the config, so it is
+    // read from the channel rather than round-tripped through Home Assistant.
+    const selected = editing ? editor?.selectedIndex() : undefined;
+    if (selected !== this.selected) this.selected = selected;
     if (editing === this.editing) return;
     this.editing = editing;
   }
@@ -267,14 +276,18 @@ export class PictureStudioCard extends LitElement {
   private _applyPositions(items: PictureItem[]): void {
     const dragging = this._drag.draggingIndex();
     items.forEach((item, index) => {
+      const wrapper = this._wrappers[index];
+      if (!wrapper) return;
+      // The selection mark is a class rather than a Lit binding because the
+      // wrappers are built imperatively, and it is set outside the drag guard
+      // below: the badge being dragged is precisely the selected one.
+      wrapper.classList.toggle("selected", this.editing && index === this.selected);
       // Leave the badge under the cursor alone: its styles are live pixels
       // managed by the drag controller. Writing the stored config position over
       // them would jump the badge back toward its pre-drag location on every
       // hass tick. Once the drag ends, onPointerUp restores the derived style
       // and the next _applyPositions then matches it exactly — no flash.
       if (index === dragging) return;
-      const wrapper = this._wrappers[index];
-      if (!wrapper) return;
       const style = positionStyle(item.position);
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
@@ -348,28 +361,35 @@ export class PictureStudioCard extends LitElement {
     /* While editing, the wrapper keeps the pointer and the badge never sees a
        click, so tapping a badge cannot toggle a light. */
     .editing .item {
-      cursor: grab;
+      /* Pointer, not grab: clicking opens the badge's form, which is the more
+         discoverable of the two gestures. Grab belongs to the gesture itself. */
+      cursor: pointer;
       touch-action: none;
-      /* The ring follows this radius; badges are pills, so match them. */
+      /* The rings follow this radius; badges are pills, so match them. */
       border-radius: var(--ha-badge-border-radius, 999px);
     }
-    /* Nothing else says a badge can be moved: the cursor only shows up once the
-       pointer is already on it, and a still screenshot cannot show a cursor at
-       all. An outline rather than a box-shadow, because outline-offset leaves a
-       real gap the image shows through — a ring flush against the badge reads as
-       part of it.
-       The dragging class repeats the rule for the length of the gesture: pointer
-       capture and the config round trip both cost the wrapper its :hover for a
-       frame or two, which showed up as the ring blinking on release.
-       No transition, for the same reason — a re-entry would fade in from zero
-       and turn that blink into a visible flash. */
+    .editing .item.dragging {
+      cursor: grabbing;
+    }
+    /* Two independent channels, so a badge can carry both marks at once and stay
+       readable: the outline says "under the pointer", the halo says "this is the
+       one whose form is open". A single channel would have made hovering the
+       selected badge a no-op.
+       Outline rather than box-shadow for the hover, because outline-offset
+       leaves a real gap the image shows through; a ring flush against the badge
+       reads as part of it.
+       The dragging class repeats the hover rule for the length of the gesture:
+       pointer capture and the config round trip both cost the wrapper its :hover
+       for a frame or two, which showed up as the ring blinking on release. No
+       transition, for the same reason — a re-entry would fade in from zero and
+       turn that blink into a visible flash. */
     .editing .item:hover,
     .editing .item.dragging {
       outline: 2px solid var(--primary-color);
       outline-offset: 1px;
     }
-    .editing .item:active {
-      cursor: grabbing;
+    .editing .item.selected {
+      box-shadow: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), 0.35);
     }
     .editing .item > * {
       pointer-events: none;

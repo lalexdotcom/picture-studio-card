@@ -1,7 +1,11 @@
 import { describe, expect, it } from "@rstest/core";
-import { activeEditor, registerEditor, subscribeEditors } from "../broker";
+import { activeEditor, notifyEditors, registerEditor, subscribeEditors } from "../broker";
 
-const channel = () => ({ patchPosition: () => undefined });
+const channel = () => ({
+  patchPosition: () => undefined,
+  editItem: () => undefined,
+  selectedIndex: () => undefined,
+});
 
 describe("broker", () => {
   it("has no active editor when none is registered", () => {
@@ -83,5 +87,21 @@ describe("subscribeEditors", () => {
     off();
     expect(calls).toBe(2); // once on subscribe, once for the real unregister
     unsubscribe();
+  });
+});
+
+describe("notifyEditors", () => {
+  it("wakes subscribers without a membership change, which is how a card learns the selection", () => {
+    let calls = 0;
+    const off = subscribeEditors(() => {
+      calls += 1;
+    });
+    // Subscribing fires once; only what follows is the announcement under test.
+    const baseline = calls;
+    notifyEditors();
+    expect(calls).toBe(baseline + 1);
+    off();
+    notifyEditors();
+    expect(calls).toBe(baseline + 1);
   });
 });

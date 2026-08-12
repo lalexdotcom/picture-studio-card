@@ -5,12 +5,26 @@ interface Hit {
   index: number;
 }
 
+/**
+ * How far the pointer must travel before the gesture counts as a drag rather
+ * than a click. A click is never perfectly still — a couple of pixels of tremor
+ * is normal, and more from a finger — so without a threshold every click would
+ * commit a position, and no click could ever open a form.
+ */
+export const DRAG_THRESHOLD_PX = 4;
+
+/** Squared distance, to compare against the threshold without a square root. */
+export const hasMoved = (dx: number, dy: number): boolean =>
+  dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
+
 interface DragOptions {
   /** Resolve a pointer target to the wrapper it belongs to, with its index. */
   getIndexedWrapper(target: EventTarget | null): Hit | undefined;
   /** The element whose box defines 100%: the same box hui-image fills. */
   getSurface(): HTMLElement | null;
   onCommit(index: number, position: Position): void;
+  /** Raised on pointerdown, so grabbing a badge selects it as surely as clicking it. */
+  onSelect(index: number): void;
 }
 
 interface DragState {
@@ -24,6 +38,11 @@ interface DragState {
   height: number;
   x: number;
   y: number;
+  /** Where the gesture started, in client coordinates, to measure the travel. */
+  startX: number;
+  startY: number;
+  /** True once the travel passed the threshold; never goes back to false. */
+  moved: boolean;
 }
 
 /**
@@ -57,14 +76,19 @@ export const createDragController = (options: DragOptions) => {
       height: box.height,
       x: box.left - surfaceBox.left,
       y: box.top - surfaceBox.top,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      moved: false,
     };
 
     // Survive the cursor leaving the surface.
     hit.element.setPointerCapture(ev.pointerId);
-    hit.element.style.cursor = "grabbing";
     // Holds the ring for the whole gesture; :hover alone drops out for a frame
     // under pointer capture and again when the config round trip rebuilds it.
     hit.element.classList.add("dragging");
+    // Grabbing selects too, so the badge being moved is also the one whose form
+    // is open — one notion of "current badge" rather than two.
+    options.onSelect(hit.index);
 
     // Switch to plain pixels for the gesture. Position and transform must move
     // together: dropping translate(-L%, -T%) while left/top are still
@@ -80,6 +104,8 @@ export const createDragController = (options: DragOptions) => {
 
   const onPointerMove = (ev: PointerEvent): void => {
     if (!state || ev.pointerId !== state.pointerId) return;
+
+    state.moved ||= hasMoved(ev.clientX - state.startX, ev.clientY - state.startY);
 
     state.x = clampPx(
       ev.clientX - state.surface.left - state.grabX,
@@ -99,11 +125,10 @@ export const createDragController = (options: DragOptions) => {
 
   const onPointerUp = (ev: PointerEvent): void => {
     if (!state || ev.pointerId !== state.pointerId) return;
-    const { hit, x, y, surface, width, height } = state;
+    const { hit, x, y, surface, width, height, moved } = state;
     state = undefined;
 
     hit.element.releasePointerCapture(ev.pointerId);
-    hit.element.style.cursor = "";
     hit.element.classList.remove("dragging");
 
     const position: Position = {
@@ -120,7 +145,12 @@ export const createDragController = (options: DragOptions) => {
     hit.element.style.top = style.top;
     hit.element.style.transform = style.transform;
 
-    options.onCommit(hit.index, position);
+    // The style above is restored either way — pointerdown switched the element
+    // to raw pixels, so leaving it there would shift the badge by its own
+    // anchoring translate. Only the commit is conditional: a click selected the
+    // badge and moved nothing, and an unchanged position is not worth a config
+    // round trip.
+    if (moved) options.onCommit(hit.index, position);
   };
 
   return {

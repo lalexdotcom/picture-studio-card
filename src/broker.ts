@@ -1,8 +1,16 @@
 import type { Position } from "./position";
 
-/** The single card → editor hop. Everything coming back goes through Home Assistant. */
+/**
+ * The single card → editor hop. Everything that changes the *config* comes back
+ * through Home Assistant; only the selection, which is editor state and never
+ * reaches the config, is read straight off the channel.
+ */
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
+  /** Open a badge's own form, the same way the pencil in the list does. */
+  editItem(index: number): void;
+  /** The badge whose form is open, if any. */
+  selectedIndex(): number | undefined;
 }
 
 const editors = new Set<EditorChannel>();
@@ -11,6 +19,14 @@ const listeners = new Set<() => void>();
 const notify = (): void => {
   for (const listener of listeners) listener();
 };
+
+/**
+ * Announce that something a card derives from the editor changed — today, the
+ * selection. Registration already notifies; this is the same signal raised for a
+ * state change rather than a membership change, so cards need only one
+ * subscription.
+ */
+export const notifyEditors = notify;
 
 export const registerEditor = (channel: EditorChannel): (() => void) => {
   editors.add(channel);

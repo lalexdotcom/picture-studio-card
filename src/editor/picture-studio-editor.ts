@@ -1,5 +1,5 @@
 import { html, LitElement, nothing } from "lit";
-import { type EditorChannel, registerEditor } from "../broker";
+import { type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import { CARD_TYPE, normalizeConfig, type PictureStudioConfig, storedConfig } from "../config";
 import type { Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
@@ -84,12 +84,33 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (this._applying) return;
     this.dispatchEvent(
       new CustomEvent("config-changed", {
-        // The one exit to HA, so the one place that serialises positions.
+        // The one exit to HA, so the one place that serializes positions.
         detail: { config: { ...storedConfig(config), type: CARD_TYPE } },
         bubbles: true,
         composed: true,
       }),
     );
+  }
+
+  /**
+   * The only writer of `_editingIndex`. Cards mirror the selection to mark the
+   * badge and have no other way to learn it, since it never reaches the config —
+   * so every change has to be announced, and routing them all through here is
+   * what keeps that true.
+   */
+  private _select(index: number | undefined): void {
+    if (this._editingIndex === index) return;
+    this._editingIndex = index;
+    notifyEditors();
+  }
+
+  /** Opening a badge's form, from the pencil in the list or from the preview. */
+  editItem(index: number): void {
+    this._select(index);
+  }
+
+  selectedIndex(): number | undefined {
+    return this._editingIndex;
   }
 
   private _backgroundChanged = (ev: CustomEvent<{ value: BackgroundData }>): void => {
@@ -105,11 +126,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit({ ...config, items: addItem(config.items, badge) });
     // Open the new badge's form straight away: a stub config is rarely usable
     // as-is, and this is what the native picker does after a pick.
-    this._editingIndex = config.items.length;
+    this._select(config.items.length);
   };
 
   private _editBadge = (ev: CustomEvent<{ index: number }>): void => {
-    this._editingIndex = ev.detail.index;
+    this._select(ev.detail.index);
   };
 
   private _badgeChanged = (ev: CustomEvent<{ badge: BadgeConfig }>): void => {
@@ -135,7 +156,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config) return;
     this._commit({ ...config, items: removeItem(config.items, ev.detail.index) });
-    this._editingIndex = undefined;
+    this._select(undefined);
   };
 
   protected render() {
@@ -151,9 +172,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
           .hass=${hass}
           .badge=${editing.config}
           @badge-changed=${this._badgeChanged}
-          @go-back=${() => {
-            this._editingIndex = undefined;
-          }}
+          @go-back=${() => this._select(undefined)}
         ></picture-studio-badge-form>
       `;
     }
