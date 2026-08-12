@@ -5,3 +5,6 @@ dist/
 .ha/
 .serena/cache/
 .serena/project.local.yml
+
+# Raw screen recordings, converted before anything is committed.
+captures/

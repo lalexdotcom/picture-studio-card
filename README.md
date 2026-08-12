@@ -1,6 +1,10 @@
 # Picture Studio
 
-A Home Assistant Lovelace card: place badges on an image and position them by **dragging them on the live preview**, inside the normal card editor.
+**Put badges on a picture and drag them where they belong — right in the card editor, without writing a line of YAML.**
+
+A floor plan, a photo, a camera view: pick an image, drop badges on it, and place them with the mouse on the live preview. What you drag is what you get.
+
+![Adding a badge in the card editor and dragging it into place on a floor plan](docs/images/editor.gif)
 
 ## Requirements
 
@@ -54,6 +58,12 @@ Then add the card:
 5. Add the card to a dashboard, as above.
 
 Updating means repeating steps 1 and 2, then hard-refreshing. Appending a query string to the resource URL — `/local/picture-studio.js?v=2` — is the reliable way to defeat browser caching.
+
+## On the dashboard
+
+Once saved, the badges behave like any other: tap one to toggle it, or open its more-info dialog.
+
+![Badges on the floor plan being tapped on a dashboard, opening more-info dialogs](docs/images/demo.gif)
 
 ## Configuration
 
@@ -112,6 +122,8 @@ The card sizes itself to the image by default. If you resize it to a height the 
 ### Custom badges
 
 Badges from other frontend plugins appear in the picker next to the built-in ones and render on the image just the same. That is the main reason this card exists.
+
+![Adding a Mushroom template badge from the picker and dragging it onto the plan](docs/images/custom-badge.gif)
 
 ## Roadmap
 
