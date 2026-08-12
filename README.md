@@ -6,6 +6,18 @@ A floor plan, a photo, a camera view: pick an image, drop badges on it, and plac
 
 ![Adding a badge in the card editor and dragging it into place on a floor plan](docs/images/editor.gif)
 
+## On the dashboard
+
+Once saved, the badges behave like any other: tap one to toggle it, or open its more-info dialog.
+
+![Badges on the floor plan being tapped on a dashboard, opening more-info dialogs](docs/images/demo.gif)
+
+## Custom badges
+
+Badges from other frontend plugins appear in the picker next to the built-in ones and render on the image just the same. That is the main reason this card exists.
+
+![Adding a Mushroom template badge from the picker and dragging it onto the plan](docs/images/custom-badge.gif)
+
 ## Requirements
 
 **Home Assistant 2026.5.0 or newer.** HACS enforces this and will refuse to
@@ -58,12 +70,6 @@ Then add the card:
 5. Add the card to a dashboard, as above.
 
 Updating means repeating steps 1 and 2, then hard-refreshing. Appending a query string to the resource URL — `/local/picture-studio.js?v=2` — is the reliable way to defeat browser caching.
-
-## On the dashboard
-
-Once saved, the badges behave like any other: tap one to toggle it, or open its more-info dialog.
-
-![Badges on the floor plan being tapped on a dashboard, opening more-info dialogs](docs/images/demo.gif)
 
 ## Configuration
 
@@ -118,12 +124,6 @@ The editor covers the keys you set every day: title, image, dark mode image, cam
 ### Card size
 
 The card sizes itself to the image by default. If you resize it to a height the image does not fit, the image keeps its proportions and the part that no longer fits stays reachable by scrolling the card.
-
-### Custom badges
-
-Badges from other frontend plugins appear in the picker next to the built-in ones and render on the image just the same. That is the main reason this card exists.
-
-![Adding a Mushroom template badge from the picker and dragging it onto the plan](docs/images/custom-badge.gif)
 
 ## Roadmap
 
