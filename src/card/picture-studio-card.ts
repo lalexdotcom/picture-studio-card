@@ -366,7 +366,7 @@ export class PictureStudioCard extends LitElement {
     .editing .item:hover,
     .editing .item.dragging {
       outline: 2px solid var(--primary-color);
-      outline-offset: 2px;
+      outline-offset: 1px;
     }
     .editing .item:active {
       cursor: grabbing;
