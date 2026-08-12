@@ -113,6 +113,12 @@ The card sizes itself to the image by default. If you resize it to a height the 
 
 Badges from other frontend plugins appear in the picker next to the built-in ones and render on the image just the same. That is the main reason this card exists.
 
+## Roadmap
+
+Badges are the first kind of item, not the only one planned. Every entry in `items` already carries a `type` discriminant — `badge` today — so a second kind can arrive without touching a configuration you have already written.
+
+That second kind is **elements**: icons, labels, buttons, anything else worth placing on an image. They will not simply mirror the element types of the built-in `picture-elements` card. That catalogue predates most of Home Assistant's current design language, and a set drawn to sit alongside today's cards and badges is worth more than a faithful copy of an older one. What exactly it contains is open.
+
 ## Development
 
 ### Prerequisites
