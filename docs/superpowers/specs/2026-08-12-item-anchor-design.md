@@ -79,10 +79,11 @@ Additions to `src/position.ts`:
 
 `span` is unchanged. `clampPx` is replaced by `advance` and goes away.
 
-**Percentages are no longer clamped to `[0, 100]`.** Neither `toPercent` nor
-`parsePercent` bounds its result; both accept any finite number and keep
-today's rounding to two decimals, and an unparseable value still falls back to
-the default. This is what makes an overflowing position expressible, and it is
+**Percentages are no longer clamped to `[0, 100]`.** That means all three of
+`parsePercent` (read), `toPercent` (derive) and `percentString` (write) — a
+bound left in any one of them puts the item back. They accept any finite number
+and keep today's rounding to two decimals, and an unparseable value still falls
+back to the default. `clampPercent` then has no caller and goes away. This is what makes an overflowing position expressible, and it is
 required by the drag rule below: an item must stay where the user dropped it.
 
 Two consequences worth stating. First, `reanchor` now preserves pixels exactly,
@@ -216,8 +217,12 @@ Unit tests, pure, mirroring the source tree as the rest do.
   `proportional`; `parsePercent` keeping a value outside `0-100`;
   `storedConfig` omits the key at the default and writes it otherwise; the full
   round trip leaves an existing config unchanged.
-- `drag`: a pointerup under a fixed anchor commits the expected percentage; a
-  gesture started outside the image commits the overflow it ended on.
+There is no DOM environment — `rstest` runs on node and `drag-layer` is covered
+only through the pure functions it delegates to, as `hasMoved` already is. So
+"a pointerup under a fixed anchor commits the right percentage" is tested as
+`toPercent` with that anchor's offset, and "a gesture that started outside
+commits the overflow it ended on" as a sequence of `advance` calls. Wiring the
+controller to those functions is left to review and to the browser pass.
 
 ## Docs
 
