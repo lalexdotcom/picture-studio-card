@@ -38,7 +38,7 @@ dependency), TypeScript.
 
 | File | Change | Responsibility |
 | --- | --- | --- |
-| `rstest.config.ts` | Create | Declare the DOM test environment |
+| `rstest.config.ts` | Modify — it already exists, carrying `include` | Declare the DOM test environment |
 | `package.json` | Modify | Add `happy-dom` to `devDependencies` |
 | `src/tests/card/harness.ts` | Create | Mount the card with stubbed helpers; fake children that count `setConfig` and `hass` |
 | `src/tests/card/picture-studio-card.test.ts` | Create | The smoke test, then the three assertions |
@@ -71,7 +71,9 @@ dependency), TypeScript.
 ### Task 1: A DOM harness, and a smoke test that uses it
 
 **Files:**
-- Create: `rstest.config.ts`
+- Modify: `rstest.config.ts` — **the file already exists** and declares
+  `include: ["src/**/*.test.ts"]`. Add `testEnvironment` alongside it; do not
+  replace the file and do not drop `include`.
 - Modify: `package.json` (add `happy-dom` to `devDependencies`)
 - Create: `src/tests/card/harness.ts`
 - Create: `src/tests/card/picture-studio-card.test.ts`
