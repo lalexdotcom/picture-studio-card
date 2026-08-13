@@ -326,20 +326,75 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    avoid, since HA's catalog is free and translated.
 6. Vertical overflow scrolling is the consumer's problem to avoid: pinning
    `rows` is what creates it, `rows: "auto"` never does.
-7. **Per-tick work in the card, not yet measured or fixed** (noted 2026-08-13).
-   `updated()` ignores its `changedProperties` and resynchronises everything on
-   every render, while `set hass` calls `requestUpdate()` on every state tick of
-   any entity. So for each card, per tick: `_syncBackground` rebuilds
-   `_bgConfig` and calls `hui-image-element.setConfig` — which defaults the
-   actions, runs `computeTooltip` and toggles classes — for an unchanged config;
-   `_syncBadges` calls `setConfig` on **every** badge, typically one Lit update
-   each, so the cost grows with badge count; and `hass` is pushed twice, once by
-   the setter and again by both sync methods. The remedy is one idea for all
-   three: reconfigure only when `_config` changed, never when only `hass` did.
-   Two minor ones alongside: `_syncEditingAndDrag` does a `querySelector(".root")`
-   per render, and `_applyPositions` rewrites the three style properties even
-   when unchanged. **Measure before fixing** — none of this has been profiled.
-   Slated for 1.1.0.
+7. ~~Per-tick work in the card~~ — **fixed and merged 2026-08-13**, spec
+   `docs/superpowers/specs/2026-08-13-per-tick-work-design.md`, plan
+   `docs/superpowers/plans/2026-08-13-per-tick-work.md`. Ships in 1.1.0.
+
+   **Measured before touching anything**, which is the whole reason the harness
+   below exists: with three badges and ten `hass` ticks, the card made **41**
+   `setConfig` calls and **80** `hass` assignments, where **1** and **40** do.
+   HA republishes `hass` on every state change of *any* entity, and the card
+   answered each one by pushing `hass` twice per element and reconfiguring
+   everything.
+
+   **The trigger was at fault, not the sync methods.** `updated()` ignored its
+   `changedProperties` and `requestUpdate()` sat in the `hass` setter — and
+   `requestUpdate()` **with no argument** schedules a cycle while recording
+   nothing, so `updated()` was already receiving an empty map and resyncing
+   anyway. Now: `_syncBackground` / `_syncBadges` only on `_config`;
+   `_applyPositions` on `_config`, `editing` or `selected`; and
+   `_syncEditingAndDrag` on **`_config`, `preview` or `editing`**.
+
+   **`preview` must stay in that gate** — `editing` *derives* from it, since
+   `_syncEditingAndDrag` is the method that assigns `editing`, so gating on
+   `editing` alone means it never runs and the drag never arms. `_config` is
+   there because `.root`, which the drag attaches to, does not exist until
+   `_config` does. Both reasons are in the code comment; do not "simplify" the
+   condition.
+
+   **The `hass` push stays** in the setter — that is what makes a badge show a
+   new state. Only the second push, repeated by the sync methods, is gone. The
+   counter test asserts 40 pushes precisely so that removing it fails loudly
+   instead of passing.
+
+   The reason that carried the change was not speed — nothing was ever profiled
+   and no symptom was ever reported. It is that **HA's own container never calls
+   `setConfig` twice**; it rebuilds the element. Calling it every second on a
+   third-party badge did something no part of HA does, to code never written to
+   expect it.
+
+   Two follow-up items became moot rather than fixed: the `querySelector(".root")`
+   per render and `_applyPositions` rewriting unchanged styles only cost anything
+   because `updated()` ran per tick.
+
+   **Known untested path:** `editing` going true → false. Nothing asserts that
+   wrappers shed their `.selected` class when the editor unmounts; it was checked
+   by hand in the browser instead.
+
+## The component test harness (new 2026-08-13)
+
+Before this the project had **no component test at all** — nine files, all pure
+modules. Now `rstest.config.ts` declares `testEnvironment: "happy-dom"` (both
+`jsdom` and `happy-dom` are supported; neither was installed, happy-dom was
+added and Lit ran under it first try), and `src/tests/card/harness.ts` mounts the
+card against a stubbed `window.loadCardHelpers`.
+
+- The fakes count **only what the card does after creation**:
+  `createBadgeElement(config)` carries a badge's config in, so a clean mount
+  leaves exactly **one** `setConfig` call, on the background, which the card
+  configures explicitly. Numbers in the tests depend on this.
+- `flush()` is `setTimeout(0)` — a macrotask, so it drains the in-flight
+  `await window.loadCardHelpers()` microtasks. `await card.updateComplete` alone
+  is not enough.
+- A **file-scoped `afterEach`** clears `document.body` and releases any
+  registered editor. Both matter: the card subscribes to the module-level broker
+  in `connectedCallback`, so a card left attached by a *failing* test keeps
+  receiving `notifyEditors()` for the rest of the run. Never go back to inline
+  `card.remove()` — it is skipped exactly when it is needed.
+- The harness mounts the card as a bare child of `document.body`, where
+  `_inEditPreview()`'s shadow-boundary walk terminates on its first step. **The
+  real ancestry walk is not exercised by any test** — that stays a browser
+  question, which is where it has twice been settled.
 8. ~~Automate the release from a version bump~~ — **done and live on `main`
    (2026-08-13)**, spec `docs/superpowers/specs/2026-08-13-release-on-version-bump-design.md`,
    plan `docs/superpowers/plans/2026-08-13-release-on-version-bump.md`.
