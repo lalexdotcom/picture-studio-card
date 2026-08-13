@@ -4,14 +4,20 @@ import { notifyEditors, registerEditor } from "../../broker";
 import type { HomeAssistant } from "../../types";
 import { background, badges, CONFIG_3, flush, mountCard, wrappers } from "./harness";
 
-describe("mounting", () => {
-  afterEach(() => {
-    // Remove every card the test mounted so broker subscriptions added in
-    // connectedCallback don't bleed into the next test — even when a previous
-    // assertion throws before reaching a manual card.remove().
-    for (const el of Array.from(document.body.children)) el.remove();
-  });
+// Tracks an editor registered mid-test so afterEach can release it even when
+// an assertion throws before the test reaches its own release() call.
+let releaseEditor: (() => void) | undefined;
 
+// Remove every card the test mounted so broker subscriptions added in
+// connectedCallback don't bleed into the next test — even when a previous
+// assertion throws before reaching a manual card.remove().
+afterEach(() => {
+  releaseEditor?.();
+  releaseEditor = undefined;
+  for (const el of Array.from(document.body.children)) el.remove();
+});
+
+describe("mounting", () => {
   it("configures the background once and builds one element per badge", async () => {
     const card = await mountCard(CONFIG_3);
 
@@ -54,8 +60,6 @@ describe("a hass tick", () => {
     expect(hassTotal()).toBe(40);
     // Nothing reconfigured: still the single mount call. Not 41.
     expect(setConfigTotal()).toBe(1);
-
-    card.remove();
   });
 });
 
@@ -75,8 +79,6 @@ describe("a real change", () => {
 
     expect(badges(card).map((b) => b.setConfigCalls)).toEqual([1, 1, 1]);
     expect((badges(card)[0]!.config as { name?: string }).name).toBe("renamed");
-
-    card.remove();
   });
 
   it("marks the selected badge without reconfiguring anything", async () => {
@@ -90,7 +92,7 @@ describe("a real change", () => {
       selectedIndex: () => selected,
     };
     card.preview = true;
-    const release = registerEditor(editor);
+    releaseEditor = registerEditor(editor);
     await flush();
 
     expect(wrappers(card)[1]?.classList.contains("selected")).toBe(true);
@@ -107,8 +109,5 @@ describe("a real change", () => {
     expect(
       background(card).setConfigCalls + badges(card).reduce((sum, b) => sum + b.setConfigCalls, 0),
     ).toBe(before);
-
-    release();
-    card.remove();
   });
 });
