@@ -72,7 +72,6 @@ export class PictureStudioBadgeList extends LitElement {
   }
 
   /** ha-dropdown reports the chosen entry on wa-select, not on the trigger. */
-  /** ha-dropdown reports the chosen entry on wa-select, not on the trigger. */
   private _add(ev: CustomEvent<{ item?: { value?: string } }>): void {
     const value = ev.detail?.item?.value;
     const choice = value ? splitChoiceValue(value) : undefined;
