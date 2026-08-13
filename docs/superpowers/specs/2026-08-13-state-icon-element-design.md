@@ -168,6 +168,12 @@ which is why that line is part of the contract, not a style detail.
 three fields become editable, and the setting found that way becomes the default
 of `auto` later, without touching any config that never unchecked the switch.
 
+**`auto` overrides, it never erases.** The numbers survive a checked switch — only
+the render substitutes the defaults for them — so unchecking it returns exactly
+what was typed. Storage therefore drops `size` only when all four fields are the
+defaults, not merely when `auto` is on: an automatic size may still carry numbers
+worth keeping.
+
 `min = max` yields a fixed size, so no separate "fixed px" mode is needed. When
 `min > max`, CSS `clamp()` returns the minimum by specification; this is
 documented rather than validated, since rejecting a transient value while the

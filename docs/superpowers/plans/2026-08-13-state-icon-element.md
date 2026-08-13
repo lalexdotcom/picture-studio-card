@@ -49,30 +49,39 @@ it before Task 1; it carries the reasoning this plan only applies.
 - Consumes: nothing.
 - Produces: `interface IconSize { auto: boolean; min: number; ratio: number; max: number }`,
   `DEFAULT_ICON_SIZE: IconSize`, `normalizeIconSize(raw: unknown): IconSize`,
-  `iconSizeCss(size: IconSize): string`.
+  `isDefaultIconSize(size: IconSize): boolean`, `iconSizeCss(size: IconSize): string`.
 
-The one rule that makes everything downstream simple: **when `auto` is true the
-three numbers *are* the defaults.** `normalizeIconSize` enforces it, so
-"is this the default size?" is just `size.auto`, the form never shows stale
-numbers behind a checked switch, and unchecking the switch starts from values the
-user can see.
+**`auto` overrides at render; it never erases.** The numbers a user typed survive
+a checked switch, so unchecking it returns them exactly as they were. Only
+`iconSizeCss` reads `auto`, and only to substitute the card's defaults for that
+one render. Normalization keeps what it was given, and storage drops `size` only
+when all four fields equal the defaults — hence `isDefaultIconSize`, which cannot
+be shortened to `size.auto`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 // src/tests/element-size.test.ts
 import { describe, expect, it } from "@rstest/core";
-import { DEFAULT_ICON_SIZE, iconSizeCss, normalizeIconSize } from "../element-size";
+import {
+  DEFAULT_ICON_SIZE,
+  iconSizeCss,
+  isDefaultIconSize,
+  normalizeIconSize,
+} from "../element-size";
 
 describe("normalizeIconSize", () => {
   it("defaults a missing size to auto", () => {
     expect(normalizeIconSize(undefined)).toEqual(DEFAULT_ICON_SIZE);
   });
 
-  it("forces the defaults when auto is on, whatever the numbers say", () => {
-    expect(normalizeIconSize({ auto: true, min: 10, ratio: 1, max: 20 })).toEqual(
-      DEFAULT_ICON_SIZE,
-    );
+  it("keeps the numbers under auto — the switch overrides, it does not erase", () => {
+    expect(normalizeIconSize({ auto: true, min: 10, ratio: 1, max: 20 })).toEqual({
+      auto: true,
+      min: 10,
+      ratio: 1,
+      max: 20,
+    });
   });
 
   it("keeps the numbers when auto is off", () => {
@@ -94,13 +103,27 @@ describe("normalizeIconSize", () => {
   });
 
   it("reads a bare object with no auto key as auto", () => {
-    expect(normalizeIconSize({ min: 10 })).toEqual(DEFAULT_ICON_SIZE);
+    expect(normalizeIconSize({ min: 10 })).toEqual({ ...DEFAULT_ICON_SIZE, auto: true, min: 10 });
+  });
+});
+
+describe("isDefaultIconSize", () => {
+  it("is true only when all four fields are the defaults", () => {
+    expect(isDefaultIconSize(DEFAULT_ICON_SIZE)).toBe(true);
+    expect(isDefaultIconSize({ ...DEFAULT_ICON_SIZE, min: 10 })).toBe(false);
+    expect(isDefaultIconSize({ ...DEFAULT_ICON_SIZE, auto: false })).toBe(false);
   });
 });
 
 describe("iconSizeCss", () => {
   it("writes the clamp in px and cqw", () => {
     expect(iconSizeCss(DEFAULT_ICON_SIZE)).toBe("clamp(40px, 3.5cqw, 70px)");
+  });
+
+  it("substitutes the card's defaults under auto, leaving the numbers untouched", () => {
+    expect(iconSizeCss({ auto: true, min: 10, ratio: 1, max: 20 })).toBe(
+      "clamp(40px, 3.5cqw, 70px)",
+    );
   });
 
   it("writes a fixed size when min equals max", () => {
@@ -149,18 +172,12 @@ export const DEFAULT_ICON_SIZE: IconSize = { auto: true, min: 40, ratio: 3.5, ma
 const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
-/**
- * Under `auto` the three numbers ARE the defaults. That single rule buys three
- * things: "is this the default?" is `size.auto`, the disabled fields in the form
- * never show numbers the card is not using, and unchecking the switch starts
- * from values the user just saw.
- */
+/** Keeps what it was given: `auto` is an override at render, never an erasure. */
 export const normalizeIconSize = (raw: unknown): IconSize => {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_ICON_SIZE };
   const size = raw as Partial<Record<keyof IconSize, unknown>>;
-  if (size.auto !== false) return { ...DEFAULT_ICON_SIZE };
   return {
-    auto: false,
+    auto: size.auto !== false,
     min: finite(size.min, DEFAULT_ICON_SIZE.min),
     ratio: finite(size.ratio, DEFAULT_ICON_SIZE.ratio),
     max: finite(size.max, DEFAULT_ICON_SIZE.max),
@@ -168,12 +185,28 @@ export const normalizeIconSize = (raw: unknown): IconSize => {
 };
 
 /**
+ * All four fields, not just `auto`: a size can be automatic and still carry
+ * numbers the user typed, and dropping it from the stored config would lose them.
+ */
+export const isDefaultIconSize = (size: IconSize): boolean =>
+  size.auto === DEFAULT_ICON_SIZE.auto &&
+  size.min === DEFAULT_ICON_SIZE.min &&
+  size.ratio === DEFAULT_ICON_SIZE.ratio &&
+  size.max === DEFAULT_ICON_SIZE.max;
+
+/**
+ * The only reader of `auto`, and the whole of the override: under it the card's
+ * defaults are substituted for this render, and the configured numbers wait
+ * untouched for the switch to come off.
+ *
  * `min > max` is left as written: CSS clamp() returns the minimum in that case,
  * and rejecting a value while the user is still typing it is worse than the
  * documented behaviour.
  */
-export const iconSizeCss = (size: IconSize): string =>
-  `clamp(${size.min}px, ${size.ratio}cqw, ${size.max}px)`;
+export const iconSizeCss = (size: IconSize): string => {
+  const { min, ratio, max } = size.auto ? DEFAULT_ICON_SIZE : size;
+  return `clamp(${min}px, ${ratio}cqw, ${max}px)`;
+};
 ```
 
 - [ ] **Step 4: Run the tests and the typechecker**
@@ -197,7 +230,8 @@ git commit -m "feat: icon size module, clamped against the card's width"
 - Test: `src/tests/config.test.ts`
 
 **Interfaces:**
-- Consumes: `IconSize`, `DEFAULT_ICON_SIZE`, `normalizeIconSize` from `src/element-size`.
+- Consumes: `IconSize`, `DEFAULT_ICON_SIZE`, `normalizeIconSize`, `isDefaultIconSize`
+  from `src/element-size`.
 - Produces:
   - `type PictureItem = BadgeItem | ElementItem`
   - `interface BadgeItem { type: "badge"; position: Position; anchor: Anchor; config: BadgeConfig }`
@@ -292,13 +326,27 @@ it("keeps keys it does not know inside an element config", () => {
   expect((out.items[0]?.config as Record<string, unknown>).future_key).toBe(1);
 });
 
-it("omits an auto size on the way out", () => {
+it("omits a size that is entirely the default", () => {
   const config = normalizeConfig({
     type: CARD_TYPE,
     items: [{ type: "element", config: { type: "state-icon", entity: "light.a" } }],
   });
   const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
   expect(stored.items[0]?.config).toEqual({ type: "state-icon", entity: "light.a" });
+});
+
+it("writes an automatic size that carries the user's numbers", () => {
+  const config = normalizeConfig({
+    type: CARD_TYPE,
+    items: [
+      {
+        type: "element",
+        config: { type: "state-icon", size: { auto: true, min: 10, ratio: 1, max: 20 } },
+      },
+    ],
+  });
+  const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
+  expect(stored.items[0]?.config.size).toEqual({ auto: true, min: 10, ratio: 1, max: 20 });
 });
 
 it("writes a manual size on the way out", () => {
@@ -430,9 +478,10 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       position: storedPosition(item.position),
     };
     if (item.anchor === "proportional") delete stored.anchor;
-    if (item.type === "element" && item.config.size.auto) {
-      // Under auto the numbers are the defaults, so the key carries nothing: a
-      // config that never unchecked the switch does not grow a `size:`.
+    if (item.type === "element" && isDefaultIconSize(item.config.size)) {
+      // Only when all four fields are the defaults: an automatic size may carry
+      // numbers the user typed, and dropping the key would lose them. A config
+      // that never touched the size does not grow a `size:`.
       const { size: _size, ...rest } = item.config;
       stored.config = rest;
     }
@@ -1288,10 +1337,10 @@ describe("toFormData / fromFormData", () => {
     expect(fromFormData(config, toFormData(config))).toEqual(config);
   });
 
-  it("returns to the defaults when auto is checked again", () => {
+  it("keeps the numbers when auto is checked again, so unchecking restores them", () => {
     const config = { ...base, size: { auto: false, min: 10, ratio: 1, max: 20 } };
     const data = { ...toFormData(config), auto_size: true };
-    expect(fromFormData(config, data).size).toEqual(DEFAULT_ICON_SIZE);
+    expect(fromFormData(config, data).size).toEqual({ auto: true, min: 10, ratio: 1, max: 20 });
   });
 
   it("never lets a form field named type overwrite the kind", () => {
