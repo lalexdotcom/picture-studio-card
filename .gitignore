@@ -6,5 +6,8 @@ dist/
 .serena/cache/
 .serena/project.local.yml
 
+# Ledger and review packages of an in-flight plan; the git history is the record.
+.superpowers/
+
 # Raw screen recordings, converted before anything is committed.
 captures/
