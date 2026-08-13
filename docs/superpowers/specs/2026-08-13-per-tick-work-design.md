@@ -66,7 +66,7 @@ called on every tick. `updated(changed)` reads its argument:
 | --- | --- |
 | `_syncBackground` | `_config` changed, or first update |
 | `_syncBadges` | `_config` changed, or first update |
-| `_syncEditingAndDrag` | `editing` changed, or first update |
+| `_syncEditingAndDrag` | `_config`, `preview` or `editing` changed |
 | `_applyPositions` | `_config`, `editing` or `selected` changed |
 
 The `_syncEditingAndDrag` row looks circular — it is the method that *sets*
