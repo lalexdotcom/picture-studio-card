@@ -357,8 +357,19 @@ aimed at the wrong thing.
 
 - [ ] **Step 3: Write the two guard tests**
 
-These must pass both before and after the fix — they are what stops an
-over-zealous gate winning the counter and losing the feature.
+These are what stop an over-zealous gate winning the counter and losing the
+feature.
+
+**Only the first of the two passes before the fix.** The second — a selection
+change must reconfigure nothing — fails on the unchanged code, because today's
+`updated()` runs `_syncBackground` and `_syncBadges` on *every* cycle whatever
+changed, a pure `selected` change included. That is the bug, so the test is
+describing the behaviour we are about to create rather than the one that
+exists. Expect it red until Step 6.
+
+The tests below do not call `card.remove()`: Task 1's `afterEach` clears
+`document.body` after every test, and duplicating it inline is the redundancy
+that task's review already removed once.
 
 Add the broker imports at the top of the file — they are used only from here:
 
@@ -431,8 +442,9 @@ describe("a real change", () => {
 
 Run: `pnpm test`
 
-Expected: the two guard tests **PASS** on the unchanged code, the counter test
-still **FAILS**. If a guard test fails now, the harness is wrong, not the card —
+Expected: the first guard test **PASSES** on the unchanged code; the second
+guard test and the counter test both **FAIL**, for the reason given in Step 3.
+If the *first* guard test fails, the harness is wrong rather than the card —
 fix the harness before touching `src/card/`.
 
 - [ ] **Step 5: Remove the `requestUpdate()` from the `hass` setter**
