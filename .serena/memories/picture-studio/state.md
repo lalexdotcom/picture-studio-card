@@ -10,9 +10,13 @@ are badges and you place them with the mouse".
 `main` is ahead of `origin/main`. Single-file build `dist/picture-studio.js`
 (~61 kB / 16 kB gzip).
 
-`feat/item-anchor` adds per-item anchor with ten values — `proportional`
-(default) plus the nine fixed grid positions. Implementation complete and
-verified in the browser; 148 unit tests, `tsc --noEmit` clean, Biome clean.
+**1.0.0 was released on 2026-08-12** (tag `v1.0.0`, at `06e2080`).
+
+`feat/item-anchor` adds the per-item anchor: ten values, `proportional`
+(default) plus the nine fixed grid positions. Verified in the browser in both
+view layouts and **merged into `main`**; 148 unit tests, `tsc --noEmit` clean,
+Biome clean. It ships in 1.1.0, which is **not released yet** — the performance
+follow-up below belongs to the same version.
 
 ## Where things are
 
@@ -298,10 +302,12 @@ the card picker filters on name **and** description. The `-card` suffix on the
 repository is the HACS convention (`button-card`, `mini-graph-card`,
 `advanced-camera-card`) and its only effect is the doubled word in the path.
 
-1. **No release yet.** `main` is pushed, but there is no tag and no GitHub
-   release, therefore no asset. The workflow fires on `release: published`,
-   builds, and attaches `dist/picture-studio.js` to that release — and since
-   `dist/` is git-ignored, that asset is the only thing HACS can install from.
+1. ~~No release yet~~ — **1.0 was released on 2026-08-12.** The workflow fires
+   on `release: published`, builds, and attaches `dist/picture-studio.js` to
+   that release; since `dist/` is git-ignored, that asset is the only thing
+   HACS can install from. `CHANGELOG.md` and `package.json` carry the version
+   alongside the tag — see AGENTS.md § Changelog and versioning, and **ask
+   before bumping**. No tag is present in this local clone.
 2. ~~Unverified in a browser~~ — **all checked in the local HA on 2026-08-12 and
    behaving as expected**: actions pinned to `none` (no tooltip, not clickable),
    `title` as the card header, the media picker showing an existing path, the
@@ -333,6 +339,25 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    Two minor ones alongside: `_syncEditingAndDrag` does a `querySelector(".root")`
    per render, and `_applyPositions` rewrites the three style properties even
    when unchanged. **Measure before fixing** — none of this has been profiled.
+   Slated for 1.1.0.
+8. **Automate the release from a version bump** (agreed 2026-08-13, not written).
+   Trigger: a commit on `main`. `release.yml` gains the whole chain in front of
+   the build it already does — compare `package.json`'s `version` against
+   `HEAD~1`, and when it changed, tag `vX.Y.Z`, create the release, build, and
+   attach `dist/picture-studio.js`. Tagging the commit that carries the version
+   is the point: the bump is reviewed in the PR, and the tagged tree cannot
+   claim a version it does not contain — which is exactly how `v1.0.0` came to
+   point at a tree saying `0.1.0`.
+   **The trap that makes this one workflow rather than two:** a release created
+   with the default `GITHUB_TOKEN` does **not** trigger workflows listening on
+   `release: published`. Split across two workflows, the build would never run
+   and the release would ship with no asset — a silent failure that leaves HACS
+   nothing to install. Either keep it in one job, or create the release with a
+   PAT / GitHub App token.
+   Two guards: do nothing if the tag already exists (a revert then re-bump must
+   not fail the build), and fail if `CHANGELOG.md` has no section for the
+   version being shipped, or still says `unreleased` — that turns AGENTS.md
+   § Changelog and versioning into something CI enforces.
 
 ## How we work (project rules, see AGENTS.md)
 

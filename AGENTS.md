@@ -25,6 +25,22 @@ ALWAYS use **French** language for chat. Everything else: **English**.
 
 Run the project's linter/formatter after every modification if one is configured.
 
+## Changelog and versioning
+
+1. `CHANGELOG.md` is updated with every delivery. It is written **for users of
+   the card**: what changes for someone configuring it. Anything about how the
+   code got there belongs in the git history, not here.
+2. A change that alters existing behaviour goes under `Changed`, and says so
+   plainly — that is the section people read before upgrading.
+3. At each delivery, **ask whether this is a version bump**, and which one.
+   Never decide it alone.
+4. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
+   `package.json`, and the git tag of the release must agree. HACS installs
+   from the GitHub release, so the tag is what users actually get.
+5. The bump lands with the release, not before: while work is in progress the
+   heading reads `unreleased` and `package.json` still names the last shipped
+   version.
+
 ## Tooling — Serena (symbol-aware MCP)
 
 Serena's symbolic tools are PRIMARY for code; built-in Read/Glob/Grep/Edit are
