@@ -1,4 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
+import type { Anchor } from "../position";
 import type { BadgeConfig, HomeAssistant } from "../types";
 import { resolveBadgeClass } from "./badge-catalog";
 
@@ -19,10 +20,12 @@ export class PictureStudioBadgeForm extends LitElement {
   static properties = {
     hass: { attribute: false },
     badge: { attribute: false },
+    anchor: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare badge?: BadgeConfig;
+  declare anchor?: Anchor;
 
   private _editor?: BadgeEditorElement;
   /** The type the mounted editor was built for; a type change needs a new one. */
@@ -102,6 +105,10 @@ export class PictureStudioBadgeForm extends LitElement {
         ></ha-icon-button>
         <span class="title">${this.badge.type}</span>
       </div>
+      <picture-studio-anchor-picker
+        .hass=${this.hass}
+        .anchor=${this.anchor}
+      ></picture-studio-anchor-picker>
       <div class="form"></div>
       ${
         this._editorType && !this._editor
@@ -124,6 +131,9 @@ export class PictureStudioBadgeForm extends LitElement {
     }
     .fallback {
       color: var(--secondary-text-color);
+    }
+    picture-studio-anchor-picker {
+      margin: 16px 0;
     }
   `;
 }

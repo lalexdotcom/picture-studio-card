@@ -3,6 +3,7 @@ import { activeEditor, notifyEditors, registerEditor, subscribeEditors } from ".
 
 const channel = () => ({
   patchPosition: () => undefined,
+  patchAnchor: () => undefined,
   select: () => undefined,
   selectedIndex: () => undefined,
 });

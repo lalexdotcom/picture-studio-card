@@ -1,7 +1,7 @@
 import { html, LitElement, nothing } from "lit";
 import { type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import { CARD_TYPE, normalizeConfig, type PictureStudioConfig, storedConfig } from "../config";
-import type { Position } from "../position";
+import type { Anchor, Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
   type BackgroundData,
@@ -73,6 +73,13 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit({ ...config, items });
   }
 
+  patchAnchor(index: number, anchor: Anchor): void {
+    const config = this._config;
+    if (!config) return;
+    const items = config.items.map((item, i) => (i === index ? { ...item, anchor } : item));
+    this._commit({ ...config, items });
+  }
+
   /** Convergence point: drag, dialogs and forms all end here. */
   protected _commit(next: PictureStudioConfig): void {
     this._config = next;
@@ -138,6 +145,12 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     });
   };
 
+  private _anchorChanged = (ev: CustomEvent<{ anchor: Anchor }>): void => {
+    ev.stopPropagation();
+    if (this._editingIndex === undefined) return;
+    this.patchAnchor(this._editingIndex, ev.detail.anchor);
+  };
+
   private _moveBadge = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void => {
     const config = this._config;
     if (!config) return;
@@ -165,8 +178,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       return html`
         <picture-studio-badge-form
           .hass=${hass}
-          .badge=${editing.config}
+                    .badge=${editing.config}
+          .anchor=${editing.anchor}
           @badge-changed=${this._badgeChanged}
+          @anchor-changed=${this._anchorChanged}
           @go-back=${() => this.select(undefined)}
         ></picture-studio-badge-form>
       `;

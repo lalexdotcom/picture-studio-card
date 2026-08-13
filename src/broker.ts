@@ -1,4 +1,4 @@
-import type { Position } from "./position";
+import type { Anchor, Position } from "./position";
 
 /**
  * The single card → editor hop. Everything that changes the *config* comes back
@@ -7,6 +7,7 @@ import type { Position } from "./position";
  */
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
+  patchAnchor(index: number, anchor: Anchor): void;
   /**
    * Open a badge's own form, the same way the pencil in the list does, or clear
    * the selection with undefined and fall back to the card's own form.
