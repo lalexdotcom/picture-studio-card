@@ -19,8 +19,8 @@ export const ELEMENT_FORM_TAG = "picture-studio-element-form";
 export const CARD_TYPE = "custom:picture-studio";
 
 /**
- * One placed item. The `type` discriminant is "badge" today; a second variant
- * (e.g. "element") can be added later without restructuring.
+ * The envelope both item families share: where the item sits (position and
+ * anchor). The family is named by `type`; the payload lives in `config`.
  */
 interface ItemBase {
   position: Position;

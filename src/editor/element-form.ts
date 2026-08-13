@@ -11,7 +11,7 @@ const CONTENT_PATH = "M4,9H20V11H4V9M4,13H14V15H4V13Z";
 const ACTIONS_PATH =
   "M9,9H11V7.5A2.5,2.5 0 0,1 13.5,5A2.5,2.5 0 0,1 16,7.5V9H18A2,2 0 0,1 20,11V15H18.5A2.5,2.5 0 0,0 16,17.5A2.5,2.5 0 0,0 18.5,20H20V22H4V11A2,2 0 0,1 6,9H9Z";
 
-export const stateIconSchema = (_localize: LocalizeFunc, auto: boolean): unknown[] => [
+export const stateIconSchema = (auto: boolean): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
@@ -164,7 +164,7 @@ export class PictureStudioElementForm extends LitElement {
       <ha-form
         .hass=${hass}
         .data=${toFormData(element)}
-        .schema=${stateIconSchema(hass.localize, element.size.auto)}
+        .schema=${stateIconSchema(element.size.auto)}
         .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
         @value-changed=${this._valueChanged}
       ></ha-form>

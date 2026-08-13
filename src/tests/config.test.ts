@@ -265,6 +265,26 @@ describe("storedConfig", () => {
     const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
     expect(stored.items[0]?.config.size).toEqual({ auto: false, min: 10, ratio: 1, max: 20 });
   });
+
+  it("returns a badge item byte-identical, leaving its config payload untouched", () => {
+    // The spec requires that an existing badge config survives a round trip
+    // unchanged. If storedConfig ever starts rewriting badge payloads, this
+    // test will catch it: the assertion covers entity, name, and actions.
+    const item = {
+      type: "badge" as const,
+      position: { top: "30%", left: "45%" },
+      config: {
+        type: "entity",
+        entity: "light.living_room",
+        name: "Living Room",
+        tap_action: { action: "more-info" },
+      },
+    };
+    const stored = storedConfig(normalizeConfig({ type: CARD_TYPE, items: [item] })) as {
+      items: unknown[];
+    };
+    expect(stored.items[0]).toEqual(item);
+  });
 });
 
 describe("anchor", () => {

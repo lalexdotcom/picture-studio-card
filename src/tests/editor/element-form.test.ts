@@ -22,7 +22,7 @@ const find = (schema: unknown[], name: string): Record<string, unknown> | undefi
 
 describe("stateIconSchema", () => {
   it("puts icon and colour on one row, then the name, then the picture", () => {
-    const content = find(stateIconSchema(localize, true), "content");
+    const content = find(stateIconSchema(true), "content");
     const names = (
       (content?.schema ?? []) as { name: string; schema?: { name: string }[] }[]
     ).flatMap((entry) => (entry.schema ? entry.schema.map((s) => s.name) : [entry.name]));
@@ -30,17 +30,17 @@ describe("stateIconSchema", () => {
   });
 
   it("disables the three size fields while auto is on", () => {
-    expect(find(stateIconSchema(localize, true), "size_min")?.disabled).toBe(true);
-    expect(find(stateIconSchema(localize, true), "size_ratio")?.disabled).toBe(true);
-    expect(find(stateIconSchema(localize, true), "size_max")?.disabled).toBe(true);
-    expect(find(stateIconSchema(localize, false), "size_min")?.disabled).toBe(false);
-    expect(find(stateIconSchema(localize, false), "size_ratio")?.disabled).toBe(false);
-    expect(find(stateIconSchema(localize, false), "size_max")?.disabled).toBe(false);
+    expect(find(stateIconSchema(true), "size_min")?.disabled).toBe(true);
+    expect(find(stateIconSchema(true), "size_ratio")?.disabled).toBe(true);
+    expect(find(stateIconSchema(true), "size_max")?.disabled).toBe(true);
+    expect(find(stateIconSchema(false), "size_min")?.disabled).toBe(false);
+    expect(find(stateIconSchema(false), "size_ratio")?.disabled).toBe(false);
+    expect(find(stateIconSchema(false), "size_max")?.disabled).toBe(false);
   });
 
   it("offers hold and double tap as optional actions", () => {
-    expect(find(stateIconSchema(localize, true), "hold_action")).toBeDefined();
-    expect(find(stateIconSchema(localize, true), "double_tap_action")).toBeDefined();
+    expect(find(stateIconSchema(true), "hold_action")).toBeDefined();
+    expect(find(stateIconSchema(true), "double_tap_action")).toBeDefined();
   });
 });
 
