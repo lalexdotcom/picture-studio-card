@@ -322,17 +322,19 @@ export class PictureStudioCard extends LitElement {
         wrapper.className = "item";
         wrapper.dataset.index = String(index);
 
-        const badge = helpers.createBadgeElement(item.config);
-        if (this._hass) badge.hass = this._hass;
-        wrapper.append(badge);
+        if (item.type === "badge") {
+          const badge = helpers.createBadgeElement(item.config);
+          if (this._hass) badge.hass = this._hass;
+          wrapper.append(badge);
+          this._elements.push(badge);
+        }
         layer.append(wrapper);
-
-        this._elements.push(badge);
         this._wrappers.push(wrapper);
       });
       this._renderedTypes = types;
     } else {
       items.forEach((item, index) => {
+        if (item.type !== "badge") return;
         const badge = this._elements[index];
         if (!badge) return;
         badge.setConfig(item.config);

@@ -25,6 +25,11 @@ export interface BadgeConfig {
   [key: string]: unknown;
 }
 
+export interface ActionConfig {
+  action: string;
+  [key: string]: unknown;
+}
+
 /**
  * Sizing defaults a card hands to the sections grid. `columns` counts twelfths of a
  * section, or "full" to span it whole; `rows` is a fixed height in grid rows, or
