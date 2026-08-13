@@ -371,30 +371,6 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    wrappers shed their `.selected` class when the editor unmounts; it was checked
    by hand in the browser instead.
 
-## The component test harness (new 2026-08-13)
-
-Before this the project had **no component test at all** — nine files, all pure
-modules. Now `rstest.config.ts` declares `testEnvironment: "happy-dom"` (both
-`jsdom` and `happy-dom` are supported; neither was installed, happy-dom was
-added and Lit ran under it first try), and `src/tests/card/harness.ts` mounts the
-card against a stubbed `window.loadCardHelpers`.
-
-- The fakes count **only what the card does after creation**:
-  `createBadgeElement(config)` carries a badge's config in, so a clean mount
-  leaves exactly **one** `setConfig` call, on the background, which the card
-  configures explicitly. Numbers in the tests depend on this.
-- `flush()` is `setTimeout(0)` — a macrotask, so it drains the in-flight
-  `await window.loadCardHelpers()` microtasks. `await card.updateComplete` alone
-  is not enough.
-- A **file-scoped `afterEach`** clears `document.body` and releases any
-  registered editor. Both matter: the card subscribes to the module-level broker
-  in `connectedCallback`, so a card left attached by a *failing* test keeps
-  receiving `notifyEditors()` for the rest of the run. Never go back to inline
-  `card.remove()` — it is skipped exactly when it is needed.
-- The harness mounts the card as a bare child of `document.body`, where
-  `_inEditPreview()`'s shadow-boundary walk terminates on its first step. **The
-  real ancestry walk is not exercised by any test** — that stays a browser
-  question, which is where it has twice been settled.
 8. ~~Automate the release from a version bump~~ — **done and live on `main`
    (2026-08-13)**, spec `docs/superpowers/specs/2026-08-13-release-on-version-bump-design.md`,
    plan `docs/superpowers/plans/2026-08-13-release-on-version-bump.md`.
@@ -457,6 +433,31 @@ card against a stubbed `window.loadCardHelpers`.
    case-sensitive, so a heading written `Unreleased` would slip past. AGENTS.md
    prescribes lowercase; the consequence is release-notes embarrassment, not a
    broken install.
+
+## The component test harness (new 2026-08-13)
+
+Before this the project had **no component test at all** — nine files, all pure
+modules. Now `rstest.config.ts` declares `testEnvironment: "happy-dom"` (both
+`jsdom` and `happy-dom` are supported; neither was installed, happy-dom was
+added and Lit ran under it first try), and `src/tests/card/harness.ts` mounts the
+card against a stubbed `window.loadCardHelpers`.
+
+- The fakes count **only what the card does after creation**:
+  `createBadgeElement(config)` carries a badge's config in, so a clean mount
+  leaves exactly **one** `setConfig` call, on the background, which the card
+  configures explicitly. Numbers in the tests depend on this.
+- `flush()` is `setTimeout(0)` — a macrotask, so it drains the in-flight
+  `await window.loadCardHelpers()` microtasks. `await card.updateComplete` alone
+  is not enough.
+- A **file-scoped `afterEach`** clears `document.body` and releases any
+  registered editor. Both matter: the card subscribes to the module-level broker
+  in `connectedCallback`, so a card left attached by a *failing* test keeps
+  receiving `notifyEditors()` for the rest of the run. Never go back to inline
+  `card.remove()` — it is skipped exactly when it is needed.
+- The harness mounts the card as a bare child of `document.body`, where
+  `_inEditPreview()`'s shadow-boundary walk terminates on its first step. **The
+  real ancestry walk is not exercised by any test** — that stays a browser
+  question, which is where it has twice been settled.
 
 ## How we work (project rules, see AGENTS.md)
 
