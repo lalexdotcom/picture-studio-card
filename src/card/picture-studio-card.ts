@@ -293,7 +293,7 @@ export class PictureStudioCard extends LitElement {
       // hass tick. Once the drag ends, onPointerUp restores the derived style
       // and the next _applyPositions then matches it exactly — no flash.
       if (index === dragging) return;
-      const style = positionStyle(item.position);
+      const style = positionStyle(item.position, "proportional");
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;

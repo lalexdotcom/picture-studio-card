@@ -142,15 +142,15 @@ export const createDragController = (options: DragOptions) => {
     hit.element.classList.remove("dragging");
 
     const position: Position = {
-      left: toPercent(x, surface.width, width),
-      top: toPercent(y, surface.height, height),
+      left: toPercent(x, surface.width, width, null),
+      top: toPercent(y, surface.height, height, null),
     };
 
     // Restore the derived style here and not only on the next setConfig: a drag
     // that ends where it started produces no config change, so no setConfig
     // would come back, and the badge would stay in raw pixels with no transform.
     // Same geometry either way, so there is no flash.
-    const style = positionStyle(position);
+    const style = positionStyle(position, "proportional");
     hit.element.style.left = style.left;
     hit.element.style.top = style.top;
     hit.element.style.transform = style.transform;
