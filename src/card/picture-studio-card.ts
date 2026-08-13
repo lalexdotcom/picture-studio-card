@@ -9,7 +9,7 @@ import {
   type PictureStudioConfig,
   stubConfig,
 } from "../config";
-import { positionStyle } from "../position";
+import { type Anchor, type Position, positionStyle, reanchor } from "../position";
 import type {
   HomeAssistant,
   LovelaceBadgeElement,
@@ -41,6 +41,10 @@ export class PictureStudioCard extends LitElement {
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
   private _renderedTypes: string[] = [];
+  /** The anchor each wrapper was last rendered with; the reanchor trigger. */
+  private _renderedAnchors: Anchor[] = [];
+  /** The coordinates each wrapper was last rendered with; the reorder guard. */
+  private _renderedPositions: Position[] = [];
   private _unsubscribe?: () => void;
 
   private _drag = createDragController({
@@ -252,6 +256,8 @@ export class PictureStudioCard extends LitElement {
       layer.replaceChildren();
       this._elements = [];
       this._wrappers = [];
+      this._renderedAnchors = [];
+      this._renderedPositions = [];
 
       items.forEach((item, index) => {
         const wrapper = document.createElement("div");
@@ -294,11 +300,60 @@ export class PictureStudioCard extends LitElement {
       // hass tick. Once the drag ends, onPointerUp restores the derived style
       // and the next _applyPositions then matches it exactly — no flash.
       if (index === dragging) return;
-      const style = positionStyle(item.position, item.anchor);
+
+      const position = this._reanchored(item, index, wrapper) ?? item.position;
+      this._renderedAnchors[index] = item.anchor;
+      this._renderedPositions[index] = position;
+
+      const style = positionStyle(position, item.anchor);
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;
     });
+  }
+
+  /**
+   * The item's coordinates re-expressed under its new anchor, or undefined if
+   * there is nothing to do. Returning the position instead of only committing
+   * it lets the caller render it on this same pass, so the item never shows at
+   * the pre-recomputation place for a frame.
+   *
+   * Guarded on the position being unchanged as well: the diff is indexed, and
+   * _syncBadges keeps the wrappers when only the order changed between badges
+   * of the same type, so a reorder would otherwise look like an anchor change
+   * and recompute from the wrong anchor. An anchor flip never moves the
+   * coordinates; a reorder always brings the other item's along.
+   */
+  private _reanchored(
+    item: PictureItem,
+    index: number,
+    wrapper: HTMLElement,
+  ): Position | undefined {
+    const from = this._renderedAnchors[index];
+    if (!this.editing || from === undefined || from === item.anchor) return undefined;
+
+    const rendered = this._renderedPositions[index];
+    if (
+      rendered === undefined ||
+      rendered.top !== item.position.top ||
+      rendered.left !== item.position.left
+    ) {
+      return undefined;
+    }
+
+    const layer = this._layer;
+    if (!layer) return undefined;
+
+    const container = layer.getBoundingClientRect();
+    const element = wrapper.getBoundingClientRect();
+    const position = reanchor(item.position, from, item.anchor, container, element);
+
+    // Record before committing: the round trip that comes back then finds the
+    // anchors equal and does nothing. This ordering is what guarantees
+    // termination even if the arithmetic above is wrong.
+    this._renderedAnchors[index] = item.anchor;
+    activeEditor()?.patchPosition(index, position);
+    return position;
   }
 
   protected render() {
