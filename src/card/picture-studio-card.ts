@@ -1,4 +1,4 @@
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
@@ -71,7 +71,11 @@ export class PictureStudioCard extends LitElement {
     for (const el of this._elements) {
       el.hass = hass;
     }
-    this.requestUpdate();
+    // No requestUpdate: render() reads _config.title and editing, never hass.
+    // Home Assistant republishes hass on every state change of any entity, so
+    // scheduling a cycle here was scheduling one per tick — and the cycle's
+    // changedProperties was empty, since requestUpdate() with no argument
+    // records nothing.
   }
 
   get hass(): HomeAssistant | undefined {
@@ -213,10 +217,24 @@ export class PictureStudioCard extends LitElement {
     this._drag.detach();
   }
 
-  protected updated(): void {
-    this._syncEditingAndDrag();
-    void this._syncBackground();
-    void this._syncBadges();
+  protected updated(changed: PropertyValues): void {
+    const configChanged = changed.has("_config");
+
+    // preview is in the gate because editing DERIVES from it: _syncEditingAndDrag
+    // is what sets editing, so waiting for editing to change would mean it never
+    // does. _config is in it because .root — which the drag attaches to — only
+    // exists once _config does.
+    if (configChanged || changed.has("preview") || changed.has("editing")) {
+      this._syncEditingAndDrag();
+    }
+
+    if (configChanged) {
+      void this._syncBackground();
+      // _syncBadges ends with _applyPositions, so it is not called again here.
+      void this._syncBadges();
+    } else if (changed.has("editing") || changed.has("selected")) {
+      this._applyPositions(this._config?.items ?? []);
+    }
   }
 
   private get _layer(): HTMLElement | null {

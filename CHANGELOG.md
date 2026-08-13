@@ -27,6 +27,13 @@
   badge already hanging over an edge can be dragged back in but not further
   out, and once fully inside it stays inside. Only a hand-written coordinate or
   a change of anchor puts a badge over the edge.
+- **Badges are no longer reconfigured on every state update.** The card used to
+  hand each badge its configuration again every time any entity in Home
+  Assistant changed state, which is something Home Assistant itself never does —
+  it rebuilds a card when its configuration changes. Badges still receive every
+  state update; they are simply no longer told their configuration has changed
+  when it has not. A third-party badge that misbehaved under that treatment
+  should now behave.
 
 ## 1.0.0 — 2026-08-12
 
