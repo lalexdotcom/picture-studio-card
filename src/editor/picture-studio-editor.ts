@@ -1,6 +1,12 @@
 import { html, LitElement, nothing } from "lit";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
-import { CARD_TYPE, normalizeConfig, type PictureStudioConfig, storedConfig } from "../config";
+import {
+  CARD_TYPE,
+  type ElementConfig,
+  normalizeConfig,
+  type PictureStudioConfig,
+  storedConfig,
+} from "../config";
 import type { Anchor, Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
@@ -11,9 +17,11 @@ import {
   mergeBackground,
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
+import { stubElementConfig } from "./element-catalog";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor } from "./items";
 import "./badge-form";
 import "./badge-list";
+import "./element-form";
 
 export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
@@ -128,13 +136,18 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit(mergeBackground(this._config, ev.detail.value));
   };
 
-  private _addBadge = async (ev: CustomEvent<{ type: string }>): Promise<void> => {
+  private _addItem = async (
+    ev: CustomEvent<{ family: "badge" | "element"; type: string }>,
+  ): Promise<void> => {
     const config = this._config;
     if (!config || !this.hass) return;
-    const badge = await stubBadgeConfig(ev.detail.type, this.hass);
-    this._commit({ ...config, items: addItem(config.items, { type: "badge", config: badge }) });
-    // Open the new badge's form straight away: a stub config is rarely usable
-    // as-is, and this is what the native picker does after a pick.
+    const item =
+      ev.detail.family === "badge"
+        ? ({ type: "badge", config: await stubBadgeConfig(ev.detail.type, this.hass) } as const)
+        : ({ type: "element", config: stubElementConfig(ev.detail.type) } as const);
+    this._commit({ ...config, items: addItem(config.items, item) });
+    // Open the new item's form straight away: a stub is rarely usable as-is —
+    // an element's has no entity at all — and this is what the native picker does.
     this.select(config.items.length);
   };
 
@@ -149,6 +162,16 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit({
       ...config,
       items: replaceConfig(config.items, this._editingIndex, ev.detail.badge),
+    });
+  };
+
+  private _elementChanged = (ev: CustomEvent<{ element: ElementConfig }>): void => {
+    ev.stopPropagation();
+    const config = this._config;
+    if (!config || this._editingIndex === undefined) return;
+    this._commit({
+      ...config,
+      items: replaceConfig(config.items, this._editingIndex, ev.detail.element),
     });
   };
 
@@ -182,16 +205,27 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const editing = this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
 
     if (editing) {
-      return html`
-        <picture-studio-badge-form
-          .hass=${hass}
-          .badge=${editing.config}
-          .anchor=${editing.anchor}
-          @badge-changed=${this._badgeChanged}
-          @anchor-changed=${this._anchorChanged}
-          @go-back=${() => this.select(undefined)}
-        ></picture-studio-badge-form>
-      `;
+      return editing.type === "badge"
+        ? html`
+            <picture-studio-badge-form
+              .hass=${hass}
+              .badge=${editing.config}
+              .anchor=${editing.anchor}
+              @badge-changed=${this._badgeChanged}
+              @anchor-changed=${this._anchorChanged}
+              @go-back=${() => this.select(undefined)}
+            ></picture-studio-badge-form>
+          `
+        : html`
+            <picture-studio-element-form
+              .hass=${hass}
+              .element=${editing.config}
+              .anchor=${editing.anchor}
+              @element-changed=${this._elementChanged}
+              @anchor-changed=${this._anchorChanged}
+              @go-back=${() => this.select(undefined)}
+            ></picture-studio-element-form>
+          `;
     }
 
     return html`
@@ -205,7 +239,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-badge-list
         .hass=${hass}
         .items=${config.items}
-        @item-add=${this._addBadge}
+        @item-add=${this._addItem}
         @item-edit=${this._editBadge}
         @item-moved=${this._moveBadge}
         @item-removed=${this._removeBadge}

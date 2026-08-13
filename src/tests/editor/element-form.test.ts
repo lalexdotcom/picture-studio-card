@@ -31,7 +31,11 @@ describe("stateIconSchema", () => {
 
   it("disables the three size fields while auto is on", () => {
     expect(find(stateIconSchema(localize, true), "size_min")?.disabled).toBe(true);
+    expect(find(stateIconSchema(localize, true), "size_ratio")?.disabled).toBe(true);
+    expect(find(stateIconSchema(localize, true), "size_max")?.disabled).toBe(true);
     expect(find(stateIconSchema(localize, false), "size_min")?.disabled).toBe(false);
+    expect(find(stateIconSchema(localize, false), "size_ratio")?.disabled).toBe(false);
+    expect(find(stateIconSchema(localize, false), "size_max")?.disabled).toBe(false);
   });
 
   it("offers hold and double tap as optional actions", () => {

@@ -13,7 +13,6 @@ const STRINGS = {
     anchor: "Positioning",
     anchor_proportional: "Proportional",
     anchor_anchored: "Anchored",
-    size: "Size",
     ratio: "Ratio",
   },
   fr: {
@@ -21,7 +20,6 @@ const STRINGS = {
     anchor: "Positionnement",
     anchor_proportional: "Proportionnel",
     anchor_anchored: "Ancré",
-    size: "Taille",
     ratio: "Ratio",
   },
 } as const;
