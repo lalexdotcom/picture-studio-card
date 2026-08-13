@@ -127,7 +127,7 @@ export class PictureStudioBadgeList extends LitElement {
       <ha-dropdown class="add" @wa-select=${this._add}>
         <ha-button slot="trigger" appearance="filled" size="s">
           <ha-svg-icon .path=${PLUS_PATH} slot="start"></ha-svg-icon>
-          ${localize("ui.panel.lovelace.editor.edit_badge.add") || "Add badge"}
+          ${localize("ui.common.add") || "Add"}
         </ha-button>
         ${addChoices(localize, window.customBadges).map(
           (c) => html`<ha-dropdown-item .value=${c.value}>${c.label}</ha-dropdown-item>`,
