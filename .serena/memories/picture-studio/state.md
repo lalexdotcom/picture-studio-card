@@ -340,24 +340,68 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    per render, and `_applyPositions` rewrites the three style properties even
    when unchanged. **Measure before fixing** — none of this has been profiled.
    Slated for 1.1.0.
-8. **Automate the release from a version bump** (agreed 2026-08-13, not written).
-   Trigger: a commit on `main`. `release.yml` gains the whole chain in front of
-   the build it already does — compare `package.json`'s `version` against
-   `HEAD~1`, and when it changed, tag `vX.Y.Z`, create the release, build, and
-   attach `dist/picture-studio.js`. Tagging the commit that carries the version
-   is the point: the bump is reviewed in the PR, and the tagged tree cannot
-   claim a version it does not contain — which is exactly how `v1.0.0` came to
-   point at a tree saying `0.1.0`.
-   **The trap that makes this one workflow rather than two:** a release created
-   with the default `GITHUB_TOKEN` does **not** trigger workflows listening on
-   `release: published`. Split across two workflows, the build would never run
-   and the release would ship with no asset — a silent failure that leaves HACS
-   nothing to install. Either keep it in one job, or create the release with a
-   PAT / GitHub App token.
-   Two guards: do nothing if the tag already exists (a revert then re-bump must
-   not fail the build), and fail if `CHANGELOG.md` has no section for the
-   version being shipped, or still says `unreleased` — that turns AGENTS.md
-   § Changelog and versioning into something CI enforces.
+8. ~~Automate the release from a version bump~~ — **done and live on `main`
+   (2026-08-13)**, spec `docs/superpowers/specs/2026-08-13-release-on-version-bump-design.md`,
+   plan `docs/superpowers/plans/2026-08-13-release-on-version-bump.md`.
+
+   **The trigger is the absence of the tag, not a diff.** `release.yml` reads
+   `version` from `package.json` and asks GitHub whether `vX.Y.Z` exists; if it
+   does, the job goes green having published nothing. Diffing `package.json`
+   against `HEAD~1` was rejected: a push carrying the bump commit *plus* a later
+   commit only runs the workflow at the tip, where the diff no longer shows the
+   bump — no release, no error. Testing the tag is idempotent and self-healing.
+   What makes it safe is AGENTS.md's own rule: while work is in progress,
+   `package.json` names the last shipped version, whose tag exists.
+
+   **Two workflows joined by `workflow_run`, not one job.** `ci.yml` validates
+   and, on `main` pushes only, uploads `dist/picture-studio.js` as an artefact
+   named `bundle`. `release.yml` wakes on CI's completion and attaches *that*
+   artefact — the published byte is the tested byte. Splitting it the other way
+   (a workflow creating the release, another listening on `release: published`)
+   cannot work: a release created with the default `GITHUB_TOKEN` does not
+   trigger `release: published`, so the build would never run and HACS would get
+   a release with no asset.
+
+   **The trap `workflow_run` brings, and which the design turns on:** the job
+   starts at the **tip of the default branch**, so `github.sha` is *not* the
+   validated commit. `github.event.workflow_run.head_sha` is used **twice** — as
+   the `checkout` ref and as `target_commitish` — and missing either recreates
+   the `v1.0.0`-on-a-`0.1.0`-tree bug from automation this time. The job `if:`
+   filters on both `conclusion == 'success'` and `head_branch == 'main'`, since
+   `workflow_run` fires on every CI completion, PRs and failures included.
+
+   **The CHANGELOG guard is not a separate check**, it is the extraction: the
+   section for the version becomes the release body (prepended to GitHub's
+   generated notes, which `body` + `generate_release_notes` compose to do). No
+   section, a heading still reading `unreleased`, or an empty body fails the job
+   before anything is published. AGENTS.md § Changelog and versioning is now
+   enforced by CI. The `awk` matches the heading with `index()` + `substr()`,
+   never a regex built from the version — `1.1.0` as a regex matches the prefix
+   of `## 1.1.0-rc.1`.
+
+   **The artefact purges itself under `success()`, never `always()`.** Rubbish in
+   two cases (the no-op never used it; the release attached it permanently),
+   precious in a third (a failed job's artefact is what re-running it needs, and
+   a re-run reuses the same `run-id`). That inverts what the retention bounds:
+   the ordinary path cleans up after itself, so 14 days only has to outlive a
+   *failed* job — sized on the failure rate, not the push rate. Housekeeping
+   reports through `::warning::` and never reddens a job whose release succeeded.
+
+   **Verified live on 2026-08-13**, twice: CI green with the artefact, the
+   Release job started by `workflow_run`, logging `v1.0.0 is already tagged`,
+   steps 5-7 `skipped`, the purge step green, `total=0` artefact left, and no new
+   tag or release. **Still unexercised**: the failure path and the nominal path,
+   both of which need a version bump — so they happen when 1.1.0 ships, in that
+   order (bump with the heading left at `unreleased`, expect red; then correct it
+   and expect the release). **Still unknown**: whether `GITHUB_TOKEN` with
+   `actions: write` suffices to download an artefact from another run, or whether
+   a PAT is needed — it fails before publishing anything, and the fallback is a
+   secret swapped into `github-token:`.
+
+   Known minor, deliberately shipped: the `case *unreleased*` guard is
+   case-sensitive, so a heading written `Unreleased` would slip past. AGENTS.md
+   prescribes lowercase; the consequence is release-notes embarrassment, not a
+   broken install.
 
 ## How we work (project rules, see AGENTS.md)
 
