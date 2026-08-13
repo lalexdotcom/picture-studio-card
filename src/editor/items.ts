@@ -1,4 +1,4 @@
-import type { PictureItem } from "../config";
+import type { ElementConfig, PictureItem } from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
 import type { BadgeConfig, HassEntity } from "../types";
 
@@ -9,20 +9,24 @@ import type { BadgeConfig, HassEntity } from "../types";
  * we are handed.
  */
 
-/** A new badge lands centered and proportional, ready to be dragged. */
-export const addItem = (items: PictureItem[], badge: BadgeConfig): PictureItem[] => [
+export type NewItem =
+  | { type: "badge"; config: BadgeConfig }
+  | { type: "element"; config: ElementConfig };
+
+/** A new item lands centered and proportional, ready to be dragged. */
+export const addItem = (items: PictureItem[], item: NewItem): PictureItem[] => [
   ...items,
-  { type: "badge", position: { ...DEFAULT_POSITION }, anchor: DEFAULT_ANCHOR, config: badge },
+  { ...item, position: { ...DEFAULT_POSITION }, anchor: DEFAULT_ANCHOR } as PictureItem,
 ];
 
-export const replaceBadge = (
+export const replaceConfig = (
   items: PictureItem[],
   index: number,
-  badge: BadgeConfig,
+  config: BadgeConfig | ElementConfig,
 ): PictureItem[] =>
   index < 0 || index >= items.length
     ? items
-    : items.map((item, i) => (i === index ? { ...item, config: badge } : item));
+    : items.map((item, i) => (i === index ? ({ ...item, config } as PictureItem) : item));
 
 /**
  * Set an item's anchor, and its coordinates with it when the caller could work
@@ -72,10 +76,21 @@ export interface RowLabel {
  * treating a badge config as opaque.
  */
 export const rowLabel = (item: PictureItem, states?: Record<string, HassEntity>): RowLabel => {
-  const config = item.config as { entity?: string; type?: string; name?: string };
-  const friendly = config.entity ? states?.[config.entity]?.attributes?.friendly_name : undefined;
-  const primary = config.name ?? friendly ?? config.entity ?? config.type ?? "badge";
+  const friendly = item.config.entity
+    ? states?.[item.config.entity as string]?.attributes?.friendly_name
+    : undefined;
 
+  if (item.type === "element") {
+    // `name` is deliberately not read: in composed mode it holds sentinels like
+    // ___device_name___, which belong in a tooltip, not in a list row.
+    const primary = friendly ?? item.config.entity ?? item.config.type;
+    return item.config.entity && item.config.entity !== primary
+      ? { primary, secondary: item.config.entity }
+      : { primary };
+  }
+
+  const config = item.config as { entity?: string; type?: string; name?: string };
+  const primary = config.name ?? friendly ?? config.entity ?? config.type ?? "badge";
   if (config.entity && config.entity !== primary) return { primary, secondary: config.entity };
   if (config.type && config.type !== primary) return { primary, secondary: config.type };
   return { primary };

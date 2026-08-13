@@ -11,7 +11,7 @@ import {
   mergeBackground,
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
-import { addItem, moveItem, removeItem, replaceBadge, setAnchor } from "./badge-items";
+import { addItem, moveItem, removeItem, replaceConfig, setAnchor } from "./items";
 import "./badge-form";
 import "./badge-list";
 
@@ -132,7 +132,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config || !this.hass) return;
     const badge = await stubBadgeConfig(ev.detail.type, this.hass);
-    this._commit({ ...config, items: addItem(config.items, badge) });
+    this._commit({ ...config, items: addItem(config.items, { type: "badge", config: badge }) });
     // Open the new badge's form straight away: a stub config is rarely usable
     // as-is, and this is what the native picker does after a pick.
     this.select(config.items.length);
@@ -148,7 +148,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (!config || this._editingIndex === undefined) return;
     this._commit({
       ...config,
-      items: replaceBadge(config.items, this._editingIndex, ev.detail.badge),
+      items: replaceConfig(config.items, this._editingIndex, ev.detail.badge),
     });
   };
 
