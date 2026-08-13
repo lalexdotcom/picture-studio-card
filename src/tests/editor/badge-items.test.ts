@@ -1,6 +1,13 @@
 import { describe, expect, it } from "@rstest/core";
 import type { PictureItem } from "../../config";
-import { addItem, moveItem, removeItem, replaceBadge, rowLabel } from "../../editor/badge-items";
+import {
+  addItem,
+  moveItem,
+  removeItem,
+  replaceBadge,
+  rowLabel,
+  setAnchor,
+} from "../../editor/badge-items";
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",
@@ -53,6 +60,38 @@ describe("replaceBadge", () => {
     const items = [item("light.a", 10, 20)];
     replaceBadge(items, 0, { type: "entity", entity: "light.z" });
     expect(items[0]?.config).toEqual({ type: "entity", entity: "light.a" });
+  });
+});
+
+describe("setAnchor", () => {
+  const items = [item("light.a", 10, 20), item("light.b", 30, 40)];
+
+  it("writes the anchor and the coordinates that keep the item still, together", () => {
+    const out = setAnchor(items, 1, "center", { top: 33, left: 44 });
+    expect(out[1]?.anchor).toBe("center");
+    expect(out[1]?.position).toEqual({ top: 33, left: 44 });
+  });
+
+  it("keeps the coordinates when the caller could not work out new ones", () => {
+    const out = setAnchor(items, 1, "center");
+    expect(out[1]?.anchor).toBe("center");
+    expect(out[1]?.position).toEqual({ top: 30, left: 40 });
+  });
+
+  it("leaves every other item untouched", () => {
+    const out = setAnchor(items, 1, "center", { top: 33, left: 44 });
+    expect(out[0]).toEqual(items[0]);
+  });
+
+  it("does not mutate its input, which Home Assistant freezes", () => {
+    setAnchor(items, 1, "center", { top: 33, left: 44 });
+    expect(items[1]?.anchor).toBe("proportional");
+    expect(items[1]?.position).toEqual({ top: 30, left: 40 });
+  });
+
+  it("returns the list unchanged for an index that is not there", () => {
+    expect(setAnchor(items, -1, "center")).toBe(items);
+    expect(setAnchor(items, 2, "center")).toBe(items);
   });
 });
 

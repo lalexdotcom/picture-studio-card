@@ -1,5 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
-import { activeEditor, subscribeEditors } from "../broker";
+import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
@@ -41,10 +41,8 @@ export class PictureStudioCard extends LitElement {
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
   private _renderedTypes: string[] = [];
-  /** The anchor each wrapper was last rendered with; the reanchor trigger. */
-  private _renderedAnchors: Anchor[] = [];
-  /** The coordinates each wrapper was last rendered with; the reorder guard. */
-  private _renderedPositions: Position[] = [];
+  /** Released when the card stops editing; see the broker's card registry. */
+  private _unregisterCard?: () => void;
   private _unsubscribe?: () => void;
 
   private _drag = createDragController({
@@ -123,13 +121,46 @@ export class PictureStudioCard extends LitElement {
    */
   private _syncEditing(): void {
     const editor = activeEditor();
-    const editing = this.preview && editor !== undefined;
+    const editing = this.preview && editor !== undefined && this._inEditPreview();
     // The selection lives in the editor and never reaches the config, so it is
     // read from the channel rather than round-tripped through Home Assistant.
     const selected = editing ? editor?.selectedIndex() : undefined;
     if (selected !== this.selected) this.selected = selected;
     if (editing === this.editing) return;
     this.editing = editing;
+  }
+
+  /**
+   * True when this card is the edit dialog's own preview.
+   *
+   * `preview` on our own element does not mean that. Home Assistant sets it on
+   * every card of a dashboard in edit mode, so that a click edits the card
+   * instead of firing its actions. Reading it as "I am the dialog" armed the
+   * drag on every picture-studio card behind the dialog, and left the editor
+   * with two candidate previews and no way to tell them apart.
+   *
+   * The reliable difference is the **edit chrome a dashboard wraps its cards
+   * in**, and which the dialog's preview has above it: `hui-card-options` in a
+   * masonry view, `hui-card-edit-mode` in a section. Neither exists around the
+   * preview the dialog renders.
+   *
+   * Do not replace this with a test on the `preview` attribute. It looks
+   * cleaner — the dialog writes `<hui-card preview>` literally while a
+   * dashboard assigns the property — but it only works in a masonry view, and
+   * silently not in sections: `hui-section` is the one component in the
+   * frontend that declares `preview` with `reflect: true`, so the attribute is
+   * written there whoever set it. Verified on 2026.8.1, and observed failing.
+   *
+   * The walk hops shadow boundaries, since `closest` stops at each one.
+   */
+  private _inEditPreview(): boolean {
+    let current: Element | null = this;
+    while (current) {
+      if (current.closest("hui-card-options, hui-card-edit-mode")) return false;
+      const root = current.getRootNode();
+      current = root instanceof ShadowRoot ? root.host : null;
+    }
+    return true;
   }
 
   /**
@@ -157,6 +188,15 @@ export class PictureStudioCard extends LitElement {
     } else {
       this._drag.detach();
     }
+
+    // Registered on the same condition the drag is armed on, so the editor only
+    // ever finds the preview it is driving — a dashboard's own cards never edit.
+    if (this.editing) {
+      this._unregisterCard ??= registerCard(this);
+    } else {
+      this._unregisterCard?.();
+      this._unregisterCard = undefined;
+    }
   }
 
   connectedCallback(): void {
@@ -168,6 +208,8 @@ export class PictureStudioCard extends LitElement {
     super.disconnectedCallback();
     this._unsubscribe?.();
     this._unsubscribe = undefined;
+    this._unregisterCard?.();
+    this._unregisterCard = undefined;
     this._drag.detach();
   }
 
@@ -256,8 +298,6 @@ export class PictureStudioCard extends LitElement {
       layer.replaceChildren();
       this._elements = [];
       this._wrappers = [];
-      this._renderedAnchors = [];
-      this._renderedPositions = [];
 
       items.forEach((item, index) => {
         const wrapper = document.createElement("div");
@@ -301,11 +341,7 @@ export class PictureStudioCard extends LitElement {
       // and the next _applyPositions then matches it exactly — no flash.
       if (index === dragging) return;
 
-      const position = this._reanchored(item, index, wrapper) ?? item.position;
-      this._renderedAnchors[index] = item.anchor;
-      this._renderedPositions[index] = position;
-
-      const style = positionStyle(position, item.anchor);
+      const style = positionStyle(item.position, item.anchor);
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;
@@ -324,36 +360,25 @@ export class PictureStudioCard extends LitElement {
    * and recompute from the wrong anchor. An anchor flip never moves the
    * coordinates; a reorder always brings the other item's along.
    */
-  private _reanchored(
-    item: PictureItem,
-    index: number,
-    wrapper: HTMLElement,
-  ): Position | undefined {
-    const from = this._renderedAnchors[index];
-    if (!this.editing || from === undefined || from === item.anchor) return undefined;
-
-    const rendered = this._renderedPositions[index];
-    if (
-      rendered === undefined ||
-      rendered.top !== item.position.top ||
-      rendered.left !== item.position.left
-    ) {
-      return undefined;
-    }
-
+  /**
+   * CardChannel. The editor asks this before it writes the new anchor, because
+   * afterwards there is no "before" left to measure: Home Assistant rebuilds the
+   * card element on every config change, so this instance — and everything it
+   * could have remembered — is gone by the time the new anchor comes back down.
+   */
+  reanchor(index: number, anchor: Anchor): Position | undefined {
+    const item = this._config?.items[index];
+    const wrapper = this._wrappers[index];
     const layer = this._layer;
-    if (!layer) return undefined;
+    if (!item || !wrapper || !layer || item.anchor === anchor) return undefined;
 
-    const container = layer.getBoundingClientRect();
-    const element = wrapper.getBoundingClientRect();
-    const position = reanchor(item.position, from, item.anchor, container, element);
-
-    // Record before committing: the round trip that comes back then finds the
-    // anchors equal and does nothing. This ordering is what guarantees
-    // termination even if the arithmetic above is wrong.
-    this._renderedAnchors[index] = item.anchor;
-    activeEditor()?.patchPosition(index, position);
-    return position;
+    return reanchor(
+      item.position,
+      item.anchor,
+      anchor,
+      layer.getBoundingClientRect(),
+      wrapper.getBoundingClientRect(),
+    );
   }
 
   protected render() {

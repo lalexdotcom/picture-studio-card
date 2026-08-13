@@ -1,5 +1,5 @@
 import type { PictureItem } from "../config";
-import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../position";
+import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
 import type { BadgeConfig, HassEntity } from "../types";
 
 /**
@@ -23,6 +23,24 @@ export const replaceBadge = (
   index < 0 || index >= items.length
     ? items
     : items.map((item, i) => (i === index ? { ...item, config: badge } : item));
+
+/**
+ * Set an item's anchor, and its coordinates with it when the caller could work
+ * out where the item has to sit to stay put. The two travel together in one
+ * write: an anchor without its matching coordinates is a badge that jumped, and
+ * a config the user never asked for.
+ */
+export const setAnchor = (
+  items: PictureItem[],
+  index: number,
+  anchor: Anchor,
+  position?: Position,
+): PictureItem[] =>
+  index < 0 || index >= items.length
+    ? items
+    : items.map((item, i) =>
+        i === index ? { ...item, anchor, position: position ?? item.position } : item,
+      );
 
 export const moveItem = (items: PictureItem[], from: number, to: number): PictureItem[] => {
   if (from < 0 || to < 0 || from >= items.length || to >= items.length) return items;
