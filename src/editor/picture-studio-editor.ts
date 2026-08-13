@@ -178,7 +178,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       return html`
         <picture-studio-badge-form
           .hass=${hass}
-                    .badge=${editing.config}
+          .badge=${editing.config}
           .anchor=${editing.anchor}
           @badge-changed=${this._badgeChanged}
           @anchor-changed=${this._anchorChanged}

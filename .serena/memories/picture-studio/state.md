@@ -7,14 +7,19 @@ are badges and you place them with the mouse".
 
 **Merged.** `feat/picture-badges` was merged into `main` with `--no-ff`
 (merge commit `42dea4b`) and the branch was deleted. **Nothing is pushed** —
-`main` is ahead of `origin/main`. 78 unit tests, `tsc --noEmit` clean and wired
-into CI, Biome clean, single-file build `dist/picture-studio.js`
+`main` is ahead of `origin/main`. Single-file build `dist/picture-studio.js`
 (~61 kB / 16 kB gzip).
+
+`feat/item-anchor` (11 commits) adds per-item anchor with ten values —
+`proportional` (default) plus the nine fixed grid positions. Implementation
+complete; 137 unit tests, `tsc --noEmit` clean, Biome clean.
 
 ## Where things are
 
 - Spec (authoritative, amended several times): `docs/superpowers/specs/2026-08-11-picture-badges-design.md`
+- Spec (anchor feature, amends the above): `docs/superpowers/specs/2026-08-12-item-anchor-design.md`
 - Plan: `docs/superpowers/plans/2026-08-11-picture-badges.md`
+- Plan (anchor feature): `docs/superpowers/plans/2026-08-12-item-anchor.md`
 - Local HA for testing: `docker compose` in the repo, container
   `picture-studio-ha` (image `:stable`, currently 2026.8.1),
   http://localhost:8123, resource at `/local/picture-studio/picture-studio.js?v=1`.
@@ -27,7 +32,7 @@ into CI, Biome clean, single-file build `dist/picture-studio.js`
 ## Source layout
 
 ```
-src/position.ts        px <-> % conversion, clamping, style derivation (pure, tested)
+src/position.ts        px <-> % conversion, anchor-aware style and bounds derivation (pure, tested)
 src/config.ts          config shape, normalization, ImageSource/imagePath, tags (pure, tested)
 src/strings.ts         our own en/fr catalog — one string (pure, tested)
 src/broker.ts          editor registry + subscribeEditors (pure, tested)
@@ -38,6 +43,7 @@ src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/background-schema.ts      ha-form schema, labels, form <-> config mapping
 src/editor/badge-list.ts             header, hint, ha-sortable rows, ha-dropdown add button
 src/editor/badge-form.ts             hosts the badge's own native config form
+src/editor/anchor-picker.ts          hand-built 3×3 grid, fixed anchors + proportional switch; emits `anchor-changed`
 src/editor/badge-catalog.ts          core + custom badge choices, choiceLabel, class lookup
 src/editor/badge-items.ts            add / replace / move / remove (pure, tested)
 src/suggestion.ts      entity-first card picker suggestion (pure, tested)
@@ -54,7 +60,8 @@ entity: light.salon             # needed for state_image / state_filter to resol
 title: My floorplan             # ha-card header
 items:
   - type: badge                 # discriminant; "element" is rejected, reserved for later
-    position: { top: 30%, left: 45% } # 0-100; a bare number is read too
+    position: { top: 30%, left: 45% } # any finite number; a bare number is read too
+    anchor: center              # absent => proportional (the default)
     config:                     # the badge's own config, opaque to us
       type: custom:mushroom-template-badge
       entity: light.salon
@@ -67,19 +74,43 @@ items:
 
 ## Decisions that must not be re-litigated
 
-- **Proportional anchoring.** `positionStyle` yields `top: L%`, `left: T%` and
-  `transform: translate(-left%, -top%)`. 0 flush top-left, 50 centered, 100 flush
-  bottom-right, so overflow is structurally impossible. The `%` and the transform
-  are **derived at render, never stored**.
+- **Anchor is per-item; `proportional` is the default.** Ten values: `proportional`
+  plus the nine fixed `top-left` / `top-center` / `top-right` / `center-left` /
+  `center` / `center-right` / `bottom-left` / `bottom-center` / `bottom-right`.
+  `positionStyle` takes both the position and the anchor; all offsets are derived
+  at render, never stored — `storedConfig` omits `anchor` when it equals
+  `proportional`, so an existing config round-trips byte-identical. Within
+  `0-100`, and only under `proportional`, overflow is structurally impossible:
+  the real offset works out to `L/100 × (C − E)`, so 0 is flush top-left and
+  100 flush bottom-right. Fixed anchors shift with a constant `translate` from
+  the `ANCHOR_OFFSETS` table; out-of-range positions are expressible and preserved.
+- **Ratcheting drag bounds, computed live in `pointermove`, never at `pointerdown`.**
+  Bounds (`AxisBounds`, seeded from `OPEN_BOUNDS`) only tighten: each move calls
+  `tighten` around the item's current position, then `advance` clamps the
+  requested position. A drag can neither create an overflow nor worsen one; an
+  item already out of range follows the cursor faithfully and commits where
+  dropped.
+- **Re-anchor trigger: indexed diff on anchor-only change.** `_applyPositions`
+  compares each item's config anchor against the last-rendered anchor. The guard
+  is "anchor changed AND position did not" — a same-type reorder does not rebuild
+  the wrappers, so the index still maps to the right item and the diff is
+  sufficient. `patchAnchor` sits on `EditorChannel` alongside `patchPosition`;
+  no card calls it externally yet — the editor fires `anchor-changed` and the
+  card responds through that channel.
 - **Pixels during the drag, percentages on release.** One commit per gesture.
   Entry and exit must both write position and transform *together*.
 - **Percent strings in the stored config, numbers in the code.** `parsePercent`
-  reads `30`, `"30"` and `"30%"` and clamps to [0, 100]; `storedConfig`
-  serialises back to `"30%"` at `_reemit`, the single exit to HA. Accepting the
-  notation without also writing it would have been worse than not accepting it:
-  the first drag would silently rewrite what the user typed. Unquoted `top: 30%`
-  is a plain string in YAML — verified with the container's own PyYAML — while a
-  *leading* `%` would be a scanner error, which never happens here.
+  reads `30`, `"30"` and `"30%"`; `storedConfig` serialises back to `"30%"` at
+  `_reemit`, the single exit to HA. Accepting the notation without also writing it
+  would have been worse than not accepting it: the first drag would silently
+  rewrite what the user typed. Unquoted `top: 30%` is a plain string in YAML —
+  verified with the container's own PyYAML — while a *leading* `%` would be a
+  scanner error, which never happens here. **The clamp to `[0, 100]` is removed
+  from all three of `parsePercent`, `toPercent`, and `percentString`** — a bound
+  left in any one of them puts an overflowing item back, and silently rewriting
+  a hand-typed `left: 150%` was never the right answer (same principle as the
+  notation: normalising what was written widens the gap between config and intent).
+  This is a knowing behaviour change even for configs that use no anchor.
 - **One `items[]` list with a `type` discriminant**, payload nested under
   `config`, so a third-party badge's own keys can never collide with ours.
 - **No `z-index`, ever.** Stacking is DOM order = list order, and the list is
@@ -137,6 +168,10 @@ items:
   table of 58 dynamic loaders and pulls the sub-component itself. Test a
   selector by rendering a form that uses it, not by probing `customElements`.
 - `ha-sortable` **is** defined in the card-edit dialog; the badge dialogs are not.
+- **`ha-control-select` is not safe for custom cards.** It would have been the
+  natural segmented control for the anchor picker, but it lives in a single
+  lazily loaded frontend chunk and cannot be relied on to be defined — verified
+  in the container's bundle for 2026.8.1. The anchor picker is hand-built.
 - `hui-sub-element-editor` handles `row`, `header`, `footer`, `element`,
   `feature`, `heading-badge` — **not** `badge`.
 - **`visibility` on a badge does nothing here.** HA evaluates those conditions in
