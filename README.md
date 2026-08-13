@@ -92,7 +92,7 @@ aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
 title: My floorplan                # optional card header
 items:
-  - type: badge                  # family discriminant; defaults to "badge" when omitted
+  - type: badge                  # family discriminant; required
     config:
       type: entity               # any Lovelace badge config
       entity: sensor.temperature
@@ -100,7 +100,34 @@ items:
       top: 30%     # see Position anchoring below
       left: 60%
     anchor: center               # optional; defaults to "proportional"
+
+  - type: element                # the other family
+    config:
+      type: state-icon           # the only element kind so far
+      entity: light.salon
+      icon: mdi:floor-lamp       # optional; the entity's state icon otherwise
+      color: state               # state | none | a theme colour name
+      name: Lampe du salon       # optional; shown as a tooltip
+      show_entity_picture: false
+      tap_action: { action: more-info }
+      size:
+        auto: true               # false to set the three numbers below
+        min: 40                  # px
+        ratio: 3.5               # % of the card's width
+        max: 70                  # px
+    position:
+      top: 45%
+      left: 20%
 ```
+
+### Icon sizing
+
+A `state-icon` sizes itself from **the card's width**, not the window's:
+`clamp(min, ratio, max)` where the ratio is a percentage of the card. In a
+sections view two cards of different widths therefore get different icon sizes,
+which a `vw`-based size in `picture-elements` cannot do. Leave `auto` on to take
+the defaults (40 px / 3.5 % / 70 px); set `min` and `max` to the same value for a
+fixed size.
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
 

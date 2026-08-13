@@ -1,5 +1,22 @@
 # Changelog
 
+## unreleased
+
+### Added
+
+- A second kind of item: `type: element` with `config.type: state-icon`. An icon
+  that reflects an entity's state, sized from the card's width rather than the
+  window's, with the entity badge's own controls — icon, colour, name as a
+  tooltip, entity picture — and tap, hold and double-tap actions.
+
+### Changed
+
+- `type` is now **required** on every item in `items[]`. It used to default to
+  `badge` when omitted; with a second family that default is ambiguous. A config
+  written by the editor already carries it, so only hand-written YAML is
+  affected, and it now fails with a message naming the accepted values rather
+  than being silently read as a badge.
+
 ## 1.1.0 — 2026-08-13
 
 ### Added
