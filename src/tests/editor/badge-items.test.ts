@@ -4,8 +4,9 @@ import { addItem, moveItem, removeItem, replaceBadge, rowLabel } from "../../edi
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",
-  config: { type: "entity", entity },
   position: { top, left },
+  anchor: "proportional",
+  config: { type: "entity", entity },
 });
 
 describe("addItem", () => {
@@ -13,6 +14,7 @@ describe("addItem", () => {
     const out = addItem([item("light.a", 10, 20)], { type: "entity", entity: "light.b" });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });
+    expect(out[1]?.anchor).toBe("proportional");
     expect(out[1]?.config).toEqual({ type: "entity", entity: "light.b" });
   });
 
@@ -90,8 +92,9 @@ describe("removeItem", () => {
 describe("rowLabel", () => {
   const badge = (config: Record<string, unknown>): PictureItem => ({
     type: "badge",
-    config: config as never,
     position: { top: 50, left: 50 },
+    anchor: "proportional",
+    config: config as never,
   });
   const states = {
     "light.ceiling_lights": { attributes: { friendly_name: "Open space" } },

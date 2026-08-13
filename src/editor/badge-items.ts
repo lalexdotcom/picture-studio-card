@@ -1,17 +1,18 @@
 import type { PictureItem } from "../config";
-import { DEFAULT_POSITION } from "../position";
+import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../position";
 import type { BadgeConfig, HassEntity } from "../types";
 
 /**
- * Every operation moves a {type, config, position} triple as a unit, which is
- * what makes reordering change stacking order without disturbing any position.
- * None of them mutates its input: Home Assistant freezes the config we are handed.
+ * Every operation moves a {type, position, anchor, config} item as a unit, which
+ * is what makes reordering change stacking order without disturbing any
+ * position. None of them mutates its input: Home Assistant freezes the config
+ * we are handed.
  */
 
-/** A new badge lands centered, ready to be dragged. Its own position object. */
+/** A new badge lands centered and proportional, ready to be dragged. */
 export const addItem = (items: PictureItem[], badge: BadgeConfig): PictureItem[] => [
   ...items,
-  { type: "badge", config: badge, position: { ...DEFAULT_POSITION } },
+  { type: "badge", position: { ...DEFAULT_POSITION }, anchor: DEFAULT_ANCHOR, config: badge },
 ];
 
 export const replaceBadge = (
