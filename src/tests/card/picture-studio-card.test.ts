@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
+import { CARD_TYPE, ICON_TAG } from "../../config";
 import type { HomeAssistant } from "../../types";
-import { background, badges, CONFIG_3, flush, mountCard, wrappers } from "./harness";
+import {
+  background,
+  badges,
+  CONFIG_3,
+  FAKE_TAG,
+  flush,
+  mountCard,
+  root,
+  wrappers,
+} from "./harness";
 
 // Tracks an editor registered mid-test so afterEach can release it even when
 // an assertion throws before the test reaches its own release() call.
@@ -109,5 +119,52 @@ describe("a real change", () => {
     expect(
       background(card).setConfigCalls + badges(card).reduce((sum, b) => sum + b.setConfigCalls, 0),
     ).toBe(before);
+  });
+});
+
+const MIXED = {
+  type: CARD_TYPE,
+  image: "/local/plan.png",
+  items: [
+    { type: "badge", config: { type: "entity", entity: "light.a" } },
+    { type: "element", config: { type: "state-icon", entity: "light.b" } },
+  ],
+};
+
+describe("mixed item families", () => {
+  it("creates a badge through the helpers and an icon through our own tag", async () => {
+    const card = await mountCard(MIXED);
+    const items = Array.from(root(card).querySelectorAll(".item"));
+    expect(items[0]?.firstElementChild?.tagName.toLowerCase()).toBe(FAKE_TAG);
+    expect(items[1]?.firstElementChild?.tagName.toLowerCase()).toBe(ICON_TAG);
+  });
+
+  it("still configures only the background on mount", async () => {
+    const card = await mountCard(MIXED);
+    expect(background(card)?.setConfigCalls).toBe(1);
+  });
+
+  it("pushes hass to every child, whatever its family", async () => {
+    const card = await mountCard(MIXED);
+    card.hass = { states: {} } as never;
+    const icon = root(card).querySelector(ICON_TAG) as { hass?: unknown };
+    expect(icon.hass).toBeDefined();
+    expect(badges(card)[0]?.hassAssignments).toBeGreaterThan(0);
+  });
+
+  it("rebuilds when a kind changes, not when another key does", async () => {
+    const card = await mountCard(MIXED);
+    const before = root(card).querySelector(ICON_TAG);
+
+    card.setConfig({
+      ...MIXED,
+      items: [
+        MIXED.items[0],
+        { type: "element", config: { type: "state-icon", entity: "light.c" } },
+      ],
+    });
+    await card.updateComplete;
+    await flush();
+    expect(root(card).querySelector(ICON_TAG)).toBe(before);
   });
 });

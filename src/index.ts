@@ -1,5 +1,6 @@
 import { PictureStudioCard } from "./card/picture-studio-card";
-import { CARD_TAG, EDITOR_TAG, FORM_TAG, LIST_TAG, PICKER_TAG } from "./config";
+import { PictureStudioStateIcon } from "./card/state-icon-element";
+import { CARD_TAG, EDITOR_TAG, FORM_TAG, ICON_TAG, LIST_TAG, PICKER_TAG } from "./config";
 import { PictureStudioAnchorPicker } from "./editor/anchor-picker";
 import { PictureStudioBadgeForm } from "./editor/badge-form";
 import { PictureStudioBadgeList } from "./editor/badge-list";
@@ -25,6 +26,8 @@ if (!customElements.get(FORM_TAG)) {
 if (!customElements.get(PICKER_TAG)) {
   customElements.define(PICKER_TAG, PictureStudioAnchorPicker);
 }
+
+if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudioStateIcon);
 
 window.customCards = window.customCards ?? [];
 window.customCards.push({

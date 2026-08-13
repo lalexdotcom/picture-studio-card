@@ -3,6 +3,7 @@ import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
+  ICON_TAG,
   imagePath,
   normalizeConfig,
   type PictureItem,
@@ -11,6 +12,7 @@ import {
 } from "../config";
 import { type Anchor, type Position, positionStyle, reanchor } from "../position";
 import type {
+  BadgeConfig,
   HomeAssistant,
   LovelaceBadgeElement,
   LovelaceElementElement,
@@ -230,8 +232,8 @@ export class PictureStudioCard extends LitElement {
 
     if (configChanged) {
       void this._syncBackground();
-      // _syncBadges ends with _applyPositions, so it is not called again here.
-      void this._syncBadges();
+      // _syncItems ends with _applyPositions, so it is not called again here.
+      void this._syncItems();
     } else if (changed.has("editing") || changed.has("selected")) {
       this._applyPositions(this._config?.items ?? []);
     }
@@ -301,12 +303,14 @@ export class PictureStudioCard extends LitElement {
    * the new config into the instances in place. This is what lets an in-flight
    * drag survive a config round-trip.
    */
-  private async _syncBadges(): Promise<void> {
+  private async _syncItems(): Promise<void> {
     const layer = this._layer;
     const items = this._config?.items ?? [];
     if (!layer) return;
 
-    const types = items.map((item) => String(item.config.type ?? ""));
+    // The family AND the kind: without the prefix, two icons and a typeless
+    // badge would all key on "".
+    const types = items.map((item) => `${item.type}:${String(item.config.type ?? "")}`);
     const sameShape =
       types.length === this._renderedTypes.length &&
       types.every((t, i) => t === this._renderedTypes[i]);
@@ -322,27 +326,37 @@ export class PictureStudioCard extends LitElement {
         wrapper.className = "item";
         wrapper.dataset.index = String(index);
 
-        if (item.type === "badge") {
-          const badge = helpers.createBadgeElement(item.config);
-          if (this._hass) badge.hass = this._hass;
-          wrapper.append(badge);
-          this._elements.push(badge);
-        }
+        // The only branch the second family costs: our element answers setConfig
+        // and hass exactly like a badge element, so every other path is shared.
+        const child = this._createChild(item, helpers);
+        if (this._hass) child.hass = this._hass;
+        wrapper.append(child as unknown as HTMLElement);
         layer.append(wrapper);
+
+        this._elements.push(child);
         this._wrappers.push(wrapper);
       });
       this._renderedTypes = types;
     } else {
       items.forEach((item, index) => {
-        if (item.type !== "badge") return;
-        const badge = this._elements[index];
-        if (!badge) return;
-        badge.setConfig(item.config);
-        if (this._hass) badge.hass = this._hass;
+        const child = this._elements[index];
+        if (!child) return;
+        child.setConfig(item.config as unknown as BadgeConfig);
+        if (this._hass) child.hass = this._hass;
       });
     }
 
     this._applyPositions(items);
+  }
+
+  private _createChild(
+    item: PictureItem,
+    helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
+  ): LovelaceBadgeElement {
+    if (item.type === "badge") return helpers.createBadgeElement(item.config);
+    const el = document.createElement(ICON_TAG) as unknown as LovelaceBadgeElement;
+    el.setConfig(item.config as unknown as BadgeConfig);
+    return el;
   }
 
   private _applyPositions(items: PictureItem[]): void {
@@ -432,9 +446,13 @@ export class PictureStudioCard extends LitElement {
       overflow-y: auto;
     }
     /* .root holds only the background element in normal flow, so the drag
-       surface matches the image's aspect ratio exactly. */
+       surface matches the image's aspect ratio exactly.
+       It is also the size container: an element's clamp is written in cqw, i.e.
+       a percentage of THIS box. Without this declaration cqw silently falls back
+       to the viewport, which is the very bug the element exists to fix. */
     .root {
       position: relative;
+      container-type: inline-size;
     }
     .background {
       display: block;
