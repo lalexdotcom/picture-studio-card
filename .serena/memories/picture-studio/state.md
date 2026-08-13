@@ -10,9 +10,9 @@ are badges and you place them with the mouse".
 `main` is ahead of `origin/main`. Single-file build `dist/picture-studio.js`
 (~61 kB / 16 kB gzip).
 
-`feat/item-anchor` (11 commits) adds per-item anchor with ten values —
-`proportional` (default) plus the nine fixed grid positions. Implementation
-complete; 137 unit tests, `tsc --noEmit` clean, Biome clean.
+`feat/item-anchor` adds per-item anchor with ten values — `proportional`
+(default) plus the nine fixed grid positions. Implementation complete and
+verified in the browser; 148 unit tests, `tsc --noEmit` clean, Biome clean.
 
 ## Where things are
 
@@ -34,18 +34,18 @@ complete; 137 unit tests, `tsc --noEmit` clean, Biome clean.
 ```
 src/position.ts        px <-> % conversion, anchor-aware style and bounds derivation (pure, tested)
 src/config.ts          config shape, normalization, ImageSource/imagePath, tags (pure, tested)
-src/strings.ts         our own en/fr catalog — one string (pure, tested)
-src/broker.ts          editor registry + subscribeEditors (pure, tested)
+src/strings.ts         our own en/fr catalog — four strings (pure, tested)
+src/broker.ts          editor registry + subscribeEditors, and the card registry (pure, tested)
 src/types.ts           hand-declared HA interfaces, incl. LocalizeFunc, LovelaceGridOptions
 src/card/picture-studio-card.ts   background element + badge children + lifecycle
 src/card/drag-layer.ts            pointer gesture, injected callbacks, no HA knowledge
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/background-schema.ts      ha-form schema, labels, form <-> config mapping
 src/editor/badge-list.ts             header, hint, ha-sortable rows, ha-dropdown add button
-src/editor/badge-form.ts             hosts the badge's own native config form
+src/editor/badge-form.ts             hosts the badge's own native config form, then the anchor picker
 src/editor/anchor-picker.ts          hand-built 3×3 grid, fixed anchors + proportional switch; emits `anchor-changed`
 src/editor/badge-catalog.ts          core + custom badge choices, choiceLabel, class lookup
-src/editor/badge-items.ts            add / replace / move / remove (pure, tested)
+src/editor/badge-items.ts            add / replace / move / remove / setAnchor (pure, tested)
 src/suggestion.ts      entity-first card picker suggestion (pure, tested)
 src/index.ts           registration + the window.customCards entry
 src/tests/**           every test, mirroring the source tree
@@ -90,13 +90,18 @@ items:
   requested position. A drag can neither create an overflow nor worsen one; an
   item already out of range follows the cursor faithfully and commits where
   dropped.
-- **Re-anchor trigger: indexed diff on anchor-only change.** `_applyPositions`
-  compares each item's config anchor against the last-rendered anchor. The guard
-  is "anchor changed AND position did not" — a same-type reorder does not rebuild
-  the wrappers, so the index still maps to the right item and the diff is
-  sufficient. `patchAnchor` sits on `EditorChannel` alongside `patchPosition`;
-  no card calls it externally yet — the editor fires `anchor-changed` and the
-  card responds through that channel.
+- **Re-anchoring is a question the editor asks the preview *before* it writes.**
+  `patchAnchor` calls `activeCard()?.reanchor(index, anchor)` on the broker's
+  card registry, then commits anchor and position in **one** write via
+  `setAnchor`. The card measures `.layer` and the wrapper and returns the
+  coordinates; when it cannot, the coordinates stay and the item moves — the
+  honest degradation. Two commits would render the new anchor against the old
+  coordinates for a frame, which is the jump the exchange exists to avoid.
+  *A card-side diff of "the anchor I last rendered" was tried first and cannot
+  work — see the HA facts below on card rebuilding. Do not reintroduce it.*
+- **`CardChannel` is the editor → card hop**, mirroring `EditorChannel`. Cards
+  register only while editing, so exactly one — the dialog's preview — is in the
+  registry while a dialog is open.
 - **Pixels during the drag, percentages on release.** One commit per gesture.
   Entry and exit must both write position and transform *together*.
 - **Percent strings in the stored config, numbers in the code.** `parsePercent`
@@ -128,6 +133,39 @@ items:
 
 ## Hard-won facts about Home Assistant (verified in their source)
 
+- **HA rebuilds the card element on every config change.** `hui-card` calls
+  `createCardElement`, not `setConfig` on the existing instance — visible in a
+  stack trace as our constructor under `create-card-element.ts` /
+  `hui-card.ts`. **No card-side state survives a commit.** Anything the editor
+  needs from the live preview must be asked for *before* it writes. This is what
+  killed the first re-anchor design, which diffed the anchor the card had last
+  rendered: the arrays were always empty, so the diff compared `undefined` to
+  the new anchor and never fired.
+- **`preview` on a card does not mean "I am the edit dialog's preview".** HA sets
+  it on every card of a dashboard in edit mode (`card.preview =
+  lovelace.editMode`, and `preview = !0` in `hui-card-options`) so a click edits
+  the card instead of firing its actions. Reading it as "the dialog" put two
+  cards in our registry and armed the drag on every picture-studio card behind
+  an open dialog.
+  What separates them is the **edit chrome a dashboard wraps its cards in**, and
+  which the dialog's preview does not have: `hui-card-options` in a masonry
+  view, `hui-card-edit-mode` in a section. `_inEditPreview()` walks up, hopping
+  shadow boundaries, and excludes itself on either. The add-card dialog renders
+  its preview without that chrome too, so the feature works there; the
+  card-picker gallery has none of it but never has an editor mounted.
+  **Do not "simplify" this to a test on the `preview` attribute.** It was tried,
+  it reads better, and it works in masonry — where `hui-card` declares `preview`
+  with no `reflect`, so the attribute exists only where the dialog wrote it
+  literally. It then fails **silently in sections**: `hui-section` is the single
+  component in the frontend declaring `preview` with `reflect: true`, so the
+  attribute is present there whoever set it, and every dashboard card in a
+  section passes. Observed failing in the browser after passing in masonry.
+- **A slotted element is not a DOM ancestor.** `closest()` walks the real tree,
+  not the flattened one, so anything we are *slotted into* is invisible to an
+  ancestor walk — reaching it needs `assignedSlot`. This is why "detect a native
+  `<dialog>` above us" was rejected: `ha-dialog` is what the edit dialog uses in
+  2026.8.1, it renders no native `<dialog>` of its own, and the native element
+  further down the stack is never an ancestor of ours.
 - **The native badge dialogs are unreachable.** `showCreateBadgeDialog` /
   `showEditBadgeDialog` fire `show-dialog` with a `dialogImport` closure their
   bundler resolved at build time; `make-dialog-manager.ts` silently returns
@@ -228,6 +266,16 @@ config key, verify that something actually consumes it, and that it consumes it
 the way the label claims.** A field that saves cleanly and changes nothing is
 worse than an absent one.
 
+Its sibling, learned on the anchor feature: **a mechanism can be reviewed
+correct and still rest on a false premise about HA's lifecycle.** The first
+re-anchor design was proved terminating and drift-free by a reviewer, and could
+never fire, because nobody asked whether the state it diffed still existed —
+HA rebuilds the card on every commit. The same shape of mistake produced the
+`preview` reading. Both were settled in one browser session by instrumenting
+each boundary and reading a stack trace; neither was going to be settled by
+more reasoning. **When behaviour contradicts a proof, doubt the premise, and go
+get evidence rather than a better argument.**
+
 ## Follow-ups
 
 **Repository: `lalexdotcom/picture-studio-card`**, card type `custom:picture-studio`,
@@ -272,6 +320,19 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    avoid, since HA's catalog is free and translated.
 6. Vertical overflow scrolling is the consumer's problem to avoid: pinning
    `rows` is what creates it, `rows: "auto"` never does.
+7. **Per-tick work in the card, not yet measured or fixed** (noted 2026-08-13).
+   `updated()` ignores its `changedProperties` and resynchronises everything on
+   every render, while `set hass` calls `requestUpdate()` on every state tick of
+   any entity. So for each card, per tick: `_syncBackground` rebuilds
+   `_bgConfig` and calls `hui-image-element.setConfig` — which defaults the
+   actions, runs `computeTooltip` and toggles classes — for an unchanged config;
+   `_syncBadges` calls `setConfig` on **every** badge, typically one Lit update
+   each, so the cost grows with badge count; and `hass` is pushed twice, once by
+   the setter and again by both sync methods. The remedy is one idea for all
+   three: reconfigure only when `_config` changed, never when only `hass` did.
+   Two minor ones alongside: `_syncEditingAndDrag` does a `querySelector(".root")`
+   per render, and `_applyPositions` rewrites the three style properties even
+   when unchanged. **Measure before fixing** — none of this has been profiled.
 
 ## How we work (project rules, see AGENTS.md)
 

@@ -152,36 +152,96 @@ holds the two `AxisBounds` in its state, seeded from `OPEN_BOUNDS`.
 ## Switching an item's anchor
 
 Changing the anchor must leave the item where it is on screen. Only the card
-knows pixels, so the recomputation lives there and reuses the channel that
-already exists, `activeEditor()?.patchPosition`.
+knows pixels, so it does the arithmetic — but it has to be **asked before the
+editor writes**, and the answer has to travel back in the same commit as the
+anchor.
 
-The card records the anchor each wrapper was last rendered with. In
-`_applyPositions`, when that recorded anchor differs from the config's and the
-card is in editing mode, it:
+> This section replaces an earlier design that had the card notice the change
+> after the fact, by diffing the anchor it last rendered against the config's.
+> That design cannot work, and the reason is worth keeping: **Home Assistant
+> rebuilds the card element on every config change.** `hui-card` calls
+> `createCardElement`, not `setConfig`, so the instance that rendered the
+> previous anchor is gone by the time the new one arrives, and any state it kept
+> went with it. The diff compared `undefined` to the new anchor on every item,
+> every time, and never fired.
 
-1. measures `.layer` and the wrapper (size only — anchor-independent);
-2. computes the new position with `reanchor`;
-3. stores the new anchor as the rendered one **before** committing;
-4. renders the recomputed position immediately, then calls `patchPosition`.
+The exchange, in order:
 
-The `setConfig` round trip that comes back finds the anchors equal and does
-nothing. Step 3 is what guarantees termination even if the arithmetic is wrong.
+1. The picker's `anchor-changed` reaches the editor, which calls `patchAnchor`.
+2. `patchAnchor` asks the live preview through the broker's card registry:
+   `activeCard()?.reanchor(index, anchor)`. Nothing has been committed yet, so
+   the card is still the one that rendered the current anchor.
+3. The card measures `.layer` and the wrapper — size only, which is
+   anchor-independent — and returns `reanchor(...)`, or `undefined` if it cannot
+   measure.
+4. The editor writes anchor and position together, in **one** commit, through
+   `setAnchor`. Two commits would render the new anchor against the old
+   coordinates for a frame, which is the jump this whole exchange exists to
+   avoid.
 
-The recorded-anchor array is reinitialised from the config whenever
-`_syncBadges` rebuilds the wrappers, so adding, removing or reordering an item
-never triggers a recomputation.
+Nothing has to converge and nothing is remembered across a commit, so the
+termination question the earlier design carried does not arise. The same goes
+for its reorder guard: the editor knows exactly which item the user changed.
+
+When the card cannot answer, the coordinates stay as they are and the item
+moves. That is the honest degradation — better than writing a position derived
+from a measurement we do not have.
 
 Because percentages are unbounded, the recomputation is exact in every case,
 including an item that already overflows: at `left: 100%` under `top-left` on a
 400 px image with a 100 px item, switching to `center` writes `112.5%` and the
 item does not move.
 
+### Which card is the preview
+
+The registry needs to hold exactly one card, and the obvious reading of "the
+card being edited" is wrong: `preview` on a card does **not** mean "I am the
+dialog's preview". Home Assistant sets it on every card of a dashboard in edit
+mode — `card.preview = lovelace.editMode` — so that a click edits the card
+instead of firing its actions. Reading it as "the dialog" put two cards in the
+registry and left the editor unable to choose between them.
+
+What separates them is the **edit chrome a dashboard wraps its cards in**, and
+which the dialog's preview does not have above it: `hui-card-options` in a
+masonry view, `hui-card-edit-mode` in a section. The card walks up, hopping
+shadow boundaries, and excludes itself if it finds either.
+
+> A test on the `preview` **attribute** was tried first and must not come back.
+> It reads better — the dialog writes `<hui-card preview>` literally while a
+> dashboard assigns the property — and it works in a masonry view, where
+> `hui-card` declares `preview` with no `reflect` so the attribute only exists
+> where it was written. It then fails **silently in sections**: `hui-section` is
+> the one component in the frontend that declares `preview` with `reflect:
+> true`, so the attribute is written there whoever set it, and every dashboard
+> card in a section passes. Verified on 2026.8.1, and observed failing in the
+> browser after passing in masonry.
+
+The **card-picker gallery** needs no special case either way: it puts the card
+element straight into a `div.preview`, with none of these wrappers, and no
+editor is mounted while it is open. The **add-card dialog** renders its preview
+without the edit chrome, like the edit dialog, so the feature works in the flow
+where a card is first configured.
+
+This also fixes a defect that predates the feature: the drag used to be armed on
+every picture-studio card behind an open dialog, and a drag there would have
+written into the dialog's config. The dialog covered them, so it was never
+reachable — but it was the same wrong reading of `preview`.
+
+If Home Assistant ever renames one of those wrappers, that layout's dashboard
+cards re-enter the registry and anchor changes stop recomputing there — the same
+symptom this section exists to fix, which is why the wrapper names are worth
+re-checking whenever the card is tried against a new Home Assistant.
+
 ## Editor
 
 A standalone `src/editor/anchor-picker.ts`: a 3×3 grid of clickable cells for
-the fixed anchors, plus a switch for `proportional` that visually disables the
-grid. It emits `anchor-changed` with the value and knows nothing about the
-config or Home Assistant.
+the fixed anchors, and a switch for `proportional`, which has no place on the
+grid because it is not a point. It emits `anchor-changed` with the value and
+knows nothing about the config or Home Assistant.
+
+The cells stay live while `proportional` is on, with none of them marked:
+clicking one is how you leave that mode, so disabling them would make the switch
+the only way out of a state the grid is there to replace.
 
 The intent is to look like Lovelace's own controls. It cannot literally reuse
 them: `ha-control-select`, the segmented control that would have been the
@@ -192,13 +252,23 @@ card cannot rely on it being defined — verified in the container's bundle for
 `ha-formfield` + `ha-switch`, both of which are broadly present. Visual
 alignment with Lovelace is expected to need a pass after delivery.
 
-`badge-form.ts` renders the picker above the badge's own native form — the
-anchor belongs to our wrapper, not to the badge, so it cannot go into the
-badge's form. The event reaches the hub, which gains `patchAnchor(index, anchor)`
-modelled on `patchPosition`.
+`badge-form.ts` renders the picker below the badge's own native form — the
+anchor belongs to our wrapper, not to the badge, so it cannot go inside a form
+whose config we treat as opaque. The event reaches the hub, which gains
+`patchAnchor(index, anchor)`; see "Switching an item's anchor" for what it does
+before it writes.
 
-Two new strings in `src/strings.ts`, en and fr: the field label and the switch
-label. The nine anchors need none, which is the point of a grid.
+Three new strings in `src/strings.ts`, en and fr: the section title
+("Positioning") and the two side labels ("Proportional", "Anchored"). The nine
+anchors need none, which is the point of a grid.
+
+The section sits below the badge's form as a row of two halves, each `flex: 1`,
+split by a vertical rule. Both halves put their control in an `ha-formfield`,
+including the grid: it is the only way the two labels are styled and spaced
+identically by construction rather than by copying values out of HA's CSS —
+their rule spaces `::slotted(ha-switch)` alone, so the grid claims the same
+`margin-inline-end` itself. The section title matches the label Home Assistant
+puts above a form field: primary text colour, `--ha-font-size-m`, normal weight.
 
 ## Tests
 
@@ -217,6 +287,11 @@ Unit tests, pure, mirroring the source tree as the rest do.
   `proportional`; `parsePercent` keeping a value outside `0-100`;
   `storedConfig` omits the key at the default and writes it otherwise; the full
   round trip leaves an existing config unchanged.
+- `badge-items`: `setAnchor` writing anchor and position together, keeping the
+  coordinates when the caller had none to give, leaving other items alone, not
+  mutating its input, and ignoring an index that is not there.
+- `broker`: the card registry resolves a single card, refuses to guess between
+  several, releases once, and is independent of the editor registry.
 There is no DOM environment — `rstest` runs on node and `drag-layer` is covered
 only through the pure functions it delegates to, as `hasMoved` already is. So
 "a pointerup under a fixed anchor commits the right percentage" is tested as
