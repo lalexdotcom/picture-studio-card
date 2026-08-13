@@ -10,13 +10,18 @@ are badges and you place them with the mouse".
 `main` is ahead of `origin/main`. Single-file build `dist/picture-studio.js`
 (~61 kB / 16 kB gzip).
 
-**1.0.0 was released on 2026-08-12** (tag `v1.0.0`, at `06e2080`).
+**1.0.0 was released on 2026-08-12** (tag `v1.0.0`, at `06e2080`) — by hand, and
+the tag landed on a tree still saying `0.1.0`, which is what follow-up 8 exists
+to make impossible. **1.1.0 was released on 2026-08-13** (tag `v1.1.0`, at
+`3230343`), the first release produced by the automated chain, on a tree that
+does say `1.1.0`.
 
 `feat/item-anchor` adds the per-item anchor: ten values, `proportional`
 (default) plus the nine fixed grid positions. Verified in the browser in both
 view layouts and **merged into `main`**; 148 unit tests, `tsc --noEmit` clean,
-Biome clean. It ships in 1.1.0, which is **not released yet** — the performance
-follow-up below belongs to the same version.
+Biome clean. It **shipped in 1.1.0 on 2026-08-13**, alongside the per-tick fix of
+follow-up 7. The suite is now **152** tests, up from 148: the four extra are the
+project's first component tests, on the card itself.
 
 ## Where things are
 
@@ -418,16 +423,28 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    *failed* job — sized on the failure rate, not the push rate. Housekeeping
    reports through `::warning::` and never reddens a job whose release succeeded.
 
-   **Verified live on 2026-08-13**, twice: CI green with the artefact, the
-   Release job started by `workflow_run`, logging `v1.0.0 is already tagged`,
-   steps 5-7 `skipped`, the purge step green, `total=0` artefact left, and no new
-   tag or release. **Still unexercised**: the failure path and the nominal path,
-   both of which need a version bump — so they happen when 1.1.0 ships, in that
-   order (bump with the heading left at `unreleased`, expect red; then correct it
-   and expect the release). **Still unknown**: whether `GITHUB_TOKEN` with
-   `actions: write` suffices to download an artefact from another run, or whether
-   a PAT is needed — it fails before publishing anything, and the fallback is a
-   secret swapped into `github-token:`.
+   **Fully exercised on 2026-08-13**, all three paths, in this order:
+
+   - *No-op*, three times: CI green with the artefact, the Release job started by
+     `workflow_run`, logging `v1.0.0 is already tagged`, steps 5-7 `skipped`, the
+     purge green, `total=0` artefact left, no tag, no release.
+   - *Failure*, deliberately: `package.json` bumped to 1.1.0 with the CHANGELOG
+     heading left at `unreleased` (commit `026f9ef`). Step 5 `failure`, steps 6-7
+     `skipped`, **step 8 also `skipped`** — and the artefact **survived**, which is
+     exactly why the purge is `success()` and not `always()`. Nothing published.
+   - *Nominal*: heading dated, all eight steps green, `v1.1.0` created **on a tree
+     whose `package.json` says `1.1.0`**, `picture-studio.js` attached, artefact
+     purged.
+
+   **The open question is closed: `GITHUB_TOKEN` with `actions: write` is enough**
+   to download an artefact from another run of the same repository. No PAT.
+
+   One thing learned from the real release page: `generate_release_notes` adds
+   almost nothing on this repository, because GitHub's generated notes list merged
+   **pull requests** and work here lands straight on `main`. All it contributed was
+   the `**Full Changelog**: …compare/v1.0.0...v1.1.0` line. Had we taken the
+   rejected option and used generated notes *instead of* the CHANGELOG section, the
+   release page would have been that one line.
 
    Known minor, deliberately shipped: the `case *unreleased*` guard is
    case-sensitive, so a heading written `Unreleased` would slip past. AGENTS.md
