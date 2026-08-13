@@ -79,7 +79,7 @@ Add to the end of `jobs.check.steps` in `.github/workflows/ci.yml`:
         with:
           name: bundle
           path: dist/picture-studio.js
-          retention-days: 7
+          retention-days: 3
 ```
 
 The `if:` is what keeps pull requests from uploading: they run every check and

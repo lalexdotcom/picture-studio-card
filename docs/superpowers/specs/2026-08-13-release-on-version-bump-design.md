@@ -51,11 +51,24 @@ step is added at the end of the job:
   with:
     name: bundle
     path: dist/picture-studio.js
-    retention-days: 7
+    retention-days: 3
 ```
 
 Pull requests run every check and upload nothing; only pushes to `main` — the
 only runs that can lead to a release — produce the artefact.
+
+**Why a retention at all, and why three days.** The nominal path consumes the
+artefact a minute after CI finishes and would be served by one day. What the
+retention covers is *recovery*: re-running a failed release job reuses the same
+`run-id`, so the artefact must still exist when a human gets round to it. Three
+days spans a weekend without being open-ended.
+
+It is a deliberate number rather than the 90-day default because this pair of
+workflows is meant to be reused, and the next repository may be private while
+it is being developed. Storage is free on public repositories; on a private one
+it counts against the account's quota, and an artefact kept for three months
+per push to `main` is the kind of slow leak nobody notices until the quota
+does.
 
 `workflow_call` with `inputs` was rejected for this: it would turn `ci.yml`
 into a workflow *called* by another, which is exactly the coupling the
