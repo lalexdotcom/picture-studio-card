@@ -97,7 +97,6 @@ export const storedPosition = (position: Position): StoredPosition => ({
 /** The travel available to the element inside the container, never negative. */
 const span = (container: number, element: number): number => Math.max(0, container - element);
 
-/** Clamp a pixel offset to the free span. */
 /** The pixel interval a drag may move within, on one axis. */
 export interface AxisBounds {
   lo: number;
