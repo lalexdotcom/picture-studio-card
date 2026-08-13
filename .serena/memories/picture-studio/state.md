@@ -436,6 +436,11 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
      whose `package.json` says `1.1.0`**, `picture-studio.js` attached, artefact
      purged.
 
+   **End of the chain confirmed in production on 2026-08-13**: 1.1.0 was installed
+   through HACS on a real Home Assistant instance and works. That is the delivery
+   path this whole feature protects — `dist/` is git-ignored, so the asset the
+   workflow attaches is the only thing HACS can install.
+
    **The open question is closed: `GITHUB_TOKEN` with `actions: write` is enough**
    to download an artefact from another run of the same repository. No PAT.
 
