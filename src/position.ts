@@ -98,8 +98,48 @@ export const storedPosition = (position: Position): StoredPosition => ({
 const span = (container: number, element: number): number => Math.max(0, container - element);
 
 /** Clamp a pixel offset to the free span. */
-export const clampPx = (px: number, container: number, element: number): number =>
-  Math.min(Math.max(px, 0), span(container, element));
+/** The pixel interval a drag may move within, on one axis. */
+export interface AxisBounds {
+  lo: number;
+  hi: number;
+}
+
+/** A gesture starts unbounded; the first pointermove closes these in. */
+export const OPEN_BOUNDS: AxisBounds = {
+  lo: Number.NEGATIVE_INFINITY,
+  hi: Number.POSITIVE_INFINITY,
+};
+
+/**
+ * Close the bounds around where the item currently is. The interval only ever
+ * shrinks toward [0, span]: an item that already overflows can be pulled back
+ * but never pushed further out, and once it is inside it cannot leave again.
+ */
+export const tighten = (
+  bounds: AxisBounds,
+  current: number,
+  container: number,
+  element: number,
+): AxisBounds => ({
+  lo: Math.max(bounds.lo, Math.min(0, current)),
+  hi: Math.min(bounds.hi, Math.max(span(container, element), current)),
+});
+
+/**
+ * One pointermove. Tightening around `current` rather than around the position
+ * the pointer is asking for is what makes the ceiling stick to where the item
+ * *is* instead of following the cursor out of the image.
+ */
+export const advance = (
+  raw: number,
+  current: number,
+  bounds: AxisBounds,
+  container: number,
+  element: number,
+): { px: number; bounds: AxisBounds } => {
+  const next = tighten(bounds, current, container, element);
+  return { px: Math.min(Math.max(raw, next.lo), next.hi), bounds: next };
+};
 
 /** Coordinate to the pixel offset of the item's leading edge. */
 export const toPx = (

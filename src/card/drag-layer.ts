@@ -1,4 +1,11 @@
-import { clampPx, type Position, positionStyle, toPercent } from "../position";
+import {
+  type AxisBounds,
+  advance,
+  OPEN_BOUNDS,
+  type Position,
+  positionStyle,
+  toPercent,
+} from "../position";
 
 interface Hit {
   element: HTMLElement;
@@ -42,6 +49,9 @@ interface DragState {
   height: number;
   x: number;
   y: number;
+  /** Per-axis travel limits, closed in on the first pointermove. */
+  boundsX: AxisBounds;
+  boundsY: AxisBounds;
   /** Where the gesture started, in client coordinates, to measure the travel. */
   startX: number;
   startY: number;
@@ -86,6 +96,8 @@ export const createDragController = (options: DragOptions) => {
       height: box.height,
       x: box.left - surfaceBox.left,
       y: box.top - surfaceBox.top,
+      boundsX: OPEN_BOUNDS,
+      boundsY: OPEN_BOUNDS,
       startX: ev.clientX,
       startY: ev.clientY,
       moved: false,
@@ -117,16 +129,24 @@ export const createDragController = (options: DragOptions) => {
 
     state.moved ||= hasMoved(ev.clientX - state.startX, ev.clientY - state.startY);
 
-    state.x = clampPx(
+    const nextX = advance(
       ev.clientX - state.surface.left - state.grabX,
+      state.x,
+      state.boundsX,
       state.surface.width,
       state.width,
     );
-    state.y = clampPx(
+    const nextY = advance(
       ev.clientY - state.surface.top - state.grabY,
+      state.y,
+      state.boundsY,
       state.surface.height,
       state.height,
     );
+    state.x = nextX.px;
+    state.boundsX = nextX.bounds;
+    state.y = nextY.px;
+    state.boundsY = nextY.bounds;
 
     state.hit.element.style.left = `${state.x}px`;
     state.hit.element.style.top = `${state.y}px`;

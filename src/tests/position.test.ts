@@ -1,16 +1,18 @@
 import { describe, expect, it } from "@rstest/core";
 import {
   ANCHOR_OFFSETS,
+  advance,
   axisOffset,
-  clampPx,
   DEFAULT_ANCHOR,
   DEFAULT_POSITION,
+  OPEN_BOUNDS,
   parseAnchor,
   parsePercent,
   percentString,
   positionStyle,
   reanchor,
   storedPosition,
+  tighten,
   toPercent,
   toPx,
 } from "../position";
@@ -284,21 +286,74 @@ describe("positionStyle", () => {
   });
 });
 
-describe("clampPx", () => {
-  it("keeps a value inside the free span", () => {
-    expect(clampPx(30, 200, 40)).toBe(30);
+describe("tighten", () => {
+  // container 200, element 40 -> span 160.
+  it("closes open bounds onto the span when the item is inside", () => {
+    expect(tighten(OPEN_BOUNDS, 80, 200, 40)).toEqual({ lo: 0, hi: 160 });
   });
 
-  it("clamps below zero to zero", () => {
-    expect(clampPx(-10, 200, 40)).toBe(0);
+  it("widens only on the side the item overflows", () => {
+    expect(tighten(OPEN_BOUNDS, 220, 200, 40)).toEqual({ lo: 0, hi: 220 });
+    expect(tighten(OPEN_BOUNDS, -30, 200, 40)).toEqual({ lo: -30, hi: 160 });
   });
 
-  it("clamps to the far edge, which is container minus element", () => {
-    expect(clampPx(500, 200, 40)).toBe(160);
+  it("never widens bounds that are already closed", () => {
+    expect(tighten({ lo: 0, hi: 160 }, 999, 200, 40)).toEqual({ lo: 0, hi: 160 });
+    expect(tighten({ lo: 0, hi: 160 }, -999, 200, 40)).toEqual({ lo: 0, hi: 160 });
   });
 
-  it("collapses to zero when the element fills the container", () => {
-    expect(clampPx(50, 200, 200)).toBe(0);
+  it("collapses to a point when the element fills the container", () => {
+    expect(tighten(OPEN_BOUNDS, 0, 200, 200)).toEqual({ lo: 0, hi: 0 });
+  });
+});
+
+describe("advance", () => {
+  // container 200, element 40 -> span 160.
+  it("behaves as a flat clamp from the first move, for an item that starts inside", () => {
+    const first = advance(500, 80, OPEN_BOUNDS, 200, 40);
+    expect(first.px).toBe(160);
+    expect(first.bounds).toEqual({ lo: 0, hi: 160 });
+    expect(advance(-10, first.px, first.bounds, 200, 40).px).toBe(0);
+  });
+
+  it("lets an item that starts outside travel inward but not further out", () => {
+    // Starts at 220, which is 60px past the far edge.
+    const out = advance(300, 220, OPEN_BOUNDS, 200, 40);
+    expect(out.px).toBe(220); // the ask was further out; the ceiling holds it
+    expect(out.bounds).toEqual({ lo: 0, hi: 220 });
+
+    const inward = advance(190, out.px, out.bounds, 200, 40);
+    expect(inward.px).toBe(190);
+    expect(inward.bounds).toEqual({ lo: 0, hi: 220 });
+  });
+
+  it("ratchets the ceiling down to where the item now is", () => {
+    let state = advance(300, 220, OPEN_BOUNDS, 200, 40); // hi 220
+    state = advance(190, state.px, state.bounds, 200, 40); // now at 190
+    state = advance(999, state.px, state.bounds, 200, 40); // asks to fly right
+    expect(state.px).toBe(190);
+    expect(state.bounds.hi).toBe(190);
+  });
+
+  it("latches at the span once the item is back inside, and cannot leave again", () => {
+    let state = advance(300, 220, OPEN_BOUNDS, 200, 40);
+    state = advance(100, state.px, state.bounds, 200, 40);
+    // The bounds still describe where the item was at the start of that move —
+    // tighten closes around `current`, not around where it landed. The ceiling
+    // is never below the item, so it cannot be pushed further out meanwhile.
+    expect(state.bounds).toEqual({ lo: 0, hi: 220 });
+    state = advance(999, state.px, state.bounds, 200, 40);
+    // Now that the previous position was inside, the ceiling latches at span.
+    expect(state.px).toBe(160);
+    expect(state.bounds).toEqual({ lo: 0, hi: 160 });
+  });
+
+  it("ratchets the floor the same way on the near side", () => {
+    let state = advance(-100, -30, OPEN_BOUNDS, 200, 40);
+    expect(state.px).toBe(-30);
+    state = advance(-5, state.px, state.bounds, 200, 40);
+    state = advance(-999, state.px, state.bounds, 200, 40);
+    expect(state.px).toBe(-5);
   });
 });
 
