@@ -7,14 +7,23 @@ are badges and you place them with the mouse".
 
 **Merged.** `feat/picture-badges` was merged into `main` with `--no-ff`
 (merge commit `42dea4b`) and the branch was deleted. **Nothing is pushed** —
-`main` is ahead of `origin/main`. 78 unit tests, `tsc --noEmit` clean and wired
-into CI, Biome clean, single-file build `dist/picture-studio.js`
+`main` is ahead of `origin/main`. Single-file build `dist/picture-studio.js`
 (~61 kB / 16 kB gzip).
+
+**1.0.0 was released on 2026-08-12** (tag `v1.0.0`, at `06e2080`).
+
+`feat/item-anchor` adds the per-item anchor: ten values, `proportional`
+(default) plus the nine fixed grid positions. Verified in the browser in both
+view layouts and **merged into `main`**; 148 unit tests, `tsc --noEmit` clean,
+Biome clean. It ships in 1.1.0, which is **not released yet** — the performance
+follow-up below belongs to the same version.
 
 ## Where things are
 
 - Spec (authoritative, amended several times): `docs/superpowers/specs/2026-08-11-picture-badges-design.md`
+- Spec (anchor feature, amends the above): `docs/superpowers/specs/2026-08-12-item-anchor-design.md`
 - Plan: `docs/superpowers/plans/2026-08-11-picture-badges.md`
+- Plan (anchor feature): `docs/superpowers/plans/2026-08-12-item-anchor.md`
 - Local HA for testing: `docker compose` in the repo, container
   `picture-studio-ha` (image `:stable`, currently 2026.8.1),
   http://localhost:8123, resource at `/local/picture-studio/picture-studio.js?v=1`.
@@ -27,19 +36,20 @@ into CI, Biome clean, single-file build `dist/picture-studio.js`
 ## Source layout
 
 ```
-src/position.ts        px <-> % conversion, clamping, style derivation (pure, tested)
+src/position.ts        px <-> % conversion, anchor-aware style and bounds derivation (pure, tested)
 src/config.ts          config shape, normalization, ImageSource/imagePath, tags (pure, tested)
-src/strings.ts         our own en/fr catalog — one string (pure, tested)
-src/broker.ts          editor registry + subscribeEditors (pure, tested)
+src/strings.ts         our own en/fr catalog — four strings (pure, tested)
+src/broker.ts          editor registry + subscribeEditors, and the card registry (pure, tested)
 src/types.ts           hand-declared HA interfaces, incl. LocalizeFunc, LovelaceGridOptions
 src/card/picture-studio-card.ts   background element + badge children + lifecycle
 src/card/drag-layer.ts            pointer gesture, injected callbacks, no HA knowledge
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/background-schema.ts      ha-form schema, labels, form <-> config mapping
 src/editor/badge-list.ts             header, hint, ha-sortable rows, ha-dropdown add button
-src/editor/badge-form.ts             hosts the badge's own native config form
+src/editor/badge-form.ts             hosts the badge's own native config form, then the anchor picker
+src/editor/anchor-picker.ts          hand-built 3×3 grid, fixed anchors + proportional switch; emits `anchor-changed`
 src/editor/badge-catalog.ts          core + custom badge choices, choiceLabel, class lookup
-src/editor/badge-items.ts            add / replace / move / remove (pure, tested)
+src/editor/badge-items.ts            add / replace / move / remove / setAnchor (pure, tested)
 src/suggestion.ts      entity-first card picker suggestion (pure, tested)
 src/index.ts           registration + the window.customCards entry
 src/tests/**           every test, mirroring the source tree
@@ -54,7 +64,8 @@ entity: light.salon             # needed for state_image / state_filter to resol
 title: My floorplan             # ha-card header
 items:
   - type: badge                 # discriminant; "element" is rejected, reserved for later
-    position: { top: 30%, left: 45% } # 0-100; a bare number is read too
+    position: { top: 30%, left: 45% } # any finite number; a bare number is read too
+    anchor: center              # absent => proportional (the default)
     config:                     # the badge's own config, opaque to us
       type: custom:mushroom-template-badge
       entity: light.salon
@@ -67,19 +78,48 @@ items:
 
 ## Decisions that must not be re-litigated
 
-- **Proportional anchoring.** `positionStyle` yields `top: L%`, `left: T%` and
-  `transform: translate(-left%, -top%)`. 0 flush top-left, 50 centered, 100 flush
-  bottom-right, so overflow is structurally impossible. The `%` and the transform
-  are **derived at render, never stored**.
+- **Anchor is per-item; `proportional` is the default.** Ten values: `proportional`
+  plus the nine fixed `top-left` / `top-center` / `top-right` / `center-left` /
+  `center` / `center-right` / `bottom-left` / `bottom-center` / `bottom-right`.
+  `positionStyle` takes both the position and the anchor; all offsets are derived
+  at render, never stored — `storedConfig` omits `anchor` when it equals
+  `proportional`, so an existing config round-trips byte-identical. Within
+  `0-100`, and only under `proportional`, overflow is structurally impossible:
+  the real offset works out to `L/100 × (C − E)`, so 0 is flush top-left and
+  100 flush bottom-right. Fixed anchors shift with a constant `translate` from
+  the `ANCHOR_OFFSETS` table; out-of-range positions are expressible and preserved.
+- **Ratcheting drag bounds, computed live in `pointermove`, never at `pointerdown`.**
+  Bounds (`AxisBounds`, seeded from `OPEN_BOUNDS`) only tighten: each move calls
+  `tighten` around the item's current position, then `advance` clamps the
+  requested position. A drag can neither create an overflow nor worsen one; an
+  item already out of range follows the cursor faithfully and commits where
+  dropped.
+- **Re-anchoring is a question the editor asks the preview *before* it writes.**
+  `patchAnchor` calls `activeCard()?.reanchor(index, anchor)` on the broker's
+  card registry, then commits anchor and position in **one** write via
+  `setAnchor`. The card measures `.layer` and the wrapper and returns the
+  coordinates; when it cannot, the coordinates stay and the item moves — the
+  honest degradation. Two commits would render the new anchor against the old
+  coordinates for a frame, which is the jump the exchange exists to avoid.
+  *A card-side diff of "the anchor I last rendered" was tried first and cannot
+  work — see the HA facts below on card rebuilding. Do not reintroduce it.*
+- **`CardChannel` is the editor → card hop**, mirroring `EditorChannel`. Cards
+  register only while editing, so exactly one — the dialog's preview — is in the
+  registry while a dialog is open.
 - **Pixels during the drag, percentages on release.** One commit per gesture.
   Entry and exit must both write position and transform *together*.
 - **Percent strings in the stored config, numbers in the code.** `parsePercent`
-  reads `30`, `"30"` and `"30%"` and clamps to [0, 100]; `storedConfig`
-  serialises back to `"30%"` at `_reemit`, the single exit to HA. Accepting the
-  notation without also writing it would have been worse than not accepting it:
-  the first drag would silently rewrite what the user typed. Unquoted `top: 30%`
-  is a plain string in YAML — verified with the container's own PyYAML — while a
-  *leading* `%` would be a scanner error, which never happens here.
+  reads `30`, `"30"` and `"30%"`; `storedConfig` serialises back to `"30%"` at
+  `_reemit`, the single exit to HA. Accepting the notation without also writing it
+  would have been worse than not accepting it: the first drag would silently
+  rewrite what the user typed. Unquoted `top: 30%` is a plain string in YAML —
+  verified with the container's own PyYAML — while a *leading* `%` would be a
+  scanner error, which never happens here. **The clamp to `[0, 100]` is removed
+  from all three of `parsePercent`, `toPercent`, and `percentString`** — a bound
+  left in any one of them puts an overflowing item back, and silently rewriting
+  a hand-typed `left: 150%` was never the right answer (same principle as the
+  notation: normalising what was written widens the gap between config and intent).
+  This is a knowing behaviour change even for configs that use no anchor.
 - **One `items[]` list with a `type` discriminant**, payload nested under
   `config`, so a third-party badge's own keys can never collide with ours.
 - **No `z-index`, ever.** Stacking is DOM order = list order, and the list is
@@ -97,6 +137,39 @@ items:
 
 ## Hard-won facts about Home Assistant (verified in their source)
 
+- **HA rebuilds the card element on every config change.** `hui-card` calls
+  `createCardElement`, not `setConfig` on the existing instance — visible in a
+  stack trace as our constructor under `create-card-element.ts` /
+  `hui-card.ts`. **No card-side state survives a commit.** Anything the editor
+  needs from the live preview must be asked for *before* it writes. This is what
+  killed the first re-anchor design, which diffed the anchor the card had last
+  rendered: the arrays were always empty, so the diff compared `undefined` to
+  the new anchor and never fired.
+- **`preview` on a card does not mean "I am the edit dialog's preview".** HA sets
+  it on every card of a dashboard in edit mode (`card.preview =
+  lovelace.editMode`, and `preview = !0` in `hui-card-options`) so a click edits
+  the card instead of firing its actions. Reading it as "the dialog" put two
+  cards in our registry and armed the drag on every picture-studio card behind
+  an open dialog.
+  What separates them is the **edit chrome a dashboard wraps its cards in**, and
+  which the dialog's preview does not have: `hui-card-options` in a masonry
+  view, `hui-card-edit-mode` in a section. `_inEditPreview()` walks up, hopping
+  shadow boundaries, and excludes itself on either. The add-card dialog renders
+  its preview without that chrome too, so the feature works there; the
+  card-picker gallery has none of it but never has an editor mounted.
+  **Do not "simplify" this to a test on the `preview` attribute.** It was tried,
+  it reads better, and it works in masonry — where `hui-card` declares `preview`
+  with no `reflect`, so the attribute exists only where the dialog wrote it
+  literally. It then fails **silently in sections**: `hui-section` is the single
+  component in the frontend declaring `preview` with `reflect: true`, so the
+  attribute is present there whoever set it, and every dashboard card in a
+  section passes. Observed failing in the browser after passing in masonry.
+- **A slotted element is not a DOM ancestor.** `closest()` walks the real tree,
+  not the flattened one, so anything we are *slotted into* is invisible to an
+  ancestor walk — reaching it needs `assignedSlot`. This is why "detect a native
+  `<dialog>` above us" was rejected: `ha-dialog` is what the edit dialog uses in
+  2026.8.1, it renders no native `<dialog>` of its own, and the native element
+  further down the stack is never an ancestor of ours.
 - **The native badge dialogs are unreachable.** `showCreateBadgeDialog` /
   `showEditBadgeDialog` fire `show-dialog` with a `dialogImport` closure their
   bundler resolved at build time; `make-dialog-manager.ts` silently returns
@@ -137,6 +210,10 @@ items:
   table of 58 dynamic loaders and pulls the sub-component itself. Test a
   selector by rendering a form that uses it, not by probing `customElements`.
 - `ha-sortable` **is** defined in the card-edit dialog; the badge dialogs are not.
+- **`ha-control-select` is not safe for custom cards.** It would have been the
+  natural segmented control for the anchor picker, but it lives in a single
+  lazily loaded frontend chunk and cannot be relied on to be defined — verified
+  in the container's bundle for 2026.8.1. The anchor picker is hand-built.
 - `hui-sub-element-editor` handles `row`, `header`, `footer`, `element`,
   `feature`, `heading-badge` — **not** `badge`.
 - **`visibility` on a badge does nothing here.** HA evaluates those conditions in
@@ -193,6 +270,16 @@ config key, verify that something actually consumes it, and that it consumes it
 the way the label claims.** A field that saves cleanly and changes nothing is
 worse than an absent one.
 
+Its sibling, learned on the anchor feature: **a mechanism can be reviewed
+correct and still rest on a false premise about HA's lifecycle.** The first
+re-anchor design was proved terminating and drift-free by a reviewer, and could
+never fire, because nobody asked whether the state it diffed still existed —
+HA rebuilds the card on every commit. The same shape of mistake produced the
+`preview` reading. Both were settled in one browser session by instrumenting
+each boundary and reading a stack trace; neither was going to be settled by
+more reasoning. **When behaviour contradicts a proof, doubt the premise, and go
+get evidence rather than a better argument.**
+
 ## Follow-ups
 
 **Repository: `lalexdotcom/picture-studio-card`**, card type `custom:picture-studio`,
@@ -215,10 +302,12 @@ the card picker filters on name **and** description. The `-card` suffix on the
 repository is the HACS convention (`button-card`, `mini-graph-card`,
 `advanced-camera-card`) and its only effect is the doubled word in the path.
 
-1. **No release yet.** `main` is pushed, but there is no tag and no GitHub
-   release, therefore no asset. The workflow fires on `release: published`,
-   builds, and attaches `dist/picture-studio.js` to that release — and since
-   `dist/` is git-ignored, that asset is the only thing HACS can install from.
+1. ~~No release yet~~ — **1.0 was released on 2026-08-12.** The workflow fires
+   on `release: published`, builds, and attaches `dist/picture-studio.js` to
+   that release; since `dist/` is git-ignored, that asset is the only thing
+   HACS can install from. `CHANGELOG.md` and `package.json` carry the version
+   alongside the tag — see AGENTS.md § Changelog and versioning, and **ask
+   before bumping**. No tag is present in this local clone.
 2. ~~Unverified in a browser~~ — **all checked in the local HA on 2026-08-12 and
    behaving as expected**: actions pinned to `none` (no tooltip, not clickable),
    `title` as the card header, the media picker showing an existing path, the
@@ -237,6 +326,38 @@ repository is the HACS convention (`button-card`, `mini-graph-card`,
    avoid, since HA's catalog is free and translated.
 6. Vertical overflow scrolling is the consumer's problem to avoid: pinning
    `rows` is what creates it, `rows: "auto"` never does.
+7. **Per-tick work in the card, not yet measured or fixed** (noted 2026-08-13).
+   `updated()` ignores its `changedProperties` and resynchronises everything on
+   every render, while `set hass` calls `requestUpdate()` on every state tick of
+   any entity. So for each card, per tick: `_syncBackground` rebuilds
+   `_bgConfig` and calls `hui-image-element.setConfig` — which defaults the
+   actions, runs `computeTooltip` and toggles classes — for an unchanged config;
+   `_syncBadges` calls `setConfig` on **every** badge, typically one Lit update
+   each, so the cost grows with badge count; and `hass` is pushed twice, once by
+   the setter and again by both sync methods. The remedy is one idea for all
+   three: reconfigure only when `_config` changed, never when only `hass` did.
+   Two minor ones alongside: `_syncEditingAndDrag` does a `querySelector(".root")`
+   per render, and `_applyPositions` rewrites the three style properties even
+   when unchanged. **Measure before fixing** — none of this has been profiled.
+   Slated for 1.1.0.
+8. **Automate the release from a version bump** (agreed 2026-08-13, not written).
+   Trigger: a commit on `main`. `release.yml` gains the whole chain in front of
+   the build it already does — compare `package.json`'s `version` against
+   `HEAD~1`, and when it changed, tag `vX.Y.Z`, create the release, build, and
+   attach `dist/picture-studio.js`. Tagging the commit that carries the version
+   is the point: the bump is reviewed in the PR, and the tagged tree cannot
+   claim a version it does not contain — which is exactly how `v1.0.0` came to
+   point at a tree saying `0.1.0`.
+   **The trap that makes this one workflow rather than two:** a release created
+   with the default `GITHUB_TOKEN` does **not** trigger workflows listening on
+   `release: published`. Split across two workflows, the build would never run
+   and the release would ship with no asset — a silent failure that leaves HACS
+   nothing to install. Either keep it in one job, or create the release with a
+   PAT / GitHub App token.
+   Two guards: do nothing if the tag already exists (a revert then re-bump must
+   not fail the build), and fail if `CHANGELOG.md` has no section for the
+   version being shipped, or still says `unreleased` — that turns AGENTS.md
+   § Changelog and versioning into something CI enforces.
 
 ## How we work (project rules, see AGENTS.md)
 

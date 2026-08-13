@@ -1,4 +1,4 @@
-import type { Position } from "./position";
+import type { Anchor, Position } from "./position";
 
 /**
  * The single card → editor hop. Everything that changes the *config* comes back
@@ -7,6 +7,7 @@ import type { Position } from "./position";
  */
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
+  patchAnchor(index: number, anchor: Anchor): void;
   /**
    * Open a badge's own form, the same way the pencil in the list does, or clear
    * the selection with undefined and fall back to the card's own form.
@@ -16,7 +17,24 @@ export interface EditorChannel {
   selectedIndex(): number | undefined;
 }
 
+/**
+ * The editor → card hop, and the only one. Home Assistant rebuilds the card
+ * element on every config change — `hui-card` calls `createCardElement` rather
+ * than `setConfig` — so nothing a card remembers survives a commit. Anything the
+ * editor needs from the live preview has to be asked for *before* it writes.
+ */
+export interface CardChannel {
+  /**
+   * The item's coordinates re-expressed under `anchor`, so that changing the
+   * anchor does not move it. Only the card knows pixels. Undefined when it
+   * cannot measure — the item is gone, or the card has not laid out yet — and
+   * the caller then keeps the coordinates it has.
+   */
+  reanchor(index: number, anchor: Anchor): Position | undefined;
+}
+
 const editors = new Set<EditorChannel>();
+const cards = new Set<CardChannel>();
 const listeners = new Set<() => void>();
 
 const notify = (): void => {
@@ -74,3 +92,23 @@ export const subscribeEditors = (listener: () => void): (() => void) => {
  */
 export const activeEditor = (): EditorChannel | undefined =>
   editors.size === 1 ? [...editors][0] : undefined;
+
+/**
+ * Cards register only while they are editing, which is the same discriminator
+ * `editing` itself is derived from. A dashboard's own cards are never in that
+ * state, so exactly one card is registered while an edit dialog is open — the
+ * preview. No notification goes with this registry: nothing derives state from
+ * it, it is only ever read at the moment of a question.
+ */
+export const registerCard = (channel: CardChannel): (() => void) => {
+  cards.add(channel);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    cards.delete(channel);
+  };
+};
+
+export const activeCard = (): CardChannel | undefined =>
+  cards.size === 1 ? [...cards][0] : undefined;

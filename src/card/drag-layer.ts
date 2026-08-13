@@ -1,4 +1,13 @@
-import { clampPx, type Position, positionStyle, toPercent } from "../position";
+import {
+  type Anchor,
+  type AxisBounds,
+  advance,
+  axisOffset,
+  OPEN_BOUNDS,
+  type Position,
+  positionStyle,
+  toPercent,
+} from "../position";
 
 interface Hit {
   element: HTMLElement;
@@ -22,6 +31,13 @@ interface DragOptions {
   getIndexedWrapper(target: EventTarget | null): Hit | undefined;
   /** The element whose box defines 100%: the same box hui-image fills. */
   getSurface(): HTMLElement | null;
+  /**
+   * The anchor the item at this index is stored with. Read at pointerup rather
+   * than captured at pointerdown: it is the only thing that decides how the
+   * pixels the gesture produced turn back into coordinates, and reading it late
+   * keeps the controller free of any copy of the config.
+   */
+  getAnchor(index: number): Anchor;
   onCommit(index: number, position: Position): void;
   /**
    * Raised on pointerdown: with an index when a badge was hit, so grabbing one
@@ -42,6 +58,9 @@ interface DragState {
   height: number;
   x: number;
   y: number;
+  /** Per-axis travel limits, closed in on the first pointermove. */
+  boundsX: AxisBounds;
+  boundsY: AxisBounds;
   /** Where the gesture started, in client coordinates, to measure the travel. */
   startX: number;
   startY: number;
@@ -86,6 +105,8 @@ export const createDragController = (options: DragOptions) => {
       height: box.height,
       x: box.left - surfaceBox.left,
       y: box.top - surfaceBox.top,
+      boundsX: OPEN_BOUNDS,
+      boundsY: OPEN_BOUNDS,
       startX: ev.clientX,
       startY: ev.clientY,
       moved: false,
@@ -117,16 +138,24 @@ export const createDragController = (options: DragOptions) => {
 
     state.moved ||= hasMoved(ev.clientX - state.startX, ev.clientY - state.startY);
 
-    state.x = clampPx(
+    const nextX = advance(
       ev.clientX - state.surface.left - state.grabX,
+      state.x,
+      state.boundsX,
       state.surface.width,
       state.width,
     );
-    state.y = clampPx(
+    const nextY = advance(
       ev.clientY - state.surface.top - state.grabY,
+      state.y,
+      state.boundsY,
       state.surface.height,
       state.height,
     );
+    state.x = nextX.px;
+    state.boundsX = nextX.bounds;
+    state.y = nextY.px;
+    state.boundsY = nextY.bounds;
 
     state.hit.element.style.left = `${state.x}px`;
     state.hit.element.style.top = `${state.y}px`;
@@ -141,16 +170,17 @@ export const createDragController = (options: DragOptions) => {
     hit.element.releasePointerCapture(ev.pointerId);
     hit.element.classList.remove("dragging");
 
+    const anchor = options.getAnchor(hit.index);
     const position: Position = {
-      left: toPercent(x, surface.width, width),
-      top: toPercent(y, surface.height, height),
+      left: toPercent(x, surface.width, width, axisOffset(anchor, "x")),
+      top: toPercent(y, surface.height, height, axisOffset(anchor, "y")),
     };
 
     // Restore the derived style here and not only on the next setConfig: a drag
     // that ends where it started produces no config change, so no setConfig
     // would come back, and the badge would stay in raw pixels with no transform.
     // Same geometry either way, so there is no flash.
-    const style = positionStyle(position);
+    const style = positionStyle(position, anchor);
     hit.element.style.left = style.left;
     hit.element.style.top = style.top;
     hit.element.style.transform = style.transform;

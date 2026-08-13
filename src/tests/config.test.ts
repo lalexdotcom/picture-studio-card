@@ -26,8 +26,9 @@ describe("normalizeConfig", () => {
       items: [
         {
           type: "badge",
-          config: { type: "entity", entity: "light.a" },
           position: { top: 30, left: 45 },
+          anchor: "proportional",
+          config: { type: "entity", entity: "light.a" },
         },
       ],
     };
@@ -176,5 +177,76 @@ describe("storedConfig", () => {
   it("leaves the rest of the config alone", () => {
     const config = normalizeConfig({ type: CARD_TYPE, image: "/local/plan.png", items: [] });
     expect(storedConfig(config)).toEqual({ type: CARD_TYPE, image: "/local/plan.png", items: [] });
+  });
+});
+
+describe("anchor", () => {
+  const base = { type: "custom:picture-studio", image: "/local/a.png" };
+  const badge = { type: "entity", entity: "light.salon" };
+
+  it("defaults a missing anchor to proportional", () => {
+    const config = normalizeConfig({
+      ...base,
+      items: [{ type: "badge", position: { top: "30%", left: "45%" }, config: badge }],
+    });
+    expect(config.items[0]?.anchor).toBe("proportional");
+  });
+
+  it("reads a fixed anchor", () => {
+    const config = normalizeConfig({
+      ...base,
+      items: [
+        { type: "badge", position: { top: "30%", left: "45%" }, anchor: "center", config: badge },
+      ],
+    });
+    expect(config.items[0]?.anchor).toBe("center");
+  });
+
+  it("falls back rather than trusting an unrecognised value", () => {
+    const config = normalizeConfig({
+      ...base,
+      items: [
+        { type: "badge", position: { top: "30%", left: "45%" }, anchor: "middle", config: badge },
+      ],
+    });
+    expect(config.items[0]?.anchor).toBe("proportional");
+  });
+
+  it("omits the key on the way out when it is the default", () => {
+    const config = normalizeConfig({
+      ...base,
+      items: [{ type: "badge", position: { top: "30%", left: "45%" }, config: badge }],
+    });
+    const stored = storedConfig(config) as { items: Record<string, unknown>[] };
+    expect(Object.hasOwn(stored.items[0] ?? {}, "anchor")).toBe(false);
+  });
+
+  it("writes the key on the way out when it is not", () => {
+    const config = normalizeConfig({
+      ...base,
+      items: [
+        { type: "badge", position: { top: "30%", left: "45%" }, anchor: "center", config: badge },
+      ],
+    });
+    const stored = storedConfig(config) as { items: Record<string, unknown>[] };
+    expect(stored.items[0]?.anchor).toBe("center");
+  });
+
+  it("leaves a config that uses no anchor byte-identical across the round trip", () => {
+    const raw = {
+      ...base,
+      items: [{ type: "badge", position: { top: "30%", left: "45%" }, config: badge }],
+    };
+    expect(storedConfig(normalizeConfig(raw))).toEqual(raw);
+  });
+
+  it("keeps an out-of-range coordinate across the round trip", () => {
+    const raw = {
+      ...base,
+      items: [
+        { type: "badge", position: { top: "-10%", left: "130%" }, anchor: "center", config: badge },
+      ],
+    };
+    expect(storedConfig(normalizeConfig(raw))).toEqual(raw);
   });
 });

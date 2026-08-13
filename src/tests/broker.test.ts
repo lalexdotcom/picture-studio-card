@@ -1,11 +1,21 @@
 import { describe, expect, it } from "@rstest/core";
-import { activeEditor, notifyEditors, registerEditor, subscribeEditors } from "../broker";
+import {
+  activeCard,
+  activeEditor,
+  notifyEditors,
+  registerCard,
+  registerEditor,
+  subscribeEditors,
+} from "../broker";
 
 const channel = () => ({
   patchPosition: () => undefined,
+  patchAnchor: () => undefined,
   select: () => undefined,
   selectedIndex: () => undefined,
 });
+
+const card = () => ({ reanchor: () => undefined });
 
 describe("broker", () => {
   it("has no active editor when none is registered", () => {
@@ -31,6 +41,49 @@ describe("broker", () => {
     expect(activeEditor()).toBeUndefined();
     offA();
     offB();
+  });
+});
+
+describe("card registry", () => {
+  it("has no active card when none is registered", () => {
+    expect(activeCard()).toBeUndefined();
+  });
+
+  it("returns the sole registered card", () => {
+    const ch = card();
+    const off = registerCard(ch);
+    expect(activeCard()).toBe(ch);
+    off();
+  });
+
+  it("returns undefined once the card unregisters", () => {
+    const off = registerCard(card());
+    off();
+    expect(activeCard()).toBeUndefined();
+  });
+
+  it("returns undefined when several cards are registered, rather than guessing", () => {
+    const offA = registerCard(card());
+    const offB = registerCard(card());
+    expect(activeCard()).toBeUndefined();
+    offA();
+    offB();
+  });
+
+  it("ignores a repeated unregister, so a second release cannot drop a later card", () => {
+    const offA = registerCard(card());
+    offA();
+    const second = card();
+    const offB = registerCard(second);
+    offA();
+    expect(activeCard()).toBe(second);
+    offB();
+  });
+
+  it("is a registry of its own: registering a card leaves the editor one alone", () => {
+    const off = registerCard(card());
+    expect(activeEditor()).toBeUndefined();
+    off();
   });
 });
 

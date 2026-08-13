@@ -1,11 +1,19 @@
 import { describe, expect, it } from "@rstest/core";
 import type { PictureItem } from "../../config";
-import { addItem, moveItem, removeItem, replaceBadge, rowLabel } from "../../editor/badge-items";
+import {
+  addItem,
+  moveItem,
+  removeItem,
+  replaceBadge,
+  rowLabel,
+  setAnchor,
+} from "../../editor/badge-items";
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",
-  config: { type: "entity", entity },
   position: { top, left },
+  anchor: "proportional",
+  config: { type: "entity", entity },
 });
 
 describe("addItem", () => {
@@ -13,6 +21,7 @@ describe("addItem", () => {
     const out = addItem([item("light.a", 10, 20)], { type: "entity", entity: "light.b" });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });
+    expect(out[1]?.anchor).toBe("proportional");
     expect(out[1]?.config).toEqual({ type: "entity", entity: "light.b" });
   });
 
@@ -54,6 +63,38 @@ describe("replaceBadge", () => {
   });
 });
 
+describe("setAnchor", () => {
+  const items = [item("light.a", 10, 20), item("light.b", 30, 40)];
+
+  it("writes the anchor and the coordinates that keep the item still, together", () => {
+    const out = setAnchor(items, 1, "center", { top: 33, left: 44 });
+    expect(out[1]?.anchor).toBe("center");
+    expect(out[1]?.position).toEqual({ top: 33, left: 44 });
+  });
+
+  it("keeps the coordinates when the caller could not work out new ones", () => {
+    const out = setAnchor(items, 1, "center");
+    expect(out[1]?.anchor).toBe("center");
+    expect(out[1]?.position).toEqual({ top: 30, left: 40 });
+  });
+
+  it("leaves every other item untouched", () => {
+    const out = setAnchor(items, 1, "center", { top: 33, left: 44 });
+    expect(out[0]).toEqual(items[0]);
+  });
+
+  it("does not mutate its input, which Home Assistant freezes", () => {
+    setAnchor(items, 1, "center", { top: 33, left: 44 });
+    expect(items[1]?.anchor).toBe("proportional");
+    expect(items[1]?.position).toEqual({ top: 30, left: 40 });
+  });
+
+  it("returns the list unchanged for an index that is not there", () => {
+    expect(setAnchor(items, -1, "center")).toBe(items);
+    expect(setAnchor(items, 2, "center")).toBe(items);
+  });
+});
+
 describe("moveItem", () => {
   it("moves a pair as a unit, so reordering never disturbs positions", () => {
     const items = [item("light.a", 10, 10), item("light.b", 20, 20), item("light.c", 30, 30)];
@@ -90,8 +131,9 @@ describe("removeItem", () => {
 describe("rowLabel", () => {
   const badge = (config: Record<string, unknown>): PictureItem => ({
     type: "badge",
-    config: config as never,
     position: { top: 50, left: 50 },
+    anchor: "proportional",
+    config: config as never,
   });
   const states = {
     "light.ceiling_lights": { attributes: { friendly_name: "Open space" } },

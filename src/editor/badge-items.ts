@@ -1,17 +1,18 @@
 import type { PictureItem } from "../config";
-import { DEFAULT_POSITION } from "../position";
+import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
 import type { BadgeConfig, HassEntity } from "../types";
 
 /**
- * Every operation moves a {type, config, position} triple as a unit, which is
- * what makes reordering change stacking order without disturbing any position.
- * None of them mutates its input: Home Assistant freezes the config we are handed.
+ * Every operation moves a {type, position, anchor, config} item as a unit, which
+ * is what makes reordering change stacking order without disturbing any
+ * position. None of them mutates its input: Home Assistant freezes the config
+ * we are handed.
  */
 
-/** A new badge lands centered, ready to be dragged. Its own position object. */
+/** A new badge lands centered and proportional, ready to be dragged. */
 export const addItem = (items: PictureItem[], badge: BadgeConfig): PictureItem[] => [
   ...items,
-  { type: "badge", config: badge, position: { ...DEFAULT_POSITION } },
+  { type: "badge", position: { ...DEFAULT_POSITION }, anchor: DEFAULT_ANCHOR, config: badge },
 ];
 
 export const replaceBadge = (
@@ -22,6 +23,24 @@ export const replaceBadge = (
   index < 0 || index >= items.length
     ? items
     : items.map((item, i) => (i === index ? { ...item, config: badge } : item));
+
+/**
+ * Set an item's anchor, and its coordinates with it when the caller could work
+ * out where the item has to sit to stay put. The two travel together in one
+ * write: an anchor without its matching coordinates is a badge that jumped, and
+ * a config the user never asked for.
+ */
+export const setAnchor = (
+  items: PictureItem[],
+  index: number,
+  anchor: Anchor,
+  position?: Position,
+): PictureItem[] =>
+  index < 0 || index >= items.length
+    ? items
+    : items.map((item, i) =>
+        i === index ? { ...item, anchor, position: position ?? item.position } : item,
+      );
 
 export const moveItem = (items: PictureItem[], from: number, to: number): PictureItem[] => {
   if (from < 0 || to < 0 || from >= items.length || to >= items.length) return items;

@@ -1,7 +1,7 @@
 import { html, LitElement, nothing } from "lit";
-import { type EditorChannel, notifyEditors, registerEditor } from "../broker";
+import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import { CARD_TYPE, normalizeConfig, type PictureStudioConfig, storedConfig } from "../config";
-import type { Position } from "../position";
+import type { Anchor, Position } from "../position";
 import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
 import {
   type BackgroundData,
@@ -11,7 +11,7 @@ import {
   mergeBackground,
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
-import { addItem, moveItem, removeItem, replaceBadge } from "./badge-items";
+import { addItem, moveItem, removeItem, replaceBadge, setAnchor } from "./badge-items";
 import "./badge-form";
 import "./badge-list";
 
@@ -71,6 +71,20 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (!config) return;
     const items = config.items.map((item, i) => (i === index ? { ...item, position } : item));
     this._commit({ ...config, items });
+  }
+
+  patchAnchor(index: number, anchor: Anchor): void {
+    const config = this._config;
+    if (!config) return;
+    // Ask the preview *before* writing. Only the card knows pixels, and only it
+    // can still see where the item sits under its current anchor — Home
+    // Assistant rebuilds the card element on every config change, so after the
+    // commit there is no "before" left anywhere to measure against.
+    // Anchor and position then travel in one write: two commits would render the
+    // new anchor against the old coordinates for a frame, which is the jump this
+    // whole exchange exists to avoid.
+    const position = activeCard()?.reanchor(index, anchor);
+    this._commit({ ...config, items: setAnchor(config.items, index, anchor, position) });
   }
 
   /** Convergence point: drag, dialogs and forms all end here. */
@@ -138,6 +152,12 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     });
   };
 
+  private _anchorChanged = (ev: CustomEvent<{ anchor: Anchor }>): void => {
+    ev.stopPropagation();
+    if (this._editingIndex === undefined) return;
+    this.patchAnchor(this._editingIndex, ev.detail.anchor);
+  };
+
   private _moveBadge = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void => {
     const config = this._config;
     if (!config) return;
@@ -166,7 +186,9 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
         <picture-studio-badge-form
           .hass=${hass}
           .badge=${editing.config}
+          .anchor=${editing.anchor}
           @badge-changed=${this._badgeChanged}
+          @anchor-changed=${this._anchorChanged}
           @go-back=${() => this.select(undefined)}
         ></picture-studio-badge-form>
       `;

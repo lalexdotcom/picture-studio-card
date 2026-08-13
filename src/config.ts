@@ -1,10 +1,18 @@
-import { DEFAULT_POSITION, type Position, parsePercent, storedPosition } from "./position";
+import {
+  type Anchor,
+  DEFAULT_POSITION,
+  type Position,
+  parseAnchor,
+  parsePercent,
+  storedPosition,
+} from "./position";
 import type { BadgeConfig } from "./types";
 
 export const CARD_TAG = "picture-studio";
 export const EDITOR_TAG = "picture-studio-editor";
 export const LIST_TAG = "picture-studio-badge-list";
 export const FORM_TAG = "picture-studio-badge-form";
+export const PICKER_TAG = "picture-studio-anchor-picker";
 export const CARD_TYPE = "custom:picture-studio";
 
 /**
@@ -14,6 +22,12 @@ export const CARD_TYPE = "custom:picture-studio";
 export interface PictureItem {
   type: "badge";
   position: Position;
+  /**
+   * What the coordinates are anchored to. Always set in memory; omitted from
+   * the stored config at its default, so an existing YAML never gains a key it
+   * did not have.
+   */
+  anchor: Anchor;
   config: BadgeConfig;
 }
 
@@ -96,8 +110,9 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
 
     return {
       type: "badge" as const,
-      config: entry.config as BadgeConfig,
       position: normalizePosition(entry.position),
+      anchor: parseAnchor(entry.anchor),
+      config: entry.config as BadgeConfig,
     };
   });
 
@@ -112,7 +127,16 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
  */
 export const storedConfig = (config: PictureStudioConfig): Record<string, unknown> => ({
   ...config,
-  items: config.items.map((item) => ({ ...item, position: storedPosition(item.position) })),
+  items: config.items.map((item) => {
+    const stored: Record<string, unknown> = {
+      ...item,
+      position: storedPosition(item.position),
+    };
+    // The default is the absence of the key, so a config that never used an
+    // anchor comes back exactly as it went in.
+    if (item.anchor === "proportional") delete stored.anchor;
+    return stored;
+  }),
 });
 
 /**

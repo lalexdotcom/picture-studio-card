@@ -97,8 +97,9 @@ items:
       type: entity               # any Lovelace badge config
       entity: sensor.temperature
     position:
-      top: 30%     # 0 = flush top, 50 = centered, 100 = flush bottom
-      left: 60%    # 0 = flush left, 50 = centered, 100 = flush right
+      top: 30%     # see Position anchoring below
+      left: 60%
+    anchor: center               # optional; defaults to "proportional"
 ```
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
@@ -113,9 +114,32 @@ Both forms render identically; the editor displays either one.
 
 ### Position anchoring
 
-`top` and `left` are percentages from **0 to 100** and use proportional anchoring — the same semantics as CSS `background-position`. At `0` the badge's edge sits flush against the top-left corner; at `50` the badge is centered; at `100` the badge's edge sits flush against the bottom-right corner. A badge therefore **can never overflow the image**, regardless of badge size or image dimensions; a value outside the range is clamped when the card reads it.
+`top` and `left` are percentages, and `anchor` decides what they are a
+percentage *of*.
 
-Write them as `30%` or as a bare `30` — both are accepted, and the editor writes the percent form back. Two decimals are kept, which is the precision dragging produces.
+`proportional` is the default and the historical behaviour: the anchor follows
+the coordinate, the same semantics as CSS `background-position`. At `0` the
+badge's edge sits flush against the top-left corner, at `50` the badge is
+centered, at `100` its edge sits flush against the bottom-right. It is the only
+mode in which a coordinate inside `0-100` **cannot overflow the image**,
+whatever the badge size or image dimensions.
+
+The nine fixed values — `top-left`, `top-center`, `top-right`, `center-left`,
+`center`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right` — pin
+the anchor instead. `left: 50%` with `anchor: center` puts the badge's own
+centre at the middle of the image, which is what picture-elements' usual
+`translate(-50%, -50%)` does.
+
+Coordinates outside `0-100` are allowed and kept as written: under a fixed
+anchor they are the way to place a badge deliberately over the edge. Dragging
+never creates an overflow and never worsens one — a badge already hanging off
+the edge can be pulled back in but not pushed further out, and once fully
+inside it stays there. Changing a badge's anchor in the editor does not move it
+either: the coordinates are recomputed so the pixels stay the same.
+
+Write the coordinates as `30%` or as a bare `30` — both are accepted, and the
+editor writes the percent form back. Two decimals are kept, which is the
+precision dragging produces.
 
 ### YAML-only keys
 
