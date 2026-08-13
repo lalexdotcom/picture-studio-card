@@ -291,13 +291,20 @@ Extend the existing harness import on line 2 to bring in `flush` and
 now keeps the import untouched afterwards:
 
 ```ts
+import type { HomeAssistant } from "../../types";
 import { background, badges, CONFIG_3, flush, mountCard, wrappers } from "./harness";
 ```
+
+`HomeAssistant` is imported the way the rest of the codebase does it — see
+`src/tests/strings.test.ts:3`.
 
 Then append:
 
 ```ts
-const tick = (n: number): unknown => ({ states: { "light.a": { state: String(n) } } });
+// One cast, in one place: the card only ever forwards hass, so a fixture
+// carrying a single state is enough to tell one tick from the next.
+const tick = (n: number): HomeAssistant =>
+  ({ states: { "light.a": { state: String(n) } } }) as unknown as HomeAssistant;
 
 describe("a hass tick", () => {
   it("neither reconfigures anything nor pushes hass twice", async () => {
@@ -316,7 +323,7 @@ describe("a hass tick", () => {
     expect(hassTotal()).toBe(0);
 
     for (let i = 0; i < 10; i++) {
-      (card as unknown as { hass: unknown }).hass = tick(i);
+      card.hass = tick(i);
       await flush();
     }
 
@@ -391,7 +398,7 @@ describe("a real change", () => {
       select: () => {},
       selectedIndex: () => selected,
     };
-    (card as unknown as { preview: boolean }).preview = true;
+    card.preview = true;
     const release = registerEditor(editor);
     await flush();
 
