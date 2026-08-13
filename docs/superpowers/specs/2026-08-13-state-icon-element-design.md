@@ -417,6 +417,30 @@ floor: read the frontend build pinned in HA core's
 frontend source at that tag. **It may raise `hacs.json` above 2026.5**, and it is
 the only one of the ten that commits anything but code.
 
+## Verification record
+
+**Row 4 — settled 2026-08-13, without a browser.** Method, the same one that set
+the floor originally: read the frontend build pinned in HA core's
+`homeassistant/components/frontend/manifest.json` at a tag, then read the
+frontend source at that build.
+
+| core | frontend |
+| --- | --- |
+| 2026.5.0 | 20260429.3 |
+| 2026.6.0 | 20260527.4 |
+| 2026.7.0 | 20260624.3 |
+
+`formatEntityName` is declared on the `HomeAssistant` interface at
+`src/types.ts:297` of **20260429.3** — present at our existing floor, not above
+it. Its signature is
+`(stateObj, type: string | EntityNameItem | EntityNameItem[] | undefined, separator?)`,
+which the `(stateObj, config.name)` call satisfies with `name` typed
+`string | undefined`.
+
+**`hacs.json` stays at 2026.5.0.** The one row that could have moved it did not.
+
+The other nine rows need a browser and are open.
+
 ## Documentation and versioning
 
 - README: the `type` key is now required, and the new element is documented.
