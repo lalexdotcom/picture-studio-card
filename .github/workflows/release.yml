@@ -7,7 +7,9 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  # read: download the bundle from CI's run. write: delete it once it is no
+  # longer needed — see the purge step at the end of the job.
+  actions: write
 
 concurrency:
   group: release
@@ -102,3 +104,35 @@ jobs:
           body_path: release-notes.md
           generate_release_notes: true
           files: picture-studio.js
+
+      # Runs on success only, which covers both useful cases: the no-op, where
+      # the bundle was never used, and the release, where the file is now
+      # attached permanently. On failure it does NOT run — a failed job's
+      # bundle is what re-running it needs, and deleting that would destroy the
+      # recovery the retention exists for.
+      - name: Purge the bundle artefact
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          # Housekeeping must never redden a job whose release succeeded, so
+          # this step reports through ::warning:: and always exits 0. The
+          # default shell runs with -e; turn it off deliberately.
+          set +e
+          set -u -o pipefail
+
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+                 --jq '.artifacts[] | select(.name == "bundle") | .id' | head -1)
+
+          if [ -z "$id" ]; then
+            echo "::warning::No bundle artefact on run $RUN_ID; nothing to purge."
+            exit 0
+          fi
+
+          if gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" >/dev/null; then
+            echo "Purged bundle artefact $id from run $RUN_ID."
+          else
+            echo "::warning::Could not delete bundle artefact $id from run $RUN_ID; it will expire on its own."
+          fi
+          exit 0

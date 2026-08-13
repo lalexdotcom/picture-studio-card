@@ -25,4 +25,4 @@ jobs:
         with:
           name: bundle
           path: dist/picture-studio.js
-          retention-days: 3
+          retention-days: 14

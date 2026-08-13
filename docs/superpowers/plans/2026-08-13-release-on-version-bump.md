@@ -79,7 +79,7 @@ Add to the end of `jobs.check.steps` in `.github/workflows/ci.yml`:
         with:
           name: bundle
           path: dist/picture-studio.js
-          retention-days: 3
+          retention-days: 14
 ```
 
 The `if:` is what keeps pull requests from uploading: they run every check and
@@ -474,6 +474,22 @@ inventing a way to fake them would prove nothing.
 So both are exercised **when 1.1.0 ships**, in that order: bump with the
 heading left at `unreleased` and expect a red build with nothing published,
 then correct the heading to `## 1.1.0 — <date>` and expect the release.
+
+## Amendment, after Task 3 — purging the artefact
+
+Added on `main` after the three tasks were merged and the no-op path was
+observed green, at the user's request. `release.yml` gains a final
+`if: success()` step that deletes the `bundle` artefact of the triggering run,
+and `permissions` moves from `actions: read` to `actions: write`. The retention
+in `ci.yml` goes from 3 days to 14: the purge is now the cleanup, so the
+retention only has to outlive a *failed* release job, and its size is bounded
+by the failure rate rather than the push rate.
+
+Unlike the two paths deferred below, **this one is verified immediately**: the
+no-op path reaches the purge step (skipped steps do not make `success()`
+false), so the very push that lands this change exercises it. Expected: CI
+green with a `bundle` artefact, the release job green, its purge step logging
+`Purged bundle artefact <id>`, and the run's artefact list empty afterwards.
 
 **One residual unknown, stated so it is not forgotten:** whether
 `GITHUB_TOKEN` with `actions: read` suffices to download an artefact from

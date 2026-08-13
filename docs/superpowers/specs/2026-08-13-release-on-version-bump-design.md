@@ -51,24 +51,25 @@ step is added at the end of the job:
   with:
     name: bundle
     path: dist/picture-studio.js
-    retention-days: 3
+    retention-days: 14
 ```
 
 Pull requests run every check and upload nothing; only pushes to `main` — the
 only runs that can lead to a release — produce the artefact.
 
-**Why a retention at all, and why three days.** The nominal path consumes the
-artefact a minute after CI finishes and would be served by one day. What the
-retention covers is *recovery*: re-running a failed release job reuses the same
-`run-id`, so the artefact must still exist when a human gets round to it. Three
-days spans a weekend without being open-ended.
+**The retention is a backstop, not the cleanup.** `release.yml` deletes the
+artefact itself when it finishes successfully (see the purge step below), so on
+the ordinary path nothing lingers: the bundle is gone within a minute or two of
+being uploaded. What survives is the artefact of a run whose release job
+*failed* — which is exactly what re-running that job needs, since a re-run
+reuses the same `run-id`.
 
-It is a deliberate number rather than the 90-day default because this pair of
-workflows is meant to be reused, and the next repository may be private while
-it is being developed. Storage is free on public repositories; on a private one
-it counts against the account's quota, and an artefact kept for three months
-per push to `main` is the kind of slow leak nobody notices until the quota
-does.
+So the number is sized on failures, not on commits. Bounding it by the failure
+rate rather than the push rate is what makes it safe to be generous: fourteen
+days covers a holiday, and an intensive week of pushes to `main` leaves nothing
+behind. This matters because these two workflows are meant to be reused, and
+the next repository may be private while it is developed — storage is free on
+public repositories, but counts against the quota on private ones.
 
 `workflow_call` with `inputs` was rejected for this: it would turn `ci.yml`
 into a workflow *called* by another, which is exactly the coupling the
@@ -147,11 +148,12 @@ again is a clean second attempt.
    of: section absent, heading still reading `unreleased`, empty body.
 5. **Download the artefact** from `workflow_run.id`.
 6. **Create the tag and the release** in one call.
+7. **Purge the bundle artefact**, on success only.
 
 ```yaml
 permissions:
   contents: write      # create the tag and the release
-  actions: read        # download an artefact from another run
+  actions: write       # download an artefact from another run, and delete it
 
 concurrency:
   group: release
@@ -215,6 +217,28 @@ in git and not in the changelog.
 
 The API creates the tag together with the release; if the call fails, neither
 exists.
+
+### Purging the artefact
+
+A final step, `if: success()`, asks the API for the `bundle` artefact of
+`workflow_run.id` and deletes it.
+
+**`success()` is the condition, not `always()`.** It covers the two cases where
+the artefact has become rubbish — the no-op, where it was never used, and the
+release, where the file is now attached to a release permanently. It
+deliberately does *not* cover failure: a failed job's artefact is what
+re-running that job needs, and deleting it would destroy the recovery the
+retention exists for. Skipped steps do not make `success()` false, so the
+no-op path reaches this step with steps 4–6 skipped.
+
+**It never reddens the job.** A release that succeeded must not report failure
+because housekeeping did. The step reports through `::warning::` — visible in
+the run summary, so not silent — and always exits 0, whether the artefact is
+already gone or the delete call fails. The default runner shell has `-e` set,
+so the step turns it off deliberately rather than by accident.
+
+This is what buys the generous retention: successes leave nothing behind, so
+only failures accumulate.
 
 ## Outcomes
 
