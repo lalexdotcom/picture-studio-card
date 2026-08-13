@@ -187,6 +187,7 @@ directory, which is what the `files:` entry below refers to.
   with:
     tag_name: v${{ steps.version.outputs.version }}
     target_commitish: ${{ github.event.workflow_run.head_sha }}
+    name: v${{ steps.version.outputs.version }}
     body_path: release-notes.md
     generate_release_notes: true
     files: picture-studio.js
