@@ -10,13 +10,15 @@ import type { HomeAssistant } from "./types";
 const STRINGS = {
   en: {
     stacking_hint: "The last badges in the list are drawn on top.",
-    anchor: "Anchoring",
+    anchor: "Positioning",
     anchor_proportional: "Proportional",
+    anchor_anchored: "Anchored",
   },
   fr: {
     stacking_hint: "Les derniers badges de la liste sont au-dessus.",
-    anchor: "Ancrage",
+    anchor: "Positionnement",
     anchor_proportional: "Proportionnel",
+    anchor_anchored: "Ancré",
   },
 } as const;
 

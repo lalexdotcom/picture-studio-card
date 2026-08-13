@@ -15,6 +15,9 @@ type BadgeEditorElement = HTMLElement & {
  * getConfigElement(). Home Assistant's badge dialogs are unreachable from a
  * custom card (see the task header), so the form lives here instead, in place
  * of the list, with a back button — the shape hui-sub-element-editor uses.
+ *
+ * The anchor picker sits below that form and outside it: the anchor is our
+ * wrapper's key, not the badge's, and a badge's config is opaque to us.
  */
 export class PictureStudioBadgeForm extends LitElement {
   static properties = {
@@ -105,10 +108,6 @@ export class PictureStudioBadgeForm extends LitElement {
         ></ha-icon-button>
         <span class="title">${this.badge.type}</span>
       </div>
-      <picture-studio-anchor-picker
-        .hass=${this.hass}
-        .anchor=${this.anchor}
-      ></picture-studio-anchor-picker>
       <div class="form"></div>
       ${
         this._editorType && !this._editor
@@ -117,6 +116,10 @@ export class PictureStudioBadgeForm extends LitElement {
           </p>`
           : nothing
       }
+      <picture-studio-anchor-picker
+        .hass=${this.hass}
+        .anchor=${this.anchor}
+      ></picture-studio-anchor-picker>
     `;
   }
 
