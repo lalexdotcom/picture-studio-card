@@ -33,3 +33,15 @@ describe("localizeOwn", () => {
     );
   });
 });
+
+describe("anchor strings", () => {
+  it("serves the anchor labels in English", () => {
+    expect(localizeOwn(undefined, "anchor")).toBe("Anchoring");
+    expect(localizeOwn(undefined, "anchor_proportional")).toBe("Proportional");
+  });
+
+  it("serves them in French", () => {
+    expect(localizeOwn(hass({ language: "fr" }), "anchor")).toBe("Ancrage");
+    expect(localizeOwn(hass({ language: "fr" }), "anchor_proportional")).toBe("Proportionnel");
+  });
+});

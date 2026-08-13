@@ -8,8 +8,16 @@ import type { HomeAssistant } from "./types";
  * through `hass.localize` instead — see background-schema and badge-list.
  */
 const STRINGS = {
-  en: { stacking_hint: "The last badges in the list are drawn on top." },
-  fr: { stacking_hint: "Les derniers badges de la liste sont au-dessus." },
+  en: {
+    stacking_hint: "The last badges in the list are drawn on top.",
+    anchor: "Anchoring",
+    anchor_proportional: "Proportional",
+  },
+  fr: {
+    stacking_hint: "Les derniers badges de la liste sont au-dessus.",
+    anchor: "Ancrage",
+    anchor_proportional: "Proportionnel",
+  },
 } as const;
 
 export type StringKey = keyof (typeof STRINGS)["en"];

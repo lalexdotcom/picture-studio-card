@@ -12,6 +12,7 @@ export const CARD_TAG = "picture-studio";
 export const EDITOR_TAG = "picture-studio-editor";
 export const LIST_TAG = "picture-studio-badge-list";
 export const FORM_TAG = "picture-studio-badge-form";
+export const PICKER_TAG = "picture-studio-anchor-picker";
 export const CARD_TYPE = "custom:picture-studio";
 
 /**

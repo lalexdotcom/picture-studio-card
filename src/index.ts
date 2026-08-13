@@ -1,5 +1,6 @@
 import { PictureStudioCard } from "./card/picture-studio-card";
-import { CARD_TAG, EDITOR_TAG, FORM_TAG, LIST_TAG } from "./config";
+import { CARD_TAG, EDITOR_TAG, FORM_TAG, LIST_TAG, PICKER_TAG } from "./config";
+import { PictureStudioAnchorPicker } from "./editor/anchor-picker";
 import { PictureStudioBadgeForm } from "./editor/badge-form";
 import { PictureStudioBadgeList } from "./editor/badge-list";
 import { PictureStudioEditor } from "./editor/picture-studio-editor";
@@ -19,6 +20,10 @@ if (!customElements.get(LIST_TAG)) {
 
 if (!customElements.get(FORM_TAG)) {
   customElements.define(FORM_TAG, PictureStudioBadgeForm);
+}
+
+if (!customElements.get(PICKER_TAG)) {
+  customElements.define(PICKER_TAG, PictureStudioAnchorPicker);
 }
 
 window.customCards = window.customCards ?? [];
