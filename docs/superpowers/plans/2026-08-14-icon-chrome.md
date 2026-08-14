@@ -681,13 +681,34 @@ and to `fr`:
     chrome_content_ratio: "Contenu",
 ```
 
-The theme's own four labels are **not** ours. The map card carries exactly this option — `theme_mode: auto | light | dark` — and its translations live in the `lovelace` fragment, the one loaded while a dashboard is being edited, so `hass.localize` really serves them here (the `ui.panel.profile.*` equivalents are in a fragment that a dashboard editor has no reason to load):
+The theme's own four labels are **not** ours. Two parts of the frontend name this exact choice with the same words, and both are used, in order:
 
 ```
-ui.panel.lovelace.editor.card.map.theme_mode         Theme mode / Mode du thème
-ui.panel.lovelace.editor.card.map.theme_modes.auto   Auto / Auto
-ui.panel.lovelace.editor.card.map.theme_modes.light  Light / Clair
-ui.panel.lovelace.editor.card.map.theme_modes.dark   Dark / Sombre
+ui.panel.profile.themes.theme_mode                    Theme mode / Mode du thème
+ui.panel.profile.themes.dark_mode.{auto,light,dark}   Auto / Light|Clair / Dark|Sombre
+
+ui.panel.lovelace.editor.card.map.theme_mode          Theme mode / Mode du thème
+ui.panel.lovelace.editor.card.map.theme_modes.{…}     the same three
+```
+
+Neither set is in the always-loaded core catalog — both live in a fragment — and the frontend calls `loadFragmentTranslation` with exactly three names: `config`, `lovelace`, `energy`. Never `profile`. So in our dialog, which *is* the Lovelace panel, the map keys always resolve while the profile keys return `""` until the user has opened their profile page in the same session.
+
+Hence the chain, and its order: **profile first** because user preferences outlive any one card, **map second** because it is what answers today, **an English literal last**. Write it as one helper rather than repeating the `||` at each call site:
+
+```ts
+const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
+
+/** Profile first — preferences outlive cards — then the map card, then English. */
+const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBACK): string =>
+  localize(`ui.panel.profile.themes.dark_mode.${value}`) ||
+  localize(`ui.panel.lovelace.editor.card.map.theme_modes.${value}`) ||
+  THEME_FALLBACK[value];
+
+/** Same order, for the control's own heading. */
+export const themeModeTitle = (localize: LocalizeFunc): string =>
+  localize("ui.panel.profile.themes.theme_mode") ||
+  localize("ui.panel.lovelace.editor.card.map.theme_mode") ||
+  "Theme mode";
 ```
 
 - [ ] **Step 2: Write the failing form tests**
@@ -794,6 +815,25 @@ describe("the chrome schema", () => {
     expect(JSON.stringify(chromeToggleSchema())).toContain("chrome_enabled");
   });
 });
+
+describe("the theme mode labels", () => {
+  const serving = (fragment: string) =>
+    ((key: string) => (key.startsWith(fragment) ? `from ${fragment}` : "")) as never;
+
+  it("prefers the profile key — user preferences outlive a card", () => {
+    const both = ((key: string) =>
+      key.startsWith("ui.panel.profile") ? "profile" : "map") as never;
+    expect(themeModeTitle(both)).toBe("profile");
+  });
+
+  it("falls to the map card when the profile fragment is not loaded", () => {
+    expect(themeModeTitle(serving("ui.panel.lovelace"))).toBe("from ui.panel.lovelace");
+  });
+
+  it("falls to English when neither fragment answers", () => {
+    expect(themeModeTitle((() => "") as never)).toBe("Theme mode");
+  });
+});
 ```
 
 - [ ] **Step 3: Run to verify it fails**
@@ -874,8 +914,6 @@ export const chromeToggleSchema = (): unknown[] => [
   { name: "chrome_enabled", selector: { boolean: {} } },
 ];
 
-const THEME_LABEL = "ui.panel.lovelace.editor.card.map.theme_modes";
-
 export const chromeSchema = (
   localize: LocalizeFunc,
   // When true, the caller renders ha-radio-group for the theme and the schema
@@ -893,7 +931,7 @@ export const chromeSchema = (
               mode: "dropdown",
               options: (["auto", "light", "dark"] as const).map((value) => ({
                 value,
-                label: localize(`${THEME_LABEL}.${value}`) || value,
+                label: themeModeLabel(localize, value),
               })),
             },
           },
@@ -946,23 +984,19 @@ In `render`, between the main `ha-form` and the "Size and position" panel. `radi
           ${
             radioGroupAvailable
               ? html`
-                <span class="section-label"
-                  >${hass.localize("ui.panel.lovelace.editor.card.map.theme_mode") || "Theme mode"}</span
-                >
+                <span class="section-label">${themeModeTitle(hass.localize)}</span>
                 <ha-radio-group
                   orientation="horizontal"
                   .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
                   @change=${this._chromeThemeChanged}
                 >
-                  <ha-radio-option .value=${"auto"}
-                    >${hass.localize(`${THEME_LABEL}.auto`) || "Auto"}</ha-radio-option
-                  >
-                  <ha-radio-option .value=${"light"}
-                    >${hass.localize(`${THEME_LABEL}.light`) || "Light"}</ha-radio-option
-                  >
-                  <ha-radio-option .value=${"dark"}
-                    >${hass.localize(`${THEME_LABEL}.dark`) || "Dark"}</ha-radio-option
-                  >
+                  ${(["auto", "light", "dark"] as const).map(
+                    (value) => html`
+                      <ha-radio-option .value=${value}
+                        >${themeModeLabel(hass.localize, value)}</ha-radio-option
+                      >
+                    `,
+                  )}
                 </ha-radio-group>
               `
               : nothing
@@ -978,7 +1012,7 @@ In `render`, between the main `ha-form` and the "Size and position" panel. `radi
       </ha-expansion-panel>
 ```
 
-`THEME_LABEL` must be exported from its module for the template to read it, or repeated as a literal — export it.
+`themeModeLabel` and `themeModeTitle` are declared in this module and read by both the schema factory and this template, so `themeModeTitle` is exported for the tests and `themeModeLabel` need not be.
 
 And the handler, a copy of `_modeChanged` with one field changed, placed beside it so the pair reads as one idea. Checking the theme also checks the box: choosing a surface is a way of asking for one.
 
@@ -1007,8 +1041,7 @@ In `elementFormLabel`, before the generic fallback:
   if (name === "chrome_radius") return localizeOwn(hass, "chrome_radius");
   if (name === "chrome_opacity") return localizeOwn(hass, "chrome_opacity");
   if (name === "chrome_content_ratio") return localizeOwn(hass, "chrome_content_ratio");
-  if (name === "chrome_theme")
-    return localize("ui.panel.lovelace.editor.card.map.theme_mode") || "Theme mode";
+  if (name === "chrome_theme") return themeModeTitle(localize);
 ```
 
 `chrome` itself is not here: it labels the panel's header, which the template writes directly.

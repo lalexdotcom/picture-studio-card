@@ -297,16 +297,30 @@ fallback since an undefined custom element renders nothing at all, silently.
 Copy that shape rather than inventing a second one. The panel sits beside "Size
 and position", before it.
 
-**Labels come from the map card**, which carries exactly this option and whose
-translations live in the `lovelace` fragment — the one loaded while editing a
-dashboard:
+**The theme's four labels are Home Assistant's, taken from two places in
+order.** Two parts of the frontend already name exactly this choice, with the
+same words in both languages:
 
 ```
+ui.panel.profile.themes.theme_mode                   Theme mode / Mode du thème
+ui.panel.profile.themes.dark_mode.{auto,light,dark}  Auto / Light|Clair / Dark|Sombre
+
 ui.panel.lovelace.editor.card.map.theme_mode         Theme mode / Mode du thème
-ui.panel.lovelace.editor.card.map.theme_modes.auto   Auto / Auto
-ui.panel.lovelace.editor.card.map.theme_modes.light  Light / Clair
-ui.panel.lovelace.editor.card.map.theme_modes.dark   Dark / Sombre
+ui.panel.lovelace.editor.card.map.theme_modes.{…}    same three
 ```
+
+Neither set is in the always-loaded core catalog; both live in a fragment. And
+the frontend calls `loadFragmentTranslation` with exactly three names —
+`config`, `lovelace`, `energy` — never `profile`. So inside our dialog, which
+*is* the Lovelace panel, the map keys are guaranteed resolved while the profile
+keys return `""` until the user happens to have opened their profile page in the
+same session.
+
+The two are therefore chained rather than chosen between: **profile first, map
+second, an English literal last.** The profile keys belong to user preferences,
+which outlive any one card, so they get priority; the map keys are what actually
+answers today. One `||` per label buys both, and removes the case where a label
+silently falls back to English for no reason the user could guess.
 
 Only the section title, the checkbox and the three number labels come from our
 own `strings.ts`.
