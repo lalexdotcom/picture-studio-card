@@ -165,5 +165,20 @@ export class PictureStudioAnchorPicker extends LitElement {
     .cell.selected {
       background: var(--primary-color);
     }
+    /* On the checked frame the default cell grey muddies into the fill, so the
+       unpicked cells take what the switch fills its thumb with when it is off —
+       the same control's own light grey, and it moves with any theme that
+       restyles switches. --secondary-background-color closes the chain: it is
+       what these cells used before the --ha-color-* tokens existed, so below our
+       minimum Home Assistant version nothing changes.
+       :not(.selected) rather than a second rule for the selected cell: the picked
+       one keeps --primary-color in both states, and scoping the change to its
+       siblings is what says so. */
+    .grid.fixed .cell:not(.selected) {
+      background: var(
+        --ha-switch-thumb-background-color,
+        var(--ha-color-on-neutral-normal, var(--secondary-background-color))
+      );
+    }
   `;
 }
