@@ -18,6 +18,7 @@ const STRINGS = {
     size_mode_adaptive: "Adaptive",
     size_mode_fixed: "Fixed",
     size_value: "Value",
+    visibility: "Visibility",
   },
   fr: {
     stacking_hint: "Les derniers badges de la liste sont au-dessus.",
@@ -29,6 +30,7 @@ const STRINGS = {
     size_mode_adaptive: "Adaptative",
     size_mode_fixed: "Fixe",
     size_value: "Valeur",
+    visibility: "Visibilité",
   },
 } as const;
 

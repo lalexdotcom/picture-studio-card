@@ -10,12 +10,14 @@ import {
   LIST_TAG,
   PICKER_TAG,
   PROBE_TAG,
+  VISIBILITY_SECTION_TAG,
 } from "./config";
 import { PictureStudioAnchorPicker } from "./editor/anchor-picker";
 import { PictureStudioBadgeForm } from "./editor/badge-form";
 import { PictureStudioBadgeList } from "./editor/badge-list";
 import { PictureStudioElementForm } from "./editor/element-form";
 import { PictureStudioEditor } from "./editor/picture-studio-editor";
+import { PictureStudioVisibilitySection } from "./editor/visibility-section";
 import { entitySuggestion } from "./suggestion";
 
 if (!customElements.get(CARD_TAG)) {
@@ -46,6 +48,10 @@ if (!customElements.get(ELEMENT_FORM_TAG)) {
 
 if (!customElements.get(PROBE_TAG)) {
   customElements.define(PROBE_TAG, PictureStudioVisibilityProbe);
+}
+
+if (!customElements.get(VISIBILITY_SECTION_TAG)) {
+  customElements.define(VISIBILITY_SECTION_TAG, PictureStudioVisibilitySection);
 }
 
 window.customCards = window.customCards ?? [];
