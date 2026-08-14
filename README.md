@@ -102,9 +102,8 @@ An icon's size follows the **card**, not the screen: in a sections view a narrow
 column gets a smaller icon than a wide one, and the same card on a phone scales
 down with it. Three modes decide how closely:
 
-- **Automatic** *(default)* — a share of the card's width, held between a floor
-  and a ceiling.
-- **Adaptive** — the same, with your own ratio and your own bounds.
+- **Automatic** *(default)*
+- **Adaptive** — your own ratio, between your own bounds.
 - **Fixed** — one size in pixels, which follows nothing.
 
 ### Chrome
