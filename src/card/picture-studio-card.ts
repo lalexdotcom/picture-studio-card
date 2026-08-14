@@ -323,7 +323,7 @@ export class PictureStudioCard extends LitElement {
 
       items.forEach((item, index) => {
         const wrapper = document.createElement("div");
-        wrapper.className = "item";
+        wrapper.className = `item ${item.type}`;
         wrapper.dataset.index = String(index);
 
         // The only branch the second family costs: our element answers setConfig
@@ -491,6 +491,11 @@ export class PictureStudioCard extends LitElement {
       touch-action: none;
       /* The rings follow this radius; badges are pills, so match them. */
       border-radius: var(--ha-badge-border-radius, 999px);
+    }
+    /* Elements (state-icon) have a square shape; the pill radius is wrong for
+       them. Badges keep the default pill via the rule above. */
+    .editing .item.element {
+      border-radius: 4px;
     }
     .editing .item.dragging {
       cursor: grabbing;

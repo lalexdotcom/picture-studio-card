@@ -152,6 +152,13 @@ describe("mixed item families", () => {
     expect(badges(card)[0]?.hassAssignments).toBeGreaterThan(0);
   });
 
+  it("gives each wrapper the family class", async () => {
+    const card = await mountCard(MIXED);
+    const items = Array.from(root(card).querySelectorAll(".item"));
+    expect(items[0]?.classList.contains("badge")).toBe(true);
+    expect(items[1]?.classList.contains("element")).toBe(true);
+  });
+
   it("rebuilds when a kind changes, not when another key does", async () => {
     const card = await mountCard(MIXED);
     const before = root(card).querySelector(ICON_TAG);
