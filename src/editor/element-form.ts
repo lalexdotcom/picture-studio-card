@@ -17,7 +17,8 @@ const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBA
 export const themeModeTitle = (localize: LocalizeFunc): string =>
   localize(`${THEME_KEY}.theme_mode`) || "Theme mode";
 
-export const stateIconSchema = (): unknown[] => [
+// Entity identity and visual content — rendered above the hand-built panels.
+export const stateIconEntityContentSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
@@ -40,6 +41,11 @@ export const stateIconSchema = (): unknown[] => [
       },
     ],
   },
+];
+
+// Tap / hold / double-tap — rendered after the hand-built panels so that
+// Interactions and Visibility always close the form, for every item type.
+export const stateIconInteractionsSchema = (): unknown[] => [
   {
     name: "interactions",
     type: "expandable",
@@ -374,7 +380,7 @@ export class PictureStudioElementForm extends LitElement {
       <ha-form
         .hass=${hass}
         .data=${toFormData(element)}
-        .schema=${stateIconSchema()}
+        .schema=${stateIconEntityContentSchema()}
         .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
         .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
         @value-changed=${this._valueChanged}
@@ -464,6 +470,14 @@ export class PictureStudioElementForm extends LitElement {
           ></picture-studio-anchor-picker>
         </div>
       </ha-expansion-panel>
+      <ha-form
+        .hass=${hass}
+        .data=${toFormData(element)}
+        .schema=${stateIconInteractionsSchema()}
+        .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+        .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
       <picture-studio-visibility-section
         .hass=${hass}
         .visibility=${this.visibility}
@@ -483,8 +497,10 @@ export class PictureStudioElementForm extends LitElement {
     }
     ha-form {
       display: block;
-      /* Matches ha-form's own root-child spacing (24px) so the four sections
-         sit evenly — the main form, content, interactions, and this panel. */
+      /* Every top-level section — ha-form or ha-expansion-panel — carries the
+         same 24px bottom margin so the column keeps one rhythm regardless of
+         the element type that follows. 24px matches ha-form's own root-child
+         spacing, so it is the value the design already uses between fields. */
       margin-bottom: var(--ha-space-6, 24px);
     }
     /* Mirrors ha-form-expandable: the panel's own content padding is zeroed and
@@ -492,6 +508,9 @@ export class PictureStudioElementForm extends LitElement {
        Assistant's own expandable sections. */
     ha-expansion-panel {
       display: block;
+      /* Same 24px bottom margin as ha-form above — uniform rule, every
+         top-level block, so no pair needs its own adjacent-sibling selector. */
+      margin-bottom: var(--ha-space-6, 24px);
       --expansion-panel-content-padding: 0;
       border-radius: var(--ha-border-radius-md);
       --ha-card-border-radius: var(--ha-border-radius-md);
@@ -521,11 +540,8 @@ export class PictureStudioElementForm extends LitElement {
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
     }
-    /* 24px, the spacing ha-form puts between its own root children — the same
-       gap the fields above already sit at, so the column keeps one rhythm. */
     picture-studio-visibility-section {
       display: block;
-      margin-top: var(--ha-space-6, 24px);
     }
   `;
 }

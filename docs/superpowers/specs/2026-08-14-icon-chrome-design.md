@@ -303,6 +303,44 @@ fallback since an undefined custom element renders nothing at all, silently.
 Copy that shape rather than inventing a second one. The panel sits beside "Size
 and position", before it.
 
+### Final section order
+
+For every item type, **Interactions and Visibility come last**, in that order.
+This is the invariant: sections that modify how the element responds to input and
+who can see it are always the closing pair, never interleaved with content or
+layout controls.
+
+For a `state-icon` element the full order is:
+
+| # | Section | Mechanism |
+|---|---------|-----------|
+| 1 | Entity | `ha-form` (entity + content, `stateIconEntityContentSchema`) |
+| 2 | Content | expandable inside the same `ha-form` |
+| 3 | Chrome | hand-built `ha-expansion-panel` |
+| 4 | Size and position | hand-built `ha-expansion-panel` |
+| 5 | Interactions | `ha-form` (`stateIconInteractionsSchema`) |
+| 6 | Visibility | `<picture-studio-visibility-section>` |
+
+For a badge the order is: badge editor (whatever the badge type renders) →
+Position → Visibility. Badges have no Interactions section from us.
+
+The `stateIconSchema` factory was split into `stateIconEntityContentSchema` and
+`stateIconInteractionsSchema` so the render method can place the interactions
+form after the hand-built panels. Both forms receive the full `toFormData(element)`
+record — `ha-form` merges the changed field onto `.data` and re-emits it, so every
+field stays alive regardless of which form's schema is currently displaying it.
+
+### Spacing rule
+
+Every top-level section in `PictureStudioElementForm` carries
+`margin-bottom: var(--ha-space-6, 24px)` — applied to both `ha-form` and
+`ha-expansion-panel`. This is a single uniform rule rather than a set of
+adjacent-sibling selectors: adding a new section type requires one line, not a
+new pair of sibling rules. The value 24px matches what `ha-form` already places
+between its own root children, so the column reads as one rhythm. Forms *inside*
+a panel are zeroed by `.content ha-form { margin-bottom: 0 }` so internal
+structure is unaffected.
+
 **The theme's four labels are Home Assistant's**, taken from the map card, which
 carries this exact option under this exact name:
 
