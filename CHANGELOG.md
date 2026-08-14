@@ -1,5 +1,17 @@
 # Changelog
 
+## unreleased
+
+### Added
+
+- **Per-item visibility.** Every item now takes a `visibility` list — Home
+  Assistant's own conditions, the same ones a card or a badge takes: entity
+  state, numeric state, screen size, time, user, zone, and `and` / `or` / `not`.
+  An item whose conditions are not met is not drawn. The editor shows a
+  "Visibility" section on each item, with Home Assistant's own condition editor
+  and its live "current visibility" banner inside it, and items carrying
+  conditions are marked in the preview.
+
 ## 1.2.0 — 2026-08-14
 
 ### Added

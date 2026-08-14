@@ -137,6 +137,10 @@ items:
       top: 30%
       left: 60%
     anchor: center               # optional; defaults to "auto"
+    visibility:                  # optional; absent means always drawn
+      - condition: state
+        entity: input_boolean.show_badge
+        state: "on"
 
   - type: element                # the other family
     config:
@@ -187,6 +191,22 @@ Coordinates outside `0-100` are allowed and kept as written: under a fixed ancho
 they are how you place an item deliberately over the edge. Dragging never creates
 an overflow and never worsens one — an item already hanging off the edge can be
 pulled back in but not pushed further out, and once fully inside it stays there.
+
+#### Visibility
+
+Every item takes an optional `visibility` list. The conditions are Home
+Assistant's own — entity state, numeric state, screen size, time, user, zone,
+and the `and` / `or` / `not` combinators — the same ones a card or a badge
+accepts. The item is drawn when every entry in the list is met; an absent or
+empty list means always drawn.
+
+In the editor, items carrying conditions are marked in the preview, and each
+item's form has a "Visibility" section with Home Assistant's condition editor
+and its live "current visibility" banner.
+
+The card's own visibility is native to Home Assistant and needs nothing from
+this card: the Lovelace engine evaluates `config.visibility` on every card,
+and the edit dialog's "Visibility" tab is generic to all cards.
 
 #### YAML-only keys
 
