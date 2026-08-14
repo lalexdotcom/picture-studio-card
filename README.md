@@ -157,6 +157,11 @@ items:
         min: 24                  # adaptive only — px
         max: 48                  # adaptive only — px
         value: 48                # fixed only — px
+      chrome:                    # optional; absent means no chrome
+        theme: none              # none | auto | light | dark
+        radius: 50               # % of the box — 50 is a disc, 0 a square
+        opacity: 1               # the surface's opacity, 0-1
+        content_ratio: 0.6       # share of the box taken by the icon, 0-1
     position:
       top: 45%
       left: 20%
@@ -207,6 +212,32 @@ and its live "current visibility" banner.
 The card's own visibility is native to Home Assistant and needs nothing from
 this card: the Lovelace engine evaluates `config.visibility` on every card,
 and the edit dialog's "Visibility" tab is generic to all cards.
+
+#### Chrome
+
+An icon drawn on a photograph competes with whatever the picture happens to
+show. `chrome` gives it a surface to stand on instead.
+
+`theme` is the switch as well as the choice. `none` — the default, and what an
+absent `chrome` means — draws nothing. `auto` uses the same background your
+dashboard's cards use, so the surface follows your theme. `light` and `dark`
+force one or the other, which is what you want when the picture is dark and the
+theme is not, or the reverse.
+
+`radius` is a percentage of the box: `50` is a disc, `0` a square, anything
+between a rounded square. `opacity` fades the surface only — the icon on it
+keeps its own colour. `content_ratio` is the share of the box the icon takes:
+`0.6` matches Home Assistant's own icons, and `1` makes the icon fill the box
+entirely, which turns the chrome into a frame around an entity picture rather
+than a disc behind it.
+
+The numbers are kept when you switch the surface back to `none`, so trying a
+chrome out and turning it off costs you nothing.
+
+Note that `size` is the size of the whole thing: switching a chrome on does not
+make an item bigger, it makes the icon inside it smaller. Nothing else about the
+item changes — where it sits, how it drags and what it does when clicked are the
+same with or without a surface.
 
 #### YAML-only keys
 
