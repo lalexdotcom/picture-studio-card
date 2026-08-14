@@ -16,12 +16,19 @@ export interface HomeAssistant {
   language: string;
   locale?: { language?: string };
   localize: LocalizeFunc;
+  /** Optional: hand-declared because our type file must not claim more than we rely on. */
+  formatEntityName?: (stateObj: HassEntity, name?: string) => string;
   [key: string]: unknown;
 }
 
 /** A Lovelace badge config. Opaque: we never read or rewrite its contents. */
 export interface BadgeConfig {
   type?: string;
+  [key: string]: unknown;
+}
+
+export interface ActionConfig {
+  action: string;
   [key: string]: unknown;
 }
 

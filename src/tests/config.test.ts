@@ -1,5 +1,13 @@
 import { describe, expect, it } from "@rstest/core";
-import { CARD_TYPE, imagePath, normalizeConfig, storedConfig, stubConfig } from "../config";
+import {
+  CARD_TYPE,
+  imagePath,
+  normalizeConfig,
+  type StateIconConfig,
+  storedConfig,
+  stubConfig,
+} from "../config";
+import { DEFAULT_ICON_SIZE } from "../element-size";
 
 describe("imagePath", () => {
   it("keeps a hand-written path as-is", () => {
@@ -112,26 +120,68 @@ describe("normalizeConfig", () => {
     expect(out.items[0]?.position).not.toBe(out.items[1]?.position);
   });
 
-  it("defaults a missing item type to badge", () => {
+  it("rejects an element whose config has no type", () => {
+    expect(() =>
+      normalizeConfig({ type: CARD_TYPE, items: [{ type: "element", config: {} }] }),
+    ).toThrow(/items\[0\]\.config.*"state-icon"/s);
+  });
+
+  it("normalizes a state-icon element, defaulting anchor and size", () => {
     const out = normalizeConfig({
       type: CARD_TYPE,
-      items: [{ config: { type: "entity" }, position: { top: 10, left: 20 } }],
+      items: [{ type: "element", config: { type: "state-icon", entity: "light.a" } }],
     });
-    expect(out.items[0]?.type).toBe("badge");
+    expect(out.items[0]).toEqual({
+      type: "element",
+      position: { top: 50, left: 50 },
+      anchor: "proportional",
+      config: { type: "state-icon", entity: "light.a", size: DEFAULT_ICON_SIZE },
+    });
+  });
+
+  it("accepts an element with no entity — a freshly added icon has none yet", () => {
+    const out = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "element", config: { type: "state-icon" } }],
+    });
+    expect((out.items[0]!.config as StateIconConfig).entity).toBeUndefined();
+  });
+
+  it("keeps keys it does not know inside an element config", () => {
+    const out = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "element", config: { type: "state-icon", future_key: 1 } }],
+    });
+    expect((out.items[0]!.config as Record<string, unknown>).future_key).toBe(1);
+  });
+
+  it("rejects an item with no type, naming the index and the accepted values", () => {
+    expect(() =>
+      normalizeConfig({
+        type: CARD_TYPE,
+        items: [{ config: { type: "entity" }, position: { top: 10, left: 20 } }],
+      }),
+    ).toThrow(/items\[0\].*"badge".*"element"/s);
   });
 
   it("rejects an unsupported item type, naming the index", () => {
     expect(() =>
       normalizeConfig({
         type: CARD_TYPE,
-        items: [{ config: {} }, { type: "element", config: {} }],
+        items: [
+          { type: "badge", config: { type: "entity" } },
+          { type: "widget", config: {} },
+        ],
       }),
     ).toThrow(/items\[1\]/);
   });
 
   it("rejects an item whose config is missing", () => {
     expect(() =>
-      normalizeConfig({ type: CARD_TYPE, items: [{ position: { top: 1, left: 2 } }] }),
+      normalizeConfig({
+        type: CARD_TYPE,
+        items: [{ type: "badge", position: { top: 1, left: 2 } }],
+      }),
     ).toThrow(/items\[0\]/);
   });
 });
@@ -177,6 +227,105 @@ describe("storedConfig", () => {
   it("leaves the rest of the config alone", () => {
     const config = normalizeConfig({ type: CARD_TYPE, image: "/local/plan.png", items: [] });
     expect(storedConfig(config)).toEqual({ type: CARD_TYPE, image: "/local/plan.png", items: [] });
+  });
+
+  it("omits a size that is entirely the default", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "element", config: { type: "state-icon", entity: "light.a" } }],
+    });
+    const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
+    expect(stored.items[0]?.config).toEqual({ type: "state-icon", entity: "light.a" });
+  });
+
+  it("writes an auto size that carries the user's numbers", () => {
+    // mode:auto but non-default numbers — size must be kept so unchecking mode restores them
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: {
+            type: "state-icon",
+            size: { mode: "auto", min: 10, ratio: 1, max: 20, value: 48 },
+          },
+        },
+      ],
+    });
+    const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
+    expect(stored.items[0]?.config.size).toEqual({
+      mode: "auto",
+      min: 10,
+      ratio: 1,
+      max: 20,
+      value: 48,
+    });
+  });
+
+  it("writes an adaptive size on the way out", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: {
+            type: "state-icon",
+            size: { mode: "adaptive", min: 10, ratio: 1, max: 20, value: 48 },
+          },
+        },
+      ],
+    });
+    const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
+    expect(stored.items[0]?.config.size).toEqual({
+      mode: "adaptive",
+      min: 10,
+      ratio: 1,
+      max: 20,
+      value: 48,
+    });
+  });
+
+  it("writes a fixed size on the way out", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: {
+            type: "state-icon",
+            size: { mode: "fixed", min: 40, ratio: 3.5, max: 70, value: 64 },
+          },
+        },
+      ],
+    });
+    const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
+    expect(stored.items[0]?.config.size).toEqual({
+      mode: "fixed",
+      min: 40,
+      ratio: 3.5,
+      max: 70,
+      value: 64,
+    });
+  });
+
+  it("returns a badge item byte-identical, leaving its config payload untouched", () => {
+    // The spec requires that an existing badge config survives a round trip
+    // unchanged. If storedConfig ever starts rewriting badge payloads, this
+    // test will catch it: the assertion covers entity, name, and actions.
+    const item = {
+      type: "badge" as const,
+      position: { top: "30%", left: "45%" },
+      config: {
+        type: "entity",
+        entity: "light.living_room",
+        name: "Living Room",
+        tap_action: { action: "more-info" },
+      },
+    };
+    const stored = storedConfig(normalizeConfig({ type: CARD_TYPE, items: [item] })) as {
+      items: unknown[];
+    };
+    expect(stored.items[0]).toEqual(item);
   });
 });
 

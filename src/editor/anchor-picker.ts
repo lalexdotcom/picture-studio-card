@@ -45,10 +45,9 @@ export class PictureStudioAnchorPicker extends LitElement {
     const anchor = this.anchor ?? "proportional";
     const proportional = anchor === "proportional";
     return html`
-      <div class="label">${localizeOwn(this.hass, "anchor")}</div>
       <div class="row">
         <div class="half">
-          <ha-formfield .label=${localizeOwn(this.hass, "anchor_proportional")}>
+          <ha-formfield .label=${this.hass?.localize("ui.common.auto") || "Automatic"}>
             <ha-switch
               .checked=${proportional}
               @change=${(ev: Event) =>
@@ -62,7 +61,10 @@ export class PictureStudioAnchorPicker extends LitElement {
                switch does: it is the only way its label is styled identically,
                by construction rather than by copying values out of HA's CSS. -->
           <ha-formfield .label=${localizeOwn(this.hass, "anchor_anchored")}>
-            <div class="grid">
+            <!-- The grid is always clickable — clicking a cell is how the user
+                 leaves the automatic mode. The .fixed class is a visual state,
+                 not a disabled one; do not add a disabled attribute to match. -->
+            <div class=${proportional ? "grid" : "grid fixed"}>
               ${CELLS.map(
                 (cell) => html`
                   <button
@@ -84,18 +86,6 @@ export class PictureStudioAnchorPicker extends LitElement {
   static styles = css`
     :host {
       display: block;
-    }
-    /* The label Home Assistant puts above a form field — "Entity" at the top of
-       the badge's own form. Theirs overrides nothing but the margin and inherits
-       the form's body text, so these are the inherited values spelled out. The
-       size token carries the user's font scale; a fixed rem would not. */
-    .label {
-      display: block;
-      color: var(--primary-text-color);
-      font-size: var(--ha-font-size-m, 14px);
-      font-weight: var(--ha-font-weight-normal, 400);
-      line-height: var(--ha-line-height-normal, 1.6);
-      margin: 0 0 var(--ha-space-2, 8px);
     }
     .row {
       display: flex;
@@ -134,11 +124,34 @@ export class PictureStudioAnchorPicker extends LitElement {
          that slot, so it has to claim the same gap itself, or the two halves
          sit unevenly against their labels. */
       margin-inline-end: 10px;
-      border: 1px solid var(--divider-color);
+      /* The switch beside it draws its unchecked track with
+         var(--ha-switch-border-color, var(--ha-color-border-neutral-normal)), so
+         the frame borrows the same chain: a theme that restyles switch borders
+         moves this one with it. --divider-color closes the chain because the
+         neutral token is absent from the theme at our minimum Home Assistant
+         version, where this then keeps exactly its previous appearance. */
+      border: 1px solid
+        var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, var(--divider-color)));
       /* Concentric with the cells it frames: a corner offset by the padding
          keeps the same gap all the way round only if the outer radius grows
          by that padding too. */
       border-radius: calc(var(--cell-radius) + var(--grid-padding));
+    }
+    /* When a fixed anchor is chosen the frame mirrors the switch's checked
+       state — the same token chain the switch uses for its checked track, so a
+       theme that restyles the switch moves this one with it. --primary-color
+       closes both chains because the --ha-color-* tokens are absent from the
+       theme at our minimum Home Assistant version, where this then keeps exactly
+       its previous appearance. */
+    .grid.fixed {
+      background-color: var(
+        --ha-switch-checked-background-color,
+        var(--ha-color-fill-primary-normal-resting, var(--primary-color))
+      );
+      border-color: var(
+        --ha-switch-checked-border-color,
+        var(--ha-color-border-primary-loud, var(--primary-color))
+      );
     }
     .cell {
       width: 10px;
@@ -151,6 +164,27 @@ export class PictureStudioAnchorPicker extends LitElement {
     }
     .cell.selected {
       background: var(--primary-color);
+    }
+    /* On the checked frame the default cell grey muddies into the fill, so the
+       unpicked cells take what the switch fills its thumb with when it is off —
+       the same control's own light grey, and it moves with any theme that
+       restyles switches. --secondary-background-color closes the chain: it is
+       what these cells used before the --ha-color-* tokens existed, so below our
+       minimum Home Assistant version nothing changes.
+       :not(.selected) rather than a second rule for the selected cell: the picked
+       one keeps --primary-color in both states, and scoping the change to its
+       siblings is what says so. */
+    .grid.fixed .cell:not(.selected) {
+      background: var(
+        --ha-switch-thumb-background-color,
+        var(--ha-color-on-neutral-normal, var(--secondary-background-color))
+      );
+      /* At full strength the grey and the primary of the picked cell read as two
+         shades of the same thing. Letting the fill show through pushes the eight
+         unpicked cells back a plane, so the picked one is the only solid mark —
+         and it stays a translucency of the switch's own grey rather than a
+         hand-mixed colour that would drift from it. */
+      opacity: 0.35;
     }
   `;
 }

@@ -1,9 +1,9 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { Anchor } from "../position";
+import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant } from "../types";
 import { resolveBadgeClass } from "./badge-catalog";
-
-const BACK_PATH = "M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z";
+import { PLACEMENT_ICON } from "./icons";
 
 type BadgeEditorElement = HTMLElement & {
   hass?: HomeAssistant;
@@ -102,10 +102,9 @@ export class PictureStudioBadgeForm extends LitElement {
       <div class="header">
         <ha-icon-button
           .label=${"Back"}
-          .path=${BACK_PATH}
           @click=${() =>
             this.dispatchEvent(new CustomEvent("go-back", { bubbles: true, composed: true }))}
-        ></ha-icon-button>
+          ><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
         <span class="title">${this.badge.type}</span>
       </div>
       <div class="form"></div>
@@ -116,10 +115,18 @@ export class PictureStudioBadgeForm extends LitElement {
           </p>`
           : nothing
       }
-      <picture-studio-anchor-picker
-        .hass=${this.hass}
-        .anchor=${this.anchor}
-      ></picture-studio-anchor-picker>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(this.hass, "anchor")}
+        </div>
+        <div class="content">
+          <picture-studio-anchor-picker
+            .hass=${this.hass}
+            .anchor=${this.anchor}
+          ></picture-studio-anchor-picker>
+        </div>
+      </ha-expansion-panel>
     `;
   }
 
@@ -135,8 +142,21 @@ export class PictureStudioBadgeForm extends LitElement {
     .fallback {
       color: var(--secondary-text-color);
     }
-    picture-studio-anchor-picker {
-      margin: 16px 0;
+    /* Mirrors ha-form-expandable: the panel's own content padding is zeroed and
+       the section supplies its own, so our sections sit exactly like Home
+       Assistant's own expandable sections. */
+    ha-expansion-panel {
+      display: block;
+      margin-top: var(--ha-space-3, 12px);
+      --expansion-panel-content-padding: 0;
+      border-radius: var(--ha-border-radius-md);
+      --ha-card-border-radius: var(--ha-border-radius-md);
+    }
+    .content {
+      padding: 12px;
+    }
+    ha-icon[slot="leading-icon"] {
+      color: var(--secondary-text-color);
     }
   `;
 }

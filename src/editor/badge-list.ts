@@ -2,17 +2,48 @@ import { css, html, LitElement, nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import type { PictureItem } from "../config";
 import { localizeOwn } from "../strings";
-import type { HomeAssistant, LocalizeFunc } from "../types";
+import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
 import { badgeCatalog, choiceLabel } from "./badge-catalog";
-import { rowLabel } from "./badge-items";
+import { elementCatalog, elementLabel } from "./element-catalog";
+import { rowLabel } from "./items";
 
-const HANDLE_PATH =
-  "M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z";
-const PLUS_PATH = "M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z";
-const PENCIL_PATH =
-  "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z";
-const TRASH_PATH =
-  "M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z";
+export interface AddChoice {
+  value: string;
+  label: string;
+}
+
+/**
+ * One list, two families. The plural labels are Home Assistant's own, which is
+ * why the prefix costs no string of ours; the separator is ": " in every
+ * language, since the thin space French typography wants before a colon would
+ * need a per-locale format string — the string this choice avoids.
+ */
+export const addChoices = (localize: LocalizeFunc, custom?: CustomBadgeEntry[]): AddChoice[] => {
+  const badges = localize("ui.panel.lovelace.editor.badges.name") || "Badges";
+  const elements =
+    localize("ui.panel.lovelace.editor.card.picture-elements.elements") || "Elements";
+  return [
+    ...badgeCatalog(custom).map((c) => ({
+      value: `badge:${c.type}`,
+      label: `${badges}: ${choiceLabel(localize, c)}`,
+    })),
+    ...elementCatalog().map((c) => ({
+      value: `element:${c.type}`,
+      label: `${elements}: ${elementLabel(localize, c.type)}`,
+    })),
+  ];
+};
+
+/** Split on the FIRST colon: a badge type may hold one, as `custom:` does. */
+export const splitChoiceValue = (
+  value: string,
+): { family: "badge" | "element"; type: string } | undefined => {
+  const at = value.indexOf(":");
+  if (at < 0) return undefined;
+  const family = value.slice(0, at);
+  if (family !== "badge" && family !== "element") return undefined;
+  return { family, type: value.slice(at + 1) };
+};
 
 export class PictureStudioBadgeList extends LitElement {
   static properties = {
@@ -34,12 +65,12 @@ export class PictureStudioBadgeList extends LitElement {
 
   /** ha-dropdown reports the chosen entry on wa-select, not on the trigger. */
   private _add(ev: CustomEvent<{ item?: { value?: string } }>): void {
-    const type = ev.detail?.item?.value;
-    if (type) this._fire("item-add", { type });
+    const value = ev.detail?.item?.value;
+    const choice = value ? splitChoiceValue(value) : undefined;
+    if (choice) this._fire("item-add", choice);
   }
 
   protected render() {
-    const choices = badgeCatalog(window.customBadges);
     // Rendered before hass lands on the first paint; degrade to the raw key, as HA does.
     const localize: LocalizeFunc = this.hass?.localize ?? (() => "");
     // Resolved once per render rather than three times per row.
@@ -61,7 +92,7 @@ export class PictureStudioBadgeList extends LitElement {
             (_item, index) => index,
             (_item, index) => html`
               <div class="row">
-                <div class="handle"><ha-svg-icon .path=${HANDLE_PATH}></ha-svg-icon></div>
+                <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
                 <div class="label">
                   <span class="primary">${labels[index]?.primary}</span>
                   ${
@@ -72,14 +103,12 @@ export class PictureStudioBadgeList extends LitElement {
                 </div>
                 <ha-icon-button
                   .label=${localize("ui.panel.lovelace.editor.badges.edit") || "Edit badge"}
-                  .path=${PENCIL_PATH}
                   @click=${() => this._fire("item-edit", { index })}
-                ></ha-icon-button>
+                  ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
                   .label=${localize("ui.panel.lovelace.editor.badges.remove") || "Remove badge"}
-                  .path=${TRASH_PATH}
                   @click=${() => this._fire("item-removed", { index })}
-                ></ha-icon-button>
+                  ><ha-icon icon="mdi:delete"></ha-icon></ha-icon-button>
               </div>
             `,
           )}
@@ -87,12 +116,11 @@ export class PictureStudioBadgeList extends LitElement {
       </ha-sortable>
       <ha-dropdown class="add" @wa-select=${this._add}>
         <ha-button slot="trigger" appearance="filled" size="s">
-          <ha-svg-icon .path=${PLUS_PATH} slot="start"></ha-svg-icon>
-          ${localize("ui.panel.lovelace.editor.edit_badge.add") || "Add badge"}
+          <ha-icon icon="mdi:plus" slot="start"></ha-icon>
+          ${localize("ui.common.add") || "Add"}
         </ha-button>
-        ${choices.map(
-          (c) =>
-            html`<ha-dropdown-item .value=${c.type}>${choiceLabel(localize, c)}</ha-dropdown-item>`,
+        ${addChoices(localize, window.customBadges).map(
+          (c) => html`<ha-dropdown-item .value=${c.value}>${c.label}</ha-dropdown-item>`,
         )}
       </ha-dropdown>
     `;

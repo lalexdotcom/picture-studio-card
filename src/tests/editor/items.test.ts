@@ -4,10 +4,12 @@ import {
   addItem,
   moveItem,
   removeItem,
-  replaceBadge,
+  replaceConfig,
   rowLabel,
   setAnchor,
-} from "../../editor/badge-items";
+} from "../../editor/items";
+import { DEFAULT_ICON_SIZE } from "../../element-size";
+import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../../position";
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",
@@ -18,7 +20,10 @@ const item = (entity: string, top: number, left: number): PictureItem => ({
 
 describe("addItem", () => {
   it("appends the badge centered on the image", () => {
-    const out = addItem([item("light.a", 10, 20)], { type: "entity", entity: "light.b" });
+    const out = addItem([item("light.a", 10, 20)], {
+      type: "badge",
+      config: { type: "entity", entity: "light.b" },
+    });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });
     expect(out[1]?.anchor).toBe("proportional");
@@ -26,26 +31,42 @@ describe("addItem", () => {
   });
 
   it("gives each added badge its own position object", () => {
-    const out = addItem(addItem([], { type: "entity" }), { type: "entity" });
+    const out = addItem(addItem([], { type: "badge", config: { type: "entity" } }), {
+      type: "badge",
+      config: { type: "entity" },
+    });
     expect(out[0]?.position).not.toBe(out[1]?.position);
   });
 
   it("passes a custom badge config through untouched", () => {
     const custom = { type: "custom:mushroom-template-badge", content: "{{ x }}", nested: { a: 1 } };
-    expect(addItem([], custom)[0]?.config).toEqual(custom);
+    expect(addItem([], { type: "badge", config: custom })[0]?.config).toEqual(custom);
   });
 
   it("does not mutate the input", () => {
     const items = [item("light.a", 10, 20)];
-    addItem(items, { type: "entity" });
+    addItem(items, { type: "badge", config: { type: "entity" } });
     expect(items).toHaveLength(1);
+  });
+
+  it("adds an element with the default position and anchor", () => {
+    const out = addItem([], {
+      type: "element",
+      config: { type: "state-icon", size: DEFAULT_ICON_SIZE },
+    });
+    expect(out[0]).toEqual({
+      type: "element",
+      position: DEFAULT_POSITION,
+      anchor: DEFAULT_ANCHOR,
+      config: { type: "state-icon", size: DEFAULT_ICON_SIZE },
+    });
   });
 });
 
-describe("replaceBadge", () => {
+describe("replaceConfig", () => {
   it("swaps the badge and keeps the position", () => {
     const items = [item("light.a", 10, 20), item("light.b", 30, 40)];
-    const out = replaceBadge(items, 1, { type: "entity", entity: "light.CHANGED" });
+    const out = replaceConfig(items, 1, { type: "entity", entity: "light.CHANGED" });
     expect(out[1]?.config).toEqual({ type: "entity", entity: "light.CHANGED" });
     expect(out[1]?.position).toEqual({ top: 30, left: 40 });
     expect(out[0]).toEqual(items[0]);
@@ -53,12 +74,12 @@ describe("replaceBadge", () => {
 
   it("leaves the list untouched for an out-of-range index", () => {
     const items = [item("light.a", 10, 20)];
-    expect(replaceBadge(items, 5, { type: "entity" })).toEqual(items);
+    expect(replaceConfig(items, 5, { type: "entity" })).toEqual(items);
   });
 
   it("does not mutate the input", () => {
     const items = [item("light.a", 10, 20)];
-    replaceBadge(items, 0, { type: "entity", entity: "light.z" });
+    replaceConfig(items, 0, { type: "entity", entity: "light.z" });
     expect(items[0]?.config).toEqual({ type: "entity", entity: "light.a" });
   });
 });
@@ -167,5 +188,32 @@ describe("rowLabel", () => {
   it("never repeats itself across the two lines", () => {
     const label = rowLabel(badge({ type: "entity", entity: "light.gone" }));
     expect(label.primary).not.toBe(label.secondary);
+  });
+});
+
+describe("rowLabel for an element", () => {
+  const icon = (config: Record<string, unknown>): PictureItem => ({
+    type: "element",
+    position: DEFAULT_POSITION,
+    anchor: DEFAULT_ANCHOR,
+    config: { type: "state-icon", size: DEFAULT_ICON_SIZE, ...config } as never,
+  });
+
+  it("prefers the entity's friendly name, keeping the id as the caption", () => {
+    const states = { "light.a": { attributes: { friendly_name: "Lampe" } } } as never;
+    expect(rowLabel(icon({ entity: "light.a" }), states)).toEqual({
+      primary: "Lampe",
+      secondary: "light.a",
+    });
+  });
+
+  it("falls back to the kind when there is no entity yet", () => {
+    expect(rowLabel(icon({}))).toEqual({ primary: "state-icon" });
+  });
+
+  it("ignores `name`, which may hold composed sentinels", () => {
+    expect(rowLabel(icon({ name: "___device_name___", entity: "light.a" })).primary).toBe(
+      "light.a",
+    );
   });
 });

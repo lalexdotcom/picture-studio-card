@@ -1,5 +1,6 @@
 import { PictureStudioCard } from "../../card/picture-studio-card";
-import { CARD_TAG } from "../../config";
+import { PictureStudioStateIcon } from "../../card/state-icon-element";
+import { CARD_TAG, ICON_TAG } from "../../config";
 
 /**
  * Stands in for a badge or the background element. It counts what the CARD
@@ -29,7 +30,7 @@ export class FakeChild extends HTMLElement {
   }
 }
 
-const FAKE_TAG = "fake-child";
+export const FAKE_TAG = "fake-child";
 
 const define = (tag: string, ctor: CustomElementConstructor): void => {
   if (!customElements.get(tag)) customElements.define(tag, ctor);
@@ -44,6 +45,7 @@ const makeChild = (config: unknown): FakeChild => {
 export const installHelpers = (): void => {
   define(FAKE_TAG, FakeChild);
   define(CARD_TAG, PictureStudioCard);
+  define(ICON_TAG, PictureStudioStateIcon);
   (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({
     createHuiElement: makeChild,
     createBadgeElement: makeChild,
@@ -65,7 +67,8 @@ export const mountCard = async (config: unknown): Promise<PictureStudioCard> => 
   return card;
 };
 
-const root = (card: PictureStudioCard): ParentNode => card.renderRoot as unknown as ParentNode;
+export const root = (card: PictureStudioCard): ParentNode =>
+  card.renderRoot as unknown as ParentNode;
 
 export const background = (card: PictureStudioCard): FakeChild =>
   root(card).querySelector(".background") as FakeChild;

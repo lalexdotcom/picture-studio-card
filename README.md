@@ -92,7 +92,7 @@ aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
 title: My floorplan                # optional card header
 items:
-  - type: badge                  # family discriminant; defaults to "badge" when omitted
+  - type: badge                  # family discriminant; required
     config:
       type: entity               # any Lovelace badge config
       entity: sensor.temperature
@@ -100,7 +100,38 @@ items:
       top: 30%     # see Position anchoring below
       left: 60%
     anchor: center               # optional; defaults to "proportional"
+
+  - type: element                # the other family
+    config:
+      type: state-icon           # the only element kind so far
+      entity: light.salon
+      icon: mdi:floor-lamp       # optional; the entity's state icon otherwise
+      color: state               # state | none | a theme colour name
+      name: Lampe du salon       # optional; shown as a tooltip
+      show_entity_picture: false
+      tap_action: { action: more-info }
+      size:
+        mode: auto               # auto | adaptive | fixed (absent => auto)
+        ratio: 8                 # adaptive only — % of card width
+        min: 24                  # adaptive only — px
+        max: 48                  # adaptive only — px
+        value: 48                # fixed only — px
+    position:
+      top: 45%
+      left: 20%
 ```
+
+### Icon sizing
+
+A `state-icon` has three sizing modes set by `size.mode`:
+
+- **`auto`** (default) — the card's built-in defaults: `clamp(24px, 8cqw, 48px)`.
+- **`adaptive`** — `clamp(<min>px, <ratio>cqw, <max>px)` from the item's own
+  numbers. The size still scales with the card's column width, but within the
+  bounds you set. In a sections view, two cards of different widths get different
+  icon sizes — a `vw`-based size in `picture-elements` cannot do that.
+- **`fixed`** — exactly `<value>px`, no scaling. Useful when the icon must hold a
+  precise size regardless of the card's width.
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
 

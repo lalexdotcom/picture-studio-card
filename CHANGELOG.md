@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.0 — 2026-08-14
+
+### Added
+
+- A second kind of item: `type: element` with `config.type: state-icon`. An icon
+  that reflects an entity's state, with the entity badge's own controls — icon,
+  colour, name as a tooltip, entity picture — and tap, hold and double-tap
+  actions. Three sizing modes: **auto** (card defaults, `clamp(24px, 8cqw,
+  48px)`), **adaptive** (`clamp(<min>px, <ratio>cqw, <max>px)` from the item's
+  own numbers — scales with the card's column width), and **fixed** (`<value>px`
+  — no container unit, for layouts where the icon must hold a precise size).
+
+### Changed
+
+- **The badge editor's positioning control now lives in a collapsible
+  "Position" section**, instead of sitting bare under the badge's own form. It
+  is the same control, one click away, and it matches the "Size and position"
+  section an icon item carries — so the two kinds of item read alike.
+- `type` is now **required** on every item in `items[]`. It used to default to
+  `badge` when omitted; with a second family that default is ambiguous. A config
+  written by the editor already carries it, so only hand-written YAML is
+  affected, and it now fails with a message naming the accepted values rather
+  than being silently read as a badge.
+
 ## 1.1.0 — 2026-08-13
 
 ### Added
