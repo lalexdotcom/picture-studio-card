@@ -102,10 +102,23 @@ An icon's size follows the **card**, not the screen: in a sections view a narrow
 column gets a smaller icon than a wide one, and the same card on a phone scales
 down with it. Three modes decide how closely:
 
-- **Automatic** *(default)* — 8% of the card's width, never under 24px, never
-  over 48px.
+- **Automatic** *(default)* — a share of the card's width, held between a floor
+  and a ceiling.
 - **Adaptive** — the same, with your own ratio and your own bounds.
 - **Fixed** — one size in pixels, which follows nothing.
+
+### Chrome
+
+A **chrome** is a surface an item stands on, so it reads against a busy picture
+instead of competing with it. Tick **Draw a chrome** and four controls appear:
+
+- **Theme** — **Auto** follows your dashboard's theme; **Light** and **Dark**
+  force one, for a picture the theme disagrees with.
+- **Radius** — a disc, a square, or anything between.
+- **Opacity** — fades the surface alone.
+- **Content** — how much of the surface its contents take.
+
+Untick the box and the numbers stay where you left them.
 
 ### YAML reference
 
@@ -180,7 +193,9 @@ Both forms render identically; the editor displays either one.
 
 An icon's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices the
 editor offers. `adaptive` reads `min`, `ratio` and `max`, `fixed` reads `value`,
-and the numbers a mode does not use are kept as you left them.
+and the numbers a mode does not use are kept as you left them. `auto` is
+`ratio: 8`, `min: 24` and `max: 48` — 8% of the card's width, never under 24px
+and never over 48px — whatever the item's own numbers say.
 
 `top` and `left` accept `30%` or a bare `30`. The editor writes the percent form
 back and keeps two decimals, which is the precision dragging produces.
@@ -212,7 +227,7 @@ The card's own visibility is native to Home Assistant and needs nothing from
 this card: the Lovelace engine evaluates `config.visibility` on every card,
 and the edit dialog's "Visibility" tab is generic to all cards.
 
-#### Chrome
+#### Chrome keys
 
 Anything drawn on a photograph competes with whatever the picture happens to
 show. `chrome` gives an item a surface to stand on instead. Icons offer it
