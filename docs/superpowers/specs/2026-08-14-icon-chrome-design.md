@@ -297,29 +297,29 @@ fallback since an undefined custom element renders nothing at all, silently.
 Copy that shape rather than inventing a second one. The panel sits beside "Size
 and position", before it.
 
-**The theme's four labels are Home Assistant's**, taken from the theme mode a
-user already sets on themselves:
+**The theme's four labels are Home Assistant's**, taken from the map card, which
+carries this exact option under this exact name:
 
 ```
-ui.panel.profile.themes.theme_mode                   Theme mode / Mode du thème
-ui.panel.profile.themes.dark_mode.{auto,light,dark}  Auto / Light|Clair / Dark|Sombre
+ui.panel.lovelace.editor.card.map.theme_mode         Theme mode / Mode du thème
+ui.panel.lovelace.editor.card.map.theme_modes.{…}    Auto / Light|Clair / Dark|Sombre
 ```
 
-These are preference keys, and preferences outlive any one card — which is why
-they are preferred over `ui.panel.lovelace.editor.card.map.theme_mode*`, the map
-card's identically-worded set.
+The identically-worded `ui.panel.profile.themes.dark_mode.*` was the other
+candidate, and the more durable name — preferences outlive cards. It was
+rejected on availability. Neither set is in the always-loaded core catalog; both
+live in a fragment; and the frontend calls `loadFragmentTranslation` with
+exactly three names — `config`, `lovelace`, `energy`. Never `profile`. A
+preference key would therefore resolve only for a user who had opened their own
+profile page in the same session, and read English for everyone else.
 
-**One measurement against them, recorded rather than acted on.** Neither set is
-in the always-loaded core catalog; both live in a fragment. And the frontend
-calls `loadFragmentTranslation` with exactly three names — `config`, `lovelace`,
-`energy` — never `profile`. Read literally, that means these keys resolve inside
-our dialog only once the user has opened their own profile page in the same
-session, and fall back to the English literal otherwise.
-
-That reading is an inference from the bundle, not an observation, and it costs
-nothing to settle: open the editor in French and look at the three labels. The
-browser walk does exactly that. If they read English, the map keys go back in as
-a second link in the chain — one `||` per label.
+**A fragment is per panel, not per card.** The `lovelace` fragment is one JSON
+per language holding every Lovelace key, every card editor's included, fetched
+when the panel loads — card *chunks* are lazy, their translations are not. So
+the map keys resolve on a dashboard that has never seen a map card. Our own
+existing labels are the proof: `ui.panel.lovelace.editor.card.generic.*` and
+`…badge.entity.*` come from that same fragment and already render in French,
+with no "generic" card anywhere.
 
 Only the section title, the checkbox and the three number labels come from our
 own `strings.ts`.

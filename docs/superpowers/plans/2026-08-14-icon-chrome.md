@@ -31,7 +31,7 @@
 | `src/tests/chrome.test.ts` *(new)* | Unit tests for the above. |
 | `src/config.ts` | `StateIconConfig.chrome`, filled by `normalizeElementConfig`, dropped by `storedConfig` when it is the default. |
 | `src/card/state-icon-element.ts` | The wrapper element, its styles, and the four custom properties. |
-| `src/strings.ts` | The five labels Home Assistant has no key for — the theme's four come from its own preference wording. |
+| `src/strings.ts` | The five labels Home Assistant has no key for — the theme's four come from the map card's. |
 | `src/editor/element-form.ts` | The "Chrome" expandable: the surface select and three numbers. |
 | `README.md`, `CHANGELOG.md` | User-facing reference and the release note. |
 
@@ -681,26 +681,29 @@ and to `fr`:
     chrome_content_ratio: "Contenu",
 ```
 
-The theme's own four labels are **not** ours. They are the ones Home Assistant uses for the theme mode a user sets on themselves — preference keys, which outlive any one card:
+The theme's own four labels are **not** ours. The map card carries this exact option under this exact name:
 
 ```
-ui.panel.profile.themes.theme_mode                    Theme mode / Mode du thème
-ui.panel.profile.themes.dark_mode.{auto,light,dark}   Auto / Light|Clair / Dark|Sombre
+ui.panel.lovelace.editor.card.map.theme_mode          Theme mode / Mode du thème
+ui.panel.lovelace.editor.card.map.theme_modes.{…}     Auto / Light|Clair / Dark|Sombre
 ```
 
-Behind one helper, so the fallback is written once rather than at each call site:
+Behind one helper each, so the English fallback is written once rather than at every call site:
 
 ```ts
+const THEME_KEY = "ui.panel.lovelace.editor.card.map";
 const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
 
 const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBACK): string =>
-  localize(`ui.panel.profile.themes.dark_mode.${value}`) || THEME_FALLBACK[value];
+  localize(`${THEME_KEY}.theme_modes.${value}`) || THEME_FALLBACK[value];
 
 export const themeModeTitle = (localize: LocalizeFunc): string =>
-  localize("ui.panel.profile.themes.theme_mode") || "Theme mode";
+  localize(`${THEME_KEY}.theme_mode`) || "Theme mode";
 ```
 
-**One thing to watch, settled in Task 6 rather than here.** These keys live in the `profile` translation fragment, and the frontend calls `loadFragmentTranslation` with exactly three names — `config`, `lovelace`, `energy`. Never `profile`. Read literally, that means they resolve in our dialog only after the user has visited their own profile page in the same session. That is an inference from the bundle, not an observation. If the walk shows English labels in a French session, the map card's identically-worded set (`ui.panel.lovelace.editor.card.map.theme_mode` and `.theme_modes.*`, in the `lovelace` fragment, which *is* loaded) goes in as a second link — one `||` per label, inside these two helpers and nowhere else.
+**This works on a dashboard that has no map card.** A translation fragment is per panel, not per card: `loadFragmentTranslation("lovelace")` fetches one JSON per language holding every Lovelace key, every card editor's included. Card *chunks* load lazily; their translations do not. The proof is already in this file — the labels it reads today come from `ui.panel.lovelace.editor.card.generic.*` and `…badge.entity.*`, the same fragment, and they render in French with no "generic" card anywhere.
+
+The identically-worded `ui.panel.profile.themes.dark_mode.*` was the other candidate and the more durable name, rejected on availability: it lives in the `profile` fragment, and `loadFragmentTranslation` is called with exactly three names — `config`, `lovelace`, `energy`. Never `profile`.
 
 - [ ] **Step 2: Write the failing form tests**
 
@@ -808,13 +811,13 @@ describe("the chrome schema", () => {
 });
 
 describe("the theme mode labels", () => {
-  it("takes Home Assistant's own preference wording", () => {
+  it("takes Home Assistant's own wording for this option", () => {
     const localize = ((key: string) =>
-      key === "ui.panel.profile.themes.theme_mode" ? "Mode du thème" : "") as never;
+      key === "ui.panel.lovelace.editor.card.map.theme_mode" ? "Mode du thème" : "") as never;
     expect(themeModeTitle(localize)).toBe("Mode du thème");
   });
 
-  it("falls back to English when the fragment holding that key is not loaded", () => {
+  it("falls back to English if the key ever goes away", () => {
     expect(themeModeTitle((() => "") as never)).toBe("Theme mode");
   });
 });
@@ -1181,7 +1184,6 @@ Three, all of which need the thing on screen:
 1. **The border.** With the rim in front of you: is a 1px border worth adding beside it? Record the verdict — either way — in the spec's "Room left for a border" section. If it is a yes, it is a new task, not a patch to this one.
 2. **The section's layout.** Checkbox, then the theme on one line, then the numbers: does it read in that order, and is the toggle better as a row inside the panel or in the panel's header? (`ha-expansion-panel`'s header slots go leading-icon → header → event → chevron → icons; `event` is the one that lands before the chevron.)
 3. **The numbers while the box is unchecked.** They are shown, on the argument that a row which vanishes reads as a value that was lost. Seen on screen, that may be the wrong call — three live-looking controls under an unchecked box is the other half of the same argument. Decide, and record it.
-4. **The theme labels, in a French session.** Open the editor without visiting the profile page first. If "Auto / Clair / Sombre" and "Mode du thème" read in French, the `profile` fragment is loaded in this context and the single key is enough. If they read English, add the map card's set as a second link in `themeModeLabel` and `themeModeTitle` — nowhere else — and note in the spec that the inference was right.
 
 - [ ] **Step 4: Append the Verification record and commit**
 
