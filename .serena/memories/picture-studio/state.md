@@ -6,34 +6,30 @@ the normal card-edit dialog. "picture-elements, but you place the items with the
 mouse".
 
 **Two families of item since 1.2.0**: Lovelace **badges**, and **elements** —
-today one kind, `state-icon`, an icon that reflects an entity's state and sizes
-itself from the **card's** width.
+today one kind, `state-icon`, an icon that reflects an entity's state, sizes
+itself from the **card's** width, and since 1.3.0 can stand on a **chrome**.
 
-**1.2.0 was merged into `main` and pushed on 2026-08-14** (merge commit `586fac9`,
-`--no-ff`, branch `feat/state-icon-element` deleted). The `v1.2.0` tag is on
-origin and `main` does not diverge from `origin/main` — the release is out.
-Pushing is what publishes: `release.yml` reads `version`, and the tag is what
-HACS installs. **The user pushes, never the agent.**
+**1.3.0 was merged into `main` on 2026-08-14** (merge commit `d67941f`,
+`--no-ff`, branch `feat/icon-chrome` deleted). Its two features are per-item
+`visibility` and the icon chrome. **Not pushed** — `main` is well ahead of
+`origin/main`, and pushing is what publishes: CI runs, then `release.yml` reads
+`version` from `package.json`, creates the `v<version>` tag and the release. HACS
+installs from that tag. **The user pushes, never the agent.**
 
-Releases so far: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
-automated chain), 1.2.0 (2026-08-14).
+Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
+automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, merged and awaiting the
+user's push).
 
-**Per-item `visibility` was merged into `main` on 2026-08-14** (merge commit
-`7561f7f`, `--no-ff`, branch `feat/item-visibility` deleted). **Not pushed** —
-`main` is 16 commits ahead of `origin/main`. It is the first of the two features
-of **1.3.0**; the second, the chrome around a state-icon, is still to design, and
-the version bump lands with it. `package.json` stays on 1.2.0 and the CHANGELOG
-heading reads `unreleased` until then.
-
-Suite: **290 tests**. Bundle: 121.1 kB / 29.9 kB gzip.
+Suite: **329 tests**. Bundle: 132.1 kB / 32.2 kB gzip.
 
 ## Where things are
 
 - Specs: `docs/superpowers/specs/` — `2026-08-11-picture-badges-design.md`
   (authoritative base), then `2026-08-12-item-anchor`,
-  `2026-08-13-per-tick-work`, `2026-08-13-release-on-version-bump`, and
-  **`2026-08-13-state-icon-element-design.md`** (the element family; carries a
-  Verification record of the browser walk).
+  `2026-08-13-per-tick-work`, `2026-08-13-release-on-version-bump`,
+  `2026-08-13-state-icon-element-design.md` (the element family), and
+  **`2026-08-14-icon-chrome-design.md`** (the chrome; carries a Verification
+  record of its browser walk).
 - Plans: `docs/superpowers/plans/`, same dates.
 - Local HA: `docker compose`, container `picture-studio-ha`, http://localhost:8123.
   The repo's `dist/` is mounted at `/config/www/picture-studio-card/`, so a
@@ -49,19 +45,21 @@ Suite: **290 tests**. Bundle: 121.1 kB / 29.9 kB gzip.
   For anything minified, prefer reading the real source over the network:
   `raw.githubusercontent.com/home-assistant/frontend/<build>/src/...`, where
   `<build>` comes from core's `frontend/manifest.json` at a tag. 2026.8.1 →
-  20260729.6. **This is the single most productive habit in this project.**
+  20260729.6, and our 2026.6.0 floor → 20260527.4.
+  **This is the single most productive habit in this project.**
 
 ## Source layout
 
 ```
 src/position.ts        px <-> % conversion, anchor-aware style and bounds (pure)
 src/element-size.ts    IconSize, the three sizing modes, iconSizeCss (pure)
+src/chrome.ts          Chrome, its defaults, normalization, storage, fills (pure)
 src/config.ts          item families, normalization, storage, tags (pure)
-src/strings.ts         our own en/fr catalog — the last resort, 7 keys
+src/strings.ts         our own en/fr catalog — the last resort
 src/broker.ts          editor + card registries (pure)
 src/types.ts           hand-declared HA interfaces
 src/card/picture-studio-card.ts   background + item children + lifecycle
-src/card/state-icon-element.ts    the element: state-badge, size, action relay
+src/card/state-icon-element.ts    the element: chrome wrapper, state-badge, actions
 src/card/visibility-probe.ts      the phantom card a hui-card probe carries
 src/editor/visibility-section.ts  hosts HA's own hui-card-visibility-editor
 src/card/drag-layer.ts            pointer gesture, injected callbacks
@@ -69,7 +67,7 @@ src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/background-schema.ts      ha-form schema for the card itself
 src/editor/badge-list.ts             rows, ha-sortable, the add menu
 src/editor/badge-form.ts             the badge's own editor + Position section
-src/editor/element-form.ts           our ha-form + Size and position section
+src/editor/element-form.ts           our ha-form, Chrome section, Size and position
 src/editor/anchor-picker.ts          switch + hand-built 3x3 grid
 src/editor/badge-catalog.ts          core + custom badge choices
 src/editor/element-catalog.ts        element kinds, labels, stubs
@@ -113,6 +111,11 @@ items:
         min: 24                 # adaptive — px
         max: 48                 # adaptive — px
         value: 48               # fixed — px
+      chrome:                   # 1.3.0 — absent => no chrome
+        theme: none             # none | auto | light | dark
+        radius: 50              # percent of the box, 0-50
+        opacity: 1              # 0-1
+        content_ratio: 0.6      # 0-1
 ```
 
 ## Decisions that must not be re-litigated
@@ -125,148 +128,140 @@ items:
   on the first drag.
 - **`config` is opaque per family.** A badge's payload belongs to a third party:
   never read, validate or rewrite it. An element's is ours: read, validate,
-  default — but keep unknown keys, for the same reason as above.
+  default — but keep unknown keys, for the same reason as above. `size` and
+  `chrome` are *our* closed records inside it, so an unknown key inside either is
+  dropped, exactly as `normalizeIconSize` has always done.
 - **The card places, the element draws itself.** The card's only concession to
   size is `container-type: inline-size` on `.root`; `cqw` is a percentage of that
-  box. Without that line `cqw` falls back to the viewport **silently**, which is
-  the exact bug the feature exists to fix.
+  box. Without that line `cqw` falls back to the viewport **silently**.
 - **Three sizing modes, `mode` read only by `iconSizeCss`.** `auto` applies the
-  card's defaults (24 / 8% / 48, measured on this card, not inherited from the
-  picture-elements workaround's 40 / 3.5 / 70 which were viewport-derived);
-  `adaptive` uses the item's numbers; `fixed` emits plain px, no clamp, no
-  container unit. **`mode` overrides, it never erases** — switching to `auto`
-  keeps the stored numbers, and `isDefaultIconSize` compares all five fields so
-  storage cannot drop numbers worth keeping. `normalizeIconSize` still reads the
-  pre-1.2 `{ auto: bool }` shape and never writes it back.
-- **The element reuses, it does not reimplement.** `state-badge` draws and
-  colours the icon; `action-handler` (a real custom element with `bind()`)
-  detects the gesture; `hass-action` hands it to HA's own `handleAction`. We
-  write the relay and nothing else.
-- **`.data` must stay the complete flat record.** `ha-form` merges the changed
-  field onto the whole `.data` it was given and re-emits it, so a conditional
-  schema is safe: the schema decides what is *shown*, never what is *carried*.
-- **Anchor is per-item, `proportional` by default**, ten values, offsets derived
-  at render. Re-anchoring asks the preview for coordinates *before* writing, and
-  commits anchor and position in one go.
+  card's defaults (24 / 8% / 48); `adaptive` uses the item's numbers; `fixed`
+  emits plain px. **`mode` overrides, it never erases.** `normalizeIconSize`
+  still reads the pre-1.2 `{ auto: bool }` shape and never writes it back.
+- **The chrome is one wrapper, and the host's box never changes.** `.chrome` is
+  always in the DOM at `--psc-icon-size` with `box-sizing: border-box`; only its
+  styling is conditional. That is what leaves `position.ts`, `drag-layer.ts` and
+  `element-size.ts` with zero diff, and it is the constraint any future change
+  here must keep. `size` is the whole footprint; `content_ratio` shrinks what is
+  inside it, never the item.
+- **`chrome.theme` carries the switch**, like `size.mode` and like `color`.
+  `none` — or an absent `chrome` — draws nothing and **keeps every number**, so
+  trying a chrome and turning it off loses nothing. `none` is a storage value and
+  is never offered in the interface: the editor's checkbox is what turns it off.
+- **The chrome's shape is conditional; its halo is not.** `border-radius` and
+  `overflow: hidden` live under `:host([chrome])`; the `drop-shadow` filter sits
+  on `.chrome` unconditionally, because a chromeless icon has worn that rim and
+  glow since 1.2.0. Getting this wrong clipped every chromeless icon into a
+  circle — see the traps.
+- **The editor rounds; the model does not clamp.** `toFormData` / `fromFormData`
+  round every numeric size and chrome field, so a slider can never leave a
+  fractional value behind. `normalizeChrome` and `normalizeIconSize` keep any
+  finite number exactly as written — the sliders guide, and someone outside their
+  range is writing YAML and means it. Same rule positions already follow.
+- **Anchor is per-item, `auto` by default**, ten values, offsets derived at
+  render. Re-anchoring asks the preview for coordinates *before* writing.
 - **Ratcheting drag bounds computed in `pointermove`**, never at `pointerdown`.
-- **Pixels during the drag, percentages on release**, one commit per gesture.
-- **Percent strings stored, numbers in code**, and no clamp to `[0, 100]`
-  anywhere.
-- **No `z-index` in the rendered stacking** — it is DOM order = list order, and
-  that must keep a single authority. **One exception, added in 1.3.0 and
-  reserved to the editor**: the selected or dragged item is raised while
-  `editing`. It never reaches the config and does not exist on a dashboard.
+- **Pixels during the drag, percentages on release**, one commit per gesture,
+  two decimals — the precision the gesture produces.
+- **No `z-index` in the rendered stacking** — DOM order = list order. One
+  exception, reserved to the editor: the selected or dragged item is raised while
+  `editing`.
+- **Editor section order, every item family: Interactions straight after
+  Content, Visibility last.** For an element: Entity, Content, Interactions,
+  Chrome, Size and position, Visibility. A badge's editor is a third-party
+  element we render whole — we cannot reorder inside it — and "after Content" is
+  the only formulation that can hold for both families. Every top-level section
+  is spaced 24px, the gap `ha-form` gives its own root children.
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
 
 ## Hard-won facts about Home Assistant (all verified in their source)
 
 - **HA rebuilds the card element on every config change** — no card-side state
-  survives a commit. Anything the editor needs from the preview must be asked for
-  before writing.
-- **`preview` does not mean "I am the edit dialog's preview"** — it is set on
-  every card in edit mode. What separates them is the edit chrome
-  (`hui-card-options` / `hui-card-edit-mode`), which `_inEditPreview()` walks for.
-  Do not "simplify" it to an attribute test: it passes in masonry and fails
-  silently in sections, where `hui-section` reflects `preview`.
-- **`state-badge` is the entity-icon disc, NOT the Lovelace badge.**
-  `hui-state-icon-element` uses it too. Its colour computation lives **inside**
-  the `overrideImage === undefined` branch, so passing `""` to hide a picture
-  also kills the colour — pass it only when a picture truly must be suppressed
-  and no icon override is set. A fixed colour applies only while
-  `stateActive(stateObj)`. And it sets `--state-inactive-color: initial` on its
-  own host, so inactive entities fall through to `--state-icon-color` (#44739e,
-  blue) unless the theme's value is handed back down.
+  survives a commit.
+- **`preview` does not mean "I am the edit dialog's preview"** — what separates
+  them is the edit chrome, which `_inEditPreview()` walks for. Do not "simplify"
+  it to an attribute test.
+- **`state-badge` is the entity-icon disc, NOT the Lovelace badge.** Its colour
+  computation lives **inside** the `overrideImage === undefined` branch, so
+  passing `""` to hide a picture also kills the colour. It sets
+  `--state-inactive-color: initial` on its own host. **It paints an entity
+  picture as a `background-image` on that same host** (`background-size: cover`)
+  while the glyph is a child sized by `--mdc-icon-size` — so sizing `state-badge`
+  scales picture and glyph together, which is why `content_ratio` needs no
+  special case for pictures. Its radii are `--state-badge-border-radius`,
+  `--state-badge-with-image-border-radius` and
+  `--state-badge-with-media-image-border-radius`, all 50% by default.
 - **A badge's icon is not `state-badge`**: `hui-entity-badge` renders `ha-badge`
-  with `<ha-state-icon>` and colours it through `--badge-color`, computed by its
-  own `_computeStateColor`. That is the road to take if `state-badge`'s
-  remaining differences ever become unacceptable.
-- **`hass.formatEntityName(stateObj, name)` resolves the composed-name sentinels**
-  (`___device_name___`) the `entity_name` selector stores, and returns the
-  entity's default name when `name` is undefined. Present since frontend
-  20260429.3, i.e. below our floor.
+  and colours it through `--badge-color`. **`ha-badge`'s own fill is
+  `var(--ha-card-background, var(--card-background-color, white))`, opaque** —
+  surface from the theme, glyph from the state. That is the recipe the chrome
+  copies; the tile card's tinted fill is not, because a translucent fill lets the
+  photograph through.
+- **Theme colour tokens come in two layers, and only one is mode-independent.**
+  The `--ha-color-*` core palette is emitted once as a global `html { … }` with
+  no dark counterpart, so `--ha-color-white` (#fff) and `--ha-color-neutral-10`
+  (#202020) are readable whichever mode is active. The *semantic* layer above it
+  (`--ha-color-surface-default`, and the classic `--card-background-color`) comes
+  in two copies, and `applyThemesOnElement` writes exactly one of them onto
+  `<html>` **in JavaScript**. So a theme's *other* mode is unreachable: forcing
+  "light" can only mean naming the palette entry. Both palette tokens exist at
+  20260527.4, our floor.
+- **Translations are per panel, not per card.** `loadFragmentTranslation` is
+  called with exactly three names in the whole bundle — `config`, `lovelace`,
+  `energy`. The `lovelace` fragment is one JSON per language holding *every*
+  Lovelace key, every card editor's included, so
+  `ui.panel.lovelace.editor.card.map.theme_mode*` resolves on a dashboard that
+  has never seen a map card. `ui.panel.profile.*` does **not** resolve in our
+  dialog — nothing loads that fragment.
+- **`hass.formatEntityName(stateObj, name)`** resolves the composed-name
+  sentinels the `entity_name` selector stores.
 - **`hass-action`** is a DOM event the root `<home-assistant>` hands to
-  `handleAction`. Nothing in the frontend fires it — it exists for third-party
-  cards. **`action-handler`** is a singleton element on `document.body` with
-  `bind(el, {hasHold, hasDoubleClick})`; HA's directive is only those three lines.
-- **A badge is clickable when** `!tap_action || hasAction(tap|hold|double)` —
-  an absent key means clickable, since the default is more-info.
+  `handleAction`. **`action-handler`** is a singleton element on `document.body`
+  with `bind(el, {hasHold, hasDoubleClick})`.
+- **A badge is clickable when** `!tap_action || hasAction(tap|hold|double)`.
 - **`ha-form` spaces its root children by 24px**; `ha-form-expandable` zeroes the
-  panel's own padding (`--expansion-panel-content-padding: 0`) and wraps its body
-  in a `.content` div at 12px, with the header a div at `role="heading"
-  aria-level="3"` and the icon in `--secondary-text-color`. Copy that, do not
-  invent spacing.
-- **`ha-form` takes `icon: "mdi:…"` as first-class beside `iconPath:`.** HA
-  inlines paths because it tree-shakes `@mdi/js`; we have no such dependency, so
-  every path inlined here is a copy of a library HA already serves. Use names.
-- **`ha-selector-select` in `mode: "list"`** renders `ha-radio-group` +
-  `ha-radio-option`, but never passes `orientation`, which is attribute-driven
-  (`:host([orientation=horizontal]) [part~=form-control-input]`) with no exported
-  part — so no CSS can make it horizontal. Render the group yourself, and guard:
-  an undefined custom element renders **nothing**, silently.
-- **`selector: { number: { mode: "box" } }`** removes the slider.
-- **The floor is `2026.6.0`** (`hacs.json`), raised from 2026.5.0 on 2026-08-14:
-  `ha-radio-group` / `ha-radio-option`, which the size control renders, appear in
-  the frontend 2026.6.0 pins (20260527.4) and not in 2026.5.0's (20260429.3).
-- **Component availability is a browser question.** Counting the chunks a tag is
-  inlined into is a hint, not proof: `ha-icon` 92, `ha-state-icon` ~20,
-  `ha-expansion-panel` 21, `ha-radio-group` 19, `ha-button-toggle-group` 8.
-  `ha-control-select` looked fine and was not. When a component must be there,
-  either prove the chunk loads (our own `entity_name` field pulls
-  `ha-button-toggle-group`) or write a fallback.
-- **Switch tokens, for anything that must match one**: track
-  `--ha-switch-background-color` / `--ha-switch-border-color`, checked
-  `--ha-switch-checked-background-color` / `--ha-switch-checked-border-color`,
-  thumb `--ha-switch-thumb-background-color`. The `--ha-color-*` layer they fall
-  back to does **not** exist at 2026.5 — always close the chain on a
-  long-lived variable (`--divider-color`, `--primary-color`,
-  `--secondary-background-color`, `--text-primary-color`).
-- **An outer-tree rule beats a `:host` declaration**, which is how a component's
-  own token blanking can be undone from outside.
-- Labels: `ui.panel.lovelace.editor.card.generic.<name>` for most,
-  `…badge.entity.<name>` for `color` / `show_entity_picture` (and
-  `color_helper`), `…picture-elements.element_types.<type>` for element kinds,
-  `ui.common.auto`. Form-control labels resolve to `--wa-form-control-label-*`.
-- Core badges are exactly `entity` and `shortcut` (2026.5+ for `shortcut`).
-- `hui-image-element.setConfig` defaults **both** `tap_action` and `hold_action`
-  to more-info; both must be pinned to `none`.
-- `title` means the ha-card header for us, a tooltip for `hui-image-element`.
-- `applyThemesOnElement` is internal, so `theme` cannot be honoured;
-  `visibility` on a badge does nothing here (the container evaluates it).
-- **Sections grid**: 12 columns, `--row-height: 56px`, `--row-gap: 8px`;
-  `hui-card` is `height: 100%`.
-
-### Added while building 1.3.0's visibility
-
+  panel's padding and wraps its body in a `.content` div at 12px. Copy that.
+- **`ha-form` merges the changed field onto the whole `.data` it was given and
+  re-emits it**, so `.data` must always be the complete flat record. That is what
+  keeps a field alive while the active schema hides it — and what makes the
+  chrome's conditional controls safe.
+- **`ha-form` takes `icon: "mdi:…"` as first-class beside `iconPath:`.**
+- **`ha-selector-select` in `mode: "list"`** never passes `orientation` to
+  `ha-radio-group`, and there is no exported part, so no CSS can make it
+  horizontal. Render the group yourself, behind `customElements.get`, with an
+  `ha-form` select as the fallback — an undefined custom element renders
+  **nothing**, silently.
+- **`selector: { number: { mode: "box" } }`** removes the slider; omitting
+  `mode` is what gives you one.
+- **The floor is `2026.6.0`** (`hacs.json`), frontend 20260527.4.
+- **Component availability is a browser question.** Counting chunks is a hint,
+  not proof. When a component must be there, prove the chunk loads or write a
+  fallback.
+- **Switch tokens**: track `--ha-switch-background-color` /
+  `--ha-switch-border-color`, checked `--ha-switch-checked-*`, thumb
+  `--ha-switch-thumb-background-color`. Always close a chain on a long-lived
+  variable.
+- **An outer-tree rule beats a `:host` declaration.**
 - **`hui-card` IS Home Assistant's implementation of the `visibility` key.** It
-  evaluates the conditions and publishes the verdict by toggling the **native
-  `hidden` attribute** on itself, plus an inline `display`. Identical at
-  `20260527.4` and `20260729.6`. So a hidden `hui-card` sibling plus a
-  `.probe[hidden] + .item` rule reflects a verdict with **no JavaScript of
-  ours**. Three catches: `preview` short-circuits the evaluation to visible,
+  evaluates and publishes the verdict by toggling the native `hidden` attribute,
+  so a hidden `hui-card` sibling plus `.probe[hidden] + .item` reflects it with
+  no JavaScript of ours. Catches: `preview` short-circuits to visible,
   `_updateVisibility` returns early without an inner card *and* without `hass`,
-  and **a config change does not re-evaluate** — only `hass` or `preview` do.
-- **`hui-conditional-element` is a trap**: it does not extend
-  `hui-conditional-base`, sets neither `hidden` nor `display`, and only
-  appends/removes its own children. It signals nothing.
+  and a config change does not re-evaluate — only `hass` or `preview` do.
+- **`hui-conditional-element` is a trap**: it signals nothing.
 - **`ha-expansion-panel` header slot order** is `leading-icon → header → event →
-  chevron → icons`. Anything in `icons` lands *after* the chevron; `event` is
-  the one before it.
-- **`ha-icon-button` reads `--ha-icon-button-size`**, not the legacy
-  `--mdc-icon-button-size`. Every HA row editor sets it to 36px.
-- **The modern entity list is `hui-entity-editor`** — Entities, Distribution and
-  History Graph all draw through it. Bordered rows of 48px, 8px apart, 12px
-  leading / 4px trailing, `mdiDragHorizontalVariant` as the handle, `mdiPencil` +
-  `mdiClose` under `ui.common.edit` / `ui.common.delete`, and no gap between the
-  actions. Rows read as **a name over a place**: `formatEntityName(stateObj,
-  {type:"entity"})` then area ▸ device. It memoizes none of it.
-- **`ha-label` pads its container to 12px a side** (`dense`), which is right
-  beside a number and far too wide around a lone icon; the padding is not
-  exposed as a variable.
-- **`--ha-card-border-width` is 0 in many themes**, which silently erases a
-  border that depends on it.
+  chevron → icons`; `event` is the one before the chevron.
+- **`ha-icon-button` reads `--ha-icon-button-size`**, not `--mdc-icon-button-size`.
+- **The modern entity list is `hui-entity-editor`** — 48px rows, 8px apart,
+  `mdiDragHorizontalVariant`, `mdiPencil` + `mdiClose`, a name over a place.
+- **`--ha-card-border-width` is 0 in many themes.**
 - **The shipped `.js.map` files carry the raw GitHub URL of every source file.**
-  Grepping them is the fastest way to find a component's real path before
-  fetching it — several guessed paths 404'd where this got it first try.
+  Grepping them is the fastest way to find a component's real path.
+- Labels: `ui.panel.lovelace.editor.card.generic.<name>` for most,
+  `…badge.entity.<name>` for `color` / `show_entity_picture`,
+  `…picture-elements.element_types.<type>` for element kinds, `ui.common.auto`.
+- `applyThemesOnElement` is internal, so a card-level `theme` cannot be honoured.
+- **Sections grid**: 12 columns, `--row-height: 56px`, `--row-gap: 8px`.
 
 ## The recurring traps
 
@@ -275,35 +270,36 @@ items:
    Before exposing a key, verify something consumes it, the way the label claims.
 2. **A mechanism can be reviewed correct and rest on a false premise.** The first
    re-anchor design was proved terminating and could never fire. So was the
-   `preview` reading. And in 1.2.0, the colour bug: our own `overrideImage: ""`
-   short-circuited a computation nobody had read to the end. **When behaviour
-   contradicts a proof, doubt the premise and go get evidence.**
+   `preview` reading, and 1.2.0's colour bug. **When behaviour contradicts a
+   proof, doubt the premise and go get evidence.**
 3. **What the suite cannot see.** happy-dom does no layout: nothing about
-   `clamp()`, `cqw`, positioning, pointer muting or CSS is observable there. Six
-   real defects survived a full green suite, a per-task review and a
-   whole-branch review in 1.2.0 — every one of them found in the browser within
-   minutes. Plan for the walk; do not hope to skip it.
-4. **A test that restates a constant stops guarding it.** Two were found copying
-   `DEFAULT_ICON_SIZE` values with a comment naming the constant.
+   `clamp()`, `cqw`, positioning, pointer muting or CSS is observable there.
+   1.2.0 shipped six such defects past a green suite and two reviews. **1.3.0
+   added a seventh, and it is the cleanest example yet**: `border-radius` and
+   `overflow: hidden` sat unconditionally on the chrome wrapper, so every icon
+   *without* a chrome was clipped into a circle. Five task reviews and a
+   whole-branch review read that CSS and none could see it; the user saw it in
+   seconds. **Plan for the walk; do not hope to skip it.**
+4. **A test that restates a constant stops guarding it.** Assert literals.
+5. **A pair of tests that check different sets is a hole.** The two localization
+   tests once asserted different keys, so a missing French string would have
+   passed the one not looking for it. They now share one `KEYS` list.
 
 ## How we work (project rules, see AGENTS.md)
 
-- **Reuse Home Assistant's machinery rather than reimplementing behaviour** — a
-  reimplementation is what drifts the next time they change something, and not
-  drifting is the requirement. The HACS floor is not a critical decision: raise
-  `minimum_home_assistant_version` freely to reach a modern component, rather
-  than working around its absence. Guards stay anyway — a floor answers "does
-  this version have it", never "is its chunk loaded here".
+- **Reuse Home Assistant's machinery rather than reimplementing behaviour.** The
+  HACS floor is not a critical decision: raise it freely to reach a modern
+  component. Guards stay anyway — a floor answers "does this version have it",
+  never "is its chunk loaded here".
 - Chat in **French**, everything else in English.
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
 - **Never `git push`** — it publishes. The user does it. Local merges are fine.
-- **Leave a clean tree at the close**, and if changes remain (a formatter's, or
-  the user's own), show them and get validation before committing them.
+- **Leave a clean tree at the close.**
 - Serena's symbolic tools are primary for code.
 - Implementation runs through dispatched subagents with a written brief, then an
   independent reviewer per task, then a whole-branch review. Model/effort per
-  AGENTS.md. **Never touch git while a subagent is running.**
+  AGENTS.md. **Never touch git while a subagent is running** — and note that
+  `git merge -F -` does not read stdin the way `git commit -F -` does; write the
+  merge message to a file.
 - Review findings have repeatedly been right in conclusion and wrong in
   mechanism. Verify a claim in HA's source before dispatching a fix for it.
-</content>
-</invoke>

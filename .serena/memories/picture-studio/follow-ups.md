@@ -9,70 +9,36 @@ card changes, this one grows and empties.
 
 ---
 
-## 1. A chrome around a state-icon
+## 1. The chrome, beyond icons
 
-**Asked for on 2026-08-14, targeted at 1.3.0. This is the next thing to
-design** — per-item `visibility` is merged, and 1.3.0 waits on this one before
-its version bump.
+**Delivered in 1.3.0 for `state-icon` only.** The key is written to belong to an
+*item* rather than to one kind of item — the README says so in as many words —
+but only `state-icon` reads it today. Whatever element kind arrives next should
+take it up rather than invent its own surface.
 
-Draw a shape behind the icon — a disc, `border-radius: 100%` — so an icon on a
-busy photograph reads against its own surface instead of against the picture.
-The current answer to that problem is the rim-and-glow filter added in 1.2.0
-(`--psc-icon-outline` / `--psc-icon-glow`). **Settled on 2026-08-14: the filter
-moves onto the chrome, which carries only a fill.** So the disc gets the rim and
-the halo that the glyph has today, and has no border of its own — which also
-disposes of the naming worry below: what was called a "border" is the filter's
-rim, not a CSS border.
-
-**The load-bearing detail, in the user's words: the size and the action apply to
-the chrome, not to the icon.** So:
-
-- `size` comes to mean the chrome's box, and the glyph becomes a proportion of
-  it. **This knowingly reopens a 1.2.0 decision** — the spec says "One value
-  drives the whole visual footprint … Home Assistant's own 24/40 glyph-to-box
-  ratio is not reproduced — the production setting reasons about the glyph, and
-  two numbers for one size would be two numbers to tune." With a chrome, that
-  ratio is exactly what is needed. Re-open it deliberately, do not contradict it
-  in passing: either a fixed inner ratio, or a second number the user tunes.
-- the hit target, the hover grow, the `clickable` attribute and the
-  `action-handler` binding move to the chrome. The drag and the anchoring measure
-  the wrapper, so they follow on their own — but check the clamp against a box
-  that is suddenly larger than the glyph.
-- the 1.2.0 drop-shadows would then trace the chrome's silhouette rather than the
-  glyph's, which is probably an improvement and is certainly a change.
-
-**Naming is open, and `border` is probably the wrong word** — a CSS border is the
-line, while what is described is a filled shape with a radius. Candidates worth
-weighing: `chrome`, `shape`, `backdrop`, `surface`. Whatever it is called, it will
-be a key inside `config`, so the element's config gains a sub-object the way
-`size` did.
-
-**Prior art to copy, but not to depend on.** The tile card draws exactly this:
-`ha-tile-icon` with `--tile-icon-color` (the state colour) and
-`--tile-icon-border-radius` (pill by default, square for images, and
-`--ha-border-radius-sm` for a media player's artwork). Its background is the
-state colour at low opacity, which is why a tile reads on any theme. **But
-`ha-tile-icon` is defined in exactly one chunk of the shipped frontend — the tile
-card's own — so it is the least available component looked at so far.** Draw the
-shape ourselves with the same idea, and take their tokens rather than their
-element. `state-badge` also already exposes `--state-badge-border-radius`,
-defaulting to 50%, which may do part of the job for free.
-
-**Questions for the brainstorm:**
-
-- On or off by default? A chrome changes every existing icon if it defaults on.
-- Does its colour follow the entity's state, like a tile, or is it configured?
-- What happens to an icon with no chrome — does it keep the filter it has today,
-  or does the filter become the chrome's alone? (Answered for the chrome case,
-  open for the bare one.)
-
-**Settled already:** the release is **1.3.0**, not 1.2.1 — a new config option is
-additive. And the rim and halo belong to the chrome, which is a fill and nothing
-else.
+Nothing to design until there is a second element kind. The open question when
+that day comes: does `chrome` move up beside `position` and `anchor` at item
+level, or does each element kind keep reading it out of its own `config`? Today
+it lives in `config` because that is where an element's own keys live, and moving
+it would be a config migration.
 
 ---
 
-## 2. Parked from the visibility session (2026-08-14)
+## 2. What 1.3.0's browser walk did not exercise
+
+Both were reasoned about rather than observed, and both would be cheap to check
+the next time the card is open in a browser.
+
+- **The `auto` fill under a custom theme.** Only the default theme was walked, so
+  `var(--ha-card-background, …)` has never been seen resolving to anything but
+  #fff / #1c1c1c. A theme with a translucent or strongly tinted card background
+  is the interesting case: the chrome would inherit it, which is the intent, but
+  nobody has looked.
+- **A sections view.** Still never walked, in any version — see entry 3.
+
+---
+
+## 3. Parked from the visibility session (2026-08-14)
 
 Neither blocks anything; both are worth a minute if the area is reopened.
 
@@ -81,10 +47,29 @@ Neither blocks anything; both are worth a minute if the area is reopened.
   nothing proves their chunks are loaded by *our* dialog, and an undefined
   custom element renders nothing at all, silently — the whole list would vanish
   rather than degrade. If that availability is ever proven, the swap is direct.
-- **The browser walk covered a panel view only.** A sections view was never
+- **The browser walk covered a panel view only.** A sections view has never been
   exercised, so the `view_columns` context path — the Lit context resolving up
   through our shadow root — is reasoned about rather than observed. Same for the
   fallback when `hui-card-visibility-editor` is undefined, which needs a
   frontend that does not load its chunk.
-</content>
-</invoke>
+
+---
+
+## 4. Small things noticed and left alone
+
+- **The hover grow with a chrome.** `transform: scale(1.04)` on the host now
+  scales a filled disc rather than a glyph. Looked at on a real dashboard and
+  kept — the user's impression that it was off-centre did not survive a second
+  look. If it is ever revisited, the alternative already sketched is to drop the
+  scale when a chrome is on and brighten the fill instead, which is what Home
+  Assistant's own tiles and badges do.
+- **A 1px border on the chrome was considered and rejected on sight.** The
+  filter's white rim already draws that line and follows the real silhouette.
+  The layout is prepared for one if it is ever wanted: `box-sizing: border-box`
+  means it would be drawn inward and shift nothing, and `getBoundingClientRect`
+  is already a border box so the drag would count it with no code change. The
+  spec's "Room left for a border" section records the verdict.
+- **`storedConfig`'s `chrome && !isDefaultChrome(chrome)`** looks like a
+  redundant guard and is not: `chrome` is optional on `StateIconConfig`, so the
+  check is what narrows the type. Two reviewers have now flagged it; it is
+  correct.
