@@ -450,7 +450,35 @@ which the `(stateObj, config.name)` call satisfies with `name` typed
 
 **`hacs.json` stays at 2026.5.0.** The one row that could have moved it did not.
 
-The other nine rows need a browser and are open.
+**The browser walk — done 2026-08-13/14, over four rounds.** The remaining rows
+were checked in the local Home Assistant, and the row this whole design exists
+for holds: **two cards of different widths in a sections view render different
+icon sizes.** `cqw` resolves against `.root`, and the production problem — every
+card on a desktop sharing one viewport-derived size — is gone.
+
+Actions fire on the right gesture, the missing-entity marker appears, dragging
+and its clamp behave, and the size fields follow their mode.
+
+What the walk caught, and none of it by reasoning:
+
+- **The colour never applied.** `overrideImage: ""` was passed whenever the
+  entity picture was off — the default — and `state-badge` computes colour only
+  inside its `overrideImage === undefined` branch. The empty string is now passed
+  only when a picture genuinely has to be suppressed.
+- **No tooltip at all**: the `title` binding was missing from the element and
+  from the property list its review was given.
+- **Inactive entities came out blue**, where a badge shows grey: `state-badge`
+  sets `--state-inactive-color: initial` on its own host, so inactive states fall
+  through to `--state-icon-color`, the #44739e of entity rows. The theme's value
+  is handed back down to it.
+- The pointer, the hover, the section padding, the form's field order, the
+  section icons and the anchor picker's colours were all aligned on values read
+  from Home Assistant's own components rather than chosen.
+
+One case remains, known and deliberate: an entity that **has** a picture, with
+the picture switched off and no icon chosen, draws an uncoloured icon. Suppressing
+the picture is what costs the colour. picture-elements cannot express that case at
+all — it has no such switch — so nothing regresses against what this card replaces.
 
 ## Documentation and versioning
 
