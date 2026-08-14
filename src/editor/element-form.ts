@@ -190,18 +190,22 @@ export class PictureStudioElementForm extends LitElement {
           slot="leading-icon"
           .path=${SIZE_POSITION_PATH}
         ></ha-svg-icon>
-        <span slot="header">${localizeOwn(hass, "size_and_position")}</span>
-        <ha-form
-          .hass=${hass}
-          .data=${toFormData(element)}
-          .schema=${stateIconSizeSchema(element.size.auto)}
-          .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-          @value-changed=${this._valueChanged}
-        ></ha-form>
-        <picture-studio-anchor-picker
-          .hass=${hass}
-          .anchor=${this.anchor}
-        ></picture-studio-anchor-picker>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "size_and_position")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${toFormData(element)}
+            .schema=${stateIconSizeSchema(element.size.auto)}
+            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+          <picture-studio-anchor-picker
+            .hass=${hass}
+            .anchor=${this.anchor}
+          ></picture-studio-anchor-picker>
+        </div>
       </ha-expansion-panel>
     `;
   }
@@ -219,6 +223,24 @@ export class PictureStudioElementForm extends LitElement {
     ha-form {
       display: block;
       margin-bottom: var(--ha-space-3);
+    }
+    /* Mirrors ha-form-expandable: the panel's own content padding is zeroed and
+       the section supplies its own, so our sections sit exactly like Home
+       Assistant's own expandable sections. */
+    ha-expansion-panel {
+      display: block;
+      --expansion-panel-content-padding: 0;
+      border-radius: var(--ha-border-radius-md);
+      --ha-card-border-radius: var(--ha-border-radius-md);
+    }
+    .content {
+      padding: 12px;
+    }
+    .content ha-form {
+      margin-bottom: 0;
+    }
+    ha-svg-icon[slot="leading-icon"] {
+      color: var(--secondary-text-color);
     }
   `;
 }

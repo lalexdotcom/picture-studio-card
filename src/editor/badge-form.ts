@@ -126,11 +126,15 @@ export class PictureStudioBadgeForm extends LitElement {
           slot="leading-icon"
           .path=${POSITION_PATH}
         ></ha-svg-icon>
-        <span slot="header">${localizeOwn(this.hass, "anchor")}</span>
-        <picture-studio-anchor-picker
-          .hass=${this.hass}
-          .anchor=${this.anchor}
-        ></picture-studio-anchor-picker>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(this.hass, "anchor")}
+        </div>
+        <div class="content">
+          <picture-studio-anchor-picker
+            .hass=${this.hass}
+            .anchor=${this.anchor}
+          ></picture-studio-anchor-picker>
+        </div>
       </ha-expansion-panel>
     `;
   }
@@ -147,9 +151,21 @@ export class PictureStudioBadgeForm extends LitElement {
     .fallback {
       color: var(--secondary-text-color);
     }
+    /* Mirrors ha-form-expandable: the panel's own content padding is zeroed and
+       the section supplies its own, so our sections sit exactly like Home
+       Assistant's own expandable sections. */
     ha-expansion-panel {
       display: block;
       margin-top: var(--ha-space-3, 12px);
+      --expansion-panel-content-padding: 0;
+      border-radius: var(--ha-border-radius-md);
+      --ha-card-border-radius: var(--ha-border-radius-md);
+    }
+    .content {
+      padding: 12px;
+    }
+    ha-svg-icon[slot="leading-icon"] {
+      color: var(--secondary-text-color);
     }
   `;
 }

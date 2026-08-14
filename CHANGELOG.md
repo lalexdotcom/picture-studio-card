@@ -11,6 +11,10 @@
 
 ### Changed
 
+- **The badge editor's positioning control now lives in a collapsible
+  "Position" section**, instead of sitting bare under the badge's own form. It
+  is the same control, one click away, and it matches the "Size and position"
+  section an icon item carries — so the two kinds of item read alike.
 - `type` is now **required** on every item in `items[]`. It used to default to
   `badge` when omitted; with a second family that default is ambiguous. A config
   written by the editor already carries it, so only hand-written YAML is
