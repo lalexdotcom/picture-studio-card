@@ -11,7 +11,8 @@ const mount = (): PictureStudioVisibilityProbe => {
 
 describe("the visibility probe's phantom card", () => {
   it("names its custom type after its tag", () => {
-    expect(PROBE_TYPE).toBe(`custom:${PROBE_TAG}`);
+    expect(PROBE_TAG).toBe("picture-studio-visibility-probe");
+    expect(PROBE_TYPE).toBe("custom:picture-studio-visibility-probe");
   });
 
   it("accepts any config, since it carries no options of its own", () => {
