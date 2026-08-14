@@ -231,22 +231,38 @@ Stated as a requirement, not an observation:
 A new pure module `src/chrome.ts`, modelled on `element-size.ts`:
 
 ```ts
-export interface Chrome { theme: "none" | "auto" | "light" | "dark";
-                          radius: number; opacity: number; content_ratio: number }
-export const DEFAULT_CHROME: Chrome
-export const normalizeChrome: (raw: unknown) => Chrome
-export const isDefaultChrome: (chrome: Chrome) => boolean
-export const chromeFill: (theme: Chrome["theme"]) => string
+export type ChromeTheme = "none" | "auto" | "light" | "dark";
+export interface Chrome {
+  theme: ChromeTheme;
+  radius: number;         // percent, 0-50
+  opacity: number;        // 0-1
+  content_ratio: number;  // 0-1
+}
+export const DEFAULT_CHROME: Chrome;
+export const normalizeChrome: (raw: unknown) => Chrome;
+export const isDefaultChrome: (chrome: Chrome) => boolean;
+export const chromeFill: (theme: ChromeTheme) => string;
 ```
 
 Everything that decides is testable without layout; the element only writes
 custom properties on the host, as it already does for `--psc-icon-size`.
 
-`normalizeChrome` keeps unknown keys, and `isDefaultChrome` compares **all four**
-fields. Without that, `storedConfig` — which rewrites the whole config on every
-editor commit — would either write a full `chrome` block into everyone's YAML on
-the first drag, or drop a tuned one. That is the `size` trap, already paid for
-once.
+`normalizeChrome` returns exactly those four fields. `chrome` is a closed record
+of ours, so an unknown key inside it is dropped, the way `normalizeIconSize`
+drops one inside `size`. The rule that nothing may vanish sits one level up, on
+the element's `config`, where `normalizeElementConfig` spreads the raw object.
+
+`isDefaultChrome` compares **all four** fields. Without that, `storedConfig` —
+which rewrites the whole config on every editor commit — would either write a
+full `chrome` block into everyone's YAML on the first drag, or drop a tuned one.
+That is the `size` trap, already paid for once.
+
+**`chrome` is optional on `StateIconConfig`, where `size` is required**, and the
+difference is not an oversight. An absent `size` cannot be reasoned about —
+`iconSizeCss` switches on `mode`, so the object has to exist — while an absent
+`chrome` already means precisely what `DEFAULT_CHROME` means: draw nothing. The
+element reads it as "no chrome" and writes no custom property at all, which also
+spares thirty-odd test literals a field that says nothing.
 
 Out-of-range numbers are clamped on read (`radius` 0–50, `opacity` 0–1,
 `content_ratio` 0–1) and never written back in clamped form.
