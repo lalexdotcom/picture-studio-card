@@ -24,12 +24,9 @@ Badges from other frontend plugins appear in the picker next to the built-in one
 
 A badge carries a pill, a label and one fixed size. When what you want on the
 plan is an icon — and you want it big — add an **icon** item instead: the same
-entity, name, icon and colour controls, without the pill, and in a size you
-choose.
+entity, name, icon and colour controls, without the pill.
 
-That size follows the **card**: in a sections view a narrow column gets a
-smaller icon than a wide one, and the same card on a phone scales down with the
-screen. The three modes are described under [Icon size](#icon-size).
+You choose [how big it is](#icon-size) and [what it stands on](#chrome).
 
 ## Install
 
@@ -101,7 +98,9 @@ the item they place.
 
 #### Icon size
 
-An icon offers three sizes:
+An icon's size follows the **card**, not the screen: in a sections view a narrow
+column gets a smaller icon than a wide one, and the same card on a phone scales
+down with it. Three modes decide how closely:
 
 - **Automatic** *(default)* — 8% of the card's width, never under 24px, never
   over 48px.
@@ -215,8 +214,10 @@ and the edit dialog's "Visibility" tab is generic to all cards.
 
 #### Chrome
 
-An icon drawn on a photograph competes with whatever the picture happens to
-show. `chrome` gives it a surface to stand on instead.
+Anything drawn on a photograph competes with whatever the picture happens to
+show. `chrome` gives an item a surface to stand on instead. Icons offer it
+today; it is written to belong to an item rather than to one kind of item, so
+other kinds can take it up as they arrive.
 
 `theme` is the switch as well as the choice. `none` — the default, and what an
 absent `chrome` means — draws nothing. `auto` uses the same background your
@@ -225,9 +226,9 @@ force one or the other, which is what you want when the picture is dark and the
 theme is not, or the reverse.
 
 `radius` is a percentage of the box: `50` is a disc, `0` a square, anything
-between a rounded square. `opacity` fades the surface only — the icon on it
-keeps its own colour. `content_ratio` is the share of the box the icon takes:
-`0.6` matches Home Assistant's own icons, and `1` makes the icon fill the box
+between a rounded square. `opacity` fades the surface only — what stands on it
+keeps its own colour. `content_ratio` is the share of the box the content takes:
+`0.6` matches Home Assistant's own icons, and `1` makes the content fill the box
 entirely, which turns the chrome into a frame around an entity picture rather
 than a disc behind it.
 
@@ -235,7 +236,7 @@ The numbers are kept when you switch the surface back to `none`, so trying a
 chrome out and turning it off costs you nothing.
 
 Note that `size` is the size of the whole thing: switching a chrome on does not
-make an item bigger, it makes the icon inside it smaller. Nothing else about the
+make an item bigger, it makes what is inside it smaller. Nothing else about the
 item changes — where it sits, how it drags and what it does when clicked are the
 same with or without a surface.
 
