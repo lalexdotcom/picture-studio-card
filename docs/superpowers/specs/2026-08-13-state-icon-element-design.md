@@ -52,10 +52,11 @@ items:
       hold_action: { action: none }
       double_tap_action: { action: none }
       size:
-        auto: true                 # true => the card's defaults
-        min: 40                    # px
-        ratio: 3.5                 # % of the card's width
-        max: 70                    # px
+        mode: auto                 # auto | adaptive | fixed (absent => auto)
+        ratio: 3.5                 # adaptive only — % of the card's width
+        min: 40                    # adaptive only — px
+        max: 70                    # adaptive only — px
+        value: 48                  # fixed only — px
 ```
 
 `config` stays nested for both families, so every item has the same shape —
@@ -98,10 +99,11 @@ type PictureItem = BadgeItem | ElementItem;
 type ElementConfig = StateIconConfig;          // | StateLabelConfig, later
 
 interface IconSize {
-  auto: boolean;
-  min: number;                                 // px
-  ratio: number;                               // % of the card's width
-  max: number;                                 // px
+  mode: "auto" | "adaptive" | "fixed";
+  ratio: number;                               // adaptive — % of the card's width
+  min: number;                                 // adaptive — px
+  max: number;                                 // adaptive — px
+  value: number;                               // fixed — px
 }
 
 interface StateIconConfig {
@@ -155,7 +157,7 @@ The contract has two halves:
 
 - the card declares `container-type: inline-size` on `.root` — the only line it
   gains;
-- the element derives `clamp(<min>px, <ratio>cqw, <max>px)` from its config.
+- the element derives a CSS size string from its `config.size.mode`.
 
 `1cqw` is 1% of `.root`'s inline size, and `.root` is exactly the image's width,
 so the size follows the card: it changes with the column width in a sections
@@ -163,21 +165,27 @@ view and reproduces today's behaviour on a phone, where the card is the screen.
 Without the container declaration `cqw` falls back to the viewport **silently** —
 which is why that line is part of the contract, not a style detail.
 
-`auto: true` ignores `min` / `ratio` / `max` and applies the card's defaults,
-40 / 3.5 / 70 — the production values this design starts from. Unchecked, the
-three fields become editable, and the setting found that way becomes the default
-of `auto` later, without touching any config that never unchecked the switch.
+Three modes, selected by `size.mode`:
 
-**`auto` overrides, it never erases.** The numbers survive a checked switch — only
-the render substitutes the defaults for them — so unchecking it returns exactly
-what was typed. Storage therefore drops `size` only when all four fields are the
-defaults, not merely when `auto` is on: an automatic size may still carry numbers
-worth keeping.
+- **`auto`** applies the card's defaults — `clamp(40px, 3.5cqw, 70px)` — ignoring
+  whatever numbers may be stored alongside it. This is the default, and it is the
+  production-proven starting point.
+- **`adaptive`** renders `clamp(<min>px, <ratio>cqw, <max>px)` from the item's own
+  numbers, so the size still scales with the card but within the user's chosen
+  bounds.
+- **`fixed`** renders `<value>px` — plain pixels, no container unit, no clamp.
+  It earns its place for layouts where the icon must hold a precise size regardless
+  of the card's width: a map overlay, a legend, a control panel with fixed columns.
 
-`min = max` yields a fixed size, so no separate "fixed px" mode is needed. When
-`min > max`, CSS `clamp()` returns the minimum by specification; this is
-documented rather than validated, since rejecting a transient value while the
-user is typing is more hostile than living with it.
+`size.mode` overrides; it never erases. Switching to `auto` keeps the stored
+`min`, `ratio`, `max`, and `value` intact — only the render substitutes the
+defaults for them — so switching back to `adaptive` or `fixed` restores exactly
+what was typed. Storage drops `size` only when all five fields equal the defaults,
+not merely when `mode` is `"auto"`: an auto size may carry numbers worth keeping.
+
+When `min > max` under `adaptive`, CSS `clamp()` returns the minimum by
+specification; this is documented rather than validated, since rejecting a
+transient value while the user is typing is more hostile than living with it.
 
 One value drives the whole visual footprint: `width`, `height` and
 `--mdc-icon-size` all read `--psc-icon-size`, so a glyph and an entity picture
@@ -468,4 +476,8 @@ The other nine rows need a browser and are open.
   punctuation.
 - **A collapsible "Positioning" section.** It would restyle the shipped badge
   form for consistency alone.
-- **A separate "fixed px" size mode.** `min = max` already expresses it.
+- **`min = max` as the fixed-size idiom (earlier design).** Dropped in favour of
+  an explicit `fixed` mode with a dedicated `value` field: the idiom was
+  non-obvious, required two coordinated edits, and did not communicate its
+  intent. An explicit mode also produces a simpler CSS output (`48px` vs
+  `clamp(48px, …, 48px)`) and needs no container unit at all.

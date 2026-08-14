@@ -111,10 +111,11 @@ items:
       show_entity_picture: false
       tap_action: { action: more-info }
       size:
-        auto: true               # false to set the three numbers below
-        min: 40                  # px
-        ratio: 3.5               # % of the card's width
-        max: 70                  # px
+        mode: auto               # auto | adaptive | fixed (absent => auto)
+        ratio: 3.5               # adaptive only — % of card width
+        min: 40                  # adaptive only — px
+        max: 70                  # adaptive only — px
+        value: 48                # fixed only — px
     position:
       top: 45%
       left: 20%
@@ -122,12 +123,15 @@ items:
 
 ### Icon sizing
 
-A `state-icon` sizes itself from **the card's width**, not the window's:
-`clamp(min, ratio, max)` where the ratio is a percentage of the card. In a
-sections view two cards of different widths therefore get different icon sizes,
-which a `vw`-based size in `picture-elements` cannot do. Leave `auto` on to take
-the defaults (40 px / 3.5 % / 70 px); set `min` and `max` to the same value for a
-fixed size.
+A `state-icon` has three sizing modes set by `size.mode`:
+
+- **`auto`** (default) — the card's built-in defaults: `clamp(40px, 3.5cqw, 70px)`.
+- **`adaptive`** — `clamp(<min>px, <ratio>cqw, <max>px)` from the item's own
+  numbers. The size still scales with the card's column width, but within the
+  bounds you set. In a sections view, two cards of different widths get different
+  icon sizes — a `vw`-based size in `picture-elements` cannot do that.
+- **`fixed`** — exactly `<value>px`, no scaling. Useful when the icon must hold a
+  precise size regardless of the card's width.
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
 
