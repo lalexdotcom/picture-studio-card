@@ -102,7 +102,7 @@ export const fromFormData = (
   //   this.data = { ...this.data, ...newValue };
   //   fireEvent(this, "value-changed", { value: this.data });
   // — so every field we pass to `.data` comes back regardless of which rows the
-  // current mode's schema is showing. Passing `toFormData(element)` (all nine
+  // current mode's schema is showing. Passing `toFormData(element)` (all ten
   // fields) as `.data` is therefore what keeps the non-visible fields alive.
   const {
     size_mode,
