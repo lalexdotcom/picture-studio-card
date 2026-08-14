@@ -61,7 +61,10 @@ export class PictureStudioAnchorPicker extends LitElement {
                switch does: it is the only way its label is styled identically,
                by construction rather than by copying values out of HA's CSS. -->
           <ha-formfield .label=${localizeOwn(this.hass, "anchor_anchored")}>
-            <div class="grid">
+            <!-- The grid is always clickable — clicking a cell is how the user
+                 leaves the automatic mode. The .fixed class is a visual state,
+                 not a disabled one; do not add a disabled attribute to match. -->
+            <div class=${proportional ? "grid" : "grid fixed"}>
               ${CELLS.map(
                 (cell) => html`
                   <button
@@ -133,6 +136,22 @@ export class PictureStudioAnchorPicker extends LitElement {
          keeps the same gap all the way round only if the outer radius grows
          by that padding too. */
       border-radius: calc(var(--cell-radius) + var(--grid-padding));
+    }
+    /* When a fixed anchor is chosen the frame mirrors the switch's checked
+       state — the same token chain the switch uses for its checked track, so a
+       theme that restyles the switch moves this one with it. --primary-color
+       closes both chains because the --ha-color-* tokens are absent from the
+       theme at our minimum Home Assistant version, where this then keeps exactly
+       its previous appearance. */
+    .grid.fixed {
+      background-color: var(
+        --ha-switch-checked-background-color,
+        var(--ha-color-fill-primary-normal-resting, var(--primary-color))
+      );
+      border-color: var(
+        --ha-switch-checked-border-color,
+        var(--ha-color-border-primary-loud, var(--primary-color))
+      );
     }
     .cell {
       width: 10px;

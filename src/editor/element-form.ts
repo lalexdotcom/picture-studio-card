@@ -141,7 +141,10 @@ export const stateIconSizeSchema = (
       {
         name: "size_ratio",
         selector: {
-          number: { min: 0, max: 100, step: 0.1, unit_of_measurement: "%", mode: "box" },
+          // A percentage of the card's width is a value you feel rather than
+          // type, so size_ratio gets a slider (no mode: "box"). The three pixel
+          // fields keep "box" because exact pixel values are typed, not dragged.
+          number: { min: 1, max: 100, step: 0.1, unit_of_measurement: "%" },
         },
       },
       {

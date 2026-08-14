@@ -140,9 +140,15 @@ describe("stateIconSizeSchema", () => {
     }
   });
 
-  it("every number field carries mode: box", () => {
+  it("size_ratio has no mode: box and spans 1 to 100", () => {
     const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
-    expect(get(find(adaptive, "size_ratio"), "selector", "number", "mode")).toBe("box");
+    expect(get(find(adaptive, "size_ratio"), "selector", "number", "mode")).toBeUndefined();
+    expect(get(find(adaptive, "size_ratio"), "selector", "number", "min")).toBe(1);
+    expect(get(find(adaptive, "size_ratio"), "selector", "number", "max")).toBe(100);
+  });
+
+  it("pixel fields (size_min, size_max, size_value) keep mode: box", () => {
+    const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
     expect(get(find(adaptive, "size_min"), "selector", "number", "mode")).toBe("box");
     expect(get(find(adaptive, "size_max"), "selector", "number", "mode")).toBe("box");
 
