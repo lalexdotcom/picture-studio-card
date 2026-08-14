@@ -1,6 +1,6 @@
 import type { ElementConfig, PictureItem } from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
-import type { BadgeConfig, HassEntity } from "../types";
+import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 
 /**
  * Every operation moves a {type, position, anchor, config} item as a unit, which
@@ -46,6 +46,25 @@ export const setAnchor = (
         i === index ? { ...item, anchor, position: position ?? item.position } : item,
       );
 
+/**
+ * Set or clear an item's conditions. An empty list is cleared rather than
+ * stored: Home Assistant's own visibility editor deletes the key when its list
+ * falls back to zero, and a `visibility: []` in YAML says nothing while looking
+ * like it says something.
+ */
+export const setVisibility = (
+  items: PictureItem[],
+  index: number,
+  visibility: VisibilityCondition[] | undefined,
+): PictureItem[] => {
+  if (index < 0 || index >= items.length) return items;
+  return items.map((item, i) => {
+    if (i !== index) return item;
+    const { visibility: _dropped, ...rest } = item;
+    return (visibility?.length ? { ...rest, visibility } : rest) as PictureItem;
+  });
+};
+
 export const moveItem = (items: PictureItem[], from: number, to: number): PictureItem[] => {
   if (from < 0 || to < 0 || from >= items.length || to >= items.length) return items;
   const out = [...items];
@@ -64,34 +83,58 @@ export interface RowLabel {
 }
 
 /**
- * An entity id is what the config carries, but not what anyone recognises: the
- * row shows the entity's own name and keeps the id underneath, the way Home
- * Assistant's own element list does.
+ * What a list row shows for a placed item.
  *
- * A `name` written into the badge wins over the entity's, being an explicit
- * choice by whoever configured it. An entity missing from `states` — deleted, or
- * not loaded yet — falls back to its id, which still says more than a blank row.
+ * Home Assistant's own entity lists — Entities, Distribution and History Graph,
+ * all three drawn by `hui-entity-editor` — read as a name over a place: the
+ * entity's name on the first line, then "Area ▸ Device" on the second. Both
+ * strings are composed by `hass.formatEntityName` against the registry, so they
+ * are asked for rather than assembled out of `friendly_name` and an entity id —
+ * an id under a name is precisely what a built-in card never shows.
  *
- * Only `name`, `entity` and `type` are read: labelling is the one exception to
- * treating a badge config as opaque.
+ * Everything after the first branch is the degradation, and a blank row is
+ * never one of the outcomes: an item with no entity, an entity absent from the
+ * registry, or a Home Assistant too old to compose names all still say
+ * something. The id says more than nothing.
  */
-export const rowLabel = (item: PictureItem, states?: Record<string, HassEntity>): RowLabel => {
-  const friendly = item.config.entity
-    ? states?.[item.config.entity as string]?.attributes?.friendly_name
-    : undefined;
+export const rowLabel = (item: PictureItem, hass?: HomeAssistant): RowLabel => {
+  const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
+  const stateObj = entityId ? hass?.states?.[entityId] : undefined;
+
+  // A `name` written into a badge outranks the registry: it is an explicit
+  // choice by whoever configured that badge, and Home Assistant's own lists
+  // only skip this because they have no such field to read. Never read for an
+  // element, where `name` may hold composed sentinels.
+  const named = item.type === "badge" ? (item.config as { name?: string }).name : undefined;
+
+  if (entityId && stateObj && hass?.formatEntityName) {
+    const format = hass.formatEntityName;
+    const primary = named || format(stateObj, { type: "entity" }) || entityId;
+    // Asked for part by part rather than as one list, so that a part which
+    // merely repeats the first line can be dropped. An entity that is its
+    // device's main one composes to the device's own name, and Home Assistant
+    // resolves that with a registry heuristic we would have to copy; comparing
+    // the two strings we already hold arrives at the same place — device on
+    // top, place underneath — without copying anything.
+    // The result is empty for an entity attached to neither, which is common
+    // enough that it has to mean "no second line" rather than a blank one.
+    const secondary = [format(stateObj, { type: "area" }), format(stateObj, { type: "device" })]
+      .filter((part) => part && part !== primary)
+      // A device and the area it sits in can carry the same name, and
+      // "Bureau ▸ Bureau" says less than "Bureau".
+      .filter((part, i, parts) => parts.indexOf(part) === i)
+      .join(" ▸ ");
+    return secondary ? { primary, secondary } : { primary };
+  }
 
   if (item.type === "element") {
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.
-    const primary = friendly ?? item.config.entity ?? item.config.type;
-    return item.config.entity && item.config.entity !== primary
-      ? { primary, secondary: item.config.entity }
-      : { primary };
+    return { primary: entityId ?? item.config.type };
   }
 
-  const config = item.config as { entity?: string; type?: string; name?: string };
-  const primary = config.name ?? friendly ?? config.entity ?? config.type ?? "badge";
-  if (config.entity && config.entity !== primary) return { primary, secondary: config.entity };
+  const config = item.config as { entity?: string; type?: string };
+  const primary = named ?? entityId ?? config.type ?? "badge";
   if (config.type && config.type !== primary) return { primary, secondary: config.type };
   return { primary };
 };

@@ -8,28 +8,28 @@ const hass = (over: Partial<HomeAssistant>): HomeAssistant =>
 describe("localizeOwn", () => {
   it("prefers the stored locale over the resolved language", () => {
     const out = localizeOwn(hass({ language: "en", locale: { language: "fr" } }), "stacking_hint");
-    expect(out).toBe("Les derniers badges de la liste sont au-dessus.");
+    expect(out).toBe("Les derniers items de la liste sont au-dessus.");
   });
 
   it("falls back to the resolved language when no locale is stored", () => {
-    expect(localizeOwn(hass({ language: "fr" }), "stacking_hint")).toContain("Les derniers badges");
+    expect(localizeOwn(hass({ language: "fr" }), "stacking_hint")).toContain("Les derniers items");
   });
 
   it("degrades a regional variant to its base language", () => {
     expect(localizeOwn(hass({ language: "fr-CA" }), "stacking_hint")).toContain(
-      "Les derniers badges",
+      "Les derniers items",
     );
   });
 
   it("falls back to English for an untranslated language", () => {
     expect(localizeOwn(hass({ language: "de" }), "stacking_hint")).toBe(
-      "The last badges in the list are drawn on top.",
+      "The last items in the list are drawn on top.",
     );
   });
 
   it("survives a missing hass", () => {
     expect(localizeOwn(undefined, "stacking_hint")).toBe(
-      "The last badges in the list are drawn on top.",
+      "The last items in the list are drawn on top.",
     );
   });
 });

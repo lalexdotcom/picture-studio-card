@@ -1,9 +1,10 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
-import type { BadgeConfig, HomeAssistant } from "../types";
+import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { resolveBadgeClass } from "./badge-catalog";
 import { PLACEMENT_ICON } from "./icons";
+import "./visibility-section";
 
 type BadgeEditorElement = HTMLElement & {
   hass?: HomeAssistant;
@@ -24,11 +25,13 @@ export class PictureStudioBadgeForm extends LitElement {
     hass: { attribute: false },
     badge: { attribute: false },
     anchor: { attribute: false },
+    visibility: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare badge?: BadgeConfig;
   declare anchor?: Anchor;
+  declare visibility?: VisibilityCondition[];
 
   private _editor?: BadgeEditorElement;
   /** The type the mounted editor was built for; a type change needs a new one. */
@@ -127,6 +130,10 @@ export class PictureStudioBadgeForm extends LitElement {
           ></picture-studio-anchor-picker>
         </div>
       </ha-expansion-panel>
+      <picture-studio-visibility-section
+        .hass=${this.hass}
+        .visibility=${this.visibility}
+      ></picture-studio-visibility-section>
     `;
   }
 
@@ -147,7 +154,11 @@ export class PictureStudioBadgeForm extends LitElement {
        Assistant's own expandable sections. */
     ha-expansion-panel {
       display: block;
-      margin-top: var(--ha-space-3, 12px);
+      /* 24px, the spacing ha-form puts between its own root children. Every
+         section of an item form — the badge's own fields, Position, Visibility —
+         is separated by the same gap, so the column reads as one rhythm rather
+         than as our sections tacked onto Home Assistant's. */
+      margin-top: var(--ha-space-6, 24px);
       --expansion-panel-content-padding: 0;
       border-radius: var(--ha-border-radius-md);
       --ha-card-border-radius: var(--ha-border-radius-md);
@@ -157,6 +168,10 @@ export class PictureStudioBadgeForm extends LitElement {
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
+    }
+    picture-studio-visibility-section {
+      display: block;
+      margin-top: var(--ha-space-6, 24px);
     }
   `;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
 import {
   CARD_TYPE,
+  hasVisibility,
   imagePath,
   normalizeConfig,
   type StateIconConfig,
@@ -326,6 +327,86 @@ describe("storedConfig", () => {
       items: unknown[];
     };
     expect(stored.items[0]).toEqual(item);
+  });
+});
+
+describe("item visibility", () => {
+  const withVisibility = (visibility: unknown) => ({
+    type: "custom:picture-studio",
+    items: [
+      {
+        type: "badge",
+        position: { top: "10%", left: "10%" },
+        visibility,
+        config: { type: "entity", entity: "light.a" },
+      },
+    ],
+  });
+
+  it("carries a condition list through untouched", () => {
+    const conditions = [{ condition: "state", entity: "binary_sensor.night", state: "on" }];
+    const out = normalizeConfig(withVisibility(conditions));
+    expect(out.items[0]?.visibility).toEqual(conditions);
+  });
+
+  it("keeps a condition type it does not know", () => {
+    const conditions = [{ condition: "future_condition", whatever: 1 }];
+    const out = normalizeConfig(withVisibility(conditions));
+    expect(out.items[0]?.visibility).toEqual(conditions);
+  });
+
+  it("leaves the key absent when the config has none", () => {
+    const out = normalizeConfig({
+      type: "custom:picture-studio",
+      items: [{ type: "badge", config: { type: "entity" } }],
+    });
+    expect(out.items[0]?.visibility).toBeUndefined();
+  });
+
+  it("raises when visibility is not a list", () => {
+    expect(() => normalizeConfig(withVisibility({ condition: "state" }))).toThrow(
+      /items\[0\]\.visibility must be a list/,
+    );
+  });
+
+  it("stores the key when it holds conditions", () => {
+    const conditions = [{ condition: "state", entity: "light.a", state: "on" }];
+    const stored = storedConfig(normalizeConfig(withVisibility(conditions)));
+    expect((stored.items as Record<string, unknown>[])[0]?.visibility).toEqual(conditions);
+  });
+
+  it("omits the key when the list is empty", () => {
+    const stored = storedConfig(normalizeConfig(withVisibility([])));
+    expect((stored.items as Record<string, unknown>[])[0]).not.toHaveProperty("visibility");
+  });
+
+  it("omits the key when there is none, so an untouched config round-trips", () => {
+    const raw = {
+      type: "custom:picture-studio",
+      items: [{ type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entity" } }],
+    };
+    const stored = storedConfig(normalizeConfig(raw));
+    expect((stored.items as Record<string, unknown>[])[0]).not.toHaveProperty("visibility");
+  });
+});
+
+describe("hasVisibility", () => {
+  const item = (visibility?: unknown) =>
+    normalizeConfig({
+      type: "custom:picture-studio",
+      items: [{ type: "badge", visibility, config: { type: "entity" } }],
+    }).items[0]!;
+
+  it("is false with no key", () => {
+    expect(hasVisibility(item())).toBe(false);
+  });
+
+  it("is false with an empty list", () => {
+    expect(hasVisibility(item([]))).toBe(false);
+  });
+
+  it("is true with one condition", () => {
+    expect(hasVisibility(item([{ condition: "state" }]))).toBe(true);
   });
 });
 

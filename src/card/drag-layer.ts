@@ -40,6 +40,16 @@ interface DragOptions {
   getAnchor(index: number): Anchor;
   onCommit(index: number, position: Position): void;
   /**
+   * Every pointermove, with the coordinates the gesture would commit if it
+   * ended now — the same conversion onPointerUp performs, so nothing the caller
+   * derives from them can jump at release.
+   *
+   * It exists for decorations that hang off the item and must not overhang the
+   * card: the marker's corner has to follow the item during the gesture, not
+   * after it, because an overhang raises a scrollbar under the pointer.
+   */
+  onMove?(index: number, position: Position): void;
+  /**
    * Raised on pointerdown: with an index when a badge was hit, so grabbing one
    * selects it as surely as clicking it, and with undefined when the press
    * landed on the image, which clears the selection.
@@ -159,6 +169,18 @@ export const createDragController = (options: DragOptions) => {
 
     state.hit.element.style.left = `${state.x}px`;
     state.hit.element.style.top = `${state.y}px`;
+
+    if (options.onMove) {
+      // Deliberately the same conversion as onPointerUp, anchor included: a
+      // caller that decides something from these coordinates decides it from
+      // exactly what the release will store, so the decision never flips at
+      // the end of the gesture.
+      const anchor = options.getAnchor(state.hit.index);
+      options.onMove(state.hit.index, {
+        left: toPercent(state.x, state.surface.width, state.width, axisOffset(anchor, "x")),
+        top: toPercent(state.y, state.surface.height, state.height, axisOffset(anchor, "y")),
+      });
+    }
     ev.preventDefault();
   };
 

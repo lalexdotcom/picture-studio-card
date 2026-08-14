@@ -3,14 +3,23 @@ import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
+  hasVisibility,
   ICON_TAG,
   imagePath,
   normalizeConfig,
   type PictureItem,
   type PictureStudioConfig,
+  PROBE_TYPE,
   stubConfig,
 } from "../config";
-import { type Anchor, type Position, positionStyle, reanchor } from "../position";
+import {
+  type Anchor,
+  type MarkerCorner,
+  markerCorner,
+  type Position,
+  positionStyle,
+  reanchor,
+} from "../position";
 import type {
   BadgeConfig,
   HomeAssistant,
@@ -19,6 +28,19 @@ import type {
   LovelaceGridOptions,
 } from "../types";
 import { createDragController } from "./drag-layer";
+
+/**
+ * The slice of `hui-card` a probe uses. Declared rather than imported: it is
+ * Home Assistant's element, and we only ever set these four.
+ */
+type ProbeElement = HTMLElement & {
+  config?: unknown;
+  hass?: unknown;
+  preview?: boolean;
+  load?: () => void;
+};
+
+const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 export class PictureStudioCard extends LitElement {
   static properties = {
@@ -42,6 +64,8 @@ export class PictureStudioCard extends LitElement {
   private _bgElement?: LovelaceElementElement;
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
+  /** Indexed like _wrappers; a hole where the item carries no conditions. */
+  private _probes: (ProbeElement | undefined)[] = [];
   private _renderedTypes: string[] = [];
   /** Released when the card stops editing; see the broker's card registry. */
   private _unregisterCard?: () => void;
@@ -58,6 +82,15 @@ export class PictureStudioCard extends LitElement {
     getSurface: () => this.renderRoot.querySelector(".layer"),
     getAnchor: (index) => this._config?.items[index]?.anchor ?? "auto",
     onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
+    // The marker has to keep pointing inward for the whole gesture: it hangs
+    // off the wrapper, and ha-card scrolls vertically, so a corner left on the
+    // trailing side raises a scrollbar under the pointer mid-drag.
+    onMove: (index, position) => {
+      const wrapper = this._wrappers[index];
+      if (wrapper?.classList.contains("conditional")) {
+        this._applyMarkerCorner(wrapper, position);
+      }
+    },
     onSelect: (index) => activeEditor()?.select(index),
   });
 
@@ -72,6 +105,9 @@ export class PictureStudioCard extends LitElement {
     if (this._bgElement) this._bgElement.hass = hass;
     for (const el of this._elements) {
       el.hass = hass;
+    }
+    for (const probe of this._probes) {
+      if (probe) probe.hass = hass;
     }
     // No requestUpdate: render() reads _config.title and editing, never hass.
     // Home Assistant republishes hass on every state change of any entity, so
@@ -230,11 +266,20 @@ export class PictureStudioCard extends LitElement {
       this._syncEditingAndDrag();
     }
 
+    if (changed.has("preview")) {
+      for (const probe of this._probes) {
+        if (probe) probe.preview = this.preview;
+      }
+    }
+
     if (configChanged) {
       void this._syncBackground();
       // _syncItems ends with _applyPositions, so it is not called again here.
       void this._syncItems();
-    } else if (changed.has("editing") || changed.has("selected")) {
+      // `preview` is in the gate because the condition marker keys on it: a
+      // dashboard entering or leaving edit mode changes nothing else here, and
+      // without this the mark would only appear on the next config change.
+    } else if (changed.has("editing") || changed.has("selected") || changed.has("preview")) {
       this._applyPositions(this._config?.items ?? []);
     }
   }
@@ -308,9 +353,12 @@ export class PictureStudioCard extends LitElement {
     const items = this._config?.items ?? [];
     if (!layer) return;
 
-    // The family AND the kind: without the prefix, two icons and a typeless
-    // badge would all key on "".
-    const types = items.map((item) => `${item.type}:${String(item.config.type ?? "")}`);
+    // The family, the kind, and whether the item carries conditions. The last
+    // one belongs here because a probe is a sibling in the layer: it appearing
+    // or disappearing changes the DOM we build, not just the config we push.
+    const types = items.map(
+      (item) => `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
+    );
     const sameShape =
       types.length === this._renderedTypes.length &&
       types.every((t, i) => t === this._renderedTypes[i]);
@@ -320,6 +368,7 @@ export class PictureStudioCard extends LitElement {
       layer.replaceChildren();
       this._elements = [];
       this._wrappers = [];
+      this._probes = [];
 
       items.forEach((item, index) => {
         const wrapper = document.createElement("div");
@@ -331,10 +380,14 @@ export class PictureStudioCard extends LitElement {
         const child = this._createChild(item, helpers);
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
+
+        const probe = this._createProbe(item);
+        if (probe) layer.append(probe);
         layer.append(wrapper);
 
         this._elements.push(child);
         this._wrappers.push(wrapper);
+        this._probes.push(probe);
       });
       this._renderedTypes = types;
     } else {
@@ -343,6 +396,11 @@ export class PictureStudioCard extends LitElement {
         if (!child) return;
         child.setConfig(item.config as unknown as BadgeConfig);
         if (this._hass) child.hass = this._hass;
+
+        const probe = this._probes[index];
+        // A new object each time is correct here: this branch only runs on a
+        // config change, never on the hass path.
+        if (probe) probe.config = { type: PROBE_TYPE, visibility: item.visibility };
       });
     }
 
@@ -359,6 +417,36 @@ export class PictureStudioCard extends LitElement {
     return el;
   }
 
+  /**
+   * A `hui-card` carrying nothing but the item's conditions and a phantom card.
+   * It is Home Assistant's own implementation of `visibility`, so the
+   * evaluation, the media-query listeners and the `time` timers are theirs. The
+   * verdict lands on the probe as the native `hidden` attribute, and the
+   * stylesheet's sibling rule reflects it onto the item — no JavaScript of ours
+   * in that path.
+   *
+   * `preview` follows the card's own, not `editing`: it is true both in the edit
+   * dialog and on a dashboard in edit mode, which is exactly when Home Assistant
+   * keeps its own hidden cards on screen.
+   *
+   * None at all while editing. The editor's marker says "has conditions", not
+   * "is hidden", so no verdict is needed there — and that is where the drag
+   * layer is already the heaviest.
+   */
+  private _createProbe(item: PictureItem): ProbeElement | undefined {
+    if (this.editing || !hasVisibility(item)) return undefined;
+    const probe = document.createElement("hui-card") as ProbeElement;
+    probe.className = "probe";
+    probe.config = { type: PROBE_TYPE, visibility: item.visibility };
+    probe.preview = this.preview;
+    if (this._hass) probe.hass = this._hass;
+    // Optional call: in the test environment hui-card is not defined, and an
+    // unknown element has no load(). The probe is then inert, which is what the
+    // suite asserts against — the real behaviour is a browser question.
+    probe.load?.();
+    return probe;
+  }
+
   private _applyPositions(items: PictureItem[]): void {
     const dragging = this._drag.draggingIndex();
     items.forEach((item, index) => {
@@ -368,18 +456,48 @@ export class PictureStudioCard extends LitElement {
       // wrappers are built imperatively, and it is set outside the drag guard
       // below: the badge being dragged is precisely the selected one.
       wrapper.classList.toggle("selected", this.editing && index === this.selected);
+      // "This item carries conditions", not "it is hidden right now": there is
+      // no probe in the editor, so there is no verdict to read — and a static
+      // mark is the better affordance anyway, since it does not flicker with
+      // entity state. The live verdict lives in the form's own banner.
+      // Keyed on `preview`, not on `editing`: `preview` is true both in the
+      // card's own edit dialog and on a dashboard in edit mode, and it is
+      // exactly what makes Home Assistant hold every conditional item on
+      // screen. The mark is what explains that — without it, an editing user
+      // sees items that a viewing user will not, and nothing says which.
+      const conditional = this.preview && hasVisibility(item);
+      wrapper.classList.toggle("conditional", conditional);
       // Leave the badge under the cursor alone: its styles are live pixels
       // managed by the drag controller. Writing the stored config position over
       // them would jump the badge back toward its pre-drag location on every
       // hass tick. Once the drag ends, onPointerUp restores the derived style
       // and the next _applyPositions then matches it exactly — no flash.
+      // The marker's corner sits below this guard for the same reason: during a
+      // gesture the stored coordinates are stale, and the drag controller is
+      // what keeps the corner honest.
       if (index === dragging) return;
+
+      this._applyMarkerCorner(wrapper, conditional ? item.position : undefined);
 
       const style = positionStyle(item.position, item.anchor);
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;
     });
+  }
+
+  /**
+   * Point the condition marker towards the inside of the picture, or clear it
+   * when there is no marker to point.
+   *
+   * Split out because the drag calls it on every pointermove. A marker left on
+   * the side the item is travelling towards overhangs the card, and `ha-card`
+   * scrolls vertically — so a stale corner does not merely look wrong, it
+   * raises a scrollbar under the pointer in the middle of a gesture.
+   */
+  private _applyMarkerCorner(wrapper: HTMLElement, position: Position | undefined): void {
+    const corner = position ? markerCorner(position) : undefined;
+    for (const c of MARKER_CORNERS) wrapper.classList.toggle(`marker-${c}`, c === corner);
   }
 
   /**
@@ -420,7 +538,7 @@ export class PictureStudioCard extends LitElement {
 
     return html`
       <ha-card .header=${this._config.title}>
-        <div class="root ${this.editing ? "editing" : ""}">
+        <div class="root ${this.editing ? "editing" : ""} ${this.preview ? "previewing" : ""}">
           <div class="layer"></div>
         </div>
       </ha-card>
@@ -439,6 +557,11 @@ export class PictureStudioCard extends LitElement {
     :host {
       display: block;
       height: 100%;
+      /* mdi:eye, inlined once as a mask source. Named here rather than at the
+         call site so the glyph is one edit away from being another one. The
+         open eye, not the crossed-out one: the mark says the item has
+         visibility conditions, not that it is hidden. */
+      --psc-marker-glyph: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z'/></svg>");
     }
     ha-card {
       height: 100%;
@@ -469,6 +592,17 @@ export class PictureStudioCard extends LitElement {
       position: absolute;
       inset: 0;
       pointer-events: none;
+    }
+    /* The probe is a hui-card carrying the item's conditions. It stays in the
+       DOM — the Lit context a view_columns condition consumes resolves through
+       it, and display: none is not detachment — and never draws.
+       The important beats the inline display hui-card drives on itself, without
+       touching the hidden attribute, which is the signal. */
+    .probe {
+      display: none !important;
+    }
+    .probe[hidden] + .item {
+      display: none;
     }
     /* max-content, not shrink-to-fit: an absolutely positioned box with a left
        and no right is sized against the space remaining to its right, which is
@@ -520,6 +654,94 @@ export class PictureStudioCard extends LitElement {
     .editing .item.dragging {
       outline: 2px solid var(--primary-color);
       outline-offset: 1px;
+    }
+    /* The item being edited comes to the front. This is the one exception to
+       "no z-index": it is an editor affordance, it never reaches the config,
+       and it does not exist on a dashboard — the rendered stacking still has a
+       single authority, the list order. .dragging is there in its own right:
+       the selection arrives through a re-render, which pointer capture can
+       precede by a frame. */
+    .editing .item.selected,
+    .editing .item.dragging {
+      z-index: 1;
+    }
+    /* "This item carries conditions". Out of flow, so it adds nothing to the
+       wrapper's max-content width: the halo, the ring and the radius keep
+       tracing the item alone, and getBoundingClientRect — which the drag clamp
+       measures — returns the same box it did before.
+       Its own pointer-events, because \`.editing .item > *\` matches real
+       children and not a pseudo-element. */
+    /* Two pseudo-elements over one box: the disc below, the glyph above. One
+       element cannot hold both — the mask that colours the glyph would clip the
+       disc away with it.
+       Both are out of flow, so neither adds anything to the wrapper's
+       max-content width: the halo, the ring and the radius keep tracing the
+       item alone, and getBoundingClientRect — which the drag clamp measures —
+       returns the same box it did before. They carry their own pointer-events,
+       because the rule muting the wrapper's children matches real children and
+       not pseudo-elements.
+       The corner comes in as four variables rather than being written on each
+       pseudo-element, so the two stay glued together by construction. */
+    /* The glyph leads and the disc follows. It is the eye that has to read on
+       a photograph; the disc is only what separates it from one, and the ring
+       between them is a constant so the two cannot drift apart. One value to
+       change, and the disc, the mask and the corner offsets all follow. */
+    .previewing .item.conditional {
+      --psc-marker-glyph-size: 16px;
+      --psc-marker-size: calc(var(--psc-marker-glyph-size) + 6px);
+    }
+    .previewing .item.conditional::before,
+    .previewing .item.conditional::after {
+      content: "";
+      position: absolute;
+      width: var(--psc-marker-size);
+      height: var(--psc-marker-size);
+      box-sizing: border-box;
+      top: var(--psc-marker-top, auto);
+      right: var(--psc-marker-right, auto);
+      bottom: var(--psc-marker-bottom, auto);
+      left: var(--psc-marker-left, auto);
+      pointer-events: none;
+    }
+    /* The badge's own tokens, so the mark follows the theme wherever the card
+       is dropped rather than carrying two hand-picked colours that would each
+       be wrong in one of the two modes. */
+    .previewing .item.conditional::before {
+      border-radius: var(--ha-border-radius-circle, 50%);
+      background: var(--ha-card-background, var(--card-background-color, #fff));
+      /* 1px outright, not --ha-card-border-width: plenty of themes set that to
+         0 and let a shadow separate their cards instead. Here the ring is what
+         lifts the mark off a photograph, so it is not the theme's to remove —
+         only its colour is. */
+      border: 1px solid var(--ha-card-border-color, var(--divider-color, #e0e0e0));
+    }
+    /* Same box as the disc, so the glyph needs no offset of its own: what is
+       smaller and centred is the mask. --badge-color is what a badge colours
+       its own icon with; outside one it resolves to the fallback, which is the
+       colour a badge's icon takes when nothing overrides it. */
+    .previewing .item.conditional::after {
+      background-color: var(--badge-color, var(--secondary-text-color));
+      -webkit-mask: var(--psc-marker-glyph) center /
+        var(--psc-marker-glyph-size) var(--psc-marker-glyph-size) no-repeat;
+      mask: var(--psc-marker-glyph) center / var(--psc-marker-glyph-size)
+        var(--psc-marker-glyph-size) no-repeat;
+    }
+    /* Half the disc, so it straddles the corner exactly whatever its size. */
+    .previewing .item.marker-top-right {
+      --psc-marker-top: calc(var(--psc-marker-size) / -2);
+      --psc-marker-right: calc(var(--psc-marker-size) / -2);
+    }
+    .previewing .item.marker-top-left {
+      --psc-marker-top: calc(var(--psc-marker-size) / -2);
+      --psc-marker-left: calc(var(--psc-marker-size) / -2);
+    }
+    .previewing .item.marker-bottom-right {
+      --psc-marker-bottom: calc(var(--psc-marker-size) / -2);
+      --psc-marker-right: calc(var(--psc-marker-size) / -2);
+    }
+    .previewing .item.marker-bottom-left {
+      --psc-marker-bottom: calc(var(--psc-marker-size) / -2);
+      --psc-marker-left: calc(var(--psc-marker-size) / -2);
     }
     .editing .item > * {
       pointer-events: none;

@@ -7,6 +7,7 @@ import {
   replaceConfig,
   rowLabel,
   setAnchor,
+  setVisibility,
 } from "../../editor/items";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
 import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../../position";
@@ -156,24 +157,62 @@ describe("rowLabel", () => {
     anchor: "auto",
     config: config as never,
   });
-  const states = {
-    "light.ceiling_lights": { attributes: { friendly_name: "Open space" } },
+  // formatEntityName composes from the registry: one `{ type }` part for the
+  // name, a list of them for the "Area ▸ Device" breadcrumb.
+  const registry =
+    (names: Record<string, string>) =>
+    (_s: unknown, part?: unknown): string =>
+      names[(part as { type?: string } | undefined)?.type ?? ""] ?? "";
+
+  const hass = {
+    states: { "light.ceiling_lights": { attributes: {} } },
+    formatEntityName: registry({ entity: "Open space", area: "Bureau", device: "Plafonnier" }),
   } as never;
 
-  it("prefers the entity's name over its id", () => {
-    expect(rowLabel(badge({ type: "entity", entity: "light.ceiling_lights" }), states)).toEqual({
+  it("shows the entity's name over its place, as Home Assistant's own lists do", () => {
+    expect(rowLabel(badge({ type: "entity", entity: "light.ceiling_lights" }), hass)).toEqual({
       primary: "Open space",
-      secondary: "light.ceiling_lights",
+      secondary: "Bureau ▸ Plafonnier",
     });
   });
 
-  it("lets a name written into the badge win over the entity's", () => {
+  it("drops the second line for an entity attached to neither an area nor a device", () => {
+    const placeless = {
+      states: { "light.ceiling_lights": { attributes: {} } },
+      formatEntityName: registry({ entity: "Open space" }),
+    } as never;
+    expect(rowLabel(badge({ type: "entity", entity: "light.ceiling_lights" }), placeless)).toEqual({
+      primary: "Open space",
+    });
+  });
+
+  it("drops the device from the second line when it is already the first", () => {
+    // What Home Assistant reaches through a registry heuristic: the main entity
+    // of a device composes to the device's own name, and repeating it under
+    // itself says nothing.
+    const mainEntity = {
+      states: { "light.ceiling_lights": { attributes: {} } },
+      formatEntityName: registry({
+        entity: "Plafonnier",
+        area: "Bureau",
+        device: "Plafonnier",
+      }),
+    } as never;
+    expect(rowLabel(badge({ type: "entity", entity: "light.ceiling_lights" }), mainEntity)).toEqual(
+      {
+        primary: "Plafonnier",
+        secondary: "Bureau",
+      },
+    );
+  });
+
+  it("lets a name written into the badge win over the registry's", () => {
     const item = badge({ type: "entity", entity: "light.ceiling_lights", name: "Desks" });
-    expect(rowLabel(item, states).primary).toBe("Desks");
+    expect(rowLabel(item, hass).primary).toBe("Desks");
   });
 
   it("falls back to the id for an entity it cannot resolve", () => {
-    expect(rowLabel(badge({ type: "entity", entity: "light.gone" }), states)).toEqual({
+    expect(rowLabel(badge({ type: "entity", entity: "light.gone" }), hass)).toEqual({
       primary: "light.gone",
       secondary: "entity",
     });
@@ -199,11 +238,17 @@ describe("rowLabel for an element", () => {
     config: { type: "state-icon", size: DEFAULT_ICON_SIZE, ...config } as never,
   });
 
-  it("prefers the entity's friendly name, keeping the id as the caption", () => {
-    const states = { "light.a": { attributes: { friendly_name: "Lampe" } } } as never;
-    expect(rowLabel(icon({ entity: "light.a" }), states)).toEqual({
+  it("shows the entity's name over its place, like a badge row", () => {
+    const hass = {
+      states: { "light.a": { attributes: {} } },
+      formatEntityName: (_s: unknown, part?: unknown): string =>
+        ({ entity: "Lampe", area: "Salon", device: "Lampadaire" })[
+          (part as { type?: string } | undefined)?.type ?? ""
+        ] ?? "",
+    } as never;
+    expect(rowLabel(icon({ entity: "light.a" }), hass)).toEqual({
       primary: "Lampe",
-      secondary: "light.a",
+      secondary: "Salon ▸ Lampadaire",
     });
   });
 
@@ -215,5 +260,49 @@ describe("rowLabel for an element", () => {
     expect(rowLabel(icon({ name: "___device_name___", entity: "light.a" })).primary).toBe(
       "light.a",
     );
+  });
+});
+
+describe("setVisibility", () => {
+  const items = [
+    {
+      type: "badge" as const,
+      position: { top: 10, left: 10 },
+      anchor: "auto" as const,
+      config: {},
+    },
+    {
+      type: "badge" as const,
+      position: { top: 20, left: 20 },
+      anchor: "auto" as const,
+      config: {},
+    },
+  ];
+
+  it("sets a list on the addressed item only", () => {
+    const conditions = [{ condition: "state" }];
+    const out = setVisibility(items, 1, conditions);
+    expect(out[1]?.visibility).toEqual(conditions);
+    expect(out[0]?.visibility).toBeUndefined();
+  });
+
+  it("clears the key rather than storing an empty list", () => {
+    const withOne = setVisibility(items, 0, [{ condition: "state" }]);
+    const cleared = setVisibility(withOne, 0, []);
+    expect(cleared[0]).not.toHaveProperty("visibility");
+  });
+
+  it("clears the key when handed nothing", () => {
+    const withOne = setVisibility(items, 0, [{ condition: "state" }]);
+    expect(setVisibility(withOne, 0, undefined)[0]).not.toHaveProperty("visibility");
+  });
+
+  it("does not mutate its input", () => {
+    setVisibility(items, 0, [{ condition: "state" }]);
+    expect(items[0]).not.toHaveProperty("visibility");
+  });
+
+  it("returns the list untouched for an index out of range", () => {
+    expect(setVisibility(items, 5, [{ condition: "state" }])).toBe(items);
   });
 });

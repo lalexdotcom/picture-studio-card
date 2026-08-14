@@ -1,5 +1,7 @@
 import { describe, expect, it } from "@rstest/core";
-import { addChoices, splitChoiceValue } from "../../editor/badge-list";
+import type { PictureItem } from "../../config";
+import { badgeCatalog } from "../../editor/badge-catalog";
+import { addChoices, kindLabel, splitChoiceValue } from "../../editor/badge-list";
 
 const localize = ((key: string) =>
   ({
@@ -12,11 +14,37 @@ const localize = ((key: string) =>
 describe("addChoices", () => {
   it("prefixes every entry with its family, badges first", () => {
     const choices = addChoices(localize, undefined);
-    expect(choices[0]).toEqual({ value: "badge:entity", label: "Badges: Entité" });
+    expect(choices[0]).toEqual({
+      value: "badge:entity",
+      label: "Badges: Entité",
+      icon: "mdi:label",
+    });
     expect(choices.at(-1)).toEqual({
       value: "element:state-icon",
       label: "Éléments: Icône d'état",
+      icon: "mdi:shape-outline",
     });
+  });
+});
+
+describe("kindLabel", () => {
+  const catalog = badgeCatalog(undefined);
+  const badge = (type: string): PictureItem =>
+    ({ type: "badge", config: { type } }) as unknown as PictureItem;
+
+  it("names a core badge through Home Assistant's own label", () => {
+    expect(kindLabel(badge("entity"), localize, catalog)).toBe("Entité");
+  });
+
+  it("names an element kind", () => {
+    const item = { type: "element", config: { type: "state-icon" } } as unknown as PictureItem;
+    expect(kindLabel(item, localize, catalog)).toBe("Icône d'état");
+  });
+
+  it("falls back to the raw type for a badge the catalogue does not know", () => {
+    expect(kindLabel(badge("custom:mushroom-template-badge"), localize, catalog)).toBe(
+      "custom:mushroom-template-badge",
+    );
   });
 });
 

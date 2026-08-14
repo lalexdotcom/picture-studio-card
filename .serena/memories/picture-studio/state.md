@@ -9,15 +9,18 @@ mouse".
 today one kind, `state-icon`, an icon that reflects an entity's state and sizes
 itself from the **card's** width.
 
-**1.2.0 was merged into `main` on 2026-08-14** (merge commit `586fac9`,
-`--no-ff`, branch `feat/state-icon-element` deleted). **Nothing is pushed** —
-`main` is ahead of `origin/main`, and pushing is what publishes: `release.yml`
-reads `version`, finds no `v1.2.0` tag, and builds/tags/publishes the release
+**1.2.0 was merged into `main` and pushed on 2026-08-14** (merge commit `586fac9`,
+`--no-ff`, branch `feat/state-icon-element` deleted). The `v1.2.0` tag is on
+origin and `main` does not diverge from `origin/main` — the release is out.
+Pushing is what publishes: `release.yml` reads `version`, and the tag is what
 HACS installs. **The user pushes, never the agent.**
 
 Releases so far: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
-automated chain), 1.2.0 (merged 2026-08-14, awaiting the user's push).
-Suite: **239 tests**. Bundle: 101.8 kB / 25.2 kB gzip.
+automated chain), 1.2.0 (2026-08-14).
+
+**In flight: `feat/item-visibility`**, per-item `visibility`, for 1.3.0 — spec
+and plan in `docs/superpowers/`, browser walk done, verification record in the
+spec. Suite: **290 tests**. Bundle: 121.1 kB / 29.9 kB gzip.
 
 ## Where things are
 
@@ -54,6 +57,8 @@ src/broker.ts          editor + card registries (pure)
 src/types.ts           hand-declared HA interfaces
 src/card/picture-studio-card.ts   background + item children + lifecycle
 src/card/state-icon-element.ts    the element: state-badge, size, action relay
+src/card/visibility-probe.ts      the phantom card a hui-card probe carries
+src/editor/visibility-section.ts  hosts HA's own hui-card-visibility-editor
 src/card/drag-layer.ts            pointer gesture, injected callbacks
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/background-schema.ts      ha-form schema for the card itself
@@ -80,7 +85,11 @@ title: My floorplan
 items:
   - type: badge                 # family; REQUIRED since 1.2.0
     position: { top: 30%, left: 45% }
-    anchor: center              # absent => proportional
+    anchor: center              # absent => auto
+    visibility:                 # 1.3.0 — HA's own conditions, opaque to us
+      - condition: state
+        entity: binary_sensor.night
+        state: "on"
     config: { type: custom:mushroom-template-badge, entity: light.salon }
 
   - type: element
@@ -138,7 +147,10 @@ items:
 - **Pixels during the drag, percentages on release**, one commit per gesture.
 - **Percent strings stored, numbers in code**, and no clamp to `[0, 100]`
   anywhere.
-- **No `z-index`, ever.** Stacking is DOM order = list order.
+- **No `z-index` in the rendered stacking** — it is DOM order = list order, and
+  that must keep a single authority. **One exception, added in 1.3.0 and
+  reserved to the editor**: the selected or dragged item is raised while
+  `editing`. It never reaches the config and does not exist on a dashboard.
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
 
 ## Hard-won facts about Home Assistant (all verified in their source)
@@ -217,6 +229,39 @@ items:
   `visibility` on a badge does nothing here (the container evaluates it).
 - **Sections grid**: 12 columns, `--row-height: 56px`, `--row-gap: 8px`;
   `hui-card` is `height: 100%`.
+
+### Added while building 1.3.0's visibility
+
+- **`hui-card` IS Home Assistant's implementation of the `visibility` key.** It
+  evaluates the conditions and publishes the verdict by toggling the **native
+  `hidden` attribute** on itself, plus an inline `display`. Identical at
+  `20260527.4` and `20260729.6`. So a hidden `hui-card` sibling plus a
+  `.probe[hidden] + .item` rule reflects a verdict with **no JavaScript of
+  ours**. Three catches: `preview` short-circuits the evaluation to visible,
+  `_updateVisibility` returns early without an inner card *and* without `hass`,
+  and **a config change does not re-evaluate** — only `hass` or `preview` do.
+- **`hui-conditional-element` is a trap**: it does not extend
+  `hui-conditional-base`, sets neither `hidden` nor `display`, and only
+  appends/removes its own children. It signals nothing.
+- **`ha-expansion-panel` header slot order** is `leading-icon → header → event →
+  chevron → icons`. Anything in `icons` lands *after* the chevron; `event` is
+  the one before it.
+- **`ha-icon-button` reads `--ha-icon-button-size`**, not the legacy
+  `--mdc-icon-button-size`. Every HA row editor sets it to 36px.
+- **The modern entity list is `hui-entity-editor`** — Entities, Distribution and
+  History Graph all draw through it. Bordered rows of 48px, 8px apart, 12px
+  leading / 4px trailing, `mdiDragHorizontalVariant` as the handle, `mdiPencil` +
+  `mdiClose` under `ui.common.edit` / `ui.common.delete`, and no gap between the
+  actions. Rows read as **a name over a place**: `formatEntityName(stateObj,
+  {type:"entity"})` then area ▸ device. It memoizes none of it.
+- **`ha-label` pads its container to 12px a side** (`dense`), which is right
+  beside a number and far too wide around a lone icon; the padding is not
+  exposed as a variable.
+- **`--ha-card-border-width` is 0 in many themes**, which silently erases a
+  border that depends on it.
+- **The shipped `.js.map` files carry the raw GitHub URL of every source file.**
+  Grepping them is the fastest way to find a component's real path before
+  fetching it — several guessed paths 404'd where this got it first try.
 
 ## The recurring traps
 

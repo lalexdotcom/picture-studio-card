@@ -9,7 +9,8 @@ import type { HomeAssistant } from "./types";
  */
 const STRINGS = {
   en: {
-    stacking_hint: "The last badges in the list are drawn on top.",
+    items: "Items",
+    stacking_hint: "The last items in the list are drawn on top.",
     anchor: "Position",
     anchor_anchored: "Anchored",
     ratio: "Ratio",
@@ -18,9 +19,11 @@ const STRINGS = {
     size_mode_adaptive: "Adaptive",
     size_mode_fixed: "Fixed",
     size_value: "Value",
+    visibility: "Visibility",
   },
   fr: {
-    stacking_hint: "Les derniers badges de la liste sont au-dessus.",
+    items: "Items",
+    stacking_hint: "Les derniers items de la liste sont au-dessus.",
     anchor: "Position",
     anchor_anchored: "Ancré",
     ratio: "Ratio",
@@ -29,6 +32,7 @@ const STRINGS = {
     size_mode_adaptive: "Adaptative",
     size_mode_fixed: "Fixe",
     size_value: "Valeur",
+    visibility: "Visibilité",
   },
 } as const;
 
