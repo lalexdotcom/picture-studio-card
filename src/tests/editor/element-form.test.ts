@@ -154,13 +154,17 @@ describe("stateIconSizeSchema", () => {
     expect(get(find(adaptive, "size_ratio"), "selector", "number", "max")).toBe(100);
   });
 
-  it("pixel fields (size_min, size_max, size_value) keep mode: box", () => {
+  it("adaptive pixel bounds (size_min, size_max) keep mode: box", () => {
     const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
     expect(get(find(adaptive, "size_min"), "selector", "number", "mode")).toBe("box");
     expect(get(find(adaptive, "size_max"), "selector", "number", "mode")).toBe("box");
+  });
 
+  it("fixed size_value is a slider from 10 to 128", () => {
     const fixed = stateIconSizeSchema("fixed", localize, undefined);
-    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBe("box");
+    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBeUndefined();
+    expect(get(find(fixed, "size_value"), "selector", "number", "min")).toBe(10);
+    expect(get(find(fixed, "size_value"), "selector", "number", "max")).toBe(128);
   });
 });
 
@@ -244,8 +248,8 @@ describe("toFormData / fromFormData", () => {
       chrome_enabled: false,
       chrome_theme: "auto",
       chrome_radius: 50,
-      chrome_opacity: 1,
-      chrome_content_ratio: 0.6,
+      chrome_opacity: 100,
+      chrome_content_ratio: 60,
     });
   });
 
@@ -355,8 +359,8 @@ describe("chrome fields", () => {
     expect(data.chrome_enabled).toBe(true);
     expect(data.chrome_theme).toBe("dark");
     expect(data.chrome_radius).toBe(12);
-    expect(data.chrome_opacity).toBe(0.8);
-    expect(data.chrome_content_ratio).toBe(0.5);
+    expect(data.chrome_opacity).toBe(80);
+    expect(data.chrome_content_ratio).toBe(50);
     expect(data).not.toHaveProperty("chrome");
   });
 
@@ -364,8 +368,22 @@ describe("chrome fields", () => {
     const data = toFormData({ type: "state-icon", size: DEFAULT_ICON_SIZE });
     expect(data.chrome_enabled).toBe(false);
     expect(data.chrome_radius).toBe(50);
-    expect(data.chrome_opacity).toBe(1);
-    expect(data.chrome_content_ratio).toBe(0.6);
+    expect(data.chrome_opacity).toBe(100);
+    expect(data.chrome_content_ratio).toBe(60);
+  });
+
+  it("round-trips fractional values without floating-point drift", () => {
+    const config = {
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      chrome: { theme: "auto", radius: 25, opacity: 0.6, content_ratio: 0.6 },
+    } as StateIconConfig;
+    const data = toFormData(config);
+    expect(data.chrome_opacity).toBe(60);
+    expect(data.chrome_content_ratio).toBe(60);
+    const next = fromFormData(config, data);
+    expect(next.chrome?.opacity).toBe(0.6);
+    expect(next.chrome?.content_ratio).toBe(0.6);
   });
 
   it("shows auto in the theme control while the box is unchecked — none is never offered", () => {

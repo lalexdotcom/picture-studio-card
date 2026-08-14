@@ -277,10 +277,11 @@ Out-of-range numbers are clamped on read (`radius` 0–50, `opacity` 0–1,
 
 A section of its own, read top to bottom as a decision then its settings:
 
-1. **a checkbox** — draw a chrome, or not;
-2. **the theme, three choices on one line** — auto, light, dark;
-3. **the three numbers**, in a grid, `selector: { number: { mode: "box" } }` so
-   no slider appears.
+1. **a checkbox** — draw a chrome, or not; always visible;
+2. **the theme, three choices on one line** — auto, light, dark; revealed only
+   when the checkbox is on;
+3. **the three number sliders** — radius (0–50 %), opacity (0–100 %),
+   content ratio (10–100 %); revealed only when the checkbox is on.
 
 **`none` never appears in the interface.** It is a storage value, not a choice
 the user makes: the checkbox is what says whether there is a chrome, and the
@@ -292,6 +293,20 @@ Checking the box sets `auto`. A theme chosen before unchecking is not restored �
 `none` overwrote it — and remembering it would mean carrying editor state beside
 the config. Whether that round trip is annoying enough to be worth the state is a
 question for the browser walk.
+
+**Numbers survive in storage when the chrome is off.** Hiding a control is not
+erasing its value. The `ha-form` invariant makes this work: every form in the
+component receives the complete flat record (`toFormData(element)`) as `.data`,
+whatever its own schema shows. A hidden field stays alive in `.data` and comes
+back in every `value-changed` event. Re-checking the box therefore restores
+exactly the numbers that were there before.
+
+**The form speaks percent; the config speaks 0–1.** `opacity` and `content_ratio`
+are stored as 0–1 in the YAML — CSS's own scale, and the spec justifies the
+choice. The editor shows them as integers 0–100. `toFormData` multiplies by 100
+(`Math.round` to avoid floating-point display drift: `0.6 * 100` is
+`60.00000000000001` without it); `fromFormData` divides back. `radius` is already
+a percentage in the config (0–50), so no conversion is needed there.
 
 **This forces a hand-built `ha-expansion-panel`, not an `expandable` entry in the
 schema**, because a three-way choice on one line cannot come from `ha-form`:

@@ -81,8 +81,11 @@ export const toFormData = (config: StateIconConfig): Record<string, unknown> => 
     // that checking the box will give it.
     chrome_theme: c.theme === "none" ? "auto" : c.theme,
     chrome_radius: c.radius,
-    chrome_opacity: c.opacity,
-    chrome_content_ratio: c.content_ratio,
+    // opacity and content_ratio are 0-1 in config; the form shows them as
+    // 0-100 percent. Math.round avoids floating-point display drift
+    // (e.g. 0.6 * 100 = 60.00000000000001 without it).
+    chrome_opacity: Math.round(c.opacity * 100),
+    chrome_content_ratio: Math.round(c.content_ratio * 100),
   };
 };
 
@@ -123,8 +126,13 @@ export const fromFormData = (
             // that draws. Unchecking stores "none" and every number survives it.
             theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
             radius: chrome_radius,
-            opacity: chrome_opacity,
-            content_ratio: chrome_content_ratio,
+            // The form speaks percent (0-100); config stores 0-1. Divide back;
+            // normalizeChrome validates if the field is missing or non-numeric.
+            opacity: typeof chrome_opacity === "number" ? chrome_opacity / 100 : chrome_opacity,
+            content_ratio:
+              typeof chrome_content_ratio === "number"
+                ? chrome_content_ratio / 100
+                : chrome_content_ratio,
           }),
         }
       : {};
@@ -201,8 +209,9 @@ export const stateIconSizeSchema = (
         name: "size_ratio",
         selector: {
           // A percentage of the card's width is a value you feel rather than
-          // type, so size_ratio gets a slider (no mode: "box"). The three pixel
-          // fields keep "box" because exact pixel values are typed, not dragged.
+          // type, so size_ratio gets a slider (no mode: "box"). The two adaptive
+          // pixel bounds keep "box" because exact pixel values are typed, not
+          // dragged. The fixed size is also a slider — a value you feel.
           number: { min: 1, max: 100, step: 0.1, unit_of_measurement: "%" },
         },
       },
@@ -231,7 +240,7 @@ export const stateIconSizeSchema = (
       ...preamble,
       {
         name: "size_value",
-        selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" } },
+        selector: { number: { min: 10, max: 128, step: 1, unit_of_measurement: "px" } },
       },
     ];
   }
@@ -268,25 +277,20 @@ export const chromeSchema = (
         },
       ]),
   {
-    name: "",
-    type: "grid",
-    schema: [
-      {
-        name: "chrome_radius",
-        selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%", mode: "box" } },
-      },
-      {
-        name: "chrome_opacity",
-        selector: { number: { min: 0, max: 1, step: 0.05, mode: "box" } },
-      },
-      {
-        name: "chrome_content_ratio",
-        // The model clamps to 0-1; the form starts at 0.1 because a ratio of
-        // zero renders an invisible icon and nothing in the editor would
-        // explain why. The form guides, the model tolerates.
-        selector: { number: { min: 0.1, max: 1, step: 0.05, mode: "box" } },
-      },
-    ],
+    name: "chrome_radius",
+    selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%" } },
+  },
+  {
+    name: "chrome_opacity",
+    selector: { number: { min: 0, max: 100, step: 1, unit_of_measurement: "%" } },
+  },
+  {
+    name: "chrome_content_ratio",
+    // The model clamps to 0-1; the form starts at 10 because a ratio of
+    // zero renders an invisible icon and nothing in the editor would
+    // explain why. The form guides, the model tolerates.
+    // The form shows 0-100 percent; fromFormData converts back to 0-1.
+    selector: { number: { min: 10, max: 100, step: 1, unit_of_measurement: "%" } },
   },
 ];
 
@@ -399,32 +403,38 @@ export class PictureStudioElementForm extends LitElement {
             @value-changed=${this._valueChanged}
           ></ha-form>
           ${
-            radioGroupAvailable
+            toFormData(element).chrome_enabled
               ? html`
-                <span class="section-label">${themeModeTitle(hass.localize)}</span>
-                <ha-radio-group
-                  orientation="horizontal"
-                  .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
-                  @change=${this._chromeThemeChanged}
-                >
-                  ${(["auto", "light", "dark"] as const).map(
-                    (value) => html`
-                      <ha-radio-option .value=${value}
-                        >${themeModeLabel(hass.localize, value)}</ha-radio-option
-                      >
-                    `,
-                  )}
-                </ha-radio-group>
-              `
+                  ${
+                    radioGroupAvailable
+                      ? html`
+                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
+                          <ha-radio-group
+                            orientation="horizontal"
+                            .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
+                            @change=${this._chromeThemeChanged}
+                          >
+                            ${(["auto", "light", "dark"] as const).map(
+                              (value) => html`
+                                <ha-radio-option .value=${value}
+                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
+                                >
+                              `,
+                            )}
+                          </ha-radio-group>
+                        `
+                      : nothing
+                  }
+                  <ha-form
+                    .hass=${hass}
+                    .data=${toFormData(element)}
+                    .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
+                    .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+                    @value-changed=${this._valueChanged}
+                  ></ha-form>
+                `
               : nothing
           }
-          <ha-form
-            .hass=${hass}
-            .data=${toFormData(element)}
-            .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
-            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
         </div>
       </ha-expansion-panel>
       <ha-expansion-panel outlined>
@@ -436,23 +446,23 @@ export class PictureStudioElementForm extends LitElement {
           ${
             radioGroupAvailable
               ? html`
-                <span class="section-label">${localizeOwn(hass, "size_mode")}</span>
-                <ha-radio-group
-                  orientation="horizontal"
-                  .value=${element.size.mode}
-                  @change=${this._modeChanged}
-                >
-                  <ha-radio-option .value=${"auto"}
-                    >${hass.localize("ui.common.auto") || "Automatic"}</ha-radio-option
+                  <span class="section-label">${localizeOwn(hass, "size_mode")}</span>
+                  <ha-radio-group
+                    orientation="horizontal"
+                    .value=${element.size.mode}
+                    @change=${this._modeChanged}
                   >
-                  <ha-radio-option .value=${"adaptive"}
-                    >${localizeOwn(hass, "size_mode_adaptive")}</ha-radio-option
-                  >
-                  <ha-radio-option .value=${"fixed"}
-                    >${localizeOwn(hass, "size_mode_fixed")}</ha-radio-option
-                  >
-                </ha-radio-group>
-              `
+                    <ha-radio-option .value=${"auto"}
+                      >${hass.localize("ui.common.auto") || "Automatic"}</ha-radio-option
+                    >
+                    <ha-radio-option .value=${"adaptive"}
+                      >${localizeOwn(hass, "size_mode_adaptive")}</ha-radio-option
+                    >
+                    <ha-radio-option .value=${"fixed"}
+                      >${localizeOwn(hass, "size_mode_fixed")}</ha-radio-option
+                    >
+                  </ha-radio-group>
+                `
               : nothing
           }
           <ha-form
