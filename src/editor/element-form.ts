@@ -74,7 +74,12 @@ export const toFormData = (config: StateIconConfig): Record<string, unknown> => 
     // The control never offers "none", so an off chrome pre-selects the theme
     // that checking the box will give it.
     chrome_theme: c.theme === "none" ? "auto" : c.theme,
-    chrome_radius: c.radius,
+    // Math.round enforces the slider's step:1 contract. A hand-written value
+    // with finer precision (e.g. 12.5) is rounded the first time the editor
+    // commits anything for that item — including a drag. This is a deliberate
+    // trade: the slider guides, and hand-authored precision outside the slider's
+    // step is not a use-case the editor supports.
+    chrome_radius: Math.round(c.radius),
     // opacity and content_ratio are 0-1 in config; the form shows them as
     // 0-100 percent. Math.round avoids floating-point display drift
     // (e.g. 0.6 * 100 = 60.00000000000001 without it).
@@ -87,7 +92,7 @@ export const fromFormData = (
   config: StateIconConfig,
   data: Record<string, unknown>,
 ): StateIconConfig => {
-  // Invariant: `data` must be the complete flat record (all nine chrome and size
+  // Invariant: `data` must be the complete flat record (all ten chrome and size
   // fields present, whether or not the active schema shows them). ha-form enforces
   // this: its value-changed handler merges the changed child onto the `.data` it
   // was given and re-emits the whole thing —
@@ -119,13 +124,21 @@ export const fromFormData = (
             // The checkbox is the switch; the theme control only ever names a surface
             // that draws. Unchecking stores "none" and every number survives it.
             theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
-            radius: chrome_radius,
+            // Math.round on the way back enforces the slider's step:1 contract.
+            // A typed decimal (e.g. 12.5 for radius, 61 for an opacity dragged
+            // to 0.61 by hand) is rounded the first time the editor commits for
+            // that item. Deliberate: hand-authored sub-step precision is not a
+            // use-case the editor supports.
+            radius: typeof chrome_radius === "number" ? Math.round(chrome_radius) : chrome_radius,
             // The form speaks percent (0-100); config stores 0-1. Divide back;
             // normalizeChrome validates if the field is missing or non-numeric.
-            opacity: typeof chrome_opacity === "number" ? chrome_opacity / 100 : chrome_opacity,
+            opacity:
+              typeof chrome_opacity === "number"
+                ? Math.round(chrome_opacity) / 100
+                : chrome_opacity,
             content_ratio:
               typeof chrome_content_ratio === "number"
-                ? chrome_content_ratio / 100
+                ? Math.round(chrome_content_ratio) / 100
                 : chrome_content_ratio,
           }),
         }
@@ -206,7 +219,7 @@ export const stateIconSizeSchema = (
           // type, so size_ratio gets a slider (no mode: "box"). The two adaptive
           // pixel bounds keep "box" because exact pixel values are typed, not
           // dragged. The fixed size is also a slider — a value you feel.
-          number: { min: 1, max: 100, step: 0.1, unit_of_measurement: "%" },
+          number: { min: 1, max: 100, step: 1, unit_of_measurement: "%" },
         },
       },
       {
@@ -280,9 +293,11 @@ export const chromeSchema = (
   },
   {
     name: "chrome_content_ratio",
-    // The model clamps to 0-1; the form starts at 10 because a ratio of
-    // zero renders an invisible icon and nothing in the editor would
-    // explain why. The form guides, the model tolerates.
+    // The model keeps any finite number as written — no clamping. Hand-written
+    // YAML is trusted exactly as written, consistent with how coordinates are
+    // treated. The form starts at 10 because a ratio of zero renders an
+    // invisible icon and nothing in the editor would explain why: the form
+    // guides, the model tolerates.
     // The form shows 0-100 percent; fromFormData converts back to 0-1.
     selector: { number: { min: 10, max: 100, step: 1, unit_of_measurement: "%" } },
   },

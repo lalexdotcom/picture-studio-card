@@ -369,7 +369,7 @@ describe("chrome fields", () => {
     expect(data.chrome_content_ratio).toBe(60);
   });
 
-  it("round-trips fractional values without floating-point drift", () => {
+  it("round-trips 0.6 (the repeating binary that motivated Math.round) without floating-point drift", () => {
     const config = {
       type: "state-icon",
       size: DEFAULT_ICON_SIZE,

@@ -197,12 +197,14 @@ so at `content_ratio: 1` picture and chrome share one silhouette and the chrome
 
 The chrome ships **without a CSS border**: the filter's white rim already draws
 that line, it follows the real silhouette, and it is already tunable through
-`--psc-icon-outline`. Whether a 1px border adds anything *next to* that rim is a
-question only the browser can answer, so it is deferred to the walk rather than
-guessed at here.
+`--psc-icon-outline`.
 
-The layout is prepared for the answer either way, and two facts make adding one
-cheap:
+**Walk verdict: no border.** Seen on screen, the rim is sufficient — adding a
+1px border next to it would double the line without adding information. The
+section is kept because the layout reasoning remains useful if this is ever
+revisited, but the question is closed.
+
+The layout facts that make adding one cheap, for the record:
 
 - `box-sizing: border-box` keeps the outer box at `--psc-icon-size`, so a border
   is drawn inward and no existing item shifts. It costs contrast at the bottom of
@@ -213,10 +215,6 @@ cheap:
   final outer size, what is clamped and what is stored agree. The only thing that
   would break this is a size that changes *during* a gesture — the box is
   measured once at `pointerdown` — and a border is static.
-
-Should the walk call for one, the whole cost is one key and one declaration. Its
-colour would face the same problem the fill just solved: it must hold against an
-unknown photograph, which no theme token can promise.
 
 ## What does not move
 
@@ -415,3 +413,44 @@ in this file.
 1.3.0, with per-item visibility. The chrome is **off everywhere** — absent from
 existing YAML and absent from the stub of a newly added element — so no dashboard
 changes on upgrade and the CHANGELOG entry goes under `Added`, not `Changed`.
+
+## Verification
+
+Walk run by the user against a real dashboard on Home Assistant 2026.8.1, local
+instance.
+
+### Defect the suite structurally could not catch
+
+`border-radius` and `overflow: hidden` sat on `.chrome` unconditionally while
+only the fill was gated by `:host([chrome])`. An icon with no chrome was
+therefore clipped into a circle and lost its corners entirely. Both properties
+moved under `:host([chrome]) .chrome` in the fix. The spec's own CSS block had
+carried the error — it was corrected as part of the same commit.
+
+This is the third time a defect of this exact family — a CSS property applied
+unconditionally where a conditional `:host([attr])` guard was required — has
+survived a green suite, a per-task review, and a whole-branch review on this
+project. The walk is not optional.
+
+### Deferred questions, now answered
+
+**Border.** No 1px border is needed. The filter's white rim does the job on its
+own; a border next to it doubles the line without adding information. The "Room
+left for a border" section above records the verdict.
+
+**Section layout.** Uniform 24px spacing throughout, achieved with a single
+`margin-bottom` rule rather than adjacent-sibling selectors. Final section order
+as delivered: Entity, Content, Interactions, Chrome, Size and position,
+Visibility.
+
+**Chrome controls visibility.** The three numeric controls (radius, opacity,
+content ratio) and the theme selector are revealed only when the checkbox is
+checked — not always shown as the spec originally stated. This reverses the
+spec's first description of that behaviour.
+
+### Not exercised
+
+- The chrome under a custom theme: the `auto` path was only walked against the
+  default HA theme. A custom theme that redefines `--ha-card-background` or the
+  palette tokens is an untested path.
+- A sections view. This project has never walked a sections-layout dashboard.
