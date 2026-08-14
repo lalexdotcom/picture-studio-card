@@ -166,7 +166,7 @@ export class PictureStudioStateIcon extends LitElement {
        .editing .item > * { pointer-events: none }, so hover never reaches
        this host while a drag is running. */
     :host([clickable]:hover) {
-      transform: scale(1.08);
+      transform: scale(1.04);
     }
     /* state-badge ships :host { width: 40px }, so the size has to drive the box
        as well as the glyph. One value, one visual footprint: a glyph and an
