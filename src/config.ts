@@ -7,7 +7,7 @@ import {
   parsePercent,
   storedPosition,
 } from "./position";
-import type { ActionConfig, BadgeConfig } from "./types";
+import type { ActionConfig, BadgeConfig, VisibilityCondition } from "./types";
 
 export const CARD_TAG = "picture-studio";
 export const EDITOR_TAG = "picture-studio-editor";
@@ -30,6 +30,13 @@ interface ItemBase {
    * did not have.
    */
   anchor: Anchor;
+  /**
+   * Home Assistant's condition list, and theirs alone: never read, validated or
+   * rewritten here. Absent means always drawn. Omitted from the stored config
+   * when absent or empty — the rule Home Assistant's own visibility editor
+   * applies — so a config that never used it comes back exactly as it went in.
+   */
+  visibility?: VisibilityCondition[];
 }
 
 export interface BadgeItem extends ItemBase {
@@ -125,6 +132,20 @@ const normalizeElementConfig = (raw: Record<string, unknown>, index: number): El
  * Validate and fill in defaults. Returns a fresh object: the config handed to
  * setConfig is frozen by Home Assistant and must never be mutated.
  */
+const normalizeVisibility = (raw: unknown, index: number): VisibilityCondition[] | undefined => {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`picture-studio: items[${index}].visibility must be a list`);
+  }
+  // Contents are never inspected: an unknown condition type must survive a round
+  // trip, exactly like an unknown key inside an element's config.
+  return raw as VisibilityCondition[];
+};
+
+/** True when the item carries at least one condition. */
+export const hasVisibility = (item: PictureItem): boolean =>
+  Array.isArray(item.visibility) && item.visibility.length > 0;
+
 export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
   if (!isRecord(raw)) {
     throw new Error("picture-studio: config must be an object");
@@ -153,10 +174,12 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
 
     const position = normalizePosition(entry.position);
     const anchor = parseAnchor(entry.anchor);
+    const visibility = normalizeVisibility(entry.visibility, index);
+    const base = { position, anchor, ...(visibility ? { visibility } : {}) };
 
     return type === "badge"
-      ? { type, position, anchor, config: entry.config as BadgeConfig }
-      : { type, position, anchor, config: normalizeElementConfig(entry.config, index) };
+      ? { ...base, type, config: entry.config as BadgeConfig }
+      : { ...base, type, config: normalizeElementConfig(entry.config, index) };
   });
 
   return { ...(raw as Record<string, unknown>), items } as PictureStudioConfig;
@@ -178,6 +201,10 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
     // The default is the absence of the key, so a config that never used an
     // anchor comes back exactly as it went in.
     if (item.anchor === "auto") delete stored.anchor;
+    // Same rule as the anchor at its default, and the same rule Home Assistant
+    // applies in its own editor: an empty list says nothing while looking like
+    // it says something.
+    if (!hasVisibility(item)) delete stored.visibility;
     if (item.type === "element" && isDefaultIconSize(item.config.size)) {
       // Only when all five fields are the defaults: a size may be automatic and
       // still carry numbers the user typed, and dropping the key would lose

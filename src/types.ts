@@ -27,6 +27,14 @@ export interface BadgeConfig {
   [key: string]: unknown;
 }
 
+/**
+ * One entry of Home Assistant's `visibility` list. Opaque on purpose: the schema
+ * is theirs, it already covers nine condition types, and `hui-card` is what
+ * reads it. Declaring their union here would only be a copy to maintain, and a
+ * copy that goes stale the next time they add a type.
+ */
+export type VisibilityCondition = Record<string, unknown>;
+
 export interface ActionConfig {
   action: string;
   [key: string]: unknown;
