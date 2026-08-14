@@ -148,6 +148,9 @@ export class PictureStudioStateIcon extends LitElement {
     :host {
       display: block;
       line-height: 0;
+      /* Captured from the page, where the theme defines it, so it can be handed
+         back to state-badge below. A custom theme keeps deciding the value. */
+      --psc-inactive-color: var(--state-inactive-color);
       /* Long enough to read as motion: at 90ms the grow registered as a flicker
          rather than an animation. */
       transition: transform 180ms ease-out;
@@ -169,6 +172,15 @@ export class PictureStudioStateIcon extends LitElement {
        as well as the glyph. One value, one visual footprint: a glyph and an
        entity picture occupy the same square. */
     state-badge {
+      /* state-badge sets --state-inactive-color: initial on its own host, which
+         sends inactive entities to the host's own color — var(--state-icon-color),
+         the #44739e blue of entity rows. Handing the theme's value back turns an
+         off entity grey, which is what a Lovelace badge shows. An outer-tree rule
+         beats a :host declaration, so this wins.
+         Scope: only resolutions that pass through this token, i.e. inactive
+         states. Active colours, a lit lamp's rgb_color and its brightness filter
+         travel through other tokens and are untouched. */
+      --state-inactive-color: var(--psc-inactive-color);
       width: var(--psc-icon-size);
       height: var(--psc-icon-size);
       --mdc-icon-size: var(--psc-icon-size);
