@@ -5,6 +5,7 @@ import {
   axisOffset,
   DEFAULT_ANCHOR,
   DEFAULT_POSITION,
+  markerCorner,
   OPEN_BOUNDS,
   parseAnchor,
   parsePercent,
@@ -146,6 +147,34 @@ describe("toPx", () => {
 
   it("lets a fixed anchor overflow, which is the whole point", () => {
     expect(toPx(100, 200, 40, 0)).toBe(200);
+  });
+});
+
+describe("markerCorner", () => {
+  it("points left for an item in the right half", () => {
+    expect(markerCorner({ top: 50, left: 80 })).toBe("top-left");
+  });
+
+  it("points right for an item in the left half", () => {
+    expect(markerCorner({ top: 50, left: 20 })).toBe("top-right");
+  });
+
+  it("points right exactly at the middle", () => {
+    expect(markerCorner({ top: 50, left: 49.99 })).toBe("top-right");
+    expect(markerCorner({ top: 50, left: 50 })).toBe("top-left");
+  });
+
+  it("drops below for an item against the top edge", () => {
+    expect(markerCorner({ top: 0, left: 20 })).toBe("bottom-right");
+    expect(markerCorner({ top: 10, left: 80 })).toBe("bottom-left");
+  });
+
+  it("stays above just under the band", () => {
+    expect(markerCorner({ top: 10.01, left: 20 })).toBe("top-right");
+  });
+
+  it("answers for an overflowing coordinate rather than throwing", () => {
+    expect(markerCorner({ top: -30, left: 140 })).toBe("bottom-left");
   });
 });
 

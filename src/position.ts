@@ -153,6 +153,34 @@ export const toPx = (
     ? (span(container, element) * percent) / 100
     : (container * percent) / 100 - (element * offset) / 100;
 
+/** Which corner of the item the editor's condition marker overhangs. */
+export type MarkerCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+/**
+ * Above this band, the marker would overhang the top of the picture and be
+ * clipped, so it drops under the item instead.
+ */
+const MARKER_TOP_BAND = 10;
+
+/**
+ * The marker overhangs the item, so it has to point towards the inside of the
+ * card: `ha-card` is `overflow-x: hidden`, and the top of the picture is where
+ * the vertical clipping happens.
+ *
+ * Derived from the stored coordinates alone. No layout is read — happy-dom
+ * performs none, and the drag deliberately avoids measurements outside
+ * `pointermove` — and the anchor is not consulted: without the item's size in
+ * percent it cannot say where an edge falls, while the coordinate alone already
+ * answers "which half of the picture is this in", which is the whole question.
+ *
+ * Being wrong costs a clipped marker, never a misplaced item.
+ */
+export const markerCorner = (position: Position): MarkerCorner => {
+  const vertical = position.top <= MARKER_TOP_BAND ? "bottom" : "top";
+  const horizontal = position.left >= 50 ? "left" : "right";
+  return `${vertical}-${horizontal}`;
+};
+
 /**
  * The inverse of toPx. Both degenerate cases answer 0: an auto item as
  * large as its container has nowhere to go, and a container of zero has no
