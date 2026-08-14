@@ -162,7 +162,7 @@ export class PictureStudioStateIcon extends LitElement {
          picture gets one around its disc. The two are exposed as variables so a
          dashboard can dial them without forking the element. */
       filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
-        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.9)));
+        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.6)));
     }
     /* Pointer when there is something to click. */
     :host([clickable]) {
