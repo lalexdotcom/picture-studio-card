@@ -297,30 +297,29 @@ fallback since an undefined custom element renders nothing at all, silently.
 Copy that shape rather than inventing a second one. The panel sits beside "Size
 and position", before it.
 
-**The theme's four labels are Home Assistant's, taken from two places in
-order.** Two parts of the frontend already name exactly this choice, with the
-same words in both languages:
+**The theme's four labels are Home Assistant's**, taken from the theme mode a
+user already sets on themselves:
 
 ```
 ui.panel.profile.themes.theme_mode                   Theme mode / Mode du thème
 ui.panel.profile.themes.dark_mode.{auto,light,dark}  Auto / Light|Clair / Dark|Sombre
-
-ui.panel.lovelace.editor.card.map.theme_mode         Theme mode / Mode du thème
-ui.panel.lovelace.editor.card.map.theme_modes.{…}    same three
 ```
 
-Neither set is in the always-loaded core catalog; both live in a fragment. And
-the frontend calls `loadFragmentTranslation` with exactly three names —
-`config`, `lovelace`, `energy` — never `profile`. So inside our dialog, which
-*is* the Lovelace panel, the map keys are guaranteed resolved while the profile
-keys return `""` until the user happens to have opened their profile page in the
-same session.
+These are preference keys, and preferences outlive any one card — which is why
+they are preferred over `ui.panel.lovelace.editor.card.map.theme_mode*`, the map
+card's identically-worded set.
 
-The two are therefore chained rather than chosen between: **profile first, map
-second, an English literal last.** The profile keys belong to user preferences,
-which outlive any one card, so they get priority; the map keys are what actually
-answers today. One `||` per label buys both, and removes the case where a label
-silently falls back to English for no reason the user could guess.
+**One measurement against them, recorded rather than acted on.** Neither set is
+in the always-loaded core catalog; both live in a fragment. And the frontend
+calls `loadFragmentTranslation` with exactly three names — `config`, `lovelace`,
+`energy` — never `profile`. Read literally, that means these keys resolve inside
+our dialog only once the user has opened their own profile page in the same
+session, and fall back to the English literal otherwise.
+
+That reading is an inference from the bundle, not an observation, and it costs
+nothing to settle: open the editor in French and look at the three labels. The
+browser walk does exactly that. If they read English, the map keys go back in as
+a second link in the chain — one `||` per label.
 
 Only the section title, the checkbox and the three number labels come from our
 own `strings.ts`.
