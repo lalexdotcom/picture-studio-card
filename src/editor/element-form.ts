@@ -240,7 +240,7 @@ export const stateIconSizeSchema = (
       ...preamble,
       {
         name: "size_value",
-        selector: { number: { min: 10, max: 128, step: 1, unit_of_measurement: "px" } },
+        selector: { number: { min: 8, max: 128, step: 1, unit_of_measurement: "px" } },
       },
     ];
   }

@@ -48,12 +48,12 @@ describe("normalizeChrome", () => {
     expect(normalizeChrome({ theme: "rainbow" }).theme).toBe("none");
   });
 
-  it("clamps each number into its own range", () => {
+  it("keeps out-of-range finite numbers exactly as written", () => {
     expect(normalizeChrome({ radius: 90, opacity: 4, content_ratio: -1 })).toEqual({
       theme: "none",
-      radius: 50,
-      opacity: 1,
-      content_ratio: 0,
+      radius: 90,
+      opacity: 4,
+      content_ratio: -1,
     });
   });
 

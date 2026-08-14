@@ -35,25 +35,29 @@ export const DEFAULT_CHROME: Chrome = {
 
 const THEMES: readonly ChromeTheme[] = ["none", "auto", "light", "dark"];
 
-const clamped = (value: unknown, fallback: number, min: number, max: number): number =>
-  typeof value === "number" && Number.isFinite(value)
-    ? Math.min(max, Math.max(min, value))
-    : fallback;
+const finiteOrDefault = (value: unknown, fallback: number): number =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 /**
  * Unknown keys are dropped: `chrome` is a closed record of ours, exactly like
  * `size`. The rule that nothing may vanish applies one level up, to the
  * element's `config`, which `normalizeElementConfig` spreads.
  */
+// The editor's sliders guide users to sensible values; a number written in
+// YAML by hand is trusted exactly as written. This mirrors the rule already
+// followed for positions: coordinates outside 0-100 are kept as written,
+// because under a fixed anchor they place an item deliberately over the edge.
+// Clamping here would be the one place the card second-guesses a hand-written
+// config.
 export const normalizeChrome = (raw: unknown): Chrome => {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_CHROME };
   const chrome = raw as Partial<Record<string, unknown>>;
   const theme = chrome.theme as ChromeTheme;
   return {
     theme: THEMES.includes(theme) ? theme : DEFAULT_CHROME.theme,
-    radius: clamped(chrome.radius, DEFAULT_CHROME.radius, 0, 50),
-    opacity: clamped(chrome.opacity, DEFAULT_CHROME.opacity, 0, 1),
-    content_ratio: clamped(chrome.content_ratio, DEFAULT_CHROME.content_ratio, 0, 1),
+    radius: finiteOrDefault(chrome.radius, DEFAULT_CHROME.radius),
+    opacity: finiteOrDefault(chrome.opacity, DEFAULT_CHROME.opacity),
+    content_ratio: finiteOrDefault(chrome.content_ratio, DEFAULT_CHROME.content_ratio),
   };
 };
 

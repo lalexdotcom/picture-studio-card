@@ -163,7 +163,7 @@ describe("stateIconSizeSchema", () => {
   it("fixed size_value is a slider from 10 to 128", () => {
     const fixed = stateIconSizeSchema("fixed", localize, undefined);
     expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBeUndefined();
-    expect(get(find(fixed, "size_value"), "selector", "number", "min")).toBe(10);
+    expect(get(find(fixed, "size_value"), "selector", "number", "min")).toBe(8);
     expect(get(find(fixed, "size_value"), "selector", "number", "max")).toBe(128);
   });
 });

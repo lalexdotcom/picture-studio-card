@@ -270,8 +270,12 @@ difference is not an oversight. An absent `size` cannot be reasoned about —
 element reads it as "no chrome" and writes no custom property at all, which also
 spares thirty-odd test literals a field that says nothing.
 
-Out-of-range numbers are clamped on read (`radius` 0–50, `opacity` 0–1,
-`content_ratio` 0–1) and never written back in clamped form.
+The editor's sliders guide users to sensible values; a number written in YAML by hand is
+trusted exactly as written. A finite number survives `normalizeChrome` unchanged — only a
+missing, non-numeric, or non-finite value falls back to its default. This is consistent with
+how positions are already treated: coordinates outside 0–100 are allowed and kept as written,
+because under a fixed anchor they place an item deliberately over the edge. Clamping here
+would be the one place the card second-guesses a hand-written config.
 
 ## Editor
 
