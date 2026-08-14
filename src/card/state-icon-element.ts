@@ -148,7 +148,9 @@ export class PictureStudioStateIcon extends LitElement {
     :host {
       display: block;
       line-height: 0;
-      transition: transform 90ms ease-out;
+      /* Long enough to read as motion: at 90ms the grow registered as a flicker
+         rather than an animation. */
+      transition: transform 180ms ease-out;
     }
     /* Pointer when there is something to click. */
     :host([clickable]) {
