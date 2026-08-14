@@ -153,7 +153,7 @@ export class PictureStudioStateIcon extends LitElement {
       --psc-inactive-color: var(--state-inactive-color);
       /* Long enough to read as motion: at 90ms the grow registered as a flicker
          rather than an animation. */
-      transition: transform 180ms ease-out;
+      transition: transform 120ms ease-out;
     }
     /* Pointer when there is something to click. */
     :host([clickable]) {
