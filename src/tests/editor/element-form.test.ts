@@ -206,8 +206,13 @@ describe("PictureStudioElementForm — radio group change", () => {
     group.dispatchEvent(new Event("change", { bubbles: true }));
 
     expect(events).toHaveLength(1);
-    const detail = (events[0] as CustomEvent<{ element: { size: typeof DEFAULT_ICON_SIZE } }>)
-      .detail;
+    const detail = (
+      events[0] as CustomEvent<{ element: { type: string; size: typeof DEFAULT_ICON_SIZE } }>
+    ).detail;
+    // The kind travels with the rest: the card rewrites the whole config on every
+    // editor commit, so an element that lost its `type` would be erased from the
+    // user's YAML rather than merely rendered wrong.
+    expect(detail.element.type).toBe("state-icon");
     expect(detail.element.size.mode).toBe("adaptive");
     // All other keys must survive the mode change.
     expect(detail.element.size.min).toBe(DEFAULT_ICON_SIZE.min);
