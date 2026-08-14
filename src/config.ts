@@ -16,6 +16,9 @@ export const FORM_TAG = "picture-studio-badge-form";
 export const PICKER_TAG = "picture-studio-anchor-picker";
 export const ICON_TAG = "picture-studio-state-icon";
 export const ELEMENT_FORM_TAG = "picture-studio-element-form";
+export const PROBE_TAG = "picture-studio-visibility-probe";
+export const VISIBILITY_SECTION_TAG = "picture-studio-visibility-section";
+export const PROBE_TYPE = `custom:${PROBE_TAG}` as const;
 export const CARD_TYPE = "custom:picture-studio";
 
 /**

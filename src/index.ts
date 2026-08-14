@@ -1,5 +1,6 @@
 import { PictureStudioCard } from "./card/picture-studio-card";
 import { PictureStudioStateIcon } from "./card/state-icon-element";
+import { PictureStudioVisibilityProbe } from "./card/visibility-probe";
 import {
   CARD_TAG,
   EDITOR_TAG,
@@ -8,6 +9,7 @@ import {
   ICON_TAG,
   LIST_TAG,
   PICKER_TAG,
+  PROBE_TAG,
 } from "./config";
 import { PictureStudioAnchorPicker } from "./editor/anchor-picker";
 import { PictureStudioBadgeForm } from "./editor/badge-form";
@@ -40,6 +42,10 @@ if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudio
 
 if (!customElements.get(ELEMENT_FORM_TAG)) {
   customElements.define(ELEMENT_FORM_TAG, PictureStudioElementForm);
+}
+
+if (!customElements.get(PROBE_TAG)) {
+  customElements.define(PROBE_TAG, PictureStudioVisibilityProbe);
 }
 
 window.customCards = window.customCards ?? [];
