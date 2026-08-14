@@ -108,8 +108,8 @@ down with it. Three modes decide how closely:
 
 ### Chrome
 
-A **chrome** is a surface an item stands on, so it reads against a busy picture
-instead of competing with it. Tick **Draw a chrome** and four controls appear:
+A **chrome** surrounds an item with its own surface, so it reads against a busy
+picture instead of competing with it.
 
 - **Theme** — **Auto** follows your dashboard's theme; **Light** and **Dark**
   force one, for a picture the theme disagrees with.
