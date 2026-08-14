@@ -10,8 +10,11 @@ const BACK_PATH = "M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5
 const CONTENT_PATH = "M4,9H20V11H4V9M4,13H14V15H4V13Z";
 const ACTIONS_PATH =
   "M10,9A1,1 0 0,1 11,8A1,1 0 0,1 12,9V13.47L13.21,13.6L18.15,15.79C18.68,16.03 19,16.56 19,17.14V21.5C18.97,22.32 18.32,22.97 17.5,23H11C10.62,23 10.26,22.85 10,22.57L5.1,18.37L5.84,17.6C6.03,17.39 6.3,17.28 6.58,17.28H6.8L10,19V9M11,5A4,4 0 0,1 15,9C15,10.5 14.2,11.77 13,12.46V11.24C13.61,10.69 14,9.89 14,9A3,3 0 0,0 11,6A3,3 0 0,0 8,9C8,9.89 8.39,10.69 9,11.24V12.46C7.8,11.77 7,10.5 7,9A4,4 0 0,1 11,5Z";
+/** mdiMoveResize */
+const SIZE_POSITION_PATH =
+  "M9,1V2H10V5H9V6H12V5H11V2H12V1M9,7C7.89,7 7,7.89 7,9V21C7,22.11 7.89,23 9,23H21C22.11,23 23,22.11 23,21V9C23,7.89 22.11,7 21,7M1,9V12H2V11H5V12H6V9H5V10H2V9M9,9H21V21H9M14,10V11H15V16H11V15H10V18H11V17H15V19H14V20H17V19H16V17H19V18H20V15H19V16H16V11H17V10";
 
-export const stateIconSchema = (auto: boolean): unknown[] => [
+export const stateIconSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
@@ -19,39 +22,17 @@ export const stateIconSchema = (auto: boolean): unknown[] => [
     flatten: true,
     iconPath: CONTENT_PATH,
     schema: [
+      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
       {
         name: "",
         type: "grid",
         schema: [
-          { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
           {
             name: "color",
             selector: { ui_color: { default_color: "state", include_state: true } },
           },
-        ],
-      },
-      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
-      { name: "show_entity_picture", selector: { boolean: {} } },
-      { name: "auto_size", selector: { boolean: {} } },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "size_min",
-            selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px" } },
-            disabled: auto,
-          },
-          {
-            name: "size_ratio",
-            selector: { number: { min: 0, max: 100, step: 0.1, unit_of_measurement: "%" } },
-            disabled: auto,
-          },
-          {
-            name: "size_max",
-            selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px" } },
-            disabled: auto,
-          },
+          { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
+          { name: "show_entity_picture", selector: { boolean: {} } },
         ],
       },
     ],
@@ -123,6 +104,40 @@ export const elementFormLabel = (
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
 
+export const stateIconSizeSchema = (auto: boolean): unknown[] => [
+  { name: "auto_size", selector: { boolean: {} } },
+  {
+    name: "",
+    type: "grid",
+    schema: [
+      {
+        name: "size_min",
+        selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px" } },
+        disabled: auto,
+      },
+      {
+        name: "size_ratio",
+        selector: { number: { min: 0, max: 100, step: 0.1, unit_of_measurement: "%" } },
+        disabled: auto,
+      },
+      {
+        name: "size_max",
+        selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px" } },
+        disabled: auto,
+      },
+    ],
+  },
+];
+
+export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
+  if (name === "color")
+    return (
+      localize("ui.panel.lovelace.editor.badge.entity.color_helper") ||
+      "Inactive state (for example, off or closed) will not be colored."
+    );
+  return undefined;
+};
+
 export class PictureStudioElementForm extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -137,9 +152,10 @@ export class PictureStudioElementForm extends LitElement {
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
     if (!this.element) return;
+    const data = { ...toFormData(this.element), ...ev.detail.value };
     this.dispatchEvent(
       new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, ev.detail.value) },
+        detail: { element: fromFormData(this.element, data) },
         bubbles: true,
         composed: true,
       }),
@@ -164,14 +180,29 @@ export class PictureStudioElementForm extends LitElement {
       <ha-form
         .hass=${hass}
         .data=${toFormData(element)}
-        .schema=${stateIconSchema(element.size.auto)}
+        .schema=${stateIconSchema()}
         .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+        .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
         @value-changed=${this._valueChanged}
       ></ha-form>
-      <picture-studio-anchor-picker
-        .hass=${hass}
-        .anchor=${this.anchor}
-      ></picture-studio-anchor-picker>
+      <ha-expansion-panel outlined>
+        <ha-svg-icon
+          slot="leading-icon"
+          .path=${SIZE_POSITION_PATH}
+        ></ha-svg-icon>
+        <span slot="header">${localizeOwn(hass, "size_and_position")}</span>
+        <ha-form
+          .hass=${hass}
+          .data=${toFormData(element)}
+          .schema=${stateIconSizeSchema(element.size.auto)}
+          .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+          @value-changed=${this._valueChanged}
+        ></ha-form>
+        <picture-studio-anchor-picker
+          .hass=${hass}
+          .anchor=${this.anchor}
+        ></picture-studio-anchor-picker>
+      </ha-expansion-panel>
     `;
   }
 

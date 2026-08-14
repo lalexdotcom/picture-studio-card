@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@rstest/core";
 import {
+  elementFormHelper,
   elementFormLabel,
   fromFormData,
   stateIconSchema,
+  stateIconSizeSchema,
   toFormData,
 } from "../../editor/element-form";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
@@ -21,26 +23,34 @@ const find = (schema: unknown[], name: string): Record<string, unknown> | undefi
 };
 
 describe("stateIconSchema", () => {
-  it("puts icon and colour on one row, then the name, then the picture", () => {
-    const content = find(stateIconSchema(true), "content");
+  it("puts the name first, then colour, icon, and picture in one grid", () => {
+    const content = find(stateIconSchema(), "content");
     const names = (
       (content?.schema ?? []) as { name: string; schema?: { name: string }[] }[]
     ).flatMap((entry) => (entry.schema ? entry.schema.map((s) => s.name) : [entry.name]));
-    expect(names.slice(0, 4)).toEqual(["icon", "color", "name", "show_entity_picture"]);
+    expect(names.slice(0, 4)).toEqual(["name", "color", "icon", "show_entity_picture"]);
   });
 
-  it("disables the three size fields while auto is on", () => {
-    expect(find(stateIconSchema(true), "size_min")?.disabled).toBe(true);
-    expect(find(stateIconSchema(true), "size_ratio")?.disabled).toBe(true);
-    expect(find(stateIconSchema(true), "size_max")?.disabled).toBe(true);
-    expect(find(stateIconSchema(false), "size_min")?.disabled).toBe(false);
-    expect(find(stateIconSchema(false), "size_ratio")?.disabled).toBe(false);
-    expect(find(stateIconSchema(false), "size_max")?.disabled).toBe(false);
+  it("does not contain the size fields (they live in stateIconSizeSchema)", () => {
+    expect(find(stateIconSchema(), "size_min")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_ratio")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_max")).toBeUndefined();
   });
 
   it("offers hold and double tap as optional actions", () => {
-    expect(find(stateIconSchema(true), "hold_action")).toBeDefined();
-    expect(find(stateIconSchema(true), "double_tap_action")).toBeDefined();
+    expect(find(stateIconSchema(), "hold_action")).toBeDefined();
+    expect(find(stateIconSchema(), "double_tap_action")).toBeDefined();
+  });
+});
+
+describe("stateIconSizeSchema", () => {
+  it("disables the three size fields while auto is on", () => {
+    expect(find(stateIconSizeSchema(true), "size_min")?.disabled).toBe(true);
+    expect(find(stateIconSizeSchema(true), "size_ratio")?.disabled).toBe(true);
+    expect(find(stateIconSizeSchema(true), "size_max")?.disabled).toBe(true);
+    expect(find(stateIconSizeSchema(false), "size_min")?.disabled).toBe(false);
+    expect(find(stateIconSizeSchema(false), "size_ratio")?.disabled).toBe(false);
+    expect(find(stateIconSizeSchema(false), "size_max")?.disabled).toBe(false);
   });
 });
 
@@ -87,5 +97,25 @@ describe("elementFormLabel", () => {
 
   it("uses ours only for the two the catalogue has not got", () => {
     expect(elementFormLabel((() => "") as never, undefined, "size_ratio")).toBe("Ratio");
+  });
+});
+
+describe("elementFormHelper", () => {
+  it("returns the HA colour helper text for the color field", () => {
+    expect(elementFormHelper(localize, "color")).toBe(
+      "L:ui.panel.lovelace.editor.badge.entity.color_helper",
+    );
+  });
+
+  it("falls back to the English string when localize returns empty", () => {
+    expect(elementFormHelper((() => "") as never, "color")).toBe(
+      "Inactive state (for example, off or closed) will not be colored.",
+    );
+  });
+
+  it("returns undefined for every other field", () => {
+    expect(elementFormHelper(localize, "icon")).toBeUndefined();
+    expect(elementFormHelper(localize, "name")).toBeUndefined();
+    expect(elementFormHelper(localize, "tap_action")).toBeUndefined();
   });
 });
