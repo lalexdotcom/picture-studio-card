@@ -24,12 +24,9 @@ Badges from other frontend plugins appear in the picker next to the built-in one
 
 A badge carries a pill, a label and one fixed size. When what you want on the
 plan is an icon — and you want it big — add an **icon** item instead: the same
-entity, name, icon and colour controls, without the pill, and in a size you
-choose.
+entity, name, icon and colour controls, without the pill.
 
-That size follows the **card**: in a sections view a narrow column gets a
-smaller icon than a wide one, and the same card on a phone scales down with the
-screen. The three modes are described under [Icon size](#icon-size).
+You choose [how big it is](#icon-size) and [what it stands on](#chrome).
 
 ## Install
 
@@ -101,12 +98,22 @@ the item they place.
 
 #### Icon size
 
-An icon offers three sizes:
+An icon's size follows the **card**, not the screen: in a sections view a narrow
+column gets a smaller icon than a wide one, and the same card on a phone scales
+down with it. Three modes decide how closely:
 
-- **Automatic** *(default)* — 8% of the card's width, never under 24px, never
-  over 48px.
-- **Adaptive** — the same, with your own ratio and your own bounds.
+- **Automatic** *(default)*
+- **Adaptive** — your own ratio, between your own bounds.
 - **Fixed** — one size in pixels, which follows nothing.
+
+### Chrome
+
+A **chrome** surrounds an item with its own surface.
+
+- **Theme** — **Auto**, **Light** or **Dark**.
+- **Radius** — a disc, a square, or anything between.
+- **Opacity** — fades the surface alone.
+- **Content** — how much of the surface its contents take.
 
 ### YAML reference
 
@@ -157,6 +164,11 @@ items:
         min: 24                  # adaptive only — px
         max: 48                  # adaptive only — px
         value: 48                # fixed only — px
+      chrome:                    # optional; absent means no chrome
+        theme: none              # none | auto | light | dark
+        radius: 50               # % of the box — 50 is a disc, 0 a square
+        opacity: 1               # the surface's opacity, 0-1
+        content_ratio: 0.6       # share of the box taken by the icon, 0-1
     position:
       top: 45%
       left: 20%
@@ -176,7 +188,9 @@ Both forms render identically; the editor displays either one.
 
 An icon's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices the
 editor offers. `adaptive` reads `min`, `ratio` and `max`, `fixed` reads `value`,
-and the numbers a mode does not use are kept as you left them.
+and the numbers a mode does not use are kept as you left them. `auto` is
+`ratio: 8`, `min: 24` and `max: 48` — 8% of the card's width, never under 24px
+and never over 48px — whatever the item's own numbers say.
 
 `top` and `left` accept `30%` or a bare `30`. The editor writes the percent form
 back and keeps two decimals, which is the precision dragging produces.
@@ -207,6 +221,34 @@ and its live "current visibility" banner.
 The card's own visibility is native to Home Assistant and needs nothing from
 this card: the Lovelace engine evaluates `config.visibility` on every card,
 and the edit dialog's "Visibility" tab is generic to all cards.
+
+#### Chrome keys
+
+Anything drawn on a photograph competes with whatever the picture happens to
+show. `chrome` gives an item a surface to stand on instead. Icons offer it
+today; it is written to belong to an item rather than to one kind of item, so
+other kinds can take it up as they arrive.
+
+`theme` is the switch as well as the choice. `none` — the default, and what an
+absent `chrome` means — draws nothing. `auto` uses the same background your
+dashboard's cards use, so the surface follows your theme. `light` and `dark`
+force one or the other, which is what you want when the picture is dark and the
+theme is not, or the reverse.
+
+`radius` is a percentage of the box: `50` is a disc, `0` a square, anything
+between a rounded square. `opacity` fades the surface only — what stands on it
+keeps its own colour. `content_ratio` is the share of the box the content takes:
+`0.6` matches Home Assistant's own icons, and `1` makes the content fill the box
+entirely, which turns the chrome into a frame around an entity picture rather
+than a disc behind it.
+
+The numbers are kept when you switch the surface back to `none`, so trying a
+chrome out and turning it off costs you nothing.
+
+Note that `size` is the size of the whole thing: switching a chrome on does not
+make an item bigger, it makes what is inside it smaller. Nothing else about the
+item changes — where it sits, how it drags and what it does when clicked are the
+same with or without a surface.
 
 #### YAML-only keys
 

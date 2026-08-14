@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
+import type { StateIconConfig } from "../../config";
 import { ELEMENT_FORM_TAG } from "../../config";
 import {
+  chromeSchema,
+  chromeToggleSchema,
   elementFormHelper,
   elementFormLabel,
   fromFormData,
   PictureStudioElementForm,
   stateIconSchema,
   stateIconSizeSchema,
+  themeModeTitle,
   toFormData,
 } from "../../editor/element-form";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
@@ -147,13 +151,17 @@ describe("stateIconSizeSchema", () => {
     expect(get(find(adaptive, "size_ratio"), "selector", "number", "max")).toBe(100);
   });
 
-  it("pixel fields (size_min, size_max, size_value) keep mode: box", () => {
+  it("adaptive pixel bounds (size_min, size_max) keep mode: box", () => {
     const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
     expect(get(find(adaptive, "size_min"), "selector", "number", "mode")).toBe("box");
     expect(get(find(adaptive, "size_max"), "selector", "number", "mode")).toBe("box");
+  });
 
+  it("fixed size_value is a slider from 10 to 128", () => {
     const fixed = stateIconSizeSchema("fixed", localize, undefined);
-    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBe("box");
+    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBeUndefined();
+    expect(get(find(fixed, "size_value"), "selector", "number", "min")).toBe(8);
+    expect(get(find(fixed, "size_value"), "selector", "number", "max")).toBe(128);
   });
 });
 
@@ -192,7 +200,9 @@ describe("PictureStudioElementForm — radio group change", () => {
 
   it("emits element-changed with the chosen mode and all other keys intact", async () => {
     const form = await mountForm("auto");
-    const group = form.shadowRoot?.querySelector("ha-radio-group");
+    // The size panel is the second ha-expansion-panel (the chrome panel is first).
+    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const group = sizePanel?.querySelector("ha-radio-group");
     expect(group).not.toBeNull();
     if (!group) return; // TypeScript guard; the assertion above already fails the test
 
@@ -223,7 +233,7 @@ describe("PictureStudioElementForm — radio group change", () => {
 });
 
 describe("toFormData / fromFormData", () => {
-  it("flattens the size into five fields", () => {
+  it("flattens size and chrome into flat fields", () => {
     expect(toFormData({ ...base, entity: "light.a" })).toEqual({
       type: "state-icon",
       entity: "light.a",
@@ -232,6 +242,11 @@ describe("toFormData / fromFormData", () => {
       size_ratio: 8,
       size_max: 48,
       size_value: 48,
+      chrome_enabled: false,
+      chrome_theme: "auto",
+      chrome_radius: 50,
+      chrome_opacity: 100,
+      chrome_content_ratio: 60,
     });
   });
 
@@ -244,9 +259,12 @@ describe("toFormData / fromFormData", () => {
   });
 
   it("round-trips a fixed size", () => {
+    // ratio is 4 (integer) — a non-integer would be rounded by toFormData and
+    // not equal config.size.ratio on the way back. That rounding is deliberate:
+    // hand-written sub-step values are rounded on the first editor commit.
     const config = {
       ...base,
-      size: { mode: "fixed" as const, min: 40, ratio: 3.5, max: 70, value: 64 },
+      size: { mode: "fixed" as const, min: 40, ratio: 4, max: 70, value: 64 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
   });
@@ -328,5 +346,131 @@ describe("elementFormHelper", () => {
     expect(elementFormHelper(localize, "icon")).toBeUndefined();
     expect(elementFormHelper(localize, "name")).toBeUndefined();
     expect(elementFormHelper(localize, "tap_action")).toBeUndefined();
+  });
+});
+
+describe("chrome fields", () => {
+  it("flattens the chrome into the form data", () => {
+    const data = toFormData({
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      chrome: { theme: "dark", radius: 12, opacity: 0.8, content_ratio: 0.5 },
+    });
+    expect(data.chrome_enabled).toBe(true);
+    expect(data.chrome_theme).toBe("dark");
+    expect(data.chrome_radius).toBe(12);
+    expect(data.chrome_opacity).toBe(80);
+    expect(data.chrome_content_ratio).toBe(50);
+    expect(data).not.toHaveProperty("chrome");
+  });
+
+  it("flattens the defaults when the element has no chrome", () => {
+    const data = toFormData({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    expect(data.chrome_enabled).toBe(false);
+    expect(data.chrome_radius).toBe(50);
+    expect(data.chrome_opacity).toBe(100);
+    expect(data.chrome_content_ratio).toBe(60);
+  });
+
+  it("round-trips 0.6 (the repeating binary that motivated Math.round) without floating-point drift", () => {
+    const config = {
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      chrome: { theme: "auto", radius: 25, opacity: 0.6, content_ratio: 0.6 },
+    } as StateIconConfig;
+    const data = toFormData(config);
+    expect(data.chrome_opacity).toBe(60);
+    expect(data.chrome_content_ratio).toBe(60);
+    const next = fromFormData(config, data);
+    expect(next.chrome?.opacity).toBe(0.6);
+    expect(next.chrome?.content_ratio).toBe(0.6);
+  });
+
+  it("shows auto in the theme control while the box is unchecked — none is never offered", () => {
+    const data = toFormData({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    expect(data.chrome_theme).toBe("auto");
+  });
+
+  it("turns the box on into the auto surface", () => {
+    const config = { type: "state-icon", size: DEFAULT_ICON_SIZE } as StateIconConfig;
+    const next = fromFormData(config, { ...toFormData(config), chrome_enabled: true });
+    expect(next.chrome).toEqual({
+      theme: "auto",
+      radius: 50,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
+  });
+
+  it("rebuilds the chrome from the flat record", () => {
+    const config = { type: "state-icon", size: DEFAULT_ICON_SIZE } as StateIconConfig;
+    const next = fromFormData(config, {
+      ...toFormData(config),
+      chrome_enabled: true,
+      chrome_theme: "dark",
+      chrome_radius: 8,
+    });
+    expect(next.chrome).toEqual({
+      theme: "dark",
+      radius: 8,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
+  });
+
+  it("keeps every number when the box is unchecked", () => {
+    const config = {
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      chrome: { theme: "dark", radius: 8, opacity: 0.5, content_ratio: 0.4 },
+    } as StateIconConfig;
+    const next = fromFormData(config, { ...toFormData(config), chrome_enabled: false });
+    expect(next.chrome).toEqual({
+      theme: "none",
+      radius: 8,
+      opacity: 0.5,
+      content_ratio: 0.4,
+    });
+  });
+});
+
+describe("the chrome schema", () => {
+  const localize = ((key: string) => key) as never;
+
+  it("offers the three drawing themes and never none", () => {
+    const options = JSON.stringify(chromeSchema(localize, false));
+    expect(options).toContain("auto");
+    expect(options).toContain("light");
+    expect(options).toContain("dark");
+    expect(options).not.toContain('"none"');
+  });
+
+  it("drops the theme field when the radio group renders it", () => {
+    expect(JSON.stringify(chromeSchema(localize, true))).not.toContain("chrome_theme");
+  });
+
+  it("shows the three numbers either way — they are kept, not lost", () => {
+    for (const available of [true, false]) {
+      const json = JSON.stringify(chromeSchema(localize, available));
+      expect(json).toContain("chrome_radius");
+      expect(json).toContain("chrome_opacity");
+      expect(json).toContain("chrome_content_ratio");
+    }
+  });
+
+  it("puts the toggle in its own schema, so it can be rendered above the theme", () => {
+    expect(JSON.stringify(chromeToggleSchema())).toContain("chrome_enabled");
+  });
+});
+
+describe("the theme mode labels", () => {
+  it("takes Home Assistant's own wording for this option", () => {
+    const localize = ((key: string) =>
+      key === "ui.panel.lovelace.editor.card.map.theme_mode" ? "Mode du thème" : "") as never;
+    expect(themeModeTitle(localize)).toBe("Mode du thème");
+  });
+
+  it("falls back to English if the key ever goes away", () => {
+    expect(themeModeTitle((() => "") as never)).toBe("Theme mode");
   });
 });

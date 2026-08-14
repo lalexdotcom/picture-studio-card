@@ -1,3 +1,4 @@
+import { type Chrome, isDefaultChrome, normalizeChrome } from "./chrome";
 import { type IconSize, isDefaultIconSize, normalizeIconSize } from "./element-size";
 import {
   type Anchor,
@@ -70,6 +71,8 @@ export interface StateIconConfig {
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;
   size: IconSize;
+  /** Optional: absent means no chrome, which is also what DEFAULT_CHROME says. */
+  chrome?: Chrome;
 }
 
 /**
@@ -128,7 +131,12 @@ const normalizeElementConfig = (raw: Record<string, unknown>, index: number): El
   // of vanishing: storedConfig rewrites the whole config on every editor commit,
   // so anything dropped here would be dropped from the user's YAML on the first
   // drag.
-  return { ...raw, type: "state-icon", size: normalizeIconSize(raw.size) } as StateIconConfig;
+  return {
+    ...raw,
+    type: "state-icon",
+    size: normalizeIconSize(raw.size),
+    chrome: normalizeChrome(raw.chrome),
+  } as StateIconConfig;
 };
 
 /**
@@ -208,12 +216,15 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
     // applies in its own editor: an empty list says nothing while looking like
     // it says something.
     if (!hasVisibility(item)) delete stored.visibility;
-    if (item.type === "element" && isDefaultIconSize(item.config.size)) {
-      // Only when all five fields are the defaults: a size may be automatic and
-      // still carry numbers the user typed, and dropping the key would lose
-      // them. A config that never touched the size does not grow a `size:`.
-      const { size: _size, ...rest } = item.config;
-      stored.config = rest;
+    if (item.type === "element") {
+      // Only when every field is a default: a mode may be off and still carry
+      // numbers the user typed, and dropping the key would lose them. A config
+      // that never touched either key does not grow one.
+      const { size, chrome, ...rest } = item.config;
+      const config: Record<string, unknown> = { ...rest };
+      if (!isDefaultIconSize(size)) config.size = size;
+      if (chrome && !isDefaultChrome(chrome)) config.chrome = chrome;
+      stored.config = config;
     }
     return stored;
   }),

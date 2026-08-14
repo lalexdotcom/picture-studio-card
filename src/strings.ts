@@ -20,6 +20,11 @@ const STRINGS = {
     size_mode_fixed: "Fixed",
     size_value: "Value",
     visibility: "Visibility",
+    chrome: "Chrome",
+    chrome_enabled: "Draw a chrome",
+    chrome_radius: "Radius",
+    chrome_opacity: "Opacity",
+    chrome_content_ratio: "Content",
   },
   fr: {
     items: "Items",
@@ -33,6 +38,11 @@ const STRINGS = {
     size_mode_fixed: "Fixe",
     size_value: "Valeur",
     visibility: "Visibilité",
+    chrome: "Habillage",
+    chrome_enabled: "Dessiner un habillage",
+    chrome_radius: "Rayon",
+    chrome_opacity: "Opacité",
+    chrome_content_ratio: "Contenu",
   },
 } as const;
 

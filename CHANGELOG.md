@@ -1,6 +1,6 @@
 # Changelog
 
-## unreleased
+## 1.3.0 — 2026-08-14
 
 ### Added
 
@@ -11,6 +11,13 @@
   "Visibility" section on each item, with Home Assistant's own condition editor
   and its live "current visibility" banner inside it, and items carrying
   conditions are marked in the preview.
+- **A chrome behind an icon.** A `state-icon` element can now stand on its own
+  surface — a disc by default, or any rounded shape — so an icon placed on a
+  busy photograph reads against something instead of against the picture. The
+  surface follows your theme, or can be forced light or dark for a picture that
+  disagrees with it, and its radius, opacity and the share of the box the icon
+  takes are all settings. It is off unless you turn it on, so nothing in an
+  existing dashboard changes.
 
 ### Changed
 

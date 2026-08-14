@@ -1,4 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
+import { chromeFill } from "../chrome";
 import type { StateIconConfig } from "../config";
 import { iconSizeCss } from "../element-size";
 import type { ActionConfig, HomeAssistant } from "../types";
@@ -100,14 +101,16 @@ export class PictureStudioStateIcon extends LitElement {
       : nothing;
 
     return html`
-      <state-badge
-        .hass=${this._hass}
-        .stateObj=${stateObj}
-        .overrideIcon=${config.icon}
-        .color=${config.color ?? "state"}
-        .overrideImage=${suppressPicture ? "" : undefined}
-        title=${title}
-      ></state-badge>
+      <div class="chrome">
+        <state-badge
+          .hass=${this._hass}
+          .stateObj=${stateObj}
+          .overrideIcon=${config.icon}
+          .color=${config.color ?? "state"}
+          .overrideImage=${suppressPicture ? "" : undefined}
+          title=${title}
+        ></state-badge>
+      </div>
     `;
   }
 
@@ -116,6 +119,27 @@ export class PictureStudioStateIcon extends LitElement {
     const config = this._config;
     if (!config) return;
     this.style.setProperty("--psc-icon-size", iconSizeCss(config.size));
+
+    // A chrome that is absent and a chrome whose theme is "none" are the same
+    // thing — the record exists so numbers survive being switched off.
+    const chrome = config.chrome;
+    const on = !!chrome && chrome.theme !== "none";
+    this.toggleAttribute("chrome", on);
+    if (on && chrome) {
+      this.style.setProperty("--psc-chrome-fill", chromeFill(chrome.theme));
+      this.style.setProperty("--psc-chrome-radius", `${chrome.radius}%`);
+      this.style.setProperty("--psc-chrome-opacity", `${chrome.opacity}`);
+      this.style.setProperty("--psc-content-ratio", `${chrome.content_ratio}`);
+    } else {
+      for (const name of [
+        "--psc-chrome-fill",
+        "--psc-chrome-radius",
+        "--psc-chrome-opacity",
+        "--psc-content-ratio",
+      ]) {
+        this.style.removeProperty(name);
+      }
+    }
 
     // Absent tap_action means clickable (the default action is more-info).
     // Mirrors Home Assistant's own badge.hasAction getter exactly: the cursor
@@ -154,15 +178,6 @@ export class PictureStudioStateIcon extends LitElement {
       /* Long enough to read as motion: at 90ms the grow registered as a flicker
          rather than an animation. */
       transition: transform 120ms ease-out;
-      /* The icon stands on the user's picture, not on the theme's background, so
-         its contrast has to hold against an unknown image — which no theme token
-         can promise. Hence literal white and black here, and only here.
-         drop-shadow rather than a border or a box-shadow: it follows the glyph's
-         own silhouette, so a lamp gets a rim around the lamp, and an entity
-         picture gets one around its disc. The two are exposed as variables so a
-         dashboard can dial them without forking the element. */
-      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
-        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.6)));
     }
     /* Pointer when there is something to click. */
     :host([clickable]) {
@@ -177,6 +192,58 @@ export class PictureStudioStateIcon extends LitElement {
     :host([clickable]:hover) {
       transform: scale(1.04);
     }
+    /* The chrome. Always present, styled only when the config asks for it, so
+       the DOM shape never depends on the config. */
+    .chrome {
+      position: relative;
+      /* Explicit: a shadow root inherits no reset, so the default is
+         content-box. Border-box keeps the outer box at exactly --psc-icon-size
+         whatever is ever drawn on its edge, which is what leaves the drag
+         bounds, the anchoring and the stored percentages alone. */
+      box-sizing: border-box;
+      width: var(--psc-icon-size);
+      height: var(--psc-icon-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* Moved off :host so the wrapper carries the whole chrome, halo included.
+         The icon stands on the user's picture, not on the theme's background,
+         so its contrast has to hold against an unknown image — which no theme
+         token can promise. Hence literal white and black here, and only here.
+         drop-shadow rather than a border or a box-shadow: it traces the
+         rendered silhouette, so it follows the glyph when there is no chrome
+         and the disc when there is one. Both are exposed as variables so a
+         dashboard can dial them without forking the element. */
+      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
+        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.6)));
+    }
+    /* The shape and the clipping belong to the chrome: an unshaped, unclipped
+       wrapper is exactly what "no chrome" means. */
+    :host([chrome]) .chrome {
+      border-radius: var(--psc-chrome-radius, 50%);
+      /* At content_ratio 1 the picture fills the box and this is what clips it
+         to the chrome's own silhouette — the chrome becomes the picture's
+         frame rather than a disc behind it. */
+      overflow: hidden;
+    }
+    /* The fill sits on a pseudo-element so its opacity is its own: fading the
+       surface must not fade the icon standing on it. */
+    :host([chrome]) .chrome::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: var(--psc-chrome-fill);
+      opacity: var(--psc-chrome-opacity, 1);
+    }
+    /* state-badge paints an entity picture as a background-image on its own
+       host and the glyph as a child sized by --mdc-icon-size, so scaling the
+       badge scales both — one declaration, no special case for pictures. */
+    :host([chrome]) state-badge {
+      --state-badge-border-radius: var(--psc-chrome-radius);
+      --state-badge-with-image-border-radius: var(--psc-chrome-radius);
+      --state-badge-with-media-image-border-radius: var(--psc-chrome-radius);
+    }
     /* state-badge ships :host { width: 40px }, so the size has to drive the box
        as well as the glyph. One value, one visual footprint: a glyph and an
        entity picture occupy the same square. */
@@ -190,9 +257,9 @@ export class PictureStudioStateIcon extends LitElement {
          states. Active colours, a lit lamp's rgb_color and its brightness filter
          travel through other tokens and are untouched. */
       --state-inactive-color: var(--psc-inactive-color);
-      width: var(--psc-icon-size);
-      height: var(--psc-icon-size);
-      --mdc-icon-size: var(--psc-icon-size);
+      width: calc(var(--psc-icon-size) * var(--psc-content-ratio, 1));
+      height: calc(var(--psc-icon-size) * var(--psc-content-ratio, 1));
+      --mdc-icon-size: calc(var(--psc-icon-size) * var(--psc-content-ratio, 1));
       display: flex;
       align-items: center;
       justify-content: center;
