@@ -136,7 +136,12 @@ describe("normalizeConfig", () => {
       type: "element",
       position: { top: 50, left: 50 },
       anchor: "auto",
-      config: { type: "state-icon", entity: "light.a", size: DEFAULT_ICON_SIZE },
+      config: {
+        type: "state-icon",
+        entity: "light.a",
+        size: DEFAULT_ICON_SIZE,
+        chrome: { theme: "none", radius: 50, opacity: 1, content_ratio: 0.6 },
+      },
     });
   });
 
@@ -387,6 +392,75 @@ describe("item visibility", () => {
     };
     const stored = storedConfig(normalizeConfig(raw));
     expect((stored.items as Record<string, unknown>[])[0]).not.toHaveProperty("visibility");
+  });
+});
+
+describe("element chrome", () => {
+  const withChrome = (chrome: unknown) => ({
+    type: "custom:picture-studio",
+    image: "/a.png",
+    items: [
+      {
+        type: "element",
+        position: { top: "10%", left: "10%" },
+        config: { type: "state-icon", entity: "light.a", chrome },
+      },
+    ],
+  });
+
+  it("normalizes a chrome the config carries", () => {
+    const config = normalizeConfig(withChrome({ theme: "dark", radius: 8 }));
+    const element = config.items[0];
+    if (!element || element.type !== "element") throw new Error("expected an element");
+    expect(element.config.chrome).toEqual({
+      theme: "dark",
+      radius: 8,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
+  });
+
+  it("gives an element with no chrome key the default record", () => {
+    const config = normalizeConfig(withChrome(undefined));
+    const element = config.items[0];
+    if (!element || element.type !== "element") throw new Error("expected an element");
+    expect(element.config.chrome).toEqual({
+      theme: "none",
+      radius: 50,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
+  });
+
+  it("does not write a chrome key back when it is untouched", () => {
+    const stored = storedConfig(normalizeConfig(withChrome(undefined)));
+    const item = (stored.items as Record<string, unknown>[])[0];
+    if (!item) throw new Error("expected an item");
+    expect(item.config).not.toHaveProperty("chrome");
+  });
+
+  it("writes the chrome back when any field was touched", () => {
+    const stored = storedConfig(normalizeConfig(withChrome({ theme: "auto" })));
+    const item = (stored.items as Record<string, unknown>[])[0];
+    if (!item) throw new Error("expected an item");
+    expect((item.config as Record<string, unknown>).chrome).toEqual({
+      theme: "auto",
+      radius: 50,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
+  });
+
+  it("keeps a chrome whose theme is none but whose numbers were tuned", () => {
+    const stored = storedConfig(normalizeConfig(withChrome({ theme: "none", radius: 10 })));
+    const item = (stored.items as Record<string, unknown>[])[0];
+    if (!item) throw new Error("expected an item");
+    expect((item.config as Record<string, unknown>).chrome).toEqual({
+      theme: "none",
+      radius: 10,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
   });
 });
 
