@@ -91,23 +91,13 @@ Updating means repeating steps 1 and 2, then hard-refreshing. Appending a query 
 
 ### Size and position
 
-Both are set by dragging in the editor, and both can be written by hand.
-
 #### Anchor
 
-An item's position is a pair of percentages, and the anchor decides *which part
-of the item* they place.
+An item's position is a pair of percentages, and the anchor decides which part of
+the item they place.
 
-**Automatic** is the default, and it makes the anchor follow the coordinate: at
-one edge of the image the item lines up against that edge, in the middle it is
-centred. Nothing can hang off the picture, whatever the item's size.
-
-Switch it off to pick one of the nine points instead — a corner, the middle of a
-side, or the centre. That point is what the coordinates then place, so a centre
-anchor at 50 / 50 puts the item's own centre at the middle of the image.
-
-Changing an anchor never moves an item: the coordinates are recomputed so the
-pixels stay where you put them.
+- **Automatic** *(default)* — the anchor follows the coordinate.
+- **Anchored** — the coordinates place the point you pick in the grid.
 
 #### Icon size
 
