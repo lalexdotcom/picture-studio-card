@@ -278,6 +278,19 @@ describe("visibility probes", () => {
     await flush();
     expect(probes(card).length).toBe(0);
   });
+
+  it("updates the probe's conditions when they change without the item gaining or losing them", async () => {
+    const card = await mountCard(CONFIG);
+    const probe = probes(card)[0] as HTMLElement & { config?: Record<string, unknown> };
+    const newConditions = [{ condition: "state", entity: "light.b", state: "off" }];
+    card.setConfig({
+      ...CONFIG,
+      items: [{ ...CONFIG.items[0], visibility: newConditions }, CONFIG.items[1]],
+    });
+    await card.updateComplete;
+    await flush();
+    expect(probe.config?.visibility).toEqual(newConditions);
+  });
 });
 
 describe("the condition marker", () => {

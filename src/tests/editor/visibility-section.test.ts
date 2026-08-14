@@ -74,4 +74,9 @@ describe("the visibility section", () => {
     await el.updateComplete;
     expect(el.editorConfig()).toBe(first);
   });
+
+  it("builds a config on cold start with no conditions", async () => {
+    const el = await mount(); // visibility = undefined
+    expect(el.editorConfig()).toEqual({ visibility: [] });
+  });
 });
