@@ -8,7 +8,7 @@ import {
   storedConfig,
 } from "../config";
 import type { Anchor, Position } from "../position";
-import type { BadgeConfig, HomeAssistant, LocalizeFunc } from "../types";
+import type { BadgeConfig, HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
 import {
   type BackgroundData,
   backgroundData,
@@ -18,7 +18,7 @@ import {
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
 import { stubElementConfig } from "./element-catalog";
-import { addItem, moveItem, removeItem, replaceConfig, setAnchor } from "./items";
+import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
@@ -181,6 +181,16 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this.patchAnchor(this._editingIndex, ev.detail.anchor);
   };
 
+  private _visibilityChanged = (ev: CustomEvent<{ visibility?: VisibilityCondition[] }>): void => {
+    ev.stopPropagation();
+    const config = this._config;
+    if (!config || this._editingIndex === undefined) return;
+    this._commit({
+      ...config,
+      items: setVisibility(config.items, this._editingIndex, ev.detail.visibility),
+    });
+  };
+
   private _moveBadge = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void => {
     const config = this._config;
     if (!config) return;
@@ -211,8 +221,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
               .hass=${hass}
               .badge=${editing.config}
               .anchor=${editing.anchor}
+              .visibility=${editing.visibility}
               @badge-changed=${this._badgeChanged}
               @anchor-changed=${this._anchorChanged}
+              @visibility-changed=${this._visibilityChanged}
               @go-back=${() => this.select(undefined)}
             ></picture-studio-badge-form>
           `
@@ -221,8 +233,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
               .hass=${hass}
               .element=${editing.config}
               .anchor=${editing.anchor}
+              .visibility=${editing.visibility}
               @element-changed=${this._elementChanged}
               @anchor-changed=${this._anchorChanged}
+              @visibility-changed=${this._visibilityChanged}
               @go-back=${() => this.select(undefined)}
             ></picture-studio-element-form>
           `;

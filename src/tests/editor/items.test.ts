@@ -7,6 +7,7 @@ import {
   replaceConfig,
   rowLabel,
   setAnchor,
+  setVisibility,
 } from "../../editor/items";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
 import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../../position";
@@ -215,5 +216,49 @@ describe("rowLabel for an element", () => {
     expect(rowLabel(icon({ name: "___device_name___", entity: "light.a" })).primary).toBe(
       "light.a",
     );
+  });
+});
+
+describe("setVisibility", () => {
+  const items = [
+    {
+      type: "badge" as const,
+      position: { top: 10, left: 10 },
+      anchor: "auto" as const,
+      config: {},
+    },
+    {
+      type: "badge" as const,
+      position: { top: 20, left: 20 },
+      anchor: "auto" as const,
+      config: {},
+    },
+  ];
+
+  it("sets a list on the addressed item only", () => {
+    const conditions = [{ condition: "state" }];
+    const out = setVisibility(items, 1, conditions);
+    expect(out[1]?.visibility).toEqual(conditions);
+    expect(out[0]?.visibility).toBeUndefined();
+  });
+
+  it("clears the key rather than storing an empty list", () => {
+    const withOne = setVisibility(items, 0, [{ condition: "state" }]);
+    const cleared = setVisibility(withOne, 0, []);
+    expect(cleared[0]).not.toHaveProperty("visibility");
+  });
+
+  it("clears the key when handed nothing", () => {
+    const withOne = setVisibility(items, 0, [{ condition: "state" }]);
+    expect(setVisibility(withOne, 0, undefined)[0]).not.toHaveProperty("visibility");
+  });
+
+  it("does not mutate its input", () => {
+    setVisibility(items, 0, [{ condition: "state" }]);
+    expect(items[0]).not.toHaveProperty("visibility");
+  });
+
+  it("returns the list untouched for an index out of range", () => {
+    expect(setVisibility(items, 5, [{ condition: "state" }])).toBe(items);
   });
 });

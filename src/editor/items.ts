@@ -1,6 +1,6 @@
 import type { ElementConfig, PictureItem } from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
-import type { BadgeConfig, HassEntity } from "../types";
+import type { BadgeConfig, HassEntity, VisibilityCondition } from "../types";
 
 /**
  * Every operation moves a {type, position, anchor, config} item as a unit, which
@@ -45,6 +45,25 @@ export const setAnchor = (
     : items.map((item, i) =>
         i === index ? { ...item, anchor, position: position ?? item.position } : item,
       );
+
+/**
+ * Set or clear an item's conditions. An empty list is cleared rather than
+ * stored: Home Assistant's own visibility editor deletes the key when its list
+ * falls back to zero, and a `visibility: []` in YAML says nothing while looking
+ * like it says something.
+ */
+export const setVisibility = (
+  items: PictureItem[],
+  index: number,
+  visibility: VisibilityCondition[] | undefined,
+): PictureItem[] => {
+  if (index < 0 || index >= items.length) return items;
+  return items.map((item, i) => {
+    if (i !== index) return item;
+    const { visibility: _dropped, ...rest } = item;
+    return (visibility?.length ? { ...rest, visibility } : rest) as PictureItem;
+  });
+};
 
 export const moveItem = (items: PictureItem[], from: number, to: number): PictureItem[] => {
   if (from < 0 || to < 0 || from >= items.length || to >= items.length) return items;

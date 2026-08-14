@@ -3,7 +3,8 @@ import type { ElementConfig, StateIconConfig } from "../config";
 import { normalizeIconSize } from "../element-size";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
-import type { HomeAssistant, LocalizeFunc } from "../types";
+import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
+import "./visibility-section";
 import { PLACEMENT_ICON } from "./icons";
 
 export const stateIconSchema = (): unknown[] => [
@@ -194,11 +195,13 @@ export class PictureStudioElementForm extends LitElement {
     hass: { attribute: false },
     element: { attribute: false },
     anchor: { attribute: false },
+    visibility: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare element?: ElementConfig;
   declare anchor?: Anchor;
+  declare visibility?: VisibilityCondition[];
 
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
@@ -302,6 +305,10 @@ export class PictureStudioElementForm extends LitElement {
           ></picture-studio-anchor-picker>
         </div>
       </ha-expansion-panel>
+      <picture-studio-visibility-section
+        .hass=${hass}
+        .visibility=${this.visibility}
+      ></picture-studio-visibility-section>
     `;
   }
 
@@ -354,6 +361,10 @@ export class PictureStudioElementForm extends LitElement {
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
+    }
+    picture-studio-visibility-section {
+      display: block;
+      margin-top: var(--ha-space-3, 12px);
     }
   `;
 }
