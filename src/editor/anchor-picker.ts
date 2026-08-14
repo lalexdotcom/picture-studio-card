@@ -179,6 +179,12 @@ export class PictureStudioAnchorPicker extends LitElement {
         --ha-switch-thumb-background-color,
         var(--ha-color-on-neutral-normal, var(--secondary-background-color))
       );
+      /* At full strength the grey and the primary of the picked cell read as two
+         shades of the same thing. Letting the fill show through pushes the eight
+         unpicked cells back a plane, so the picked one is the only solid mark —
+         and it stays a translucency of the switch's own grey rather than a
+         hand-mixed colour that would drift from it. */
+      opacity: 0.5;
     }
   `;
 }
