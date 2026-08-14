@@ -40,11 +40,57 @@ describe("picture-studio-state-icon", () => {
     expect(badge(await mount({ entity: "light.a", color: "red" }))?.color).toBe("red");
   });
 
-  it("forces the icon with an empty overrideImage when the picture is off", async () => {
-    expect(badge(await mount({ entity: "light.a" }))?.overrideImage).toBe("");
-    expect(
-      badge(await mount({ entity: "light.a", show_entity_picture: true }))?.overrideImage,
-    ).toBeUndefined();
+  describe("overrideImage", () => {
+    it("is undefined when the entity has no picture — the bug was ''", async () => {
+      // light.a has attributes: {} — no entity_picture. Passing "" unconditionally
+      // blocked state-badge's colour computation; the fix makes it undefined here.
+      expect(badge(await mount({ entity: "light.a" }))?.overrideImage).toBeUndefined();
+    });
+
+    it("is '' when the entity has a picture and show_entity_picture is off", async () => {
+      const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
+      el.setConfig({ type: "state-icon", size: DEFAULT_ICON_SIZE, entity: "light.p" });
+      el.hass = {
+        states: {
+          "light.p": {
+            entity_id: "light.p",
+            state: "on",
+            attributes: { entity_picture: "/cam.jpg" },
+          },
+        },
+      } as never;
+      document.body.append(el);
+      await el.updateComplete;
+      expect(badge(el)?.overrideImage).toBe("");
+    });
+
+    it("is undefined even with a picture when an icon override is set", async () => {
+      const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
+      el.setConfig({
+        type: "state-icon",
+        size: DEFAULT_ICON_SIZE,
+        entity: "light.p",
+        icon: "mdi:lamp",
+      });
+      el.hass = {
+        states: {
+          "light.p": {
+            entity_id: "light.p",
+            state: "on",
+            attributes: { entity_picture: "/cam.jpg" },
+          },
+        },
+      } as never;
+      document.body.append(el);
+      await el.updateComplete;
+      expect(badge(el)?.overrideImage).toBeUndefined();
+    });
+
+    it("is undefined when show_entity_picture is true", async () => {
+      expect(
+        badge(await mount({ entity: "light.a", show_entity_picture: true }))?.overrideImage,
+      ).toBeUndefined();
+    });
   });
 
   it("passes the icon override through", async () => {
@@ -57,6 +103,70 @@ describe("picture-studio-state-icon", () => {
       size: { auto: false, min: 10, ratio: 1, max: 20 },
     });
     expect(el.style.getPropertyValue("--psc-icon-size")).toBe("clamp(10px, 1cqw, 20px)");
+  });
+});
+
+describe("title", () => {
+  it("uses formatEntityName with the configured name", async () => {
+    const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
+    el.setConfig({
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      entity: "light.a",
+      name: "My lamp",
+    });
+    el.hass = {
+      states: { "light.a": { entity_id: "light.a", state: "on", attributes: {} } },
+      formatEntityName: (_s: unknown, name?: string) => name ?? "Default Name",
+    } as never;
+    document.body.append(el);
+    await el.updateComplete;
+    expect(badge(el)?.getAttribute("title")).toBe("My lamp");
+  });
+
+  it("calls formatEntityName with undefined when no name is configured", async () => {
+    const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
+    el.setConfig({ type: "state-icon", size: DEFAULT_ICON_SIZE, entity: "light.a" });
+    el.hass = {
+      states: { "light.a": { entity_id: "light.a", state: "on", attributes: {} } },
+      formatEntityName: (_s: unknown, name?: string) => name ?? "Default Name",
+    } as never;
+    document.body.append(el);
+    await el.updateComplete;
+    expect(badge(el)?.getAttribute("title")).toBe("Default Name");
+  });
+
+  it("emits no title attribute when there is no entity", async () => {
+    const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
+    el.setConfig({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    el.hass = {
+      states: {},
+      formatEntityName: () => "should not be used",
+    } as never;
+    document.body.append(el);
+    await el.updateComplete;
+    expect(badge(el)?.hasAttribute("title")).toBe(false);
+  });
+});
+
+describe("clickable attribute", () => {
+  it("is present when no action keys are set — default is more-info", async () => {
+    const el = await mount({ entity: "light.a" });
+    expect(el.hasAttribute("clickable")).toBe(true);
+  });
+
+  it("is absent when tap_action is none and the others are unset", async () => {
+    const el = await mount({ entity: "light.a", tap_action: { action: "none" } });
+    expect(el.hasAttribute("clickable")).toBe(false);
+  });
+
+  it("is present when tap_action is none but hold_action is active", async () => {
+    const el = await mount({
+      entity: "light.a",
+      tap_action: { action: "none" },
+      hold_action: { action: "toggle" },
+    });
+    expect(el.hasAttribute("clickable")).toBe(true);
   });
 });
 

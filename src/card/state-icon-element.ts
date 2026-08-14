@@ -81,13 +81,32 @@ export class PictureStudioStateIcon extends LitElement {
 
     const stateObj = config.entity ? this._hass?.states?.[config.entity] : undefined;
 
+    // Only blank out overrideImage when the entity actually has a picture to suppress,
+    // picture-display is off, and no icon override is chosen (overrideIcon already wins
+    // that branch in state-badge anyway). Passing "" unconditionally blocks state-badge's
+    // colour computation — it only colours inside the `overrideImage === undefined` branch.
+    // Residual hole: an entity with a picture, show_entity_picture off, and no icon still
+    // loses colour. Closing it would require a different approach to picture suppression.
+    const hasPicture = !!(
+      stateObj?.attributes?.entity_picture || stateObj?.attributes?.entity_picture_local
+    );
+    const suppressPicture = !config.show_entity_picture && hasPicture && !config.icon;
+
+    // Use the entity's formatted name (with optional user-supplied override) as the
+    // tooltip. formatEntityName returns the entity's default name when name is undefined,
+    // so one call covers both the "name typed" and "no name" cases.
+    const title = stateObj
+      ? (this._hass?.formatEntityName?.(stateObj, config.name) ?? nothing)
+      : nothing;
+
     return html`
       <state-badge
         .hass=${this._hass}
         .stateObj=${stateObj}
         .overrideIcon=${config.icon}
         .color=${config.color ?? "state"}
-        .overrideImage=${config.show_entity_picture ? undefined : ""}
+        .overrideImage=${suppressPicture ? "" : undefined}
+        title=${title}
       ></state-badge>
     `;
   }
@@ -97,6 +116,16 @@ export class PictureStudioStateIcon extends LitElement {
     const config = this._config;
     if (!config) return;
     this.style.setProperty("--psc-icon-size", iconSizeCss(config.size));
+
+    // Absent tap_action means clickable (the default action is more-info).
+    // Mirrors Home Assistant's own badge.hasAction getter exactly: the cursor
+    // disappears only when all three actions are explicitly set to "none".
+    const clickable =
+      !config.tap_action ||
+      hasAction(config.tap_action) ||
+      hasAction(config.hold_action) ||
+      hasAction(config.double_tap_action);
+    this.toggleAttribute("clickable", clickable);
 
     const handler = actionHandler();
     if (handler?.bind) {
@@ -119,6 +148,20 @@ export class PictureStudioStateIcon extends LitElement {
     :host {
       display: block;
       line-height: 0;
+      transition: transform 90ms ease-out;
+    }
+    /* Pointer when there is something to click. */
+    :host([clickable]) {
+      cursor: pointer;
+    }
+    /* Subtle grow on hover: scale goes on the host — the card's wrapper carries
+       translate(…) and must not be touched; 50% 50% is the default
+       transform-origin, so the icon scales from its own centre regardless of
+       the item's anchor. No guard for edit mode needed: the card already sets
+       .editing .item > * { pointer-events: none }, so hover never reaches
+       this host while a drag is running. */
+    :host([clickable]:hover) {
+      transform: scale(1.08);
     }
     /* state-badge ships :host { width: 40px }, so the size has to drive the box
        as well as the glyph. One value, one visual footprint: a glyph and an

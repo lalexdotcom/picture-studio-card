@@ -16,6 +16,8 @@ export interface HomeAssistant {
   language: string;
   locale?: { language?: string };
   localize: LocalizeFunc;
+  /** Optional: hand-declared because our type file must not claim more than we rely on. */
+  formatEntityName?: (stateObj: HassEntity, name?: string) => string;
   [key: string]: unknown;
 }
 
