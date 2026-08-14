@@ -108,8 +108,7 @@ down with it. Three modes decide how closely:
 
 ### Chrome
 
-A **chrome** surrounds an item with its own surface, so it reads against a busy
-picture instead of competing with it.
+A **chrome** surrounds an item with its own surface.
 
 - **Theme** — **Auto**, **Light** or **Dark**.
 - **Radius** — a disc, a square, or anything between.
