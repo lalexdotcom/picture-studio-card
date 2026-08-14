@@ -12,7 +12,14 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
-import { type Anchor, type Position, positionStyle, reanchor } from "../position";
+import {
+  type Anchor,
+  type MarkerCorner,
+  markerCorner,
+  type Position,
+  positionStyle,
+  reanchor,
+} from "../position";
 import type {
   BadgeConfig,
   HomeAssistant,
@@ -32,6 +39,8 @@ type ProbeElement = HTMLElement & {
   preview?: boolean;
   load?: () => void;
 };
+
+const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 export class PictureStudioCard extends LitElement {
   static properties = {
@@ -435,6 +444,19 @@ export class PictureStudioCard extends LitElement {
       // wrappers are built imperatively, and it is set outside the drag guard
       // below: the badge being dragged is precisely the selected one.
       wrapper.classList.toggle("selected", this.editing && index === this.selected);
+      // "This item carries conditions", not "it is hidden right now": there is
+      // no probe in the editor, so there is no verdict to read — and a static
+      // mark is the better affordance anyway, since it does not flicker with
+      // entity state. The live verdict lives in the form's own banner.
+      const conditional = this.editing && hasVisibility(item);
+      wrapper.classList.toggle("conditional", conditional);
+      const corner = conditional ? markerCorner(item.position) : undefined;
+      for (const c of MARKER_CORNERS) wrapper.classList.toggle(`marker-${c}`, c === corner);
+      if (conditional) {
+        wrapper.dataset.conditions = String(item.visibility?.length ?? 0);
+      } else {
+        delete wrapper.dataset.conditions;
+      }
       // Leave the badge under the cursor alone: its styles are live pixels
       // managed by the drag controller. Writing the stored config position over
       // them would jump the badge back toward its pre-drag location on every
@@ -598,6 +620,54 @@ export class PictureStudioCard extends LitElement {
     .editing .item.dragging {
       outline: 2px solid var(--primary-color);
       outline-offset: 1px;
+    }
+    /* The item being edited comes to the front. This is the one exception to
+       "no z-index": it is an editor affordance, it never reaches the config,
+       and it does not exist on a dashboard — the rendered stacking still has a
+       single authority, the list order. .dragging is there in its own right:
+       the selection arrives through a re-render, which pointer capture can
+       precede by a frame. */
+    .editing .item.selected,
+    .editing .item.dragging {
+      z-index: 1;
+    }
+    /* "This item carries conditions". Out of flow, so it adds nothing to the
+       wrapper's max-content width: the halo, the ring and the radius keep
+       tracing the item alone, and getBoundingClientRect — which the drag clamp
+       measures — returns the same box it did before.
+       Its own pointer-events, because \`.editing .item > *\` matches real
+       children and not a pseudo-element. */
+    .editing .item.conditional::after {
+      content: attr(data-conditions);
+      position: absolute;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      box-sizing: border-box;
+      border-radius: var(--ha-border-radius-md, 8px);
+      background: var(--secondary-background-color, #e0e0e0);
+      color: var(--primary-text-color, #212121);
+      font-size: 11px;
+      font-weight: var(--ha-font-weight-medium, 500);
+      line-height: 16px;
+      text-align: center;
+      pointer-events: none;
+    }
+    .editing .item.marker-top-right::after {
+      top: -8px;
+      right: -8px;
+    }
+    .editing .item.marker-top-left::after {
+      top: -8px;
+      left: -8px;
+    }
+    .editing .item.marker-bottom-right::after {
+      bottom: -8px;
+      right: -8px;
+    }
+    .editing .item.marker-bottom-left::after {
+      bottom: -8px;
+      left: -8px;
     }
     .editing .item > * {
       pointer-events: none;

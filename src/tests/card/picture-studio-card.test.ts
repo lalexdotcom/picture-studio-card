@@ -279,3 +279,74 @@ describe("visibility probes", () => {
     expect(probes(card).length).toBe(0);
   });
 });
+
+describe("the condition marker", () => {
+  const CONFIG = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "badge",
+        position: { top: "40%", left: "80%" },
+        visibility: [
+          { condition: "state", entity: "light.a", state: "on" },
+          { condition: "screen" },
+        ],
+        config: { type: "entity", entity: "light.a" },
+      },
+      {
+        type: "badge",
+        position: { top: "20%", left: "20%" },
+        config: { type: "entity", entity: "light.b" },
+      },
+    ],
+  };
+
+  // editing is derived, never assigned: it comes from `preview` plus a
+  // registered editor. releaseEditor and its afterEach already live at the top
+  // of this file.
+  const edit = async (card: PictureStudioCard): Promise<void> => {
+    card.preview = true;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+    });
+    await flush();
+  };
+
+  it("marks only the conditional item, and only while editing", async () => {
+    const card = await mountCard(CONFIG);
+    expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(false);
+    await edit(card);
+    expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(true);
+    expect(wrappers(card)[1]?.classList.contains("conditional")).toBe(false);
+  });
+
+  it("carries the number of conditions", async () => {
+    const card = await mountCard(CONFIG);
+    await edit(card);
+    expect(wrappers(card)[0]?.dataset.conditions).toBe("2");
+  });
+
+  it("points the marker towards the inside of the picture", async () => {
+    const card = await mountCard(CONFIG);
+    await edit(card);
+    expect(wrappers(card)[0]?.classList.contains("marker-top-left")).toBe(true);
+    expect(wrappers(card)[0]?.classList.contains("marker-top-right")).toBe(false);
+  });
+
+  it("clears the mark when the conditions go", async () => {
+    const card = await mountCard(CONFIG);
+    await edit(card);
+    card.setConfig({
+      ...CONFIG,
+      items: [{ ...CONFIG.items[0], visibility: undefined }, CONFIG.items[1]],
+    });
+    await card.updateComplete;
+    await flush();
+    expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(false);
+    expect(wrappers(card)[0]?.dataset.conditions).toBeUndefined();
+  });
+});
