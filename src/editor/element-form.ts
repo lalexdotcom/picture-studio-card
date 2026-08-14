@@ -1,4 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
+import { DEFAULT_CHROME, normalizeChrome } from "../chrome";
 import type { ElementConfig, StateIconConfig } from "../config";
 import { normalizeIconSize } from "../element-size";
 import type { Anchor } from "../position";
@@ -6,6 +7,15 @@ import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
 import "./visibility-section";
 import { PLACEMENT_ICON } from "./icons";
+
+const THEME_KEY = "ui.panel.lovelace.editor.card.map";
+const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
+
+const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBACK): string =>
+  localize(`${THEME_KEY}.theme_modes.${value}`) || THEME_FALLBACK[value];
+
+export const themeModeTitle = (localize: LocalizeFunc): string =>
+  localize(`${THEME_KEY}.theme_mode`) || "Theme mode";
 
 export const stateIconSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
@@ -51,7 +61,8 @@ export const stateIconSchema = (): unknown[] => [
 ];
 
 export const toFormData = (config: StateIconConfig): Record<string, unknown> => {
-  const { size, ...rest } = config;
+  const { size, chrome, ...rest } = config;
+  const c = chrome ?? DEFAULT_CHROME;
   return {
     ...rest,
     size_mode: size.mode,
@@ -59,6 +70,13 @@ export const toFormData = (config: StateIconConfig): Record<string, unknown> => 
     size_ratio: size.ratio,
     size_max: size.max,
     size_value: size.value,
+    chrome_enabled: c.theme !== "none",
+    // The control never offers "none", so an off chrome pre-selects the theme
+    // that checking the box will give it.
+    chrome_theme: c.theme === "none" ? "auto" : c.theme,
+    chrome_radius: c.radius,
+    chrome_opacity: c.opacity,
+    chrome_content_ratio: c.content_ratio,
   };
 };
 
@@ -66,18 +84,46 @@ export const fromFormData = (
   config: StateIconConfig,
   data: Record<string, unknown>,
 ): StateIconConfig => {
-  // Invariant: `data` must be the complete flat record (all five size fields
-  // present, whether or not the active schema shows them). ha-form enforces this:
-  // its value-changed handler merges the changed child onto the `.data` it was
-  // given and re-emits the whole thing —
+  // Invariant: `data` must be the complete flat record (all nine chrome and size
+  // fields present, whether or not the active schema shows them). ha-form enforces
+  // this: its value-changed handler merges the changed child onto the `.data` it
+  // was given and re-emits the whole thing —
   //   this.data = { ...this.data, ...newValue };
   //   fireEvent(this, "value-changed", { value: this.data });
   // — so every field we pass to `.data` comes back regardless of which rows the
-  // current mode's schema is showing. Passing `toFormData(element)` (all five
+  // current mode's schema is showing. Passing `toFormData(element)` (all nine
   // fields) as `.data` is therefore what keeps the non-visible fields alive.
-  const { size_mode, size_min, size_ratio, size_max, size_value, ...rest } = data;
+  const {
+    size_mode,
+    size_min,
+    size_ratio,
+    size_max,
+    size_value,
+    chrome_enabled,
+    chrome_theme,
+    chrome_radius,
+    chrome_opacity,
+    chrome_content_ratio,
+    ...rest
+  } = data;
+  // Chrome is written when it was present before (numbers must survive unchecking)
+  // or when the user explicitly enables it. When the original had no chrome and
+  // the box is off, the key is omitted entirely so an absent chrome still round-trips.
+  const chromeOut =
+    chrome_enabled || config.chrome !== undefined
+      ? {
+          chrome: normalizeChrome({
+            // The checkbox is the switch; the theme control only ever names a surface
+            // that draws. Unchecking stores "none" and every number survives it.
+            theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
+            radius: chrome_radius,
+            opacity: chrome_opacity,
+            content_ratio: chrome_content_ratio,
+          }),
+        }
+      : {};
   return {
-    ...(rest as Omit<StateIconConfig, "type" | "size">),
+    ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
     size: normalizeIconSize({
@@ -87,6 +133,7 @@ export const fromFormData = (
       max: size_max,
       value: size_value,
     }),
+    ...chromeOut,
   };
 };
 
@@ -106,6 +153,11 @@ export const elementFormLabel = (
   if (name === "color" || name === "show_entity_picture") {
     return localize(`ui.panel.lovelace.editor.badge.entity.${name}`) || name;
   }
+  if (name === "chrome_enabled") return localizeOwn(hass, "chrome_enabled");
+  if (name === "chrome_radius") return localizeOwn(hass, "chrome_radius");
+  if (name === "chrome_opacity") return localizeOwn(hass, "chrome_opacity");
+  if (name === "chrome_content_ratio") return localizeOwn(hass, "chrome_content_ratio");
+  if (name === "chrome_theme") return themeModeTitle(localize);
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
 
@@ -181,6 +233,57 @@ export const stateIconSizeSchema = (
   return preamble;
 };
 
+/** The checkbox, alone, so the theme control can be rendered between it and the numbers. */
+export const chromeToggleSchema = (): unknown[] => [
+  { name: "chrome_enabled", selector: { boolean: {} } },
+];
+
+export const chromeSchema = (
+  localize: LocalizeFunc,
+  // When true, the caller renders ha-radio-group for the theme and the schema
+  // omits chrome_theme. When false, the select stays so the theme is still
+  // changeable — ha-form is the guarantee that it renders.
+  radioGroupAvailable = false,
+): unknown[] => [
+  ...(radioGroupAvailable
+    ? []
+    : [
+        {
+          name: "chrome_theme",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: (["auto", "light", "dark"] as const).map((value) => ({
+                value,
+                label: themeModeLabel(localize, value),
+              })),
+            },
+          },
+        },
+      ]),
+  {
+    name: "",
+    type: "grid",
+    schema: [
+      {
+        name: "chrome_radius",
+        selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%", mode: "box" } },
+      },
+      {
+        name: "chrome_opacity",
+        selector: { number: { min: 0, max: 1, step: 0.05, mode: "box" } },
+      },
+      {
+        name: "chrome_content_ratio",
+        // The model clamps to 0-1; the form starts at 0.1 because a ratio of
+        // zero renders an invisible icon and nothing in the editor would
+        // explain why. The form guides, the model tolerates.
+        selector: { number: { min: 0.1, max: 1, step: 0.05, mode: "box" } },
+      },
+    ],
+  },
+];
+
 export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
   if (name === "color")
     return (
@@ -233,6 +336,20 @@ export class PictureStudioElementForm extends LitElement {
     );
   };
 
+  private _chromeThemeChanged = (ev: Event): void => {
+    if (!this.element) return;
+    const value = (ev.currentTarget as { value?: string }).value;
+    if (!value) return;
+    const data = { ...toFormData(this.element), chrome_theme: value, chrome_enabled: true };
+    this.dispatchEvent(
+      new CustomEvent("element-changed", {
+        detail: { element: fromFormData(this.element, data) },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
   protected render() {
     const element = this.element;
     const hass = this.hass;
@@ -262,6 +379,48 @@ export class PictureStudioElementForm extends LitElement {
         .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
         @value-changed=${this._valueChanged}
       ></ha-form>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "chrome")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${toFormData(element)}
+            .schema=${chromeToggleSchema()}
+            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+          ${
+            radioGroupAvailable
+              ? html`
+                <span class="section-label">${themeModeTitle(hass.localize)}</span>
+                <ha-radio-group
+                  orientation="horizontal"
+                  .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
+                  @change=${this._chromeThemeChanged}
+                >
+                  ${(["auto", "light", "dark"] as const).map(
+                    (value) => html`
+                      <ha-radio-option .value=${value}
+                        >${themeModeLabel(hass.localize, value)}</ha-radio-option
+                      >
+                    `,
+                  )}
+                </ha-radio-group>
+              `
+              : nothing
+          }
+          <ha-form
+            .hass=${hass}
+            .data=${toFormData(element)}
+            .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
+            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
       <ha-expansion-panel outlined>
         <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">

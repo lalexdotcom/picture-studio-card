@@ -55,3 +55,34 @@ describe("size_and_position string", () => {
     expect(localizeOwn(hass({ language: "fr" }), "size_and_position")).toBe("Taille et position");
   });
 });
+
+describe("chrome strings", () => {
+  const KEYS = [
+    "chrome",
+    "chrome_enabled",
+    "chrome_radius",
+    "chrome_opacity",
+    "chrome_content_ratio",
+  ] as const;
+
+  it("serves the section and its fields in English", () => {
+    expect(KEYS.map((key) => localizeOwn(undefined, key))).toEqual([
+      "Chrome",
+      "Draw a chrome",
+      "Radius",
+      "Opacity",
+      "Content",
+    ]);
+  });
+
+  it("serves the same five in French", () => {
+    const fr = hass({ language: "fr" });
+    expect(KEYS.map((key) => localizeOwn(fr, key))).toEqual([
+      "Habillage",
+      "Dessiner un habillage",
+      "Rayon",
+      "Opacité",
+      "Contenu",
+    ]);
+  });
+});
