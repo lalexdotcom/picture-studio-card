@@ -137,7 +137,7 @@ items:
       top: 30%
       left: 60%
     anchor: center               # optional; defaults to "auto"
-    visibility:                  # optional; absent means always drawn
+    visibility:                  # optional; absent or empty means always drawn
       - condition: state
         entity: input_boolean.show_badge
         state: "on"
