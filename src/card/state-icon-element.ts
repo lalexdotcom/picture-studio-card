@@ -203,11 +203,6 @@ export class PictureStudioStateIcon extends LitElement {
       box-sizing: border-box;
       width: var(--psc-icon-size);
       height: var(--psc-icon-size);
-      border-radius: var(--psc-chrome-radius, 50%);
-      /* At content_ratio 1 the picture fills the box and this is what clips it
-         to the chrome's own silhouette — the chrome becomes the picture's
-         frame rather than a disc behind it. */
-      overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -221,6 +216,15 @@ export class PictureStudioStateIcon extends LitElement {
          dashboard can dial them without forking the element. */
       filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
         drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.6)));
+    }
+    /* The shape and the clipping belong to the chrome: an unshaped, unclipped
+       wrapper is exactly what "no chrome" means. */
+    :host([chrome]) .chrome {
+      border-radius: var(--psc-chrome-radius, 50%);
+      /* At content_ratio 1 the picture fills the box and this is what clips it
+         to the chrome's own silhouette — the chrome becomes the picture's
+         frame rather than a disc behind it. */
+      overflow: hidden;
     }
     /* The fill sits on a pseudo-element so its opacity is its own: fading the
        surface must not fade the icon standing on it. */

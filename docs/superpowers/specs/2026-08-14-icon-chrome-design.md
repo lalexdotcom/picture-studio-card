@@ -142,8 +142,6 @@ i.e. the state colour. That is the badge recipe.
   box-sizing: border-box;
   width: var(--psc-icon-size);
   height: var(--psc-icon-size);
-  border-radius: var(--psc-chrome-radius, 50%);
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -152,7 +150,15 @@ i.e. the state colour. That is the badge recipe.
   filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
     drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.6)));
 }
-.chrome::before {
+/* The shape and the clipping are conditional: an unshaped, unclipped wrapper
+   is exactly what "no chrome" means. */
+:host([chrome]) .chrome {
+  border-radius: var(--psc-chrome-radius, 50%);
+  /* At content_ratio 1 the picture fills the box and this is what clips it
+     to the chrome's own silhouette — the chrome becomes the picture's frame. */
+  overflow: hidden;
+}
+:host([chrome]) .chrome::before {
   content: "";
   position: absolute;
   inset: 0;
