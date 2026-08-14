@@ -45,7 +45,6 @@ export class PictureStudioAnchorPicker extends LitElement {
     const anchor = this.anchor ?? "proportional";
     const proportional = anchor === "proportional";
     return html`
-      <div class="label">${localizeOwn(this.hass, "anchor")}</div>
       <div class="row">
         <div class="half">
           <ha-formfield .label=${localizeOwn(this.hass, "anchor_proportional")}>
@@ -84,18 +83,6 @@ export class PictureStudioAnchorPicker extends LitElement {
   static styles = css`
     :host {
       display: block;
-    }
-    /* The label Home Assistant puts above a form field — "Entity" at the top of
-       the badge's own form. Theirs overrides nothing but the margin and inherits
-       the form's body text, so these are the inherited values spelled out. The
-       size token carries the user's font scale; a fixed rem would not. */
-    .label {
-      display: block;
-      color: var(--primary-text-color);
-      font-size: var(--ha-font-size-m, 14px);
-      font-weight: var(--ha-font-weight-normal, 400);
-      line-height: var(--ha-line-height-normal, 1.6);
-      margin: 0 0 var(--ha-space-2, 8px);
     }
     .row {
       display: flex;
