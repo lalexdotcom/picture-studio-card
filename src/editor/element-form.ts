@@ -4,6 +4,7 @@ import { normalizeIconSize } from "../element-size";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
+import { PLACEMENT_ICON } from "./icons";
 
 export const stateIconSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
@@ -176,8 +177,7 @@ export class PictureStudioElementForm extends LitElement {
         @value-changed=${this._valueChanged}
       ></ha-form>
       <ha-expansion-panel outlined>
-        <!-- mdi:crop-free — keep in sync with badge-form.ts, same visual cue for positioning sections -->
-        <ha-icon slot="leading-icon" icon="mdi:crop-free"></ha-icon>
+        <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">
           ${localizeOwn(hass, "size_and_position")}
         </div>

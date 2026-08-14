@@ -3,6 +3,7 @@ import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant } from "../types";
 import { resolveBadgeClass } from "./badge-catalog";
+import { PLACEMENT_ICON } from "./icons";
 
 type BadgeEditorElement = HTMLElement & {
   hass?: HomeAssistant;
@@ -115,8 +116,7 @@ export class PictureStudioBadgeForm extends LitElement {
           : nothing
       }
       <ha-expansion-panel outlined>
-        <!-- mdi:crop-free — keep in sync with element-form.ts, same visual cue for positioning sections -->
-        <ha-icon slot="leading-icon" icon="mdi:crop-free"></ha-icon>
+        <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">
           ${localizeOwn(this.hass, "anchor")}
         </div>
