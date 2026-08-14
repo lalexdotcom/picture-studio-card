@@ -5,17 +5,26 @@
  * following the window, cannot do in a sections view.
  */
 export interface IconSize {
-  auto: boolean;
-  /** px */
-  min: number;
-  /** % of the card's width */
+  /** "auto" uses the card's defaults; "adaptive" clamps own min/ratio/max; "fixed" is exact pixels. */
+  mode: "auto" | "adaptive" | "fixed";
+  /** adaptive only — % of the card's width */
   ratio: number;
-  /** px */
+  /** adaptive only — px */
+  min: number;
+  /** adaptive only — px */
   max: number;
+  /** fixed only — px */
+  value: number;
 }
 
 /** The production values this design starts from; tunable once measured. */
-export const DEFAULT_ICON_SIZE: IconSize = { auto: true, min: 40, ratio: 3.5, max: 70 };
+export const DEFAULT_ICON_SIZE: IconSize = {
+  mode: "auto",
+  ratio: 3.5,
+  min: 40,
+  max: 70,
+  value: 48,
+};
 
 const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -23,12 +32,29 @@ const finite = (value: unknown, fallback: number): number =>
 /** Keeps what it was given: `auto` is an override at render, never an erasure. */
 export const normalizeIconSize = (raw: unknown): IconSize => {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_ICON_SIZE };
-  const size = raw as Partial<Record<keyof IconSize, unknown>>;
+  // Use string-keyed record so we can read both the new `mode` field and the
+  // legacy `auto` field without TypeScript narrowing complaints.
+  const size = raw as Partial<Record<string, unknown>>;
+
+  // Read-compatibility path for configs written during development with
+  // { auto: true, … } or { auto: false, … }:
+  //   auto: true  → mode: "auto"
+  //   auto: false → mode: "adaptive"
+  // Never written back out; the normalised form always uses `mode`.
+  let mode: "auto" | "adaptive" | "fixed";
+  if ("auto" in size) {
+    mode = size.auto !== false ? "auto" : "adaptive";
+  } else {
+    const m = size.mode;
+    mode = m === "auto" || m === "adaptive" || m === "fixed" ? m : "auto";
+  }
+
   return {
-    auto: size.auto !== false,
-    min: finite(size.min, DEFAULT_ICON_SIZE.min),
+    mode,
     ratio: finite(size.ratio, DEFAULT_ICON_SIZE.ratio),
+    min: finite(size.min, DEFAULT_ICON_SIZE.min),
     max: finite(size.max, DEFAULT_ICON_SIZE.max),
+    value: finite(size.value, DEFAULT_ICON_SIZE.value),
   };
 };
 
@@ -37,10 +63,11 @@ export const normalizeIconSize = (raw: unknown): IconSize => {
  * numbers the user typed, and dropping it from the stored config would lose them.
  */
 export const isDefaultIconSize = (size: IconSize): boolean =>
-  size.auto === DEFAULT_ICON_SIZE.auto &&
+  size.mode === DEFAULT_ICON_SIZE.mode &&
   size.min === DEFAULT_ICON_SIZE.min &&
   size.ratio === DEFAULT_ICON_SIZE.ratio &&
-  size.max === DEFAULT_ICON_SIZE.max;
+  size.max === DEFAULT_ICON_SIZE.max &&
+  size.value === DEFAULT_ICON_SIZE.value;
 
 /**
  * The only reader of `auto`, and the whole of the override: under it the card's
@@ -52,6 +79,11 @@ export const isDefaultIconSize = (size: IconSize): boolean =>
  * documented behaviour.
  */
 export const iconSizeCss = (size: IconSize): string => {
-  const { min, ratio, max } = size.auto ? DEFAULT_ICON_SIZE : size;
-  return `clamp(${min}px, ${ratio}cqw, ${max}px)`;
+  if (size.mode === "fixed") return `${size.value}px`;
+  if (size.mode === "auto") {
+    const { min, ratio, max } = DEFAULT_ICON_SIZE;
+    return `clamp(${min}px, ${ratio}cqw, ${max}px)`;
+  }
+  // adaptive
+  return `clamp(${size.min}px, ${size.ratio}cqw, ${size.max}px)`;
 };

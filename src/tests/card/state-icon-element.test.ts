@@ -100,7 +100,7 @@ describe("picture-studio-state-icon", () => {
   it("writes the size as a custom property on the host", async () => {
     const el = await mount({
       entity: "light.a",
-      size: { auto: false, min: 10, ratio: 1, max: 20 },
+      size: { mode: "adaptive" as const, min: 10, ratio: 1, max: 20, value: 48 },
     });
     expect(el.style.getPropertyValue("--psc-icon-size")).toBe("clamp(10px, 1cqw, 20px)");
   });

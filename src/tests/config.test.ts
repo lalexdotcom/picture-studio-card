@@ -238,32 +238,74 @@ describe("storedConfig", () => {
     expect(stored.items[0]?.config).toEqual({ type: "state-icon", entity: "light.a" });
   });
 
-  it("writes an automatic size that carries the user's numbers", () => {
+  it("writes an auto size that carries the user's numbers", () => {
+    // mode:auto but non-default numbers — size must be kept so unchecking mode restores them
     const config = normalizeConfig({
       type: CARD_TYPE,
       items: [
         {
           type: "element",
-          config: { type: "state-icon", size: { auto: true, min: 10, ratio: 1, max: 20 } },
+          config: {
+            type: "state-icon",
+            size: { mode: "auto", min: 10, ratio: 1, max: 20, value: 48 },
+          },
         },
       ],
     });
     const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
-    expect(stored.items[0]?.config.size).toEqual({ auto: true, min: 10, ratio: 1, max: 20 });
+    expect(stored.items[0]?.config.size).toEqual({
+      mode: "auto",
+      min: 10,
+      ratio: 1,
+      max: 20,
+      value: 48,
+    });
   });
 
-  it("writes a manual size on the way out", () => {
+  it("writes an adaptive size on the way out", () => {
     const config = normalizeConfig({
       type: CARD_TYPE,
       items: [
         {
           type: "element",
-          config: { type: "state-icon", size: { auto: false, min: 10, ratio: 1, max: 20 } },
+          config: {
+            type: "state-icon",
+            size: { mode: "adaptive", min: 10, ratio: 1, max: 20, value: 48 },
+          },
         },
       ],
     });
     const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
-    expect(stored.items[0]?.config.size).toEqual({ auto: false, min: 10, ratio: 1, max: 20 });
+    expect(stored.items[0]?.config.size).toEqual({
+      mode: "adaptive",
+      min: 10,
+      ratio: 1,
+      max: 20,
+      value: 48,
+    });
+  });
+
+  it("writes a fixed size on the way out", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: {
+            type: "state-icon",
+            size: { mode: "fixed", min: 40, ratio: 3.5, max: 70, value: 64 },
+          },
+        },
+      ],
+    });
+    const stored = storedConfig(config) as { items: { config: Record<string, unknown> }[] };
+    expect(stored.items[0]?.config.size).toEqual({
+      mode: "fixed",
+      min: 40,
+      ratio: 3.5,
+      max: 70,
+      value: 64,
+    });
   });
 
   it("returns a badge item byte-identical, leaving its config payload untouched", () => {

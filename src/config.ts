@@ -179,9 +179,9 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
     // anchor comes back exactly as it went in.
     if (item.anchor === "proportional") delete stored.anchor;
     if (item.type === "element" && isDefaultIconSize(item.config.size)) {
-      // Only when all four fields are the defaults: an automatic size may carry
-      // numbers the user typed, and dropping the key would lose them. A config
-      // that never touched the size does not grow a `size:`.
+      // Only when all five fields are the defaults: a size may be automatic and
+      // still carry numbers the user typed, and dropping the key would lose
+      // them. A config that never touched the size does not grow a `size:`.
       const { size: _size, ...rest } = item.config;
       stored.config = rest;
     }
