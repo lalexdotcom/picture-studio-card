@@ -112,9 +112,9 @@ items:
       tap_action: { action: more-info }
       size:
         mode: auto               # auto | adaptive | fixed (absent => auto)
-        ratio: 3.5               # adaptive only — % of card width
-        min: 40                  # adaptive only — px
-        max: 70                  # adaptive only — px
+        ratio: 8                 # adaptive only — % of card width
+        min: 24                  # adaptive only — px
+        max: 48                  # adaptive only — px
         value: 48                # fixed only — px
     position:
       top: 45%
@@ -125,7 +125,7 @@ items:
 
 A `state-icon` has three sizing modes set by `size.mode`:
 
-- **`auto`** (default) — the card's built-in defaults: `clamp(40px, 3.5cqw, 70px)`.
+- **`auto`** (default) — the card's built-in defaults: `clamp(24px, 8cqw, 48px)`.
 - **`adaptive`** — `clamp(<min>px, <ratio>cqw, <max>px)` from the item's own
   numbers. The size still scales with the card's column width, but within the
   bounds you set. In a sections view, two cards of different widths get different

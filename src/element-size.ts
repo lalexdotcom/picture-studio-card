@@ -17,12 +17,17 @@ export interface IconSize {
   value: number;
 }
 
-/** The production values this design starts from; tunable once measured. */
+/**
+ * Measured on the card itself rather than inherited: the picture-elements
+ * workaround this design replaces used 40 / 3.5 / 70, but those were bounds
+ * chosen against the viewport. Against the card, a steeper ratio between tighter
+ * bounds holds the icon's proportion across column widths.
+ */
 export const DEFAULT_ICON_SIZE: IconSize = {
   mode: "auto",
-  ratio: 3.5,
-  min: 40,
-  max: 70,
+  ratio: 8,
+  min: 24,
+  max: 48,
   value: 48,
 };
 

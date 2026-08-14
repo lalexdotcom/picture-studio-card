@@ -89,12 +89,12 @@ describe("isDefaultIconSize", () => {
 
 describe("iconSizeCss", () => {
   it("auto: writes the card's defaults as clamp in px and cqw", () => {
-    expect(iconSizeCss(DEFAULT_ICON_SIZE)).toBe("clamp(40px, 3.5cqw, 70px)");
+    expect(iconSizeCss(DEFAULT_ICON_SIZE)).toBe("clamp(24px, 8cqw, 48px)");
   });
 
   it("auto: ignores the stored numbers and always applies the card's defaults", () => {
     expect(iconSizeCss({ mode: "auto", min: 10, ratio: 1, max: 20, value: 64 })).toBe(
-      "clamp(40px, 3.5cqw, 70px)",
+      "clamp(24px, 8cqw, 48px)",
     );
   });
 

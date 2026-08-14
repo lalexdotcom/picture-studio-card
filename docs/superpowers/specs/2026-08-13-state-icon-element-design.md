@@ -53,9 +53,9 @@ items:
       double_tap_action: { action: none }
       size:
         mode: auto                 # auto | adaptive | fixed (absent => auto)
-        ratio: 3.5                 # adaptive only — % of the card's width
-        min: 40                    # adaptive only — px
-        max: 70                    # adaptive only — px
+        ratio: 8                   # adaptive only — % of the card's width
+        min: 24                    # adaptive only — px
+        max: 48                    # adaptive only — px
         value: 48                  # fixed only — px
 ```
 
@@ -167,9 +167,12 @@ which is why that line is part of the contract, not a style detail.
 
 Three modes, selected by `size.mode`:
 
-- **`auto`** applies the card's defaults — `clamp(40px, 3.5cqw, 70px)` — ignoring
-  whatever numbers may be stored alongside it. This is the default, and it is the
-  production-proven starting point.
+- **`auto`** applies the card's defaults — `clamp(24px, 8cqw, 48px)` — ignoring
+  whatever numbers may be stored alongside it. These are measured on this card
+  rather than inherited: the picture-elements workaround used 40 / 3.5 / 70, but
+  those bounds were chosen against the viewport. Against the card, a steeper
+  ratio between tighter bounds is what holds the icon's proportion as a column
+  narrows.
 - **`adaptive`** renders `clamp(<min>px, <ratio>cqw, <max>px)` from the item's own
   numbers, so the size still scales with the card but within the user's chosen
   bounds.

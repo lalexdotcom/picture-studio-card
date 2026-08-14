@@ -7,8 +7,8 @@
 - A second kind of item: `type: element` with `config.type: state-icon`. An icon
   that reflects an entity's state, with the entity badge's own controls — icon,
   colour, name as a tooltip, entity picture — and tap, hold and double-tap
-  actions. Three sizing modes: **auto** (card defaults, `clamp(40px, 3.5cqw,
-  70px)`), **adaptive** (`clamp(<min>px, <ratio>cqw, <max>px)` from the item's
+  actions. Three sizing modes: **auto** (card defaults, `clamp(24px, 8cqw,
+  48px)`), **adaptive** (`clamp(<min>px, <ratio>cqw, <max>px)` from the item's
   own numbers — scales with the card's column width), and **fixed** (`<value>px`
   — no container unit, for layouts where the icon must hold a precise size).
 

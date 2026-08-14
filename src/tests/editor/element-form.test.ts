@@ -228,9 +228,9 @@ describe("toFormData / fromFormData", () => {
       type: "state-icon",
       entity: "light.a",
       size_mode: "auto",
-      size_min: 40,
-      size_ratio: 3.5,
-      size_max: 70,
+      size_min: 24,
+      size_ratio: 8,
+      size_max: 48,
       size_value: 48,
     });
   });
@@ -280,8 +280,10 @@ describe("toFormData / fromFormData", () => {
     const data = { type: "state-icon", entity: "light.a", size_mode: "fixed" };
     const result = fromFormData(base, data);
     expect(result.size.mode).toBe("fixed");
-    expect(result.size.value).toBe(48); // DEFAULT_ICON_SIZE.value
-    expect(result.size.min).toBe(40); // DEFAULT_ICON_SIZE.min
+    // Read from the constant, not restated: a test that copies a default stops
+    // guarding it the day the default moves, and starts failing instead.
+    expect(result.size.value).toBe(DEFAULT_ICON_SIZE.value);
+    expect(result.size.min).toBe(DEFAULT_ICON_SIZE.min);
   });
 
   it("never lets a form field named type overwrite the kind", () => {
