@@ -19,6 +19,9 @@ const mount = async (config: Partial<StateIconConfig>) => {
 const badge = (el: PictureStudioStateIcon) =>
   el.shadowRoot?.querySelector("state-badge") as (HTMLElement & Record<string, unknown>) | null;
 
+const chromeEl = (el: PictureStudioStateIcon) =>
+  el.shadowRoot?.querySelector(".chrome") as HTMLElement | null;
+
 afterEach(() => {
   document.body.replaceChildren();
 });
@@ -185,6 +188,60 @@ describe("hasAction", () => {
     expect(hasAction(undefined)).toBe(false);
     expect(hasAction({ action: "none" })).toBe(false);
     expect(hasAction({ action: "toggle" })).toBe(true);
+  });
+});
+
+describe("chrome", () => {
+  it("always wraps the badge, so the DOM shape never depends on the config", async () => {
+    const el = await mount({ entity: "light.a" });
+    expect(chromeEl(el)).not.toBeNull();
+    expect(chromeEl(el)?.querySelector("state-badge")).not.toBeNull();
+  });
+
+  it("marks nothing and writes nothing when there is no chrome", async () => {
+    const el = await mount({ entity: "light.a" });
+    expect(el.hasAttribute("chrome")).toBe(false);
+    expect(el.style.getPropertyValue("--psc-chrome-fill")).toBe("");
+    expect(el.style.getPropertyValue("--psc-content-ratio")).toBe("");
+  });
+
+  it("treats an explicit theme of none as no chrome", async () => {
+    const el = await mount({
+      entity: "light.a",
+      chrome: { theme: "none", radius: 10, opacity: 0.5, content_ratio: 0.4 },
+    });
+    expect(el.hasAttribute("chrome")).toBe(false);
+    expect(el.style.getPropertyValue("--psc-chrome-radius")).toBe("");
+  });
+
+  it("writes the four properties when a chrome is on", async () => {
+    const el = await mount({
+      entity: "light.a",
+      chrome: { theme: "dark", radius: 12, opacity: 0.8, content_ratio: 0.5 },
+    });
+    expect(el.hasAttribute("chrome")).toBe(true);
+    expect(el.style.getPropertyValue("--psc-chrome-fill")).toBe(
+      "var(--ha-color-neutral-10, #202020)",
+    );
+    expect(el.style.getPropertyValue("--psc-chrome-radius")).toBe("12%");
+    expect(el.style.getPropertyValue("--psc-chrome-opacity")).toBe("0.8");
+    expect(el.style.getPropertyValue("--psc-content-ratio")).toBe("0.5");
+  });
+
+  it("clears the properties when a chrome is switched off in place", async () => {
+    const el = await mount({
+      entity: "light.a",
+      chrome: { theme: "auto", radius: 50, opacity: 1, content_ratio: 0.6 },
+    });
+    el.setConfig({
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      entity: "light.a",
+      chrome: { theme: "none", radius: 50, opacity: 1, content_ratio: 0.6 },
+    });
+    await el.updateComplete;
+    expect(el.hasAttribute("chrome")).toBe(false);
+    expect(el.style.getPropertyValue("--psc-chrome-fill")).toBe("");
   });
 });
 
