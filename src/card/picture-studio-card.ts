@@ -3,11 +3,13 @@ import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
+  hasVisibility,
   ICON_TAG,
   imagePath,
   normalizeConfig,
   type PictureItem,
   type PictureStudioConfig,
+  PROBE_TYPE,
   stubConfig,
 } from "../config";
 import { type Anchor, type Position, positionStyle, reanchor } from "../position";
@@ -19,6 +21,17 @@ import type {
   LovelaceGridOptions,
 } from "../types";
 import { createDragController } from "./drag-layer";
+
+/**
+ * The slice of `hui-card` a probe uses. Declared rather than imported: it is
+ * Home Assistant's element, and we only ever set these four.
+ */
+type ProbeElement = HTMLElement & {
+  config?: unknown;
+  hass?: unknown;
+  preview?: boolean;
+  load?: () => void;
+};
 
 export class PictureStudioCard extends LitElement {
   static properties = {
@@ -42,6 +55,8 @@ export class PictureStudioCard extends LitElement {
   private _bgElement?: LovelaceElementElement;
   private _elements: LovelaceBadgeElement[] = [];
   private _wrappers: HTMLElement[] = [];
+  /** Indexed like _wrappers; a hole where the item carries no conditions. */
+  private _probes: (ProbeElement | undefined)[] = [];
   private _renderedTypes: string[] = [];
   /** Released when the card stops editing; see the broker's card registry. */
   private _unregisterCard?: () => void;
@@ -72,6 +87,9 @@ export class PictureStudioCard extends LitElement {
     if (this._bgElement) this._bgElement.hass = hass;
     for (const el of this._elements) {
       el.hass = hass;
+    }
+    for (const probe of this._probes) {
+      if (probe) probe.hass = hass;
     }
     // No requestUpdate: render() reads _config.title and editing, never hass.
     // Home Assistant republishes hass on every state change of any entity, so
@@ -230,6 +248,12 @@ export class PictureStudioCard extends LitElement {
       this._syncEditingAndDrag();
     }
 
+    if (changed.has("preview")) {
+      for (const probe of this._probes) {
+        if (probe) probe.preview = this.preview;
+      }
+    }
+
     if (configChanged) {
       void this._syncBackground();
       // _syncItems ends with _applyPositions, so it is not called again here.
@@ -308,9 +332,12 @@ export class PictureStudioCard extends LitElement {
     const items = this._config?.items ?? [];
     if (!layer) return;
 
-    // The family AND the kind: without the prefix, two icons and a typeless
-    // badge would all key on "".
-    const types = items.map((item) => `${item.type}:${String(item.config.type ?? "")}`);
+    // The family, the kind, and whether the item carries conditions. The last
+    // one belongs here because a probe is a sibling in the layer: it appearing
+    // or disappearing changes the DOM we build, not just the config we push.
+    const types = items.map(
+      (item) => `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
+    );
     const sameShape =
       types.length === this._renderedTypes.length &&
       types.every((t, i) => t === this._renderedTypes[i]);
@@ -320,6 +347,7 @@ export class PictureStudioCard extends LitElement {
       layer.replaceChildren();
       this._elements = [];
       this._wrappers = [];
+      this._probes = [];
 
       items.forEach((item, index) => {
         const wrapper = document.createElement("div");
@@ -331,10 +359,14 @@ export class PictureStudioCard extends LitElement {
         const child = this._createChild(item, helpers);
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
+
+        const probe = this._createProbe(item);
+        if (probe) layer.append(probe);
         layer.append(wrapper);
 
         this._elements.push(child);
         this._wrappers.push(wrapper);
+        this._probes.push(probe);
       });
       this._renderedTypes = types;
     } else {
@@ -343,6 +375,11 @@ export class PictureStudioCard extends LitElement {
         if (!child) return;
         child.setConfig(item.config as unknown as BadgeConfig);
         if (this._hass) child.hass = this._hass;
+
+        const probe = this._probes[index];
+        // A new object each time is correct here: this branch only runs on a
+        // config change, never on the hass path.
+        if (probe) probe.config = { type: PROBE_TYPE, visibility: item.visibility };
       });
     }
 
@@ -357,6 +394,36 @@ export class PictureStudioCard extends LitElement {
     const el = document.createElement(ICON_TAG) as unknown as LovelaceBadgeElement;
     el.setConfig(item.config as unknown as BadgeConfig);
     return el;
+  }
+
+  /**
+   * A `hui-card` carrying nothing but the item's conditions and a phantom card.
+   * It is Home Assistant's own implementation of `visibility`, so the
+   * evaluation, the media-query listeners and the `time` timers are theirs. The
+   * verdict lands on the probe as the native `hidden` attribute, and the
+   * stylesheet's sibling rule reflects it onto the item — no JavaScript of ours
+   * in that path.
+   *
+   * `preview` follows the card's own, not `editing`: it is true both in the edit
+   * dialog and on a dashboard in edit mode, which is exactly when Home Assistant
+   * keeps its own hidden cards on screen.
+   *
+   * None at all while editing. The editor's marker says "has conditions", not
+   * "is hidden", so no verdict is needed there — and that is where the drag
+   * layer is already the heaviest.
+   */
+  private _createProbe(item: PictureItem): ProbeElement | undefined {
+    if (this.editing || !hasVisibility(item)) return undefined;
+    const probe = document.createElement("hui-card") as ProbeElement;
+    probe.className = "probe";
+    probe.config = { type: PROBE_TYPE, visibility: item.visibility };
+    probe.preview = this.preview;
+    if (this._hass) probe.hass = this._hass;
+    // Optional call: in the test environment hui-card is not defined, and an
+    // unknown element has no load(). The probe is then inert, which is what the
+    // suite asserts against — the real behaviour is a browser question.
+    probe.load?.();
+    return probe;
   }
 
   private _applyPositions(items: PictureItem[]): void {
@@ -469,6 +536,17 @@ export class PictureStudioCard extends LitElement {
       position: absolute;
       inset: 0;
       pointer-events: none;
+    }
+    /* The probe is a hui-card carrying the item's conditions. It stays in the
+       DOM — the Lit context a view_columns condition consumes resolves through
+       it, and display: none is not detachment — and never draws.
+       The important beats the inline display hui-card drives on itself, without
+       touching the hidden attribute, which is the signal. */
+    .probe {
+      display: none !important;
+    }
+    .probe[hidden] + .item {
+      display: none;
     }
     /* max-content, not shrink-to-fit: an absolutely positioned box with a left
        and no right is sized against the space remaining to its right, which is

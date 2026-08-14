@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
-import { CARD_TYPE, ICON_TAG } from "../../config";
+import type { PictureStudioCard } from "../../card/picture-studio-card";
+import { CARD_TAG, CARD_TYPE, ICON_TAG, PROBE_TYPE } from "../../config";
 import type { HomeAssistant } from "../../types";
 import {
   background,
@@ -9,6 +10,7 @@ import {
   CONFIG_3,
   FAKE_TAG,
   flush,
+  installHelpers,
   mountCard,
   root,
   wrappers,
@@ -173,5 +175,107 @@ describe("mixed item families", () => {
     await card.updateComplete;
     await flush();
     expect(root(card).querySelector(ICON_TAG)).toBe(before);
+  });
+});
+
+describe("visibility probes", () => {
+  const CONFIG = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "badge",
+        position: { top: "10%", left: "10%" },
+        visibility: [{ condition: "state", entity: "light.a", state: "on" }],
+        config: { type: "entity", entity: "light.a" },
+      },
+      {
+        type: "badge",
+        position: { top: "20%", left: "20%" },
+        config: { type: "entity", entity: "light.b" },
+      },
+    ],
+  };
+
+  const probes = (card: PictureStudioCard): HTMLElement[] =>
+    Array.from(root(card).querySelectorAll(".probe")) as HTMLElement[];
+
+  const EDITOR_STUB: EditorChannel = {
+    patchPosition: () => {},
+    patchAnchor: () => {},
+    select: () => {},
+    selectedIndex: () => undefined,
+  };
+
+  it("creates one probe, for the conditional item only", async () => {
+    const card = await mountCard(CONFIG);
+    expect(probes(card).length).toBe(1);
+  });
+
+  it("puts the probe immediately before its own item", async () => {
+    const card = await mountCard(CONFIG);
+    expect(probes(card)[0]?.nextElementSibling).toBe(wrappers(card)[0]);
+  });
+
+  it("hands the probe the item's conditions and the phantom type", async () => {
+    const card = await mountCard(CONFIG);
+    const probe = probes(card)[0] as HTMLElement & { config?: Record<string, unknown> };
+    expect(probe.config?.type).toBe(PROBE_TYPE);
+    expect(probe.config?.visibility).toEqual(CONFIG.items[0]?.visibility);
+  });
+
+  it("pushes hass to the probes", async () => {
+    const card = await mountCard(CONFIG);
+    const probe = probes(card)[0] as HTMLElement & { hass?: unknown };
+    const hass = { states: {}, themes: { darkMode: false }, language: "en", localize: () => "" };
+    card.hass = hass as never;
+    expect(probe.hass).toBe(hass);
+  });
+
+  it("creates none when the editor is already there at the first sync", async () => {
+    releaseEditor = registerEditor(EDITOR_STUB);
+    installHelpers();
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.preview = true;
+    card.setConfig(CONFIG);
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    expect(probes(card).length).toBe(0);
+  });
+
+  it("forces a probe visible when preview arrives after it was built", async () => {
+    // The false→true transition at mount: the preview can render before the
+    // editor announces itself. The probe then exists, and `preview` is what
+    // keeps it from hiding anything.
+    const card = await mountCard(CONFIG);
+    const probe = probes(card)[0] as HTMLElement & { preview?: boolean };
+    expect(probe.preview).toBe(false);
+    card.preview = true;
+    await card.updateComplete;
+    expect(probe.preview).toBe(true);
+  });
+
+  it("rebuilds when conditions appear on an item that had none", async () => {
+    const card = await mountCard(CONFIG);
+    expect(probes(card).length).toBe(1);
+    card.setConfig({
+      ...CONFIG,
+      items: [CONFIG.items[0], { ...CONFIG.items[1], visibility: [{ condition: "screen" }] }],
+    });
+    await card.updateComplete;
+    await flush();
+    expect(probes(card).length).toBe(2);
+  });
+
+  it("rebuilds when conditions disappear", async () => {
+    const card = await mountCard(CONFIG);
+    card.setConfig({
+      ...CONFIG,
+      items: [{ ...CONFIG.items[0], visibility: undefined }, CONFIG.items[1]],
+    });
+    await card.updateComplete;
+    await flush();
+    expect(probes(card).length).toBe(0);
   });
 });
