@@ -14,6 +14,9 @@
 
 ### Changed
 
+- **`anchor: proportional` is now `anchor: auto`.** The nine fixed anchors are
+  unchanged. Configs written with `proportional` are still read and normalise to
+  `auto`; nothing needs to be updated by hand.
 - **The badge editor's positioning control now lives in a collapsible
   "Position" section**, instead of sitting bare under the badge's own form. It
   is the same control, one click away, and it matches the "Size and position"

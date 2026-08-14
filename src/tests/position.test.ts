@@ -71,8 +71,8 @@ describe("parseAnchor", () => {
     expect(parseAnchor("bottom-right")).toBe("bottom-right");
   });
 
-  it("takes the proportional keyword", () => {
-    expect(parseAnchor("proportional")).toBe("proportional");
+  it("reads the legacy proportional value as auto (read-compat path for pre-1.2.0 configs)", () => {
+    expect(parseAnchor("proportional")).toBe("auto");
   });
 
   it("falls back to the default on anything else", () => {
@@ -87,8 +87,8 @@ describe("parseAnchor", () => {
     expect(parseAnchor("constructor")).toBe(DEFAULT_ANCHOR);
   });
 
-  it("defaults to proportional, so no existing config moves", () => {
-    expect(DEFAULT_ANCHOR).toBe("proportional");
+  it("defaults to auto", () => {
+    expect(DEFAULT_ANCHOR).toBe("auto");
   });
 });
 
@@ -122,14 +122,14 @@ describe("axisOffset", () => {
     expect(axisOffset("bottom-left", "y")).toBe(100);
   });
 
-  it("returns null for proportional, whose offset is the coordinate itself", () => {
-    expect(axisOffset("proportional", "x")).toBeNull();
-    expect(axisOffset("proportional", "y")).toBeNull();
+  it("returns null for auto, whose offset is the coordinate itself", () => {
+    expect(axisOffset("auto", "x")).toBeNull();
+    expect(axisOffset("auto", "y")).toBeNull();
   });
 });
 
 describe("toPx", () => {
-  it("spreads a proportional coordinate over the free span", () => {
+  it("spreads an auto coordinate over the free span", () => {
     expect(toPx(0, 200, 40, null)).toBe(0);
     expect(toPx(50, 200, 40, null)).toBe(80);
     expect(toPx(100, 200, 40, null)).toBe(160);
@@ -150,7 +150,7 @@ describe("toPx", () => {
 });
 
 describe("toPercent", () => {
-  it("inverts the proportional map", () => {
+  it("inverts the auto map", () => {
     expect(toPercent(0, 200, 40, null)).toBe(0);
     expect(toPercent(80, 200, 40, null)).toBe(50);
     expect(toPercent(160, 200, 40, null)).toBe(100);
@@ -172,7 +172,7 @@ describe("toPercent", () => {
     expect(toPercent(-20, 200, 40, 0)).toBe(-10);
   });
 
-  it("returns 0 when a proportional item is as wide as its container", () => {
+  it("returns 0 when an auto item is as wide as its container", () => {
     expect(toPercent(0, 200, 200, null)).toBe(0);
   });
 
@@ -183,7 +183,7 @@ describe("toPercent", () => {
 
 describe("toPx / toPercent round trip", () => {
   const anchors = [
-    "proportional",
+    "auto",
     "top-left",
     "top-center",
     "top-right",
@@ -213,11 +213,12 @@ describe("reanchor", () => {
   const element = { width: 100, height: 100 };
 
   it("leaves the item exactly where it is", () => {
-    // proportional 100/100 puts the item's leading edge at 300px.
+    // auto 100/100 puts the item's leading edge at 300px.
     // Under top-left, 300px is 75%.
-    expect(
-      reanchor({ top: 100, left: 100 }, "proportional", "top-left", container, element),
-    ).toEqual({ top: 75, left: 75 });
+    expect(reanchor({ top: 100, left: 100 }, "auto", "top-left", container, element)).toEqual({
+      top: 75,
+      left: 75,
+    });
   });
 
   it("is exact for an item that already overflows", () => {
@@ -240,7 +241,7 @@ describe("reanchor", () => {
     const wide = { width: 400, height: 200 };
     const item = { width: 100, height: 50 };
     // x: 300px under top-left is 75%. y: 150px under top-left is 75%.
-    expect(reanchor({ top: 100, left: 100 }, "proportional", "top-left", wide, item)).toEqual({
+    expect(reanchor({ top: 100, left: 100 }, "auto", "top-left", wide, item)).toEqual({
       top: 75,
       left: 75,
     });
@@ -248,16 +249,16 @@ describe("reanchor", () => {
 });
 
 describe("positionStyle", () => {
-  it("derives a proportional translate from the coordinates themselves", () => {
-    expect(positionStyle({ top: 30, left: 45 }, "proportional")).toEqual({
+  it("derives an auto translate from the coordinates themselves", () => {
+    expect(positionStyle({ top: 30, left: 45 }, "auto")).toEqual({
       top: "30%",
       left: "45%",
       transform: "translate(-45%, -30%)",
     });
   });
 
-  it("anchors flush to the bottom-right at 100, under proportional", () => {
-    expect(positionStyle({ top: 100, left: 100 }, "proportional")).toEqual({
+  it("anchors flush to the bottom-right at 100, under auto", () => {
+    expect(positionStyle({ top: 100, left: 100 }, "auto")).toEqual({
       top: "100%",
       left: "100%",
       transform: "translate(-100%, -100%)",

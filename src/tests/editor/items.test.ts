@@ -14,7 +14,7 @@ import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../../position";
 const item = (entity: string, top: number, left: number): PictureItem => ({
   type: "badge",
   position: { top, left },
-  anchor: "proportional",
+  anchor: "auto",
   config: { type: "entity", entity },
 });
 
@@ -26,7 +26,7 @@ describe("addItem", () => {
     });
     expect(out).toHaveLength(2);
     expect(out[1]?.position).toEqual({ top: 50, left: 50 });
-    expect(out[1]?.anchor).toBe("proportional");
+    expect(out[1]?.anchor).toBe("auto");
     expect(out[1]?.config).toEqual({ type: "entity", entity: "light.b" });
   });
 
@@ -106,7 +106,7 @@ describe("setAnchor", () => {
 
   it("does not mutate its input, which Home Assistant freezes", () => {
     setAnchor(items, 1, "center", { top: 33, left: 44 });
-    expect(items[1]?.anchor).toBe("proportional");
+    expect(items[1]?.anchor).toBe("auto");
     expect(items[1]?.position).toEqual({ top: 30, left: 40 });
   });
 
@@ -153,7 +153,7 @@ describe("rowLabel", () => {
   const badge = (config: Record<string, unknown>): PictureItem => ({
     type: "badge",
     position: { top: 50, left: 50 },
-    anchor: "proportional",
+    anchor: "auto",
     config: config as never,
   });
   const states = {

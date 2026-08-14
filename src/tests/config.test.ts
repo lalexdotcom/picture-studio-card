@@ -35,7 +35,7 @@ describe("normalizeConfig", () => {
         {
           type: "badge",
           position: { top: 30, left: 45 },
-          anchor: "proportional",
+          anchor: "auto",
           config: { type: "entity", entity: "light.a" },
         },
       ],
@@ -134,7 +134,7 @@ describe("normalizeConfig", () => {
     expect(out.items[0]).toEqual({
       type: "element",
       position: { top: 50, left: 50 },
-      anchor: "proportional",
+      anchor: "auto",
       config: { type: "state-icon", entity: "light.a", size: DEFAULT_ICON_SIZE },
     });
   });
@@ -333,12 +333,12 @@ describe("anchor", () => {
   const base = { type: "custom:picture-studio", image: "/local/a.png" };
   const badge = { type: "entity", entity: "light.salon" };
 
-  it("defaults a missing anchor to proportional", () => {
+  it("defaults a missing anchor to auto", () => {
     const config = normalizeConfig({
       ...base,
       items: [{ type: "badge", position: { top: "30%", left: "45%" }, config: badge }],
     });
-    expect(config.items[0]?.anchor).toBe("proportional");
+    expect(config.items[0]?.anchor).toBe("auto");
   });
 
   it("reads a fixed anchor", () => {
@@ -358,7 +358,25 @@ describe("anchor", () => {
         { type: "badge", position: { top: "30%", left: "45%" }, anchor: "middle", config: badge },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("proportional");
+    expect(config.items[0]?.anchor).toBe("auto");
+  });
+
+  it("reads the legacy proportional value as auto (read-compat path for pre-1.2.0 configs)", () => {
+    const config = normalizeConfig({
+      ...base,
+      items: [
+        {
+          type: "badge",
+          position: { top: "30%", left: "45%" },
+          anchor: "proportional",
+          config: badge,
+        },
+      ],
+    });
+    expect(config.items[0]?.anchor).toBe("auto");
+    // auto is the default, so storedConfig omits the key rather than writing it back out.
+    const stored = storedConfig(config) as { items: Record<string, unknown>[] };
+    expect(Object.hasOwn(stored.items[0] ?? {}, "anchor")).toBe(false);
   });
 
   it("omits the key on the way out when it is the default", () => {

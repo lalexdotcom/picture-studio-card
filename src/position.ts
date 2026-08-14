@@ -1,6 +1,6 @@
 /**
  * Positions are percentages, and the anchor decides what they are a percentage
- * *of*. Under `proportional` — the default, and the only behaviour there used to
+ * *of*. Under `auto` — the default, and the only behaviour there used to
  * be — the anchor follows the coordinate: 0 is flush with the top-left corner,
  * 50 centered, 100 flush with the bottom-right, so a coordinate inside 0-100
  * cannot overflow at any container size. Every fixed anchor pins the translate
@@ -22,7 +22,7 @@ export interface StoredPosition {
 
 /** Where the item's own box is pinned to its coordinates. */
 export type Anchor =
-  | "proportional"
+  | "auto"
   | "top-left"
   | "top-center"
   | "top-right"
@@ -33,10 +33,10 @@ export type Anchor =
   | "bottom-center"
   | "bottom-right";
 
-export const DEFAULT_ANCHOR: Anchor = "proportional";
+export const DEFAULT_ANCHOR: Anchor = "auto";
 
 /** Each fixed anchor as a percentage of the item's own size, per axis. */
-export const ANCHOR_OFFSETS: Record<Exclude<Anchor, "proportional">, { x: number; y: number }> = {
+export const ANCHOR_OFFSETS: Record<Exclude<Anchor, "auto">, { x: number; y: number }> = {
   "top-left": { x: 0, y: 0 },
   "top-center": { x: 50, y: 0 },
   "top-right": { x: 100, y: 0 },
@@ -53,15 +53,17 @@ export const ANCHOR_OFFSETS: Record<Exclude<Anchor, "proportional">, { x: number
  * inherits `toString`, and `"toString" in ANCHOR_OFFSETS` is true.
  */
 export const parseAnchor = (raw: unknown): Anchor => {
-  if (raw === "proportional") return "proportional";
+  // Read-compatibility path for configs written before 1.2.0 with anchor: proportional.
+  // Never written back out; the normalised form always uses "auto".
+  if (raw === "proportional") return "auto";
   return typeof raw === "string" && Object.hasOwn(ANCHOR_OFFSETS, raw)
     ? (raw as Anchor)
     : DEFAULT_ANCHOR;
 };
 
-/** One component of an anchor. `null` is proportional: the offset is the coordinate. */
+/** One component of an anchor. `null` is auto: the offset is the coordinate itself. */
 export const axisOffset = (anchor: Anchor, axis: "x" | "y"): number | null =>
-  anchor === "proportional" ? null : ANCHOR_OFFSETS[anchor][axis];
+  anchor === "auto" ? null : ANCHOR_OFFSETS[anchor][axis];
 
 /**
  * Read a stored coordinate. A hand-written config may say 30, "30" or "30%";
@@ -152,7 +154,7 @@ export const toPx = (
     : (container * percent) / 100 - (element * offset) / 100;
 
 /**
- * The inverse of toPx. Both degenerate cases answer 0: a proportional item as
+ * The inverse of toPx. Both degenerate cases answer 0: an auto item as
  * large as its container has nowhere to go, and a container of zero has no
  * scale to express anything against.
  */

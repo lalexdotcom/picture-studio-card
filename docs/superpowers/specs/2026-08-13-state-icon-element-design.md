@@ -40,7 +40,7 @@ else — `normalizeConfig` already accepts the family.
 items:
   - type: element
     position: { top: 30%, left: 45% }
-    anchor: center                 # absent => proportional, unchanged
+    anchor: center                 # absent => auto, unchanged
     config:
       type: state-icon
       entity: light.salon
@@ -380,7 +380,7 @@ Unit, on the pure modules:
   default inverts), `type: element` without `config.type` throws, an unknown
   `config.type` throws, a valid item comes out with its anchor and size defaults.
 - `storedConfig`: `size` omitted at its default, `anchor` omitted at
-  `proportional`, and the one that matters — **an existing badge config comes back
+  `"auto"`, and the one that matters — **an existing badge config comes back
   byte-identical**.
 - The size module: `auto` resolves to the defaults, `min = max` is a fixed size,
   `min > max` returns the minimum.

@@ -13,7 +13,7 @@ export type NewItem =
   | { type: "badge"; config: BadgeConfig }
   | { type: "element"; config: ElementConfig };
 
-/** A new item lands centered and proportional, ready to be dragged. */
+/** A new item lands centered with the automatic anchor, ready to be dragged. */
 export const addItem = (items: PictureItem[], item: NewItem): PictureItem[] => [
   ...items,
   { ...item, position: { ...DEFAULT_POSITION }, anchor: DEFAULT_ANCHOR } as PictureItem,

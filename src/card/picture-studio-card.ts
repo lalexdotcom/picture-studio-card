@@ -56,7 +56,7 @@ export class PictureStudioCard extends LitElement {
         : undefined;
     },
     getSurface: () => this.renderRoot.querySelector(".layer"),
-    getAnchor: (index) => this._config?.items[index]?.anchor ?? "proportional",
+    getAnchor: (index) => this._config?.items[index]?.anchor ?? "auto",
     onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
     onSelect: (index) => activeEditor()?.select(index),
   });

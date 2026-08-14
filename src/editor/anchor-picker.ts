@@ -4,13 +4,13 @@ import { localizeOwn } from "../strings";
 import type { HomeAssistant } from "../types";
 
 /** Row-major, so the grid reads the way it looks. */
-const CELLS = Object.keys(ANCHOR_OFFSETS) as Exclude<Anchor, "proportional">[];
+const CELLS = Object.keys(ANCHOR_OFFSETS) as Exclude<Anchor, "auto">[];
 
 /**
  * Picks the anchor: a 3x3 grid for the nine fixed values, and a switch for
- * `proportional`, which has no place on the grid because it is not a point.
+ * `auto`, which has no place on the grid because it is not a point.
  *
- * The cells stay live while `proportional` is on, with none of them marked:
+ * The cells stay live while `auto` is on, with none of them marked:
  * clicking one is how you leave that mode, so disabling them would make the
  * switch the only way out of a state the grid is meant to replace.
  *
@@ -42,16 +42,16 @@ export class PictureStudioAnchorPicker extends LitElement {
   }
 
   protected render() {
-    const anchor = this.anchor ?? "proportional";
-    const proportional = anchor === "proportional";
+    const anchor = this.anchor ?? "auto";
+    const isAuto = anchor === "auto";
     return html`
       <div class="row">
         <div class="half">
           <ha-formfield .label=${this.hass?.localize("ui.common.auto") || "Automatic"}>
             <ha-switch
-              .checked=${proportional}
+              .checked=${isAuto}
               @change=${(ev: Event) =>
-                this._emit((ev.target as HTMLInputElement).checked ? "proportional" : "center")}
+                this._emit((ev.target as HTMLInputElement).checked ? "auto" : "center")}
             ></ha-switch>
           </ha-formfield>
         </div>
@@ -64,7 +64,7 @@ export class PictureStudioAnchorPicker extends LitElement {
             <!-- The grid is always clickable — clicking a cell is how the user
                  leaves the automatic mode. The .fixed class is a visual state,
                  not a disabled one; do not add a disabled attribute to match. -->
-            <div class=${proportional ? "grid" : "grid fixed"}>
+            <div class=${isAuto ? "grid" : "grid fixed"}>
               ${CELLS.map(
                 (cell) => html`
                   <button

@@ -177,7 +177,7 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
     };
     // The default is the absence of the key, so a config that never used an
     // anchor comes back exactly as it went in.
-    if (item.anchor === "proportional") delete stored.anchor;
+    if (item.anchor === "auto") delete stored.anchor;
     if (item.type === "element" && isDefaultIconSize(item.config.size)) {
       // Only when all five fields are the defaults: a size may be automatic and
       // still carry numbers the user typed, and dropping the key would lose
