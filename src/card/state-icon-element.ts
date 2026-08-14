@@ -154,6 +154,15 @@ export class PictureStudioStateIcon extends LitElement {
       /* Long enough to read as motion: at 90ms the grow registered as a flicker
          rather than an animation. */
       transition: transform 120ms ease-out;
+      /* The icon stands on the user's picture, not on the theme's background, so
+         its contrast has to hold against an unknown image — which no theme token
+         can promise. Hence literal white and black here, and only here.
+         drop-shadow rather than a border or a box-shadow: it follows the glyph's
+         own silhouette, so a lamp gets a rim around the lamp, and an entity
+         picture gets one around its disc. The two are exposed as variables so a
+         dashboard can dial them without forking the element. */
+      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.85)))
+        drop-shadow(var(--psc-icon-glow, 0 1px 2px rgba(0, 0, 0, 0.45)));
     }
     /* Pointer when there is something to click. */
     :host([clickable]) {
