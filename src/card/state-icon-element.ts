@@ -161,7 +161,7 @@ export class PictureStudioStateIcon extends LitElement {
          own silhouette, so a lamp gets a rim around the lamp, and an entity
          picture gets one around its disc. The two are exposed as variables so a
          dashboard can dial them without forking the element. */
-      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.85)))
+      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
         drop-shadow(var(--psc-icon-glow, 0 1px 2px rgba(0, 0, 0, 0.45)));
     }
     /* Pointer when there is something to click. */
