@@ -106,7 +106,12 @@ export class PictureStudioVisibilitySection extends LitElement {
       <ha-expansion-panel outlined>
         <ha-icon slot="leading-icon" .icon=${VISIBILITY_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">${title}</div>
-        ${count > 0 ? html`<ha-label slot="icons" dense>${count}</ha-label>` : nothing}
+        ${
+          // The `event` slot, not `icons`: ha-expansion-panel renders its header
+          // as leading-icon → header → event → chevron → icons, so anything in
+          // `icons` lands after the chevron. The count belongs beside the title.
+          count > 0 ? html`<ha-label slot="event" dense>${count}</ha-label>` : nothing
+        }
         <div class="content">
           ${
             this._available
@@ -144,6 +149,11 @@ export class PictureStudioVisibilitySection extends LitElement {
     .fallback {
       color: var(--secondary-text-color);
       margin: 0;
+    }
+    /* The count sits against the title rather than floating away from it, and
+       leaves the chevron its own space. */
+    ha-label[slot="event"] {
+      margin-inline-start: var(--ha-space-2, 8px);
     }
   `;
 }

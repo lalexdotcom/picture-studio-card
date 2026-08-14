@@ -17,7 +17,18 @@ export interface HomeAssistant {
   locale?: { language?: string };
   localize: LocalizeFunc;
   /** Optional: hand-declared because our type file must not claim more than we rely on. */
-  formatEntityName?: (stateObj: HassEntity, name?: string) => string;
+  /**
+   * Composes a display name from the entity registry. The second argument is a
+   * plain name, one `{ type }` part, or a list of them — `entity`, `device`,
+   * `area` — joined by `options.separator`. Declared loosely on purpose: the
+   * part shapes are Home Assistant's, and copying their union here would be a
+   * copy to keep in step for nothing we read.
+   */
+  formatEntityName?: (
+    stateObj: HassEntity,
+    name?: string | { type: string } | { type: string }[],
+    options?: { separator?: string },
+  ) => string;
   [key: string]: unknown;
 }
 

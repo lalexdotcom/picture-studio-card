@@ -362,9 +362,11 @@ export class PictureStudioElementForm extends LitElement {
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
     }
+    /* 24px, the spacing ha-form puts between its own root children — the same
+       gap the fields above already sit at, so the column keeps one rhythm. */
     picture-studio-visibility-section {
       display: block;
-      margin-top: var(--ha-space-3, 12px);
+      margin-top: var(--ha-space-6, 24px);
     }
   `;
 }

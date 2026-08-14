@@ -154,7 +154,11 @@ export class PictureStudioBadgeForm extends LitElement {
        Assistant's own expandable sections. */
     ha-expansion-panel {
       display: block;
-      margin-top: var(--ha-space-3, 12px);
+      /* 24px, the spacing ha-form puts between its own root children. Every
+         section of an item form — the badge's own fields, Position, Visibility —
+         is separated by the same gap, so the column reads as one rhythm rather
+         than as our sections tacked onto Home Assistant's. */
+      margin-top: var(--ha-space-6, 24px);
       --expansion-panel-content-padding: 0;
       border-radius: var(--ha-border-radius-md);
       --ha-card-border-radius: var(--ha-border-radius-md);
@@ -167,7 +171,7 @@ export class PictureStudioBadgeForm extends LitElement {
     }
     picture-studio-visibility-section {
       display: block;
-      margin-top: var(--ha-space-3, 12px);
+      margin-top: var(--ha-space-6, 24px);
     }
   `;
 }

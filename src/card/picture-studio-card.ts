@@ -82,6 +82,15 @@ export class PictureStudioCard extends LitElement {
     getSurface: () => this.renderRoot.querySelector(".layer"),
     getAnchor: (index) => this._config?.items[index]?.anchor ?? "auto",
     onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
+    // The marker has to keep pointing inward for the whole gesture: it hangs
+    // off the wrapper, and ha-card scrolls vertically, so a corner left on the
+    // trailing side raises a scrollbar under the pointer mid-drag.
+    onMove: (index, position) => {
+      const wrapper = this._wrappers[index];
+      if (wrapper?.classList.contains("conditional")) {
+        this._applyMarkerCorner(wrapper, position);
+      }
+    },
     onSelect: (index) => activeEditor()?.select(index),
   });
 
@@ -267,7 +276,10 @@ export class PictureStudioCard extends LitElement {
       void this._syncBackground();
       // _syncItems ends with _applyPositions, so it is not called again here.
       void this._syncItems();
-    } else if (changed.has("editing") || changed.has("selected")) {
+      // `preview` is in the gate because the condition marker keys on it: a
+      // dashboard entering or leaving edit mode changes nothing else here, and
+      // without this the mark would only appear on the next config change.
+    } else if (changed.has("editing") || changed.has("selected") || changed.has("preview")) {
       this._applyPositions(this._config?.items ?? []);
     }
   }
@@ -448,27 +460,44 @@ export class PictureStudioCard extends LitElement {
       // no probe in the editor, so there is no verdict to read — and a static
       // mark is the better affordance anyway, since it does not flicker with
       // entity state. The live verdict lives in the form's own banner.
-      const conditional = this.editing && hasVisibility(item);
+      // Keyed on `preview`, not on `editing`: `preview` is true both in the
+      // card's own edit dialog and on a dashboard in edit mode, and it is
+      // exactly what makes Home Assistant hold every conditional item on
+      // screen. The mark is what explains that — without it, an editing user
+      // sees items that a viewing user will not, and nothing says which.
+      const conditional = this.preview && hasVisibility(item);
       wrapper.classList.toggle("conditional", conditional);
-      const corner = conditional ? markerCorner(item.position) : undefined;
-      for (const c of MARKER_CORNERS) wrapper.classList.toggle(`marker-${c}`, c === corner);
-      if (conditional) {
-        wrapper.dataset.conditions = String(item.visibility?.length ?? 0);
-      } else {
-        delete wrapper.dataset.conditions;
-      }
       // Leave the badge under the cursor alone: its styles are live pixels
       // managed by the drag controller. Writing the stored config position over
       // them would jump the badge back toward its pre-drag location on every
       // hass tick. Once the drag ends, onPointerUp restores the derived style
       // and the next _applyPositions then matches it exactly — no flash.
+      // The marker's corner sits below this guard for the same reason: during a
+      // gesture the stored coordinates are stale, and the drag controller is
+      // what keeps the corner honest.
       if (index === dragging) return;
+
+      this._applyMarkerCorner(wrapper, conditional ? item.position : undefined);
 
       const style = positionStyle(item.position, item.anchor);
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;
     });
+  }
+
+  /**
+   * Point the condition marker towards the inside of the picture, or clear it
+   * when there is no marker to point.
+   *
+   * Split out because the drag calls it on every pointermove. A marker left on
+   * the side the item is travelling towards overhangs the card, and `ha-card`
+   * scrolls vertically — so a stale corner does not merely look wrong, it
+   * raises a scrollbar under the pointer in the middle of a gesture.
+   */
+  private _applyMarkerCorner(wrapper: HTMLElement, position: Position | undefined): void {
+    const corner = position ? markerCorner(position) : undefined;
+    for (const c of MARKER_CORNERS) wrapper.classList.toggle(`marker-${c}`, c === corner);
   }
 
   /**
@@ -509,7 +538,7 @@ export class PictureStudioCard extends LitElement {
 
     return html`
       <ha-card .header=${this._config.title}>
-        <div class="root ${this.editing ? "editing" : ""}">
+        <div class="root ${this.editing ? "editing" : ""} ${this.preview ? "previewing" : ""}">
           <div class="layer"></div>
         </div>
       </ha-card>
@@ -528,6 +557,11 @@ export class PictureStudioCard extends LitElement {
     :host {
       display: block;
       height: 100%;
+      /* mdi:eye, inlined once as a mask source. Named here rather than at the
+         call site so the glyph is one edit away from being another one. The
+         open eye, not the crossed-out one: the mark says the item has
+         visibility conditions, not that it is hidden. */
+      --psc-marker-glyph: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z'/></svg>");
     }
     ha-card {
       height: 100%;
@@ -637,37 +671,77 @@ export class PictureStudioCard extends LitElement {
        measures — returns the same box it did before.
        Its own pointer-events, because \`.editing .item > *\` matches real
        children and not a pseudo-element. */
-    .editing .item.conditional::after {
-      content: attr(data-conditions);
+    /* Two pseudo-elements over one box: the disc below, the glyph above. One
+       element cannot hold both — the mask that colours the glyph would clip the
+       disc away with it.
+       Both are out of flow, so neither adds anything to the wrapper's
+       max-content width: the halo, the ring and the radius keep tracing the
+       item alone, and getBoundingClientRect — which the drag clamp measures —
+       returns the same box it did before. They carry their own pointer-events,
+       because the rule muting the wrapper's children matches real children and
+       not pseudo-elements.
+       The corner comes in as four variables rather than being written on each
+       pseudo-element, so the two stay glued together by construction. */
+    /* The glyph leads and the disc follows. It is the eye that has to read on
+       a photograph; the disc is only what separates it from one, and the ring
+       between them is a constant so the two cannot drift apart. One value to
+       change, and the disc, the mask and the corner offsets all follow. */
+    .previewing .item.conditional {
+      --psc-marker-glyph-size: 16px;
+      --psc-marker-size: calc(var(--psc-marker-glyph-size) + 6px);
+    }
+    .previewing .item.conditional::before,
+    .previewing .item.conditional::after {
+      content: "";
       position: absolute;
-      min-width: 16px;
-      height: 16px;
-      padding: 0 4px;
+      width: var(--psc-marker-size);
+      height: var(--psc-marker-size);
       box-sizing: border-box;
-      border-radius: var(--ha-border-radius-md, 8px);
-      background: var(--secondary-background-color, #e0e0e0);
-      color: var(--primary-text-color, #212121);
-      font-size: 11px;
-      font-weight: var(--ha-font-weight-medium, 500);
-      line-height: 16px;
-      text-align: center;
+      top: var(--psc-marker-top, auto);
+      right: var(--psc-marker-right, auto);
+      bottom: var(--psc-marker-bottom, auto);
+      left: var(--psc-marker-left, auto);
       pointer-events: none;
     }
-    .editing .item.marker-top-right::after {
-      top: -8px;
-      right: -8px;
+    /* The badge's own tokens, so the mark follows the theme wherever the card
+       is dropped rather than carrying two hand-picked colours that would each
+       be wrong in one of the two modes. */
+    .previewing .item.conditional::before {
+      border-radius: var(--ha-border-radius-circle, 50%);
+      background: var(--ha-card-background, var(--card-background-color, #fff));
+      /* 1px outright, not --ha-card-border-width: plenty of themes set that to
+         0 and let a shadow separate their cards instead. Here the ring is what
+         lifts the mark off a photograph, so it is not the theme's to remove —
+         only its colour is. */
+      border: 1px solid var(--ha-card-border-color, var(--divider-color, #e0e0e0));
     }
-    .editing .item.marker-top-left::after {
-      top: -8px;
-      left: -8px;
+    /* Same box as the disc, so the glyph needs no offset of its own: what is
+       smaller and centred is the mask. --badge-color is what a badge colours
+       its own icon with; outside one it resolves to the fallback, which is the
+       colour a badge's icon takes when nothing overrides it. */
+    .previewing .item.conditional::after {
+      background-color: var(--badge-color, var(--secondary-text-color));
+      -webkit-mask: var(--psc-marker-glyph) center /
+        var(--psc-marker-glyph-size) var(--psc-marker-glyph-size) no-repeat;
+      mask: var(--psc-marker-glyph) center / var(--psc-marker-glyph-size)
+        var(--psc-marker-glyph-size) no-repeat;
     }
-    .editing .item.marker-bottom-right::after {
-      bottom: -8px;
-      right: -8px;
+    /* Half the disc, so it straddles the corner exactly whatever its size. */
+    .previewing .item.marker-top-right {
+      --psc-marker-top: calc(var(--psc-marker-size) / -2);
+      --psc-marker-right: calc(var(--psc-marker-size) / -2);
     }
-    .editing .item.marker-bottom-left::after {
-      bottom: -8px;
-      left: -8px;
+    .previewing .item.marker-top-left {
+      --psc-marker-top: calc(var(--psc-marker-size) / -2);
+      --psc-marker-left: calc(var(--psc-marker-size) / -2);
+    }
+    .previewing .item.marker-bottom-right {
+      --psc-marker-bottom: calc(var(--psc-marker-size) / -2);
+      --psc-marker-right: calc(var(--psc-marker-size) / -2);
+    }
+    .previewing .item.marker-bottom-left {
+      --psc-marker-bottom: calc(var(--psc-marker-size) / -2);
+      --psc-marker-left: calc(var(--psc-marker-size) / -2);
     }
     .editing .item > * {
       pointer-events: none;

@@ -1,16 +1,38 @@
 import { css, html, LitElement, nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import type { PictureItem } from "../config";
+import { hasVisibility, type PictureItem } from "../config";
 import { localizeOwn } from "../strings";
 import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
-import { badgeCatalog, choiceLabel } from "./badge-catalog";
+import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
 import { elementCatalog, elementLabel } from "./element-catalog";
+import { itemIcon } from "./icons";
 import { rowLabel } from "./items";
 
 export interface AddChoice {
   value: string;
   label: string;
+  icon: string;
 }
+
+/**
+ * The human name of an item's kind, for the tooltip on its row icon. The add
+ * menu shows the same name behind a family prefix, which is where the pairing
+ * between glyph and kind is learned; here the prefix would only repeat what the
+ * icon beside it already says.
+ */
+export const kindLabel = (
+  item: PictureItem,
+  localize: LocalizeFunc,
+  // Built once per render by the caller. Rebuilding it here would rebuild the
+  // whole catalogue once per row, on every hass tick — the very thing the
+  // comment above `labels` in render() exists to prevent.
+  catalog: BadgeChoice[] = badgeCatalog(window.customBadges),
+): string => {
+  const type = String(item.config.type ?? "");
+  if (item.type === "element") return elementLabel(localize, type);
+  const choice = catalog.find((c) => c.type === type);
+  return choice ? choiceLabel(localize, choice) : type;
+};
 
 /**
  * One list, two families. The plural labels are Home Assistant's own, which is
@@ -26,10 +48,12 @@ export const addChoices = (localize: LocalizeFunc, custom?: CustomBadgeEntry[]):
     ...badgeCatalog(custom).map((c) => ({
       value: `badge:${c.type}`,
       label: `${badges}: ${choiceLabel(localize, c)}`,
+      icon: itemIcon("badge", c.type),
     })),
     ...elementCatalog().map((c) => ({
       value: `element:${c.type}`,
       label: `${elements}: ${elementLabel(localize, c.type)}`,
+      icon: itemIcon("element", c.type),
     })),
   ];
 };
@@ -74,13 +98,21 @@ export class PictureStudioBadgeList extends LitElement {
     // Rendered before hass lands on the first paint; degrade to the raw key, as HA does.
     const localize: LocalizeFunc = this.hass?.localize ?? (() => "");
     // Resolved once per render rather than three times per row.
-    const labels = this.items.map((item) => rowLabel(item, this.hass?.states));
+    const labels = this.items.map((item) => rowLabel(item, this.hass));
+    // Same reason, and it matters more: without this the whole badge catalogue
+    // would be rebuilt once per row, on every hass tick.
+    const catalog = badgeCatalog(window.customBadges);
+    const kinds = this.items.map((item) => kindLabel(item, localize, catalog));
 
     return html`
-      <h3>${localize("ui.panel.lovelace.editor.badges.name") || "Badges"}</h3>
+      <!-- Our own string, not Home Assistant's "Badges": the list has carried
+           two families since 1.2.0, and naming it after one of them was true
+           for exactly one release. -->
+      <h3>${localizeOwn(this.hass, "items")}</h3>
       <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
       <ha-sortable
         handle-selector=".handle"
+        draggable-selector=".item"
         @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
           ev.stopPropagation();
           this._fire("item-moved", ev.detail);
@@ -90,9 +122,14 @@ export class PictureStudioBadgeList extends LitElement {
           ${repeat(
             this.items,
             (_item, index) => index,
-            (_item, index) => html`
-              <div class="row">
-                <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
+            (item, index) => html`
+              <div class="item">
+                <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
+                <ha-icon
+                  class="kind"
+                  .icon=${itemIcon(item.type, String(item.config.type ?? ""))}
+                  title=${kinds[index]}
+                ></ha-icon>
                 <div class="label">
                   <span class="primary">${labels[index]?.primary}</span>
                   ${
@@ -101,14 +138,29 @@ export class PictureStudioBadgeList extends LitElement {
                       : nothing
                   }
                 </div>
+                ${
+                  // States that the row carries visibility conditions. Not a
+                  // control: no target, no ripple, no hover — and the same eye
+                  // the form's own section is headed by, so the two read as one
+                  // idea rather than two.
+                  hasVisibility(item)
+                    ? html`<span
+                        class="conditional"
+                        title=${
+                          localize("ui.panel.lovelace.editor.edit_card.tab_visibility") ||
+                          localizeOwn(this.hass, "visibility")
+                        }
+                      ><ha-icon icon="mdi:eye"></ha-icon></span>`
+                    : nothing
+                }
                 <ha-icon-button
-                  .label=${localize("ui.panel.lovelace.editor.badges.edit") || "Edit badge"}
+                  .label=${localize("ui.common.edit") || "Edit"}
                   @click=${() => this._fire("item-edit", { index })}
                   ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
-                  .label=${localize("ui.panel.lovelace.editor.badges.remove") || "Remove badge"}
+                  .label=${localize("ui.common.delete") || "Delete"}
                   @click=${() => this._fire("item-removed", { index })}
-                  ><ha-icon icon="mdi:delete"></ha-icon></ha-icon-button>
+                  ><ha-icon icon="mdi:close"></ha-icon></ha-icon-button>
               </div>
             `,
           )}
@@ -120,7 +172,9 @@ export class PictureStudioBadgeList extends LitElement {
           ${localize("ui.common.add") || "Add"}
         </ha-button>
         ${addChoices(localize, window.customBadges).map(
-          (c) => html`<ha-dropdown-item .value=${c.value}>${c.label}</ha-dropdown-item>`,
+          (c) => html`<ha-dropdown-item .value=${c.value}
+            ><ha-icon slot="icon" .icon=${c.icon}></ha-icon>${c.label}</ha-dropdown-item
+          >`,
         )}
       </ha-dropdown>
     `;
@@ -137,20 +191,47 @@ export class PictureStudioBadgeList extends LitElement {
       font-size: var(--ha-font-size-s);
       margin: 0 0 var(--ha-space-2);
     }
+    /* The geometry of Home Assistant's own entity list — the one the Entities,
+       Distribution and History Graph editors all draw through hui-entity-editor:
+       bordered rows of 48px, 8px apart, 12px of leading space and 4px of
+       trailing, and no gap at all between the two actions.
+       Rebuilt here rather than mounted as ha-md-list / ha-md-list-item: those
+       ship in chunks this dialog is not guaranteed to load, and an undefined
+       custom element renders nothing at all, silently — the whole list would
+       vanish rather than degrade. */
     .rows {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--ha-space-2, 8px);
     }
-    .row {
+    .rows:has(> *) {
+      margin-bottom: var(--ha-space-2, 8px);
+    }
+    .item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      min-height: 48px;
+      box-sizing: border-box;
+      border: 1px solid var(--divider-color);
+      border-radius: var(--ha-border-radius-md, 8px);
+      padding-inline-start: 12px;
+      padding-inline-end: 4px;
     }
     .handle {
+      cursor: move; /* fallback where grab is unsupported */
       cursor: grab;
       display: flex;
+      flex: none;
       color: var(--secondary-text-color);
+      margin-inline-end: 12px;
+    }
+    /* Says which family the row belongs to. Secondary colour and no target: it
+       is a legend, not a control, and the tooltip carries the name. */
+    .kind {
+      display: flex;
+      flex: none;
+      color: var(--secondary-text-color);
+      margin-inline-end: 12px;
     }
     .label {
       flex: 1;
@@ -166,6 +247,37 @@ export class PictureStudioBadgeList extends LitElement {
     .secondary {
       font-size: var(--ha-font-size-s);
       color: var(--secondary-text-color);
+    }
+    /* The same pill as the count in an item form's Visibility header:
+       ha-label's dense geometry and its background formula. Drawn here rather
+       than mounted, because ha-label pads its container to 12px a side — right
+       beside a number, far too wide around a lone icon. */
+    .conditional {
+      display: inline-flex;
+      align-items: center;
+      flex: none;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: var(--ha-border-radius-md, 8px);
+      background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.15);
+      color: var(--secondary-text-color);
+      margin-inline-end: var(--ha-space-2, 8px);
+    }
+    .conditional ha-icon {
+      display: flex;
+      --mdc-icon-size: 14px;
+    }
+    /* ha-icon-button pads itself out to a 48px touch target, which leaves a
+       wide band of nothing between the two actions and before them. 36px is
+       still a comfortable pointer target in a dialog and gives the row back its
+       horizontal space — the label is what the eye should land on. */
+    /* --ha-icon-button-size is the token ha-icon-button actually reads; the
+       36px is the value every Home Assistant row editor sets, which is what
+       closes the empty band between the two actions. */
+    ha-icon-button {
+      --ha-icon-button-size: 36px;
+      color: var(--secondary-text-color);
+      flex: none;
     }
     /* The trigger sizes itself; only the spacing is ours. */
     .add {

@@ -337,10 +337,17 @@ describe("the condition marker", () => {
     expect(wrappers(card)[1]?.classList.contains("conditional")).toBe(false);
   });
 
-  it("carries the number of conditions", async () => {
+  it("marks on a dashboard in edit mode, where no editor is mounted", async () => {
+    // Home Assistant sets preview on every card of a view in edit mode, and
+    // that is exactly what holds conditional items on screen. The mark has to
+    // follow the same signal, or an editing user sees items a viewing user
+    // will not with nothing saying which.
     const card = await mountCard(CONFIG);
-    await edit(card);
-    expect(wrappers(card)[0]?.dataset.conditions).toBe("2");
+    card.preview = true;
+    await card.updateComplete;
+    expect((card as unknown as { editing: boolean }).editing).toBe(false);
+    expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(true);
+    expect(wrappers(card)[1]?.classList.contains("conditional")).toBe(false);
   });
 
   it("points the marker towards the inside of the picture", async () => {
@@ -360,6 +367,6 @@ describe("the condition marker", () => {
     await card.updateComplete;
     await flush();
     expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(false);
-    expect(wrappers(card)[0]?.dataset.conditions).toBeUndefined();
+    expect(wrappers(card)[0]?.classList.contains("marker-top-left")).toBe(false);
   });
 });

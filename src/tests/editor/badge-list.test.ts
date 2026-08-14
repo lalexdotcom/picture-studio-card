@@ -12,10 +12,15 @@ const localize = ((key: string) =>
 describe("addChoices", () => {
   it("prefixes every entry with its family, badges first", () => {
     const choices = addChoices(localize, undefined);
-    expect(choices[0]).toEqual({ value: "badge:entity", label: "Badges: Entité" });
+    expect(choices[0]).toEqual({
+      value: "badge:entity",
+      label: "Badges: Entité",
+      icon: "mdi:label",
+    });
     expect(choices.at(-1)).toEqual({
       value: "element:state-icon",
       label: "Éléments: Icône d'état",
+      icon: "mdi:shape-outline",
     });
   });
 });

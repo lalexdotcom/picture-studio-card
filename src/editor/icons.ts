@@ -14,3 +14,22 @@
  * anyone remembering to keep two strings equal.
  */
 export const PLACEMENT_ICON = "mdi:crop-free";
+
+const BADGE_ICON = "mdi:label";
+const ELEMENT_ICON = "mdi:shape-outline";
+
+/**
+ * The glyph that tells one kind of item from another, in the list and in the
+ * add menu.
+ *
+ * One per entry, and deliberately the same one twice where two entries share a
+ * family: what it has to carry is "which sort of thing is this", not "which
+ * exact type". The add menu keeps its "Badges: …" / "Elements: …" prefixes, and
+ * those are what teach the pairing — the icon alone would have to be learned
+ * from nothing.
+ *
+ * `type` is unused today and stays in the signature on purpose: the day one
+ * badge kind deserves its own glyph, this function is the only thing to open.
+ */
+export const itemIcon = (family: "badge" | "element", _type: string): string =>
+  family === "badge" ? BADGE_ICON : ELEMENT_ICON;
