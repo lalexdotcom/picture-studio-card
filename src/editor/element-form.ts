@@ -66,10 +66,13 @@ export const toFormData = (config: StateIconConfig): Record<string, unknown> => 
   return {
     ...rest,
     size_mode: size.mode,
-    size_min: size.min,
-    size_ratio: size.ratio,
-    size_max: size.max,
-    size_value: size.value,
+    // Math.round enforces each slider's step:1 contract (same trade as the chrome
+    // numbers below). size_mode is a string; the read path (normalizeIconSize)
+    // keeps any finite number as written — rounding belongs to the editor only.
+    size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
+    size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
+    size_max: typeof size.max === "number" ? Math.round(size.max) : size.max,
+    size_value: typeof size.value === "number" ? Math.round(size.value) : size.value,
     chrome_enabled: c.theme !== "none",
     // The control never offers "none", so an off chrome pre-selects the theme
     // that checking the box will give it.
@@ -149,10 +152,13 @@ export const fromFormData = (
     type: config.type,
     size: normalizeIconSize({
       mode: size_mode,
-      min: size_min,
-      ratio: size_ratio,
-      max: size_max,
-      value: size_value,
+      // Math.round on the way back enforces each slider's step:1 contract.
+      // Same deliberate trade as the chrome numbers: a hand-written sub-step
+      // value is rounded the first time the editor commits for that item.
+      min: typeof size_min === "number" ? Math.round(size_min) : size_min,
+      ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
+      max: typeof size_max === "number" ? Math.round(size_max) : size_max,
+      value: typeof size_value === "number" ? Math.round(size_value) : size_value,
     }),
     ...chromeOut,
   };

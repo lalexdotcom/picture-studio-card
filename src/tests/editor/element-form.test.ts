@@ -259,9 +259,12 @@ describe("toFormData / fromFormData", () => {
   });
 
   it("round-trips a fixed size", () => {
+    // ratio is 4 (integer) — a non-integer would be rounded by toFormData and
+    // not equal config.size.ratio on the way back. That rounding is deliberate:
+    // hand-written sub-step values are rounded on the first editor commit.
     const config = {
       ...base,
-      size: { mode: "fixed" as const, min: 40, ratio: 3.5, max: 70, value: 64 },
+      size: { mode: "fixed" as const, min: 40, ratio: 4, max: 70, value: 64 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
   });
