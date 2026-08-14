@@ -23,10 +23,10 @@ export interface AddChoice {
 export const kindLabel = (
   item: PictureItem,
   localize: LocalizeFunc,
-  // Built once per render by the caller. Rebuilding it here would rebuild the
-  // whole catalogue once per row, on every hass tick — the very thing the
-  // comment above `labels` in render() exists to prevent.
-  catalog: BadgeChoice[] = badgeCatalog(window.customBadges),
+  // Required, not defaulted: the caller builds it once per render, and a
+  // default would advertise "you may omit this" while quietly rebuilding the
+  // whole catalogue on every call — once per row, on every hass tick.
+  catalog: BadgeChoice[],
 ): string => {
   const type = String(item.config.type ?? "");
   if (item.type === "element") return elementLabel(localize, type);

@@ -120,6 +120,9 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant): RowLabel => {
     // enough that it has to mean "no second line" rather than a blank one.
     const secondary = [format(stateObj, { type: "area" }), format(stateObj, { type: "device" })]
       .filter((part) => part && part !== primary)
+      // A device and the area it sits in can carry the same name, and
+      // "Bureau ▸ Bureau" says less than "Bureau".
+      .filter((part, i, parts) => parts.indexOf(part) === i)
       .join(" ▸ ");
     return secondary ? { primary, secondary } : { primary };
   }

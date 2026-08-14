@@ -190,8 +190,8 @@ A shared `picture-studio-visibility-section`, mounted by both `badge-form` and
 `element-form`, the way the anchor picker already lives a double life.
 
 It renders an `ha-expansion-panel outlined` modelled on the existing Position
-section: `mdi:eye` in `leading-icon`, the title in `header`, and in the **`icons`
-slot** — the trailing zone of the header, before the chevron — an `ha-label
+section: `mdi:eye` in `leading-icon`, the title in `header`, and in the **`event`
+slot** — the last one before the chevron — an `ha-label
 dense` carrying the number of top-level conditions, absent when there are none.
 `dense` is 20px tall over `rgba(var(--rgb-primary-text-color), 0.15)`: a quiet
 pill, not a notification badge. The panel exposes five slots — `leading-icon`,
@@ -221,8 +221,13 @@ other components used here sit at 25 chunks (`ha-expansion-panel`), 24
 
 ## The preview marker
 
-An item that carries conditions is marked in the edit preview, where items are
-actually selected. The marker says **"this item has conditions"**, not "it is
+An item that carries conditions is marked wherever `preview` is true — the
+card's own edit dialog **and** a dashboard in edit mode. Keyed on `preview` and
+not on `editing`, for the same reason the probes are: `preview` is exactly what
+makes Home Assistant hold every conditional item on screen, so it is also what
+has to explain why they are all there. Everything else the editor draws — the
+halo, the ring, the cursor, the stacking exception — stays on `editing`, which
+is what arms the drag. The marker says **"this item has conditions"**, not "it is
 hidden right now": with no probe in the editor there is no verdict to read, and a
 static mark is the better affordance anyway — it does not flicker with entity
 state. The live verdict stays where Home Assistant puts it, in the form's banner.
@@ -365,3 +370,38 @@ listener path rather than the `hass` path.
   an exclamation mark would make a normal configuration look like an error.
 - **A marker in the item list rather than on the preview.** The preview is the
   product: it is where items are selected, and the list is the secondary view.
+
+## Verification record
+
+Walked in the browser on 2026-08-14, against the local container (HA 2026.8.1,
+frontend 20260729.6), in a **panel** view.
+
+Confirmed working:
+
+- An item with a state condition is hidden on a dashboard when the condition
+  fails and drawn when it holds, flipping on the entity's own change with no
+  reload.
+- The dashboard switched to edit mode brings every conditional item back. This
+  is where the design was found short: the mark keyed on `editing`, so it was
+  absent in exactly the situation that most needs it — items on screen that a
+  viewing user will not see, with nothing saying which. It now keys on
+  `preview`, and the spec above says so.
+- The card's edit dialog shows every item whatever its conditions, marked.
+- The marker near each edge, and during a drag. Also found short: the corner was
+  only recomputed at release, so mid-gesture the mark overhung the card and
+  raised a scrollbar under the pointer. It now follows every `pointermove`,
+  through the same conversion the release performs so nothing flips at the end.
+- The marker against the halo and the ring: neither encloses it.
+- The drag clamp is unchanged, and reordering by drag and drop still works after
+  the list was rebuilt.
+- A `screen` condition across its breakpoint — the media-query listener path,
+  which nothing else exercises.
+- The Visibility section: Home Assistant's editor mounts, its verdict banner
+  updates live, and the count in the header follows the list.
+
+Not walked, and knowingly left:
+
+- A **sections** view. Only a panel view was exercised, so the `view_columns`
+  context path is reasoned about rather than observed.
+- The fallback for an undefined `hui-card-visibility-editor`, which needs a
+  frontend that does not load the chunk.

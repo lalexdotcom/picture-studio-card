@@ -329,7 +329,7 @@ describe("the condition marker", () => {
     await flush();
   };
 
-  it("marks only the conditional item, and only while editing", async () => {
+  it("marks only the conditional item, and only in preview", async () => {
     const card = await mountCard(CONFIG);
     expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(false);
     await edit(card);
