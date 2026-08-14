@@ -174,6 +174,12 @@ Two adjustments to existing code:
 - **The `hass` setter** feeds the probes as it feeds the items. This is the
   per-tick path, so it stays a plain loop with no `requestUpdate`, per
   `2026-08-13-per-tick-work-design.md`.
+- **A `preview` change is pushed to the probes**, in `updated()`. Not symmetry:
+  `preview` is set on every card of a dashboard entering edit mode, and it is
+  what keeps Home Assistant's own hidden cards on screen. A probe built while it
+  was false would go on evaluating, and an item hidden by its conditions would
+  stay invisible to the person trying to edit it. It also closes the mount-order
+  race described above rather than merely tolerating it.
 
 The probe must stay in the DOM — `display: none` is not detachment — for the
 context resolution described above.
@@ -239,8 +245,9 @@ wrapper, which is already a containing block. Three consequences:
   `.editing .item > * { pointer-events: none }` matches real children, not a
   pseudo-element.
 
-**The corner is chosen by a pure function** in `position.ts`, from `position` and
-`anchor`: the pill sits on the side pointing towards the inside of the card —
+**The corner is chosen by a pure function** in `position.ts`, from the stored
+coordinates alone: the pill sits on the side pointing towards the inside of the
+card —
 left when the item is in the right half, below when it is pinned to the top — so
 it is not clipped by the card's `overflow-x: hidden`. No layout is read: happy-dom
 performs none, and the drag deliberately avoids measurements outside
