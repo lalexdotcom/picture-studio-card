@@ -269,17 +269,49 @@ Out-of-range numbers are clamped on read (`radius` 0–50, `opacity` 0–1,
 
 ## Editor
 
-One more expandable in `stateIconSchema`, after "Content", icon `mdi:shape`:
+A section of its own, read top to bottom as a decision then its settings:
 
-- the `theme` selector, `none | auto | light | dark`;
-- the three numbers in a grid, `selector: { number: { mode: "box" } }` so no
-  slider appears.
+1. **a checkbox** — draw a chrome, or not;
+2. **the theme, three choices on one line** — auto, light, dark;
+3. **the three numbers**, in a grid, `selector: { number: { mode: "box" } }` so
+   no slider appears.
 
-**The numbers stay visible when `theme: none`.** They are kept in storage; hiding
-them would suggest they are lost.
+**`none` never appears in the interface.** It is a storage value, not a choice
+the user makes: the checkbox is what says whether there is a chrome, and the
+theme control only ever offers the three that draw something. Unchecking writes
+`theme: none` and keeps every number, which is the whole reason the switch lives
+on `theme` rather than on a boolean of its own.
 
-Labels take Home Assistant's keys where they exist (`ui.common.auto`) and fall
-back to our own `strings.ts` catalog otherwise.
+Checking the box sets `auto`. A theme chosen before unchecking is not restored —
+`none` overwrote it — and remembering it would mean carrying editor state beside
+the config. Whether that round trip is annoying enough to be worth the state is a
+question for the browser walk.
+
+**This forces a hand-built `ha-expansion-panel`, not an `expandable` entry in the
+schema**, because a three-way choice on one line cannot come from `ha-form`:
+`ha-selector-select` in `mode: "list"` never passes `orientation` to
+`ha-radio-group`, and the attribute has no exported part, so no CSS can lay it
+out horizontally. The size control solved this already — render `ha-radio-group`
+ourselves, guarded by `customElements.get`, with an `ha-form` select as the
+fallback since an undefined custom element renders nothing at all, silently.
+Copy that shape rather than inventing a second one. The panel sits beside "Size
+and position", before it.
+
+**Labels come from the map card**, which carries exactly this option and whose
+translations live in the `lovelace` fragment — the one loaded while editing a
+dashboard:
+
+```
+ui.panel.lovelace.editor.card.map.theme_mode         Theme mode / Mode du thème
+ui.panel.lovelace.editor.card.map.theme_modes.auto   Auto / Auto
+ui.panel.lovelace.editor.card.map.theme_modes.light  Light / Clair
+ui.panel.lovelace.editor.card.map.theme_modes.dark   Dark / Sombre
+```
+
+Only the section title, the checkbox and the three number labels come from our
+own `strings.ts`.
+
+The layout is expected to be adjusted at delivery, with the section on screen.
 
 ## Verification
 

@@ -31,7 +31,7 @@
 | `src/tests/chrome.test.ts` *(new)* | Unit tests for the above. |
 | `src/config.ts` | `StateIconConfig.chrome`, filled by `normalizeElementConfig`, dropped by `storedConfig` when it is the default. |
 | `src/card/state-icon-element.ts` | The wrapper element, its styles, and the four custom properties. |
-| `src/strings.ts` | Eight labels Home Assistant has no key for. |
+| `src/strings.ts` | The five labels Home Assistant has no key for — the theme's four come from the map card. |
 | `src/editor/element-form.ts` | The "Chrome" expandable: the surface select and three numbers. |
 | `README.md`, `CHANGELOG.md` | User-facing reference and the release note. |
 
@@ -643,24 +643,29 @@ git commit -m "feat(chrome): the element draws the wrapper, and the halo moves o
 ### Task 4: The editor section
 
 **Files:**
-- Modify: `src/strings.ts` — eight keys, `en` and `fr`
-- Modify: `src/editor/element-form.ts` — `toFormData`, `fromFormData`, `stateIconSchema`, `elementFormLabel`, and the one call site in `render`
+- Modify: `src/strings.ts` — five keys, `en` and `fr`
+- Modify: `src/editor/element-form.ts` — `toFormData`, `fromFormData`, `elementFormLabel`, two new schema factories, and the panel in `render`
 - Test: `src/tests/editor/element-form.test.ts`, `src/tests/strings.test.ts`
 
 **Interfaces:**
 - Consumes: `Chrome`, `DEFAULT_CHROME`, `normalizeChrome` from `../chrome`; `StateIconConfig.chrome` from Task 2.
-- Produces: form fields `chrome_theme`, `chrome_radius`, `chrome_opacity`, `chrome_content_ratio`; `stateIconSchema` gains the signature `(localize: LocalizeFunc, hass: HomeAssistant | undefined) => unknown[]`.
+- Produces: form fields `chrome_enabled`, `chrome_theme`, `chrome_radius`, `chrome_opacity`, `chrome_content_ratio`; `export const chromeToggleSchema: () => unknown[]`; `export const chromeSchema: (localize: LocalizeFunc, radioGroupAvailable?: boolean) => unknown[]`. **`stateIconSchema` keeps its current signature** — the section is a panel of its own, not a schema entry.
+
+**The section's shape:** a checkbox says whether there is a chrome, then the theme offers three choices on one line, then the three numbers. `none` never appears in the interface — it is what unchecking stores, and storing it is what keeps the numbers.
+
+**Why a hand-built `ha-expansion-panel`:** a three-way choice on one line cannot come from `ha-form`. `ha-selector-select` in `mode: "list"` never passes `orientation` to `ha-radio-group`, and the attribute has no exported part, so no CSS reaches it. The size control already solved this — `ha-radio-group` rendered by hand behind a `customElements.get` guard, with an `ha-form` select as the fallback, because an undefined custom element renders nothing at all, silently. Copy that shape exactly; do not invent a second one.
+
+**The toggle goes through `ha-form`'s `boolean` selector** rather than a hand-placed `ha-checkbox`: `ha-selector` pulls its own sub-components, so it is guaranteed to render, and nothing here proves an `ha-checkbox` chunk is loaded in our dialog. It draws Home Assistant's boolean row. If a literal checkbox is wanted, that is a delivery-time layout adjustment.
+
+**The numbers stay visible when the box is unchecked**, as agreed for the select-based version: they are kept in storage, and a row that vanishes reads as a value that was lost. This is the first thing to reconsider with the section on screen — see Task 6.
 
 - [ ] **Step 1: Add the strings**
 
-In `src/strings.ts`, add to `en` (alphabetical order is not used in this file; keep the `chrome_*` block together, after `anchor_anchored`):
+In `src/strings.ts`, add to `en` (this file is not in alphabetical order; keep the `chrome_*` block together, after `anchor_anchored`):
 
 ```ts
     chrome: "Chrome",
-    chrome_theme: "Surface",
-    chrome_theme_none: "None",
-    chrome_theme_light: "Light",
-    chrome_theme_dark: "Dark",
+    chrome_enabled: "Draw a chrome",
     chrome_radius: "Radius",
     chrome_opacity: "Opacity",
     chrome_content_ratio: "Content",
@@ -670,16 +675,20 @@ and to `fr`:
 
 ```ts
     chrome: "Habillage",
-    chrome_theme: "Surface",
-    chrome_theme_none: "Aucune",
-    chrome_theme_light: "Claire",
-    chrome_theme_dark: "Sombre",
+    chrome_enabled: "Dessiner un habillage",
     chrome_radius: "Rayon",
     chrome_opacity: "Opacité",
     chrome_content_ratio: "Contenu",
 ```
 
-`auto` is not in this list: it comes from `hass.localize("ui.common.auto")`, as the size mode's does.
+The theme's own four labels are **not** ours. The map card carries exactly this option — `theme_mode: auto | light | dark` — and its translations live in the `lovelace` fragment, the one loaded while a dashboard is being edited, so `hass.localize` really serves them here (the `ui.panel.profile.*` equivalents are in a fragment that a dashboard editor has no reason to load):
+
+```
+ui.panel.lovelace.editor.card.map.theme_mode         Theme mode / Mode du thème
+ui.panel.lovelace.editor.card.map.theme_modes.auto   Auto / Auto
+ui.panel.lovelace.editor.card.map.theme_modes.light  Light / Clair
+ui.panel.lovelace.editor.card.map.theme_modes.dark   Dark / Sombre
+```
 
 - [ ] **Step 2: Write the failing form tests**
 
@@ -693,6 +702,7 @@ describe("chrome fields", () => {
       size: DEFAULT_ICON_SIZE,
       chrome: { theme: "dark", radius: 12, opacity: 0.8, content_ratio: 0.5 },
     });
+    expect(data.chrome_enabled).toBe(true);
     expect(data.chrome_theme).toBe("dark");
     expect(data.chrome_radius).toBe(12);
     expect(data.chrome_opacity).toBe(0.8);
@@ -702,34 +712,51 @@ describe("chrome fields", () => {
 
   it("flattens the defaults when the element has no chrome", () => {
     const data = toFormData({ type: "state-icon", size: DEFAULT_ICON_SIZE });
-    expect(data.chrome_theme).toBe("none");
+    expect(data.chrome_enabled).toBe(false);
     expect(data.chrome_radius).toBe(50);
     expect(data.chrome_opacity).toBe(1);
     expect(data.chrome_content_ratio).toBe(0.6);
+  });
+
+  it("shows auto in the theme control while the box is unchecked — none is never offered", () => {
+    const data = toFormData({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    expect(data.chrome_theme).toBe("auto");
+  });
+
+  it("turns the box on into the auto surface", () => {
+    const config = { type: "state-icon", size: DEFAULT_ICON_SIZE } as StateIconConfig;
+    const next = fromFormData(config, { ...toFormData(config), chrome_enabled: true });
+    expect(next.chrome).toEqual({
+      theme: "auto",
+      radius: 50,
+      opacity: 1,
+      content_ratio: 0.6,
+    });
   });
 
   it("rebuilds the chrome from the flat record", () => {
     const config = { type: "state-icon", size: DEFAULT_ICON_SIZE } as StateIconConfig;
     const next = fromFormData(config, {
       ...toFormData(config),
-      chrome_theme: "auto",
+      chrome_enabled: true,
+      chrome_theme: "dark",
       chrome_radius: 8,
     });
     expect(next.chrome).toEqual({
-      theme: "auto",
+      theme: "dark",
       radius: 8,
       opacity: 1,
       content_ratio: 0.6,
     });
   });
 
-  it("keeps the numbers when the surface is switched back to none", () => {
+  it("keeps every number when the box is unchecked", () => {
     const config = {
       type: "state-icon",
       size: DEFAULT_ICON_SIZE,
-      chrome: { theme: "auto", radius: 8, opacity: 0.5, content_ratio: 0.4 },
+      chrome: { theme: "dark", radius: 8, opacity: 0.5, content_ratio: 0.4 },
     } as StateIconConfig;
-    const next = fromFormData(config, { ...toFormData(config), chrome_theme: "none" });
+    const next = fromFormData(config, { ...toFormData(config), chrome_enabled: false });
     expect(next.chrome).toEqual({
       theme: "none",
       radius: 8,
@@ -739,23 +766,32 @@ describe("chrome fields", () => {
   });
 });
 
-describe("the chrome section", () => {
-  const section = (schema: unknown[]) =>
-    schema.find((s) => (s as { name?: string }).name === "chrome") as
-      | { schema: { name: string }[] }
-      | undefined;
+describe("the chrome schema", () => {
+  const localize = ((key: string) => key) as never;
 
-  it("sits in the schema as an expandable", () => {
-    const schema = stateIconSchema(((k: string) => k) as never, undefined);
-    expect(section(schema)).toBeDefined();
+  it("offers the three drawing themes and never none", () => {
+    const options = JSON.stringify(chromeSchema(localize, false));
+    expect(options).toContain("auto");
+    expect(options).toContain("light");
+    expect(options).toContain("dark");
+    expect(options).not.toContain('"none"');
   });
 
-  it("shows the three numbers whatever the surface is — they are kept, not lost", () => {
-    const schema = stateIconSchema(((k: string) => k) as never, undefined);
-    const names = JSON.stringify(section(schema));
-    expect(names).toContain("chrome_radius");
-    expect(names).toContain("chrome_opacity");
-    expect(names).toContain("chrome_content_ratio");
+  it("drops the theme field when the radio group renders it", () => {
+    expect(JSON.stringify(chromeSchema(localize, true))).not.toContain("chrome_theme");
+  });
+
+  it("shows the three numbers either way — they are kept, not lost", () => {
+    for (const available of [true, false]) {
+      const json = JSON.stringify(chromeSchema(localize, available));
+      expect(json).toContain("chrome_radius");
+      expect(json).toContain("chrome_opacity");
+      expect(json).toContain("chrome_content_ratio");
+    }
+  });
+
+  it("puts the toggle in its own schema, so it can be rendered above the theme", () => {
+    expect(JSON.stringify(chromeToggleSchema())).toContain("chrome_enabled");
   });
 });
 ```
@@ -780,7 +816,10 @@ toFormData = (config: StateIconConfig): Record<string, unknown> => {
     size_ratio: size.ratio,
     size_max: size.max,
     size_value: size.value,
-    chrome_theme: c.theme,
+    chrome_enabled: c.theme !== "none",
+    // The control never offers "none", so an off chrome pre-selects the theme
+    // that checking the box will give it.
+    chrome_theme: c.theme === "none" ? "auto" : c.theme,
     chrome_radius: c.radius,
     chrome_opacity: c.opacity,
     chrome_content_ratio: c.content_ratio,
@@ -797,6 +836,7 @@ toFormData = (config: StateIconConfig): Record<string, unknown> => {
     size_ratio,
     size_max,
     size_value,
+    chrome_enabled,
     chrome_theme,
     chrome_radius,
     chrome_opacity,
@@ -808,7 +848,9 @@ toFormData = (config: StateIconConfig): Record<string, unknown> => {
     type: config.type,
     size: normalizeIconSize({ ... }),   // unchanged
     chrome: normalizeChrome({
-      theme: chrome_theme,
+      // The checkbox is the switch; the theme control only ever names a surface
+      // that draws. Unchecking stores "none" and every number survives it.
+      theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
       radius: chrome_radius,
       opacity: chrome_opacity,
       content_ratio: chrome_content_ratio,
@@ -822,100 +864,184 @@ Add the import:
 import { DEFAULT_CHROME, normalizeChrome } from "../chrome";
 ```
 
-- [ ] **Step 5: Add the section to the schema**
+- [ ] **Step 5: Write the two schema factories**
 
-`stateIconSchema` gains two parameters and one entry, placed after the `content` expandable and before `interactions`:
+Add these beside `stateIconSizeSchema`, which they are modelled on. `stateIconSchema` is **not** touched.
 
 ```ts
-stateIconSchema = (localize: LocalizeFunc, hass: HomeAssistant | undefined): unknown[] => [
-  { name: "entity", selector: { entity: {} } },
-  { /* content — unchanged */ },
-  {
-    name: "chrome",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:shape",
-    schema: [
-      {
-        name: "chrome_theme",
-        selector: {
-          select: {
-            mode: "dropdown",
-            options: [
-              { value: "none", label: localizeOwn(hass, "chrome_theme_none") },
-              { value: "auto", label: localize("ui.common.auto") || "Automatic" },
-              { value: "light", label: localizeOwn(hass, "chrome_theme_light") },
-              { value: "dark", label: localizeOwn(hass, "chrome_theme_dark") },
-            ],
-          },
-        },
-      },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "chrome_radius",
-            selector: {
-              number: { min: 0, max: 50, step: 1, unit_of_measurement: "%", mode: "box" },
+/** The checkbox, alone, so the theme control can be rendered between it and the numbers. */
+export const chromeToggleSchema = (): unknown[] => [
+  { name: "chrome_enabled", selector: { boolean: {} } },
+];
+
+const THEME_LABEL = "ui.panel.lovelace.editor.card.map.theme_modes";
+
+export const chromeSchema = (
+  localize: LocalizeFunc,
+  // When true, the caller renders ha-radio-group for the theme and the schema
+  // omits chrome_theme. When false, the select stays so the theme is still
+  // changeable — ha-form is the guarantee that it renders.
+  radioGroupAvailable = false,
+): unknown[] => [
+  ...(radioGroupAvailable
+    ? []
+    : [
+        {
+          name: "chrome_theme",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: (["auto", "light", "dark"] as const).map((value) => ({
+                value,
+                label: localize(`${THEME_LABEL}.${value}`) || value,
+              })),
             },
           },
-          {
-            name: "chrome_opacity",
-            selector: { number: { min: 0, max: 1, step: 0.05, mode: "box" } },
-          },
-          {
-            name: "chrome_content_ratio",
-            // The model clamps to 0-1; the form starts at 0.1 because a ratio of
-            // zero renders an invisible icon and nothing in the editor would
-            // explain why. The form guides, the model tolerates.
-            selector: { number: { min: 0.1, max: 1, step: 0.05, mode: "box" } },
-          },
-        ],
+        },
+      ]),
+  {
+    name: "",
+    type: "grid",
+    schema: [
+      {
+        name: "chrome_radius",
+        selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%", mode: "box" } },
+      },
+      {
+        name: "chrome_opacity",
+        selector: { number: { min: 0, max: 1, step: 0.05, mode: "box" } },
+      },
+      {
+        name: "chrome_content_ratio",
+        // The model clamps to 0-1; the form starts at 0.1 because a ratio of
+        // zero renders an invisible icon and nothing in the editor would
+        // explain why. The form guides, the model tolerates.
+        selector: { number: { min: 0.1, max: 1, step: 0.05, mode: "box" } },
       },
     ],
   },
-  { /* interactions — unchanged */ },
 ];
 ```
 
-The three numbers are shown whatever the surface: they are kept in storage, and hiding them would suggest they are lost.
+`none` is absent from the options on purpose: the checkbox is what turns the chrome off, and offering the same decision twice invites the two to disagree.
+
+- [ ] **Step 5b: Render the panel**
+
+In `render`, between the main `ha-form` and the "Size and position" panel. `radioGroupAvailable` is already computed above in that method — reuse it, do not compute it twice:
+
+```ts
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "chrome")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${toFormData(element)}
+            .schema=${chromeToggleSchema()}
+            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+          ${
+            radioGroupAvailable
+              ? html`
+                <span class="section-label"
+                  >${hass.localize("ui.panel.lovelace.editor.card.map.theme_mode") || "Theme mode"}</span
+                >
+                <ha-radio-group
+                  orientation="horizontal"
+                  .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
+                  @change=${this._chromeThemeChanged}
+                >
+                  <ha-radio-option .value=${"auto"}
+                    >${hass.localize(`${THEME_LABEL}.auto`) || "Auto"}</ha-radio-option
+                  >
+                  <ha-radio-option .value=${"light"}
+                    >${hass.localize(`${THEME_LABEL}.light`) || "Light"}</ha-radio-option
+                  >
+                  <ha-radio-option .value=${"dark"}
+                    >${hass.localize(`${THEME_LABEL}.dark`) || "Dark"}</ha-radio-option
+                  >
+                </ha-radio-group>
+              `
+              : nothing
+          }
+          <ha-form
+            .hass=${hass}
+            .data=${toFormData(element)}
+            .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
+            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+```
+
+`THEME_LABEL` must be exported from its module for the template to read it, or repeated as a literal — export it.
+
+And the handler, a copy of `_modeChanged` with one field changed, placed beside it so the pair reads as one idea. Checking the theme also checks the box: choosing a surface is a way of asking for one.
+
+```ts
+  private _chromeThemeChanged = (ev: Event): void => {
+    if (!this.element) return;
+    const value = (ev.currentTarget as { value?: string }).value;
+    if (!value) return;
+    const data = { ...toFormData(this.element), chrome_theme: value, chrome_enabled: true };
+    this.dispatchEvent(
+      new CustomEvent("element-changed", {
+        detail: { element: fromFormData(this.element, data) },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+```
 
 - [ ] **Step 6: Label the new fields**
 
 In `elementFormLabel`, before the generic fallback:
 
 ```ts
-  if (name === "chrome") return localizeOwn(hass, "chrome");
-  if (name === "chrome_theme") return localizeOwn(hass, "chrome_theme");
+  if (name === "chrome_enabled") return localizeOwn(hass, "chrome_enabled");
   if (name === "chrome_radius") return localizeOwn(hass, "chrome_radius");
   if (name === "chrome_opacity") return localizeOwn(hass, "chrome_opacity");
   if (name === "chrome_content_ratio") return localizeOwn(hass, "chrome_content_ratio");
+  if (name === "chrome_theme")
+    return localize("ui.panel.lovelace.editor.card.map.theme_mode") || "Theme mode";
 ```
 
-And in `render`, the call becomes `.schema=${stateIconSchema(hass.localize, hass)}`.
+`chrome` itself is not here: it labels the panel's header, which the template writes directly.
 
 - [ ] **Step 7: Cover the strings**
 
 `src/tests/strings.test.ts` names its keys by hand — `StringKey` is `keyof en`, so a key missing from `fr` is not a type error and needs a test. Add, beside the existing `size_and_position` block:
 
+Both tests must assert **the same five keys** — a pair that checks different sets is how a missing translation slips through the one that does not look for it.
+
 ```ts
 describe("chrome strings", () => {
+  const KEYS = ["chrome", "chrome_enabled", "chrome_radius", "chrome_opacity", "chrome_content_ratio"] as const;
+
   it("serves the section and its fields in English", () => {
-    expect(localizeOwn(undefined, "chrome")).toBe("Chrome");
-    expect(localizeOwn(undefined, "chrome_theme")).toBe("Surface");
-    expect(localizeOwn(undefined, "chrome_theme_none")).toBe("None");
-    expect(localizeOwn(undefined, "chrome_radius")).toBe("Radius");
-    expect(localizeOwn(undefined, "chrome_content_ratio")).toBe("Content");
+    expect(KEYS.map((key) => localizeOwn(undefined, key))).toEqual([
+      "Chrome",
+      "Draw a chrome",
+      "Radius",
+      "Opacity",
+      "Content",
+    ]);
   });
 
-  it("serves them in French", () => {
+  it("serves the same five in French", () => {
     const fr = hass({ language: "fr" });
-    expect(localizeOwn(fr, "chrome")).toBe("Habillage");
-    expect(localizeOwn(fr, "chrome_theme_none")).toBe("Aucune");
-    expect(localizeOwn(fr, "chrome_theme_dark")).toBe("Sombre");
-    expect(localizeOwn(fr, "chrome_opacity")).toBe("Opacité");
-    expect(localizeOwn(fr, "chrome_content_ratio")).toBe("Contenu");
+    expect(KEYS.map((key) => localizeOwn(fr, key))).toEqual([
+      "Habillage",
+      "Dessiner un habillage",
+      "Rayon",
+      "Opacité",
+      "Contenu",
+    ]);
   });
 });
 ```
@@ -1031,9 +1157,13 @@ On a card using `/local/demo/office-plan.jpg`, check each of:
 - dragging a chromed item to each edge — the bounds should feel exactly as they did before, since the box has not changed;
 - clicking one — the whole disc is the target, not just the glyph.
 
-- [ ] **Step 3: Answer the deferred question**
+- [ ] **Step 3: Answer the deferred questions**
 
-With the rim in front of you: is a 1px border worth adding beside it? Record the verdict — either way — in the spec's "Room left for a border" section. If it is a yes, it is a new task, not a patch to this one.
+Three, all of which need the thing on screen:
+
+1. **The border.** With the rim in front of you: is a 1px border worth adding beside it? Record the verdict — either way — in the spec's "Room left for a border" section. If it is a yes, it is a new task, not a patch to this one.
+2. **The section's layout.** Checkbox, then the theme on one line, then the numbers: does it read in that order, and is the toggle better as a row inside the panel or in the panel's header? (`ha-expansion-panel`'s header slots go leading-icon → header → event → chevron → icons; `event` is the one that lands before the chevron.)
+3. **The numbers while the box is unchecked.** They are shown, on the argument that a row which vanishes reads as a value that was lost. Seen on screen, that may be the wrong call — three live-looking controls under an unchecked box is the other half of the same argument. Decide, and record it.
 
 - [ ] **Step 4: Append the Verification record and commit**
 
