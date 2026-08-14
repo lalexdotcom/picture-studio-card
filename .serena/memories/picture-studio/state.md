@@ -295,6 +295,9 @@ items:
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
 - **Never `git push`** — it publishes. The user does it. Local merges are fine.
 - **Leave a clean tree at the close.**
+- **The user's browser walks cover a panel view and a sections view, every
+  time.** They do not announce it. Never write "a sections view was not
+  exercised" — if a walk happened, both did.
 - Serena's symbolic tools are primary for code.
 - Implementation runs through dispatched subagents with a written brief, then an
   independent reviewer per task, then a whole-branch review. Model/effort per

@@ -35,10 +35,9 @@ the next time the card is open in a browser.
   is the interesting case: the chrome would inherit it, which is the intent, but
   nobody has looked.
 
-**A sections view finally was walked.** 1.3.0's walk covered both a panel view
-and a sections view — the first time in this project — so the card's rendering
-and the editor have now been seen in the layout that had only ever been reasoned
-about. That closes the view-type half of entry 3.
+**View types are not a gap and never were.** The user walks both a panel view and
+a sections view as a matter of course, and simply does not say so each time — so
+assume every browser walk in this project's history covered both.
 
 ---
 
@@ -51,11 +50,11 @@ Neither blocks anything; both are worth a minute if the area is reopened.
   nothing proves their chunks are loaded by *our* dialog, and an undefined
   custom element renders nothing at all, silently — the whole list would vanish
   rather than degrade. If that availability is ever proven, the swap is direct.
-- ~~**The browser walk covered a panel view only.**~~ Closed by 1.3.0's walk,
-  which ran in both a panel and a sections view. What remains unobserved is not a
-  view type but a version: the fallback when `hui-card-visibility-editor` is
-  undefined needs a frontend that does not load its chunk, and every frontend
-  walked so far loads it.
+- **The fallback when `hui-card-visibility-editor` is undefined** has never been
+  seen, and cannot be until a frontend that does not load its chunk is tried.
+  Every frontend walked so far loads it. (This entry once also claimed the walks
+  had only covered a panel view — that was an inference of the agent's, recorded
+  as though observed, and it was wrong. See the note above.)
 
 ---
 
