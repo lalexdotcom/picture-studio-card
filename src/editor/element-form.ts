@@ -112,6 +112,11 @@ export const stateIconSizeSchema = (
   mode: "auto" | "adaptive" | "fixed",
   localize: LocalizeFunc,
   hass: HomeAssistant | undefined,
+  // When true, the caller renders ha-radio-group for mode selection and the
+  // schema omits size_mode. When false (the default), size_mode is included as
+  // a vertical ha-form select — correct but not horizontal — guaranteed to
+  // load because ha-selector pulls its own sub-components.
+  radioGroupAvailable = false,
 ): unknown[] => {
   const modeField = {
     name: "size_mode",
@@ -126,9 +131,13 @@ export const stateIconSizeSchema = (
       },
     },
   };
+  // When the radio group handles mode selection, it is not repeated in the
+  // form. In the fallback path the select stays so the user can still change
+  // the mode — ha-form is the guarantee that it renders.
+  const preamble = radioGroupAvailable ? [] : [modeField];
   if (mode === "adaptive") {
     return [
-      modeField,
+      ...preamble,
       {
         name: "size_ratio",
         selector: {
@@ -157,7 +166,7 @@ export const stateIconSizeSchema = (
   }
   if (mode === "fixed") {
     return [
-      modeField,
+      ...preamble,
       {
         name: "size_value",
         selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" } },
@@ -165,7 +174,7 @@ export const stateIconSizeSchema = (
     ];
   }
   // auto — no numeric fields
-  return [modeField];
+  return preamble;
 };
 
 export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
@@ -201,18 +210,42 @@ export class PictureStudioElementForm extends LitElement {
     );
   };
 
+  // Handles a change event from ha-radio-group (the horizontal mode control).
+  // Emits element-changed through the same path as _valueChanged so there is
+  // exactly one way a config change leaves this component.
+  private _modeChanged = (ev: Event): void => {
+    if (!this.element) return;
+    const value = (ev.currentTarget as { value?: string }).value;
+    if (!value) return;
+    const data = { ...toFormData(this.element), size_mode: value };
+    this.dispatchEvent(
+      new CustomEvent("element-changed", {
+        detail: { element: fromFormData(this.element, data) },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
   protected render() {
     const element = this.element;
     const hass = this.hass;
     if (!element || !hass) return nothing;
+
+    // Check at render time whether ha-radio-group is available.
+    // If it is not, size_mode falls back to a vertical ha-form select — correct
+    // but not horizontal. The check is lazy (render time, not module load) so a
+    // chunk that registers the element after ours is still found.
+    const radioGroupAvailable = !!customElements.get("ha-radio-group");
 
     return html`
       <div class="header">
         <ha-icon-button
           .label=${"Back"}
           @click=${() =>
-            this.dispatchEvent(new CustomEvent("go-back", { bubbles: true, composed: true }))}
-          ><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
+            this.dispatchEvent(
+              new CustomEvent("go-back", { bubbles: true, composed: true }),
+            )}><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
         <span class="title">${element.type}</span>
       </div>
       <ha-form
@@ -229,15 +262,37 @@ export class PictureStudioElementForm extends LitElement {
           ${localizeOwn(hass, "size_and_position")}
         </div>
         <div class="content">
+          ${
+            radioGroupAvailable
+              ? html`
+                <span class="section-label">${localizeOwn(hass, "size_mode")}</span>
+                <ha-radio-group
+                  orientation="horizontal"
+                  .value=${element.size.mode}
+                  @change=${this._modeChanged}
+                >
+                  <ha-radio-option .value=${"auto"}
+                    >${hass.localize("ui.common.auto") || "Automatic"}</ha-radio-option
+                  >
+                  <ha-radio-option .value=${"adaptive"}
+                    >${localizeOwn(hass, "size_mode_adaptive")}</ha-radio-option
+                  >
+                  <ha-radio-option .value=${"fixed"}
+                    >${localizeOwn(hass, "size_mode_fixed")}</ha-radio-option
+                  >
+                </ha-radio-group>
+              `
+              : nothing
+          }
           <ha-form
             .hass=${hass}
             .data=${toFormData(element)}
-            .schema=${stateIconSizeSchema(element.size.mode, hass.localize, hass)}
+            .schema=${stateIconSizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
             .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
             @value-changed=${this._valueChanged}
           ></ha-form>
           <div class="separator"></div>
-          <div class="anchor-heading">${localizeOwn(hass, "anchor")}</div>
+          <span class="section-label">${localizeOwn(hass, "anchor")}</span>
           <picture-studio-anchor-picker
             .hass=${hass}
             .anchor=${this.anchor}
@@ -282,11 +337,17 @@ export class PictureStudioElementForm extends LitElement {
       border-top: 1px solid var(--divider-color);
       margin: var(--ha-space-3, 12px) 0;
     }
-    .anchor-heading {
-      color: var(--secondary-text-color);
-      font-size: var(--ha-font-size-s);
-      font-weight: var(--ha-font-weight-medium);
-      margin-bottom: var(--ha-space-2, 8px);
+    /* Both section headings ("Taille" above the mode control and "Position"
+       above the anchor picker) share this class so they are identical by
+       construction. The declarations resolve to the same values that Home
+       Assistant's own wa-form-control labels use, so the pair follows HA's
+       typography wherever it goes. */
+    .section-label {
+      color: var(--wa-form-control-label-color);
+      font-weight: var(--wa-form-control-label-font-weight);
+      line-height: var(--wa-form-control-label-line-height);
+      margin-block-end: 0.5em;
+      display: inline-flex;
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);

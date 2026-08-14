@@ -1,8 +1,10 @@
-import { describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it } from "@rstest/core";
+import { ELEMENT_FORM_TAG } from "../../config";
 import {
   elementFormHelper,
   elementFormLabel,
   fromFormData,
+  PictureStudioElementForm,
   stateIconSchema,
   stateIconSizeSchema,
   toFormData,
@@ -56,7 +58,8 @@ describe("stateIconSchema", () => {
 });
 
 describe("stateIconSizeSchema", () => {
-  it("auto: contains only the size_mode radio field, no numeric fields", () => {
+  // --- Fallback path (radioGroupAvailable = false, the default) ---
+  it("auto: contains size_mode and no numeric fields (fallback path)", () => {
     const schema = stateIconSizeSchema("auto", localize, undefined);
     expect(find(schema, "size_mode")).toBeDefined();
     expect(find(schema, "size_ratio")).toBeUndefined();
@@ -65,7 +68,7 @@ describe("stateIconSizeSchema", () => {
     expect(find(schema, "size_value")).toBeUndefined();
   });
 
-  it("adaptive: contains size_mode, size_ratio, size_min, size_max — no size_value", () => {
+  it("adaptive: contains size_mode, size_ratio, size_min, size_max — no size_value (fallback path)", () => {
     const schema = stateIconSizeSchema("adaptive", localize, undefined);
     expect(find(schema, "size_mode")).toBeDefined();
     expect(find(schema, "size_ratio")).toBeDefined();
@@ -74,23 +77,13 @@ describe("stateIconSizeSchema", () => {
     expect(find(schema, "size_value")).toBeUndefined();
   });
 
-  it("fixed: contains size_mode and size_value — no adaptive fields", () => {
+  it("fixed: contains size_mode and size_value — no adaptive fields (fallback path)", () => {
     const schema = stateIconSizeSchema("fixed", localize, undefined);
     expect(find(schema, "size_mode")).toBeDefined();
     expect(find(schema, "size_value")).toBeDefined();
     expect(find(schema, "size_ratio")).toBeUndefined();
     expect(find(schema, "size_min")).toBeUndefined();
     expect(find(schema, "size_max")).toBeUndefined();
-  });
-
-  it("every number field carries mode: box", () => {
-    const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
-    expect(get(find(adaptive, "size_ratio"), "selector", "number", "mode")).toBe("box");
-    expect(get(find(adaptive, "size_min"), "selector", "number", "mode")).toBe("box");
-    expect(get(find(adaptive, "size_max"), "selector", "number", "mode")).toBe("box");
-
-    const fixed = stateIconSizeSchema("fixed", localize, undefined);
-    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBe("box");
   });
 
   it("size_mode field uses a select with mode: list and three options", () => {
@@ -102,6 +95,119 @@ describe("stateIconSizeSchema", () => {
       ? (options as Record<string, unknown>[]).map((o) => o.value)
       : undefined;
     expect(values).toEqual(["auto", "adaptive", "fixed"]);
+  });
+
+  // --- Radio-group path (radioGroupAvailable = true) ---
+  it("omits size_mode when radioGroupAvailable is true (radio group path)", () => {
+    expect(
+      find(stateIconSizeSchema("auto", localize, undefined, true), "size_mode"),
+    ).toBeUndefined();
+    expect(
+      find(stateIconSizeSchema("adaptive", localize, undefined, true), "size_mode"),
+    ).toBeUndefined();
+    expect(
+      find(stateIconSizeSchema("fixed", localize, undefined, true), "size_mode"),
+    ).toBeUndefined();
+  });
+
+  it("includes size_mode when radioGroupAvailable is false (fallback path)", () => {
+    expect(
+      find(stateIconSizeSchema("auto", localize, undefined, false), "size_mode"),
+    ).toBeDefined();
+    expect(
+      find(stateIconSizeSchema("adaptive", localize, undefined, false), "size_mode"),
+    ).toBeDefined();
+    expect(
+      find(stateIconSizeSchema("fixed", localize, undefined, false), "size_mode"),
+    ).toBeDefined();
+  });
+
+  it("numeric rows per mode are unchanged regardless of radioGroupAvailable", () => {
+    for (const rga of [true, false] as const) {
+      const adaptive = stateIconSizeSchema("adaptive", localize, undefined, rga);
+      expect(find(adaptive, "size_ratio")).toBeDefined();
+      expect(find(adaptive, "size_min")).toBeDefined();
+      expect(find(adaptive, "size_max")).toBeDefined();
+      expect(find(adaptive, "size_value")).toBeUndefined();
+
+      const fixed = stateIconSizeSchema("fixed", localize, undefined, rga);
+      expect(find(fixed, "size_value")).toBeDefined();
+      expect(find(fixed, "size_ratio")).toBeUndefined();
+
+      const auto = stateIconSizeSchema("auto", localize, undefined, rga);
+      expect(find(auto, "size_ratio")).toBeUndefined();
+      expect(find(auto, "size_value")).toBeUndefined();
+    }
+  });
+
+  it("every number field carries mode: box", () => {
+    const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
+    expect(get(find(adaptive, "size_ratio"), "selector", "number", "mode")).toBe("box");
+    expect(get(find(adaptive, "size_min"), "selector", "number", "mode")).toBe("box");
+    expect(get(find(adaptive, "size_max"), "selector", "number", "mode")).toBe("box");
+
+    const fixed = stateIconSizeSchema("fixed", localize, undefined);
+    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBe("box");
+  });
+});
+
+describe("PictureStudioElementForm — radio group change", () => {
+  // Register a minimal stub so customElements.get("ha-radio-group") returns a
+  // non-undefined value and the form takes the radio-group render path.
+  // ha-radio-group renders nothing meaningful under happy-dom, so we assert on
+  // what we pass it and what we emit, not on its rendered internals.
+  if (!customElements.get("ha-radio-group")) {
+    customElements.define("ha-radio-group", class extends HTMLElement {});
+  }
+  if (!customElements.get("ha-radio-option")) {
+    customElements.define("ha-radio-option", class extends HTMLElement {});
+  }
+  if (!customElements.get(ELEMENT_FORM_TAG)) {
+    customElements.define(ELEMENT_FORM_TAG, PictureStudioElementForm);
+  }
+
+  const hass = {
+    localize: ((key: string) => `L:${key}`) as never,
+    states: {},
+  } as never;
+
+  const mountForm = async (mode: "auto" | "adaptive" | "fixed") => {
+    const el = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    el.hass = hass;
+    el.element = { type: "state-icon", size: { ...DEFAULT_ICON_SIZE, mode } };
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("emits element-changed with the chosen mode and all other keys intact", async () => {
+    const form = await mountForm("auto");
+    const group = form.shadowRoot?.querySelector("ha-radio-group");
+    expect(group).not.toBeNull();
+    if (!group) return; // TypeScript guard; the assertion above already fails the test
+
+    const events: CustomEvent[] = [];
+    form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
+
+    // Simulate ha-radio-group firing a change event with value "adaptive".
+    // The handler reads ev.currentTarget.value, so we set it on the element
+    // before dispatching.
+    (group as HTMLElement & { value?: string }).value = "adaptive";
+    group.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(events).toHaveLength(1);
+    const detail = (events[0] as CustomEvent<{ element: { size: typeof DEFAULT_ICON_SIZE } }>)
+      .detail;
+    expect(detail.element.size.mode).toBe("adaptive");
+    // All other keys must survive the mode change.
+    expect(detail.element.size.min).toBe(DEFAULT_ICON_SIZE.min);
+    expect(detail.element.size.max).toBe(DEFAULT_ICON_SIZE.max);
+    expect(detail.element.size.value).toBe(DEFAULT_ICON_SIZE.value);
+    expect(detail.element.size.ratio).toBe(DEFAULT_ICON_SIZE.ratio);
   });
 });
 
