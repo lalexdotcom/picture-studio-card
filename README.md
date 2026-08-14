@@ -111,8 +111,7 @@ down with it. Three modes decide how closely:
 A **chrome** surrounds an item with its own surface, so it reads against a busy
 picture instead of competing with it.
 
-- **Theme** — **Auto** follows your dashboard's theme; **Light** and **Dark**
-  force one, for a picture the theme disagrees with.
+- **Theme** — **Auto**, **Light** or **Dark**.
 - **Radius** — a disc, a square, or anything between.
 - **Opacity** — fades the surface alone.
 - **Content** — how much of the surface its contents take.
