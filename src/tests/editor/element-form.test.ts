@@ -8,8 +8,7 @@ import {
   elementFormLabel,
   fromFormData,
   PictureStudioElementForm,
-  stateIconEntityContentSchema,
-  stateIconInteractionsSchema,
+  stateIconSchema,
   stateIconSizeSchema,
   themeModeTitle,
   toFormData,
@@ -39,9 +38,9 @@ const find = (schema: unknown[], name: string): Record<string, unknown> | undefi
   return undefined;
 };
 
-describe("stateIconEntityContentSchema", () => {
+describe("stateIconSchema", () => {
   it("puts the name first, then colour, icon, and picture in one grid", () => {
-    const content = find(stateIconEntityContentSchema(), "content");
+    const content = find(stateIconSchema(), "content");
     const names = (
       (content?.schema ?? []) as { name: string; schema?: { name: string }[] }[]
     ).flatMap((entry) => (entry.schema ? entry.schema.map((s) => s.name) : [entry.name]));
@@ -49,18 +48,16 @@ describe("stateIconEntityContentSchema", () => {
   });
 
   it("does not contain the size fields (they live in stateIconSizeSchema)", () => {
-    expect(find(stateIconEntityContentSchema(), "size_min")).toBeUndefined();
-    expect(find(stateIconEntityContentSchema(), "size_ratio")).toBeUndefined();
-    expect(find(stateIconEntityContentSchema(), "size_max")).toBeUndefined();
-    expect(find(stateIconEntityContentSchema(), "size_mode")).toBeUndefined();
-    expect(find(stateIconEntityContentSchema(), "size_value")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_min")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_ratio")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_max")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_mode")).toBeUndefined();
+    expect(find(stateIconSchema(), "size_value")).toBeUndefined();
   });
-});
 
-describe("stateIconInteractionsSchema", () => {
   it("offers hold and double tap as optional actions", () => {
-    expect(find(stateIconInteractionsSchema(), "hold_action")).toBeDefined();
-    expect(find(stateIconInteractionsSchema(), "double_tap_action")).toBeDefined();
+    expect(find(stateIconSchema(), "hold_action")).toBeDefined();
+    expect(find(stateIconSchema(), "double_tap_action")).toBeDefined();
   });
 });
 

@@ -17,8 +17,7 @@ const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBA
 export const themeModeTitle = (localize: LocalizeFunc): string =>
   localize(`${THEME_KEY}.theme_mode`) || "Theme mode";
 
-// Entity identity and visual content — rendered above the hand-built panels.
-export const stateIconEntityContentSchema = (): unknown[] => [
+export const stateIconSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
@@ -41,11 +40,6 @@ export const stateIconEntityContentSchema = (): unknown[] => [
       },
     ],
   },
-];
-
-// Tap / hold / double-tap — rendered after the hand-built panels so that
-// Interactions and Visibility always close the form, for every item type.
-export const stateIconInteractionsSchema = (): unknown[] => [
   {
     name: "interactions",
     type: "expandable",
@@ -384,7 +378,7 @@ export class PictureStudioElementForm extends LitElement {
       <ha-form
         .hass=${hass}
         .data=${toFormData(element)}
-        .schema=${stateIconEntityContentSchema()}
+        .schema=${stateIconSchema()}
         .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
         .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
         @value-changed=${this._valueChanged}
@@ -480,14 +474,6 @@ export class PictureStudioElementForm extends LitElement {
           ></picture-studio-anchor-picker>
         </div>
       </ha-expansion-panel>
-      <ha-form
-        .hass=${hass}
-        .data=${toFormData(element)}
-        .schema=${stateIconInteractionsSchema()}
-        .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-        .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
       <picture-studio-visibility-section
         .hass=${hass}
         .visibility=${this.visibility}

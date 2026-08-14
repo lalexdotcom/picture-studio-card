@@ -324,30 +324,33 @@ and position", before it.
 
 ### Final section order
 
-For every item type, **Interactions and Visibility come last**, in that order.
-This is the invariant: sections that modify how the element responds to input and
-who can see it are always the closing pair, never interleaved with content or
-layout controls.
+**The rule, holding for every item type: Interactions comes directly after
+Content; Visibility comes last.**
+
+The formulation "Interactions after Content" is forced by the badge family.
+A badge's editor is a third-party custom element rendered whole inside
+`<div class="form">` — we cannot reach into it or reorder anything it draws,
+and what it draws is Content then Interactions. So "Interactions last" could
+never hold for a badge without splitting a third-party element. "After Content"
+holds for both families without touching the badge form at all.
 
 For a `state-icon` element the full order is:
 
 | # | Section | Mechanism |
 |---|---------|-----------|
-| 1 | Entity | `ha-form` (entity + content, `stateIconEntityContentSchema`) |
-| 2 | Content | expandable inside the same `ha-form` |
-| 3 | Chrome | hand-built `ha-expansion-panel` |
-| 4 | Size and position | hand-built `ha-expansion-panel` |
-| 5 | Interactions | `ha-form` (`stateIconInteractionsSchema`) |
+| 1 | Entity | `ha-form` (`stateIconSchema`, first entry) |
+| 2 | Content | expandable inside same `ha-form` |
+| 3 | Interactions | expandable inside same `ha-form` (last entry) |
+| 4 | Chrome | hand-built `ha-expansion-panel` |
+| 5 | Size and position | hand-built `ha-expansion-panel` |
 | 6 | Visibility | `<picture-studio-visibility-section>` |
 
-For a badge the order is: badge editor (whatever the badge type renders) →
-Position → Visibility. Badges have no Interactions section from us.
+For a badge the order is: badge editor (Content, Interactions from the badge's
+own form) → Position → Visibility.
 
-The `stateIconSchema` factory was split into `stateIconEntityContentSchema` and
-`stateIconInteractionsSchema` so the render method can place the interactions
-form after the hand-built panels. Both forms receive the full `toFormData(element)`
-record — `ha-form` merges the changed field onto `.data` and re-emits it, so every
-field stays alive regardless of which form's schema is currently displaying it.
+`stateIconSchema` remains a single factory containing entity, content, and
+interactions in that order. Splitting it is unnecessary because nothing needs
+to be rendered between the content and interactions entries.
 
 ### Spacing rule
 
