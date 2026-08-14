@@ -117,8 +117,6 @@ instead of competing with it. Tick **Draw a chrome** and four controls appear:
 - **Opacity** — fades the surface alone.
 - **Content** — how much of the surface its contents take.
 
-Untick the box and the numbers stay where you left them.
-
 ### YAML reference
 
 ```yaml
