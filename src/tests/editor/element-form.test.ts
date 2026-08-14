@@ -157,6 +157,16 @@ describe("toFormData / fromFormData", () => {
     });
   });
 
+  it("degrades gracefully when non-schema keys are absent — normalizeIconSize supplies defaults", () => {
+    // Documents what happens if the ha-form invariant (emitting the full .data
+    // record) is ever broken: missing size fields become defaults, not a crash.
+    const data = { type: "state-icon", entity: "light.a", size_mode: "fixed" };
+    const result = fromFormData(base, data);
+    expect(result.size.mode).toBe("fixed");
+    expect(result.size.value).toBe(48); // DEFAULT_ICON_SIZE.value
+    expect(result.size.min).toBe(40); // DEFAULT_ICON_SIZE.min
+  });
+
   it("never lets a form field named type overwrite the kind", () => {
     expect(fromFormData(base, { ...toFormData(base), type: "nonsense" }).type).toBe("state-icon");
   });

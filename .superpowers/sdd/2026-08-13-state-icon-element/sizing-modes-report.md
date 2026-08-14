@@ -187,3 +187,50 @@ pnpm lint      → Found 3 warnings. (pre-existing noNonNullAssertion, unchanged
 ## Concerns
 
 None. The three `noNonNullAssertion` warnings are pre-existing and unchanged.
+
+---
+
+## Review fix — 2026-08-14
+
+### Findings addressed
+
+**1. (Documented, risk does not exist.)** Reviewer flagged that `fromFormData`
+might reset non-visible fields to defaults when `ha-form` only re-emits the
+active schema's fields. Read the ha-form source; this does not happen. ha-form's
+`addValueChangedListener` merges the changed child onto the full `.data` it was
+given:
+
+```ts
+this.data = { ...this.data, ...newValue };
+fireEvent(this, "value-changed", { value: this.data });
+```
+
+Because we pass `toFormData(element)` (all five size fields) as `.data`, every
+field comes back regardless of which rows the mode's schema is showing. Added a
+comment to `fromFormData` quoting the merge line and stating the invariant:
+"`.data` must be the complete flat record; the schema decides what is *shown*,
+never what is *carried*."
+
+**2. (Pinned with a test.)** Added `"degrades gracefully when non-schema keys are
+absent"` to the `toFormData / fromFormData` suite. It calls `fromFormData` with
+a `data` object carrying only `size_mode: "fixed"` (no `size_value`, `size_min`,
+etc.) and asserts that `normalizeIconSize` fills in the defaults rather than
+crashing. Documents what happens if the ha-form invariant is ever broken.
+
+**3. (JSDoc fixed.)** `isDefaultIconSize` in `src/element-size.ts` had a JSDoc
+reading "All four fields, not just `auto`". Changed to "All five fields, not just
+`mode`" to match the updated interface and the parallel comment in `config.ts`.
+
+### Test output
+
+```
+pnpm test      → No test failures reported. (1 new test in toFormData/fromFormData suite)
+pnpm typecheck → (exit 0)
+pnpm lint      → Found 3 warnings. (pre-existing noNonNullAssertion, unchanged)
+```
+
+### Files changed in this commit
+
+- `src/element-size.ts` — JSDoc on `isDefaultIconSize`
+- `src/editor/element-form.ts` — comment on `fromFormData`
+- `src/tests/editor/element-form.test.ts` — degradation test

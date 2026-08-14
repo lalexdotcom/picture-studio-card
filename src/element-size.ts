@@ -59,7 +59,7 @@ export const normalizeIconSize = (raw: unknown): IconSize => {
 };
 
 /**
- * All four fields, not just `auto`: a size can be automatic and still carry
+ * All five fields, not just `mode`: a size can be automatic and still carry
  * numbers the user typed, and dropping it from the stored config would lose them.
  */
 export const isDefaultIconSize = (size: IconSize): boolean =>

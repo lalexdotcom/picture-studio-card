@@ -65,6 +65,15 @@ export const fromFormData = (
   config: StateIconConfig,
   data: Record<string, unknown>,
 ): StateIconConfig => {
+  // Invariant: `data` must be the complete flat record (all five size fields
+  // present, whether or not the active schema shows them). ha-form enforces this:
+  // its value-changed handler merges the changed child onto the `.data` it was
+  // given and re-emits the whole thing —
+  //   this.data = { ...this.data, ...newValue };
+  //   fireEvent(this, "value-changed", { value: this.data });
+  // — so every field we pass to `.data` comes back regardless of which rows the
+  // current mode's schema is showing. Passing `toFormData(element)` (all five
+  // fields) as `.data` is therefore what keeps the non-visible fields alive.
   const { size_mode, size_min, size_ratio, size_max, size_value, ...rest } = data;
   return {
     ...(rest as Omit<StateIconConfig, "type" | "size">),
