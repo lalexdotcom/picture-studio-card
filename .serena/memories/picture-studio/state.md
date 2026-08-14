@@ -18,9 +18,14 @@ HACS installs. **The user pushes, never the agent.**
 Releases so far: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
 automated chain), 1.2.0 (2026-08-14).
 
-**In flight: `feat/item-visibility`**, per-item `visibility`, for 1.3.0 — spec
-and plan in `docs/superpowers/`, browser walk done, verification record in the
-spec. Suite: **290 tests**. Bundle: 121.1 kB / 29.9 kB gzip.
+**Per-item `visibility` was merged into `main` on 2026-08-14** (merge commit
+`7561f7f`, `--no-ff`, branch `feat/item-visibility` deleted). **Not pushed** —
+`main` is 16 commits ahead of `origin/main`. It is the first of the two features
+of **1.3.0**; the second, the chrome around a state-icon, is still to design, and
+the version bump lands with it. `package.json` stays on 1.2.0 and the CHANGELOG
+heading reads `unreleased` until then.
+
+Suite: **290 tests**. Bundle: 121.1 kB / 29.9 kB gzip.
 
 ## Where things are
 

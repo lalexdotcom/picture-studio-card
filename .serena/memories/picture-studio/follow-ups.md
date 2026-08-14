@@ -11,7 +11,9 @@ card changes, this one grows and empties.
 
 ## 1. A chrome around a state-icon
 
-**Asked for on 2026-08-14, targeted at 1.3.0.**
+**Asked for on 2026-08-14, targeted at 1.3.0. This is the next thing to
+design** — per-item `visibility` is merged, and 1.3.0 waits on this one before
+its version bump.
 
 Draw a shape behind the icon — a disc, `border-radius: 100%` — so an icon on a
 busy photograph reads against its own surface instead of against the picture.
@@ -67,5 +69,22 @@ defaulting to 50%, which may do part of the job for free.
 **Settled already:** the release is **1.3.0**, not 1.2.1 — a new config option is
 additive. And the rim and halo belong to the chrome, which is a fill and nothing
 else.
+
+---
+
+## 2. Parked from the visibility session (2026-08-14)
+
+Neither blocks anything; both are worth a minute if the area is reopened.
+
+- **The item list is our own markup, not `ha-md-list` / `ha-md-list-item`.** It
+  copies their geometry exactly. The real components were rejected because
+  nothing proves their chunks are loaded by *our* dialog, and an undefined
+  custom element renders nothing at all, silently — the whole list would vanish
+  rather than degrade. If that availability is ever proven, the swap is direct.
+- **The browser walk covered a panel view only.** A sections view was never
+  exercised, so the `view_columns` context path — the Lit context resolving up
+  through our shadow root — is reasoned about rather than observed. Same for the
+  fallback when `hui-card-visibility-editor` is undefined, which needs a
+  frontend that does not load its chunk.
 </content>
 </invoke>
