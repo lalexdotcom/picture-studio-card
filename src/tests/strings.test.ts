@@ -37,13 +37,11 @@ describe("localizeOwn", () => {
 describe("anchor strings", () => {
   it("serves the anchor labels in English", () => {
     expect(localizeOwn(undefined, "anchor")).toBe("Position");
-    expect(localizeOwn(undefined, "anchor_proportional")).toBe("Proportional");
     expect(localizeOwn(undefined, "anchor_anchored")).toBe("Anchored");
   });
 
   it("serves them in French", () => {
     expect(localizeOwn(hass({ language: "fr" }), "anchor")).toBe("Position");
-    expect(localizeOwn(hass({ language: "fr" }), "anchor_proportional")).toBe("Proportionnel");
     expect(localizeOwn(hass({ language: "fr" }), "anchor_anchored")).toBe("Ancré");
   });
 });

@@ -53,10 +53,11 @@ export const toFormData = (config: StateIconConfig): Record<string, unknown> => 
   const { size, ...rest } = config;
   return {
     ...rest,
-    auto_size: size.auto,
+    size_mode: size.mode,
     size_min: size.min,
     size_ratio: size.ratio,
     size_max: size.max,
+    size_value: size.value,
   };
 };
 
@@ -64,16 +65,17 @@ export const fromFormData = (
   config: StateIconConfig,
   data: Record<string, unknown>,
 ): StateIconConfig => {
-  const { auto_size, size_min, size_ratio, size_max, ...rest } = data;
+  const { size_mode, size_min, size_ratio, size_max, size_value, ...rest } = data;
   return {
     ...(rest as Omit<StateIconConfig, "type" | "size">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
     size: normalizeIconSize({
-      auto: auto_size !== false,
+      mode: size_mode,
       min: size_min,
       ratio: size_ratio,
       max: size_max,
+      value: size_value,
     }),
   };
 };
@@ -84,42 +86,78 @@ export const elementFormLabel = (
   hass: HomeAssistant | undefined,
   name: string,
 ): string => {
-  if (name === "auto_size") return localize("ui.common.auto") || "Automatic";
+  if (name === "size_mode") return localizeOwn(hass, "size_mode");
   if (name === "size_min")
     return localize("ui.panel.lovelace.editor.card.generic.minimum") || "Minimum";
   if (name === "size_max")
     return localize("ui.panel.lovelace.editor.card.generic.maximum") || "Maximum";
   if (name === "size_ratio") return localizeOwn(hass, "ratio");
+  if (name === "size_value") return localizeOwn(hass, "size_value");
   if (name === "color" || name === "show_entity_picture") {
     return localize(`ui.panel.lovelace.editor.badge.entity.${name}`) || name;
   }
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
 
-export const stateIconSizeSchema = (auto: boolean): unknown[] => [
-  { name: "auto_size", selector: { boolean: {} } },
-  {
-    name: "",
-    type: "grid",
-    schema: [
-      {
-        name: "size_min",
-        selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px" } },
-        disabled: auto,
+export const stateIconSizeSchema = (
+  mode: "auto" | "adaptive" | "fixed",
+  localize: LocalizeFunc,
+  hass: HomeAssistant | undefined,
+): unknown[] => {
+  const modeField = {
+    name: "size_mode",
+    selector: {
+      select: {
+        mode: "list",
+        options: [
+          { value: "auto", label: localize("ui.common.auto") || "Automatic" },
+          { value: "adaptive", label: localizeOwn(hass, "size_mode_adaptive") },
+          { value: "fixed", label: localizeOwn(hass, "size_mode_fixed") },
+        ],
       },
+    },
+  };
+  if (mode === "adaptive") {
+    return [
+      modeField,
       {
         name: "size_ratio",
-        selector: { number: { min: 0, max: 100, step: 0.1, unit_of_measurement: "%" } },
-        disabled: auto,
+        selector: {
+          number: { min: 0, max: 100, step: 0.1, unit_of_measurement: "%", mode: "box" },
+        },
       },
       {
-        name: "size_max",
-        selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px" } },
-        disabled: auto,
+        name: "",
+        type: "grid",
+        schema: [
+          {
+            name: "size_min",
+            selector: {
+              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
+            },
+          },
+          {
+            name: "size_max",
+            selector: {
+              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
+            },
+          },
+        ],
       },
-    ],
-  },
-];
+    ];
+  }
+  if (mode === "fixed") {
+    return [
+      modeField,
+      {
+        name: "size_value",
+        selector: { number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" } },
+      },
+    ];
+  }
+  // auto — no numeric fields
+  return [modeField];
+};
 
 export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
   if (name === "color")
@@ -185,10 +223,12 @@ export class PictureStudioElementForm extends LitElement {
           <ha-form
             .hass=${hass}
             .data=${toFormData(element)}
-            .schema=${stateIconSizeSchema(element.size.auto)}
+            .schema=${stateIconSizeSchema(element.size.mode, hass.localize, hass)}
             .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
             @value-changed=${this._valueChanged}
           ></ha-form>
+          <div class="separator"></div>
+          <div class="anchor-heading">${localizeOwn(hass, "anchor")}</div>
           <picture-studio-anchor-picker
             .hass=${hass}
             .anchor=${this.anchor}
@@ -210,7 +250,9 @@ export class PictureStudioElementForm extends LitElement {
     }
     ha-form {
       display: block;
-      margin-bottom: var(--ha-space-3);
+      /* Matches ha-form's own root-child spacing (24px) so the four sections
+         sit evenly — the main form, content, interactions, and this panel. */
+      margin-bottom: var(--ha-space-6, 24px);
     }
     /* Mirrors ha-form-expandable: the panel's own content padding is zeroed and
        the section supplies its own, so our sections sit exactly like Home
@@ -226,6 +268,16 @@ export class PictureStudioElementForm extends LitElement {
     }
     .content ha-form {
       margin-bottom: 0;
+    }
+    .separator {
+      border-top: 1px solid var(--divider-color);
+      margin: var(--ha-space-3, 12px) 0;
+    }
+    .anchor-heading {
+      color: var(--secondary-text-color);
+      font-size: var(--ha-font-size-s);
+      font-weight: var(--ha-font-weight-medium);
+      margin-bottom: var(--ha-space-2, 8px);
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);

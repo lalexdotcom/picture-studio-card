@@ -47,7 +47,7 @@ export class PictureStudioAnchorPicker extends LitElement {
     return html`
       <div class="row">
         <div class="half">
-          <ha-formfield .label=${localizeOwn(this.hass, "anchor_proportional")}>
+          <ha-formfield .label=${this.hass?.localize("ui.common.auto") || "Automatic"}>
             <ha-switch
               .checked=${proportional}
               @change=${(ev: Event) =>
