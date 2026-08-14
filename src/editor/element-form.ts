@@ -4,19 +4,14 @@ import { normalizeIconSize } from "../element-size";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
-import { BACK_PATH, PLACEMENT_PATH } from "./icons";
 
-/** mdiTextShort and mdiGestureTap, the icons Home Assistant puts on these sections. */
-const CONTENT_PATH = "M4,9H20V11H4V9M4,13H14V15H4V13Z";
-const ACTIONS_PATH =
-  "M10,9A1,1 0 0,1 11,8A1,1 0 0,1 12,9V13.47L13.21,13.6L18.15,15.79C18.68,16.03 19,16.56 19,17.14V21.5C18.97,22.32 18.32,22.97 17.5,23H11C10.62,23 10.26,22.85 10,22.57L5.1,18.37L5.84,17.6C6.03,17.39 6.3,17.28 6.58,17.28H6.8L10,19V9M11,5A4,4 0 0,1 15,9C15,10.5 14.2,11.77 13,12.46V11.24C13.61,10.69 14,9.89 14,9A3,3 0 0,0 11,6A3,3 0 0,0 8,9C8,9.89 8.39,10.69 9,11.24V12.46C7.8,11.77 7,10.5 7,9A4,4 0 0,1 11,5Z";
 export const stateIconSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
     type: "expandable",
     flatten: true,
-    iconPath: CONTENT_PATH,
+    icon: "mdi:text-short",
     schema: [
       { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
       {
@@ -37,7 +32,7 @@ export const stateIconSchema = (): unknown[] => [
     name: "interactions",
     type: "expandable",
     flatten: true,
-    iconPath: ACTIONS_PATH,
+    icon: "mdi:gesture-tap",
     schema: [
       { name: "tap_action", selector: { ui_action: { default_action: "more-info" } } },
       {
@@ -167,10 +162,9 @@ export class PictureStudioElementForm extends LitElement {
       <div class="header">
         <ha-icon-button
           .label=${"Back"}
-          .path=${BACK_PATH}
           @click=${() =>
             this.dispatchEvent(new CustomEvent("go-back", { bubbles: true, composed: true }))}
-        ></ha-icon-button>
+          ><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
         <span class="title">${element.type}</span>
       </div>
       <ha-form
@@ -182,10 +176,8 @@ export class PictureStudioElementForm extends LitElement {
         @value-changed=${this._valueChanged}
       ></ha-form>
       <ha-expansion-panel outlined>
-        <ha-svg-icon
-          slot="leading-icon"
-          .path=${PLACEMENT_PATH}
-        ></ha-svg-icon>
+        <!-- mdi:crop-free — keep in sync with badge-form.ts, same visual cue for positioning sections -->
+        <ha-icon slot="leading-icon" icon="mdi:crop-free"></ha-icon>
         <div slot="header" role="heading" aria-level="3">
           ${localizeOwn(hass, "size_and_position")}
         </div>
@@ -235,7 +227,7 @@ export class PictureStudioElementForm extends LitElement {
     .content ha-form {
       margin-bottom: 0;
     }
-    ha-svg-icon[slot="leading-icon"] {
+    ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
     }
   `;

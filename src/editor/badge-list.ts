@@ -7,14 +7,6 @@ import { badgeCatalog, choiceLabel } from "./badge-catalog";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { rowLabel } from "./items";
 
-const HANDLE_PATH =
-  "M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z";
-const PLUS_PATH = "M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z";
-const PENCIL_PATH =
-  "M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z";
-const TRASH_PATH =
-  "M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z";
-
 export interface AddChoice {
   value: string;
   label: string;
@@ -100,7 +92,7 @@ export class PictureStudioBadgeList extends LitElement {
             (_item, index) => index,
             (_item, index) => html`
               <div class="row">
-                <div class="handle"><ha-svg-icon .path=${HANDLE_PATH}></ha-svg-icon></div>
+                <div class="handle"><ha-icon icon="mdi:drag"></ha-icon></div>
                 <div class="label">
                   <span class="primary">${labels[index]?.primary}</span>
                   ${
@@ -111,14 +103,12 @@ export class PictureStudioBadgeList extends LitElement {
                 </div>
                 <ha-icon-button
                   .label=${localize("ui.panel.lovelace.editor.badges.edit") || "Edit badge"}
-                  .path=${PENCIL_PATH}
                   @click=${() => this._fire("item-edit", { index })}
-                ></ha-icon-button>
+                  ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
                   .label=${localize("ui.panel.lovelace.editor.badges.remove") || "Remove badge"}
-                  .path=${TRASH_PATH}
                   @click=${() => this._fire("item-removed", { index })}
-                ></ha-icon-button>
+                  ><ha-icon icon="mdi:delete"></ha-icon></ha-icon-button>
               </div>
             `,
           )}
@@ -126,7 +116,7 @@ export class PictureStudioBadgeList extends LitElement {
       </ha-sortable>
       <ha-dropdown class="add" @wa-select=${this._add}>
         <ha-button slot="trigger" appearance="filled" size="s">
-          <ha-svg-icon .path=${PLUS_PATH} slot="start"></ha-svg-icon>
+          <ha-icon icon="mdi:plus" slot="start"></ha-icon>
           ${localize("ui.common.add") || "Add"}
         </ha-button>
         ${addChoices(localize, window.customBadges).map(

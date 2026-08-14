@@ -3,7 +3,6 @@ import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant } from "../types";
 import { resolveBadgeClass } from "./badge-catalog";
-import { BACK_PATH, PLACEMENT_PATH } from "./icons";
 
 type BadgeEditorElement = HTMLElement & {
   hass?: HomeAssistant;
@@ -102,10 +101,9 @@ export class PictureStudioBadgeForm extends LitElement {
       <div class="header">
         <ha-icon-button
           .label=${"Back"}
-          .path=${BACK_PATH}
           @click=${() =>
             this.dispatchEvent(new CustomEvent("go-back", { bubbles: true, composed: true }))}
-        ></ha-icon-button>
+          ><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
         <span class="title">${this.badge.type}</span>
       </div>
       <div class="form"></div>
@@ -117,10 +115,8 @@ export class PictureStudioBadgeForm extends LitElement {
           : nothing
       }
       <ha-expansion-panel outlined>
-        <ha-svg-icon
-          slot="leading-icon"
-          .path=${PLACEMENT_PATH}
-        ></ha-svg-icon>
+        <!-- mdi:crop-free — keep in sync with element-form.ts, same visual cue for positioning sections -->
+        <ha-icon slot="leading-icon" icon="mdi:crop-free"></ha-icon>
         <div slot="header" role="heading" aria-level="3">
           ${localizeOwn(this.hass, "anchor")}
         </div>
@@ -159,7 +155,7 @@ export class PictureStudioBadgeForm extends LitElement {
     .content {
       padding: 12px;
     }
-    ha-svg-icon[slot="leading-icon"] {
+    ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
     }
   `;
