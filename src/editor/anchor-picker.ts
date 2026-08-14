@@ -184,7 +184,7 @@ export class PictureStudioAnchorPicker extends LitElement {
          unpicked cells back a plane, so the picked one is the only solid mark —
          and it stays a translucency of the switch's own grey rather than a
          hand-mixed colour that would drift from it. */
-      opacity: 0.5;
+      opacity: 0.35;
     }
   `;
 }
