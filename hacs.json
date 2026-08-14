@@ -2,5 +2,5 @@
   "name": "Picture Studio",
   "filename": "picture-studio.js",
   "render_readme": true,
-  "homeassistant": "2026.5.0"
+  "homeassistant": "2026.6.0"
 }

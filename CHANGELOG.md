@@ -14,6 +14,10 @@
 
 ### Changed
 
+- **The minimum Home Assistant version is now 2026.6.0**, up from 2026.5.0. The
+  editor's size control uses a radio group Home Assistant only ships from that
+  version; below it the control still works, laid out as a list, but the card is
+  no longer tested there.
 - **`anchor: proportional` is now `anchor: auto`.** The nine fixed anchors are
   unchanged. Configs written with `proportional` are still read and normalise to
   `auto`; nothing needs to be updated by hand.

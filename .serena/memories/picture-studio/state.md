@@ -166,7 +166,7 @@ items:
 - **`hass.formatEntityName(stateObj, name)` resolves the composed-name sentinels**
   (`___device_name___`) the `entity_name` selector stores, and returns the
   entity's default name when `name` is undefined. Present since frontend
-  20260429.3, i.e. at our 2026.5 floor.
+  20260429.3, i.e. below our floor.
 - **`hass-action`** is a DOM event the root `<home-assistant>` hands to
   `handleAction`. Nothing in the frontend fires it — it exists for third-party
   cards. **`action-handler`** is a singleton element on `document.body` with
@@ -187,6 +187,9 @@ items:
   part — so no CSS can make it horizontal. Render the group yourself, and guard:
   an undefined custom element renders **nothing**, silently.
 - **`selector: { number: { mode: "box" } }`** removes the slider.
+- **The floor is `2026.6.0`** (`hacs.json`), raised from 2026.5.0 on 2026-08-14:
+  `ha-radio-group` / `ha-radio-option`, which the size control renders, appear in
+  the frontend 2026.6.0 pins (20260527.4) and not in 2026.5.0's (20260429.3).
 - **Component availability is a browser question.** Counting the chunks a tag is
   inlined into is a hint, not proof: `ha-icon` 92, `ha-state-icon` ~20,
   `ha-expansion-panel` 21, `ha-radio-group` 19, `ha-button-toggle-group` 8.
@@ -197,7 +200,7 @@ items:
   `--ha-switch-background-color` / `--ha-switch-border-color`, checked
   `--ha-switch-checked-background-color` / `--ha-switch-checked-border-color`,
   thumb `--ha-switch-thumb-background-color`. The `--ha-color-*` layer they fall
-  back to does **not** exist at our 2026.5 floor — always close the chain on a
+  back to does **not** exist at 2026.5 — always close the chain on a
   long-lived variable (`--divider-color`, `--primary-color`,
   `--secondary-background-color`, `--text-primary-color`).
 - **An outer-tree rule beats a `:host` declaration**, which is how a component's
@@ -235,6 +238,12 @@ items:
 
 ## How we work (project rules, see AGENTS.md)
 
+- **Reuse Home Assistant's machinery rather than reimplementing behaviour** — a
+  reimplementation is what drifts the next time they change something, and not
+  drifting is the requirement. The HACS floor is not a critical decision: raise
+  `minimum_home_assistant_version` freely to reach a modern component, rather
+  than working around its absence. Guards stay anyway — a floor answers "does
+  this version have it", never "is its chunk loaded here".
 - Chat in **French**, everything else in English.
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
 - **Never `git push`** — it publishes. The user does it. Local merges are fine.

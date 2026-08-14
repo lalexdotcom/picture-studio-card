@@ -35,7 +35,7 @@ screen. The three modes are described under [Icon size](#icon-size).
 
 ### Requirements
 
-**Home Assistant 2026.5.0 or newer.** HACS enforces this and will refuse to install on an older version.
+**Home Assistant 2026.6.0 or newer.** HACS enforces this and will refuse to install on an older version.
 
 ### HACS
 

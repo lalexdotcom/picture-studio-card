@@ -448,7 +448,22 @@ it. Its signature is
 which the `(stateObj, config.name)` call satisfies with `name` typed
 `string | undefined`.
 
-**`hacs.json` stays at 2026.5.0.** The one row that could have moved it did not.
+**`hacs.json` stayed at 2026.5.0 for this row** — the one that could have moved
+it did not.
+
+**It was raised to 2026.6.0 afterwards, for a different reason.** The editor's
+size control renders `ha-radio-group` / `ha-radio-option`, and
+`src/components/radio/` does not exist in the frontend that 2026.5.0 pins
+(20260429.3); it appears in the one 2026.6.0 pins (20260527.4) and in every
+build since. The card degrades rather than breaks below that — the guard puts
+the field back into the `ha-form` schema, where Home Assistant's own selector
+lays the choices out as a list — but the floor now names the version the card is
+actually tested against.
+
+**The guard stays, and is not made redundant by the floor.** It fires whenever
+`customElements.get` returns undefined, and the version is only one of the
+reasons that can happen: a component present in a build but whose chunk the edit
+dialog never loads is the failure this project has already met twice.
 
 **The browser walk — done 2026-08-13/14, over four rounds.** The remaining rows
 were checked in the local Home Assistant, and the row this whole design exists
