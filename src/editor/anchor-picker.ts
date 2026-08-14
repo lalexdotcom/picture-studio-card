@@ -121,7 +121,14 @@ export class PictureStudioAnchorPicker extends LitElement {
          that slot, so it has to claim the same gap itself, or the two halves
          sit unevenly against their labels. */
       margin-inline-end: 10px;
-      border: 1px solid var(--divider-color);
+      /* The switch beside it draws its unchecked track with
+         var(--ha-switch-border-color, var(--ha-color-border-neutral-normal)), so
+         the frame borrows the same chain: a theme that restyles switch borders
+         moves this one with it. --divider-color closes the chain because the
+         neutral token is absent from the theme at our minimum Home Assistant
+         version, where this then keeps exactly its previous appearance. */
+      border: 1px solid
+        var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, var(--divider-color)));
       /* Concentric with the cells it frames: a corner offset by the padding
          keeps the same gap all the way round only if the outer radius grows
          by that padding too. */
