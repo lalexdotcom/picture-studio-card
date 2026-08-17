@@ -4,7 +4,7 @@
  * `1cqw` is 1% of `.root`'s width, so the size follows the card — which `vw`,
  * following the window, cannot do in a sections view.
  */
-export interface IconSize {
+export interface ElementSize {
   /** "auto" uses the card's defaults; "adaptive" clamps own min/ratio/max; "fixed" is exact pixels. */
   mode: "auto" | "adaptive" | "fixed";
   /** adaptive only — % of the card's width */
@@ -23,7 +23,7 @@ export interface IconSize {
  * chosen against the viewport. Against the card, a steeper ratio between tighter
  * bounds holds the icon's proportion across column widths.
  */
-export const DEFAULT_ICON_SIZE: IconSize = {
+export const DEFAULT_ICON_SIZE: ElementSize = {
   mode: "auto",
   ratio: 8,
   min: 24,
@@ -35,7 +35,7 @@ const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 /** Keeps what it was given: `auto` is an override at render, never an erasure. */
-export const normalizeIconSize = (raw: unknown): IconSize => {
+export const normalizeElementSize = (raw: unknown): ElementSize => {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_ICON_SIZE };
   // Use string-keyed record so we can read both the new `mode` field and the
   // legacy `auto` field without TypeScript narrowing complaints.
@@ -67,7 +67,7 @@ export const normalizeIconSize = (raw: unknown): IconSize => {
  * All five fields, not just `mode`: a size can be automatic and still carry
  * numbers the user typed, and dropping it from the stored config would lose them.
  */
-export const isDefaultIconSize = (size: IconSize): boolean =>
+export const isDefaultElementSize = (size: ElementSize): boolean =>
   size.mode === DEFAULT_ICON_SIZE.mode &&
   size.min === DEFAULT_ICON_SIZE.min &&
   size.ratio === DEFAULT_ICON_SIZE.ratio &&
@@ -83,7 +83,7 @@ export const isDefaultIconSize = (size: IconSize): boolean =>
  * and rejecting a value while the user is still typing it is worse than the
  * documented behaviour.
  */
-export const iconSizeCss = (size: IconSize): string => {
+export const elementSizeCss = (size: ElementSize): string => {
   if (size.mode === "fixed") return `${size.value}px`;
   if (size.mode === "auto") {
     const { min, ratio, max } = DEFAULT_ICON_SIZE;

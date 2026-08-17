@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
 import type { ElementConfig, StateIconConfig } from "../config";
-import { normalizeIconSize } from "../element-size";
+import { normalizeElementSize } from "../element-size";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
@@ -150,7 +150,7 @@ export const fromFormData = (
     ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
-    size: normalizeIconSize({
+    size: normalizeElementSize({
       mode: size_mode,
       // Math.round on the way back enforces each slider's step:1 contract.
       // Same deliberate trade as the chrome numbers: a hand-written sub-step

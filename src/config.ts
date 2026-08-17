@@ -1,5 +1,5 @@
 import { type IconChrome, isDefaultIconChrome, normalizeIconChrome } from "./chrome";
-import { type IconSize, isDefaultIconSize, normalizeIconSize } from "./element-size";
+import { type ElementSize, isDefaultElementSize, normalizeElementSize } from "./element-size";
 import {
   type Anchor,
   DEFAULT_POSITION,
@@ -70,7 +70,7 @@ export interface StateIconConfig {
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;
-  size: IconSize;
+  size: ElementSize;
   /** Optional: absent means no chrome, which is also what DEFAULT_CHROME says. */
   chrome?: IconChrome;
 }
@@ -134,7 +134,7 @@ const normalizeElementConfig = (raw: Record<string, unknown>, index: number): El
   return {
     ...raw,
     type: "state-icon",
-    size: normalizeIconSize(raw.size),
+    size: normalizeElementSize(raw.size),
     chrome: normalizeIconChrome(raw.chrome),
   } as StateIconConfig;
 };
@@ -222,7 +222,7 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       // that never touched either key does not grow one.
       const { size, chrome, ...rest } = item.config;
       const config: Record<string, unknown> = { ...rest };
-      if (!isDefaultIconSize(size)) config.size = size;
+      if (!isDefaultElementSize(size)) config.size = size;
       if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
       stored.config = config;
     }

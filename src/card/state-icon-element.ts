@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { chromeFill } from "../chrome";
 import type { StateIconConfig } from "../config";
-import { iconSizeCss } from "../element-size";
+import { elementSizeCss } from "../element-size";
 import type { ActionConfig, HomeAssistant } from "../types";
 
 /** Home Assistant's own one-liner: an action counts when set and not "none". */
@@ -118,7 +118,7 @@ export class PictureStudioStateIcon extends LitElement {
   protected updated(): void {
     const config = this._config;
     if (!config) return;
-    this.style.setProperty("--psc-icon-size", iconSizeCss(config.size));
+    this.style.setProperty("--psc-icon-size", elementSizeCss(config.size));
 
     // A chrome that is absent and a chrome whose theme is "none" are the same
     // thing — the record exists so numbers survive being switched off.
