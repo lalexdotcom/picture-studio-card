@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.1 — 2026-08-17
+
+### Changed
+
+- **The halo behind an icon is softer.** The dark glow that lifts an icon off
+  the picture under it was drawing a hard ring rather than a shadow on a light
+  picture — most visibly behind a chrome, where it traces the whole disc
+  instead of the strokes of a glyph. It is now wider and fainter. The thin
+  white rim above it is unchanged, since that is what carries a dark icon on a
+  dark picture. Nothing to configure, and a dashboard that sets
+  `--psc-icon-glow` itself still wins.
+
 ## 1.3.0 — 2026-08-14
 
 ### Added

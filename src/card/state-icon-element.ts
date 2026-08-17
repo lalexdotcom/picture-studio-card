@@ -213,9 +213,16 @@ export class PictureStudioStateIcon extends LitElement {
          drop-shadow rather than a border or a box-shadow: it traces the
          rendered silhouette, so it follows the glyph when there is no chrome
          and the disc when there is one. Both are exposed as variables so a
-         dashboard can dial them without forking the element. */
+         dashboard can dial them without forking the element.
+         The glow is tuned for the filled silhouette — a chrome's disc, or the
+         square an entity picture paints — because that is where these values
+         lay the most ink: at 60% the edge read as a dark ring on a light
+         picture rather than as a shadow. Opacity is what does that, so it came
+         down alone and the blur stayed where 1.2.0 put it. The white rim is
+         not part of it either: it is invisible on a light picture and is what
+         carries a dark icon on a dark one, so it keeps its 1.2.0 value. */
       filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
-        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.6)));
+        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.2)));
     }
     /* The shape and the clipping belong to the chrome: an unshaped, unclipped
        wrapper is exactly what "no chrome" means. */
