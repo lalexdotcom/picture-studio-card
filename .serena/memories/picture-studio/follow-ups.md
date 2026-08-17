@@ -20,24 +20,20 @@ Nothing to design until there is a second element kind. The open question when
 that day comes: does `chrome` move up beside `position` and `anchor` at item
 level, or does each element kind keep reading it out of its own `config`? Today
 it lives in `config` because that is where an element's own keys live, and moving
-it would be a config migration.
+it would be a config migration — a real one since 1.3.0 shipped: dashboards in
+the wild now carry `chrome` inside `config`, so any move has to keep reading the
+old place.
 
 ---
 
-## 2. What 1.3.0's browser walk did not exercise
+## 2. The `auto` fill has never been seen under a custom theme
 
-Both were reasoned about rather than observed, and both would be cheap to check
-the next time the card is open in a browser.
-
-- **The `auto` fill under a custom theme.** Only the default theme was walked, so
-  `var(--ha-card-background, …)` has never been seen resolving to anything but
-  #fff / #1c1c1c. A theme with a translucent or strongly tinted card background
-  is the interesting case: the chrome would inherit it, which is the intent, but
-  nobody has looked.
-
-**View types are not a gap and never were.** The user walks both a panel view and
-a sections view as a matter of course, and simply does not say so each time — so
-assume every browser walk in this project's history covered both.
+**Shipped unverified in 1.3.0.** Only the default theme was walked, so
+`var(--ha-card-background, …)` has never been seen resolving to anything but
+#fff / #1c1c1c. A theme with a translucent or strongly tinted card background is
+the interesting case: the chrome would inherit it, which is the intent, but
+nobody has looked. It is public now, so if it misbehaves it misbehaves for
+users — cheap to settle the next time the card is open under a theme.
 
 ---
 
@@ -52,9 +48,7 @@ Neither blocks anything; both are worth a minute if the area is reopened.
   rather than degrade. If that availability is ever proven, the swap is direct.
 - **The fallback when `hui-card-visibility-editor` is undefined** has never been
   seen, and cannot be until a frontend that does not load its chunk is tried.
-  Every frontend walked so far loads it. (This entry once also claimed the walks
-  had only covered a panel view — that was an inference of the agent's, recorded
-  as though observed, and it was wrong. See the note above.)
+  Every frontend walked so far loads it.
 
 ---
 
@@ -66,12 +60,6 @@ Neither blocks anything; both are worth a minute if the area is reopened.
   look. If it is ever revisited, the alternative already sketched is to drop the
   scale when a chrome is on and brighten the fill instead, which is what Home
   Assistant's own tiles and badges do.
-- **A 1px border on the chrome was considered and rejected on sight.** The
-  filter's white rim already draws that line and follows the real silhouette.
-  The layout is prepared for one if it is ever wanted: `box-sizing: border-box`
-  means it would be drawn inward and shift nothing, and `getBoundingClientRect`
-  is already a border box so the drag would count it with no code change. The
-  spec's "Room left for a border" section records the verdict.
 - **`storedConfig`'s `chrome && !isDefaultChrome(chrome)`** looks like a
   redundant guard and is not: `chrome` is optional on `StateIconConfig`, so the
   check is what narrows the type. Two reviewers have now flagged it; it is

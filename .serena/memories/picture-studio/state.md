@@ -9,16 +9,17 @@ mouse".
 today one kind, `state-icon`, an icon that reflects an entity's state, sizes
 itself from the **card's** width, and since 1.3.0 can stand on a **chrome**.
 
-**1.3.0 was merged into `main` on 2026-08-14** (merge commit `d67941f`,
-`--no-ff`, branch `feat/icon-chrome` deleted). Its two features are per-item
-`visibility` and the icon chrome. **Not pushed** — `main` is well ahead of
-`origin/main`, and pushing is what publishes: CI runs, then `release.yml` reads
-`version` from `package.json`, creates the `v<version>` tag and the release. HACS
-installs from that tag. **The user pushes, never the agent.**
+**1.3.0 is published** — pushed on 2026-08-17, tag `v1.3.0` on `62b4f80`, `main`
+level with `origin/main`. It was merged on 2026-08-14 (merge commit `d67941f`,
+`--no-ff`, branch `feat/icon-chrome` deleted); its two features are per-item
+`visibility` and the icon chrome. The chain that published it is unchanged: a
+push to `main` runs CI, then `release.yml` reads `version` from `package.json`
+and creates the `v<version>` tag and the release. HACS installs from that tag.
+**The user pushes, never the agent.**
 
 Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
-automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, merged and awaiting the
-user's push).
+automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published on
+2026-08-17).
 
 Suite: **329 tests**. Bundle: 132.1 kB / 32.2 kB gzip.
 
