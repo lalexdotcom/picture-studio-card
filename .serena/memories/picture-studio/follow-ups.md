@@ -1,8 +1,13 @@
 # picture-studio — follow-ups
 
-What is parked, not what is done. `picture-studio/state` describes the card as it
-stands; this file holds what has been asked for and not yet designed. An entry
-here is a starting point for a brainstorm, never a decision already taken.
+**A todo list.** What is parked, not what is done: this file holds what has been
+asked for and not yet designed, and an entry **leaves** it once it is settled. An
+entry here is a starting point for a brainstorm, never a decision already taken.
+
+Anything durable belongs in `picture-studio/state` instead — a verified fact about
+Home Assistant, a decision not to re-litigate, a habit to keep across the whole
+project. If an entry here would still be true and useful with nothing left to do,
+it is in the wrong file.
 
 Kept separate because the two age differently: the state file is rewritten as the
 card changes, this one grows and empties.
@@ -52,35 +57,11 @@ Neither blocks anything; both are worth a minute if the area is reopened.
 
 ---
 
-## 4. What else does a view type change under our feet?
+## 4. The hover grow, if a chrome ever makes it look wrong
 
-Opened by the badge outline of 1.3.1: `hui-panel-view` saves the theme's card
-tokens under `--restore-card-*` and then zeroes `--ha-card-border-radius`,
-`--ha-card-border-width` and `--ha-card-box-shadow` for **every** descendant, so
-the instruction crossed our shadow DOM and reached the third-party badges we
-host. HA's own container cards answer it with `:host([ispanel]) #root`; ours now
-does the same on `.item`, and `hui-card` hands us the switch
-(`this._element.isPanel = "panel" === this.layout`).
-
-That was one instance of a shape, not a one-off: a view type redefines something
-for everything below it, and our card relays foreign content in the middle. **Any
-future element kind or nested container should be checked against it before it
-ships.** The sweep that found this one, on the frontend in the container, is the
-one to repeat on other tokens: `grep -roh -- "--ha-card-border-width:[^;}]*"`
-over `frontend_latest/*.js` returned exactly two declarations and led straight to
-the mechanism. `ispanel`, `layout` and `--restore-card-*` are the names to follow.
-
----
-
-## 5. Small things noticed and left alone
-
-- **The hover grow with a chrome.** `transform: scale(1.04)` on the host now
-  scales a filled disc rather than a glyph. Looked at on a real dashboard and
-  kept — the user's impression that it was off-centre did not survive a second
-  look. If it is ever revisited, the alternative already sketched is to drop the
-  scale when a chrome is on and brighten the fill instead, which is what Home
-  Assistant's own tiles and badges do.
-- **`storedConfig`'s `chrome && !isDefaultChrome(chrome)`** looks like a
-  redundant guard and is not: `chrome` is optional on `StateIconConfig`, so the
-  check is what narrows the type. Two reviewers have now flagged it; it is
-  correct.
+`transform: scale(1.04)` on the host now scales a filled disc rather than a
+glyph. Looked at on a real dashboard and kept — the impression that it was
+off-centre did not survive a second look. If it is ever revisited, the
+alternative already sketched is to drop the scale when a chrome is on and
+brighten the fill instead, which is what Home Assistant's own tiles and badges
+do.

@@ -173,6 +173,9 @@ items:
   element we render whole — we cannot reorder inside it — and "after Content" is
   the only formulation that can hold for both families. Every top-level section
   is spaced 24px, the gap `ha-form` gives its own root children.
+- **`storedConfig`'s `chrome && !isDefaultChrome(chrome)` is not a redundant
+  guard.** `chrome` is optional on `StateIconConfig`, so the check is what narrows
+  the type. Two reviewers have flagged it; it is correct.
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
 
 ## Hard-won facts about Home Assistant (all verified in their source)
@@ -262,6 +265,19 @@ items:
   `…badge.entity.<name>` for `color` / `show_entity_picture`,
   `…picture-elements.element_types.<type>` for element kinds, `ui.common.auto`.
 - `applyThemesOnElement` is internal, so a card-level `theme` cannot be honoured.
+- **A view type can redefine anything for everything underneath it.**
+  `hui-panel-view` saves the theme's card tokens under `--restore-card-*`, then
+  zeroes `--ha-card-border-radius`, `--ha-card-border-width` and
+  `--ha-card-box-shadow` on `*`, so a card that fills the view carries no border.
+  Custom properties inherit, so that instruction crosses our shadow DOM and lands
+  on the third-party content we host: a badge reads those very tokens, and lost in
+  a panel view the outline it wears in a sections one. HA's own container cards
+  restore the three on the box holding their children (`:host([ispanel]) #root`);
+  ours does it on `.item`, and `hui-card` hands us the switch —
+  `this._element.isPanel = "panel" === this.layout`, reflected as `ispanel`.
+  Conditional on purpose: `--restore-card-*` exists **only** under a panel view,
+  so an unconditional restore would send a badge back to its own `1px` and
+  overrule a theme that asked for none.
 - **Sections grid**: 12 columns, `--row-height: 56px`, `--row-gap: 8px`.
 
 ## The recurring traps
@@ -292,6 +308,13 @@ items:
   HACS floor is not a critical decision: raise it freely to reach a modern
   component. Guards stay anyway — a floor answers "does this version have it",
   never "is its chunk loaded here".
+- **Ask what the view type changes under us.** Panel and not-panel are not the
+  same environment, and the difference reaches the content we host. Before
+  shipping a new element kind or a nested container, walk it in both — and when
+  something looks different in one, sweep the frontend for what a view redefines
+  rather than reasoning about it. The panel-view card tokens above are the worked
+  example, `grep -roh -- "--ha-card-border-width:[^;}]*"` over `frontend_latest`
+  the sweep that found them.
 - Chat in **French**, everything else in English.
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
 - **Never `git push`** — it publishes. The user does it. Local merges are fine.
