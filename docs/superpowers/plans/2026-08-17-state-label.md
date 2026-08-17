@@ -30,6 +30,7 @@
 | file | responsibility |
 |---|---|
 | `src/halo.ts` | the halo recipe: one pure function producing the `drop-shadow` pair from a token name |
+| `src/card/item-styles.ts` | the CSS both element kinds share: the chrome's fill (its theme and its opacity) and the halo, each written once |
 | `src/card/state-label-element.ts` | the `state-label` custom element: chrome wrapper, name + `state-display`, actions |
 | `src/editor/state-icon-form.ts` | `state-icon`'s schemas and its `toFormData` / `fromFormData` (moved out of `element-form.ts`) |
 | `src/editor/state-label-form.ts` | `state-label`'s schemas and its `toFormData` / `fromFormData` |
@@ -370,15 +371,17 @@ git commit -m "feat(size): the same three modes, defaults that belong to the kin
 ### Task 3: the halo becomes opt-in
 
 **Files:**
-- Create: `src/halo.ts`, `src/tests/halo.test.ts`
-- Modify: `src/config.ts`, `src/card/state-icon-element.ts`
+- Create: `src/halo.ts`, `src/card/item-styles.ts`, `src/tests/halo.test.ts`
+- Modify: `src/config.ts`, `src/card/state-icon-element.ts`, `src/tests/card/harness.ts`
 - Test: `src/tests/config.test.ts`, `src/tests/card/state-icon-element.test.ts`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
   - `haloFilter(sizeVar: string): string` from `src/halo.ts`
+  - from `src/card/item-styles.ts`: `chromeFillStyles: CSSResult` (the surface — its theme fill and its opacity) and `haloStyles(sizeVar: string): CSSResult`
   - `StateIconConfig.halo?: boolean`, normalised to a strict boolean by `normalizeElementConfig`, written by `storedConfig` only when `true`
+  - `cssRules` in the test harness accepting an array of `CSSResult` as well as a single one
 
 - [ ] **Step 1: Write the failing test for the recipe**
 
@@ -541,38 +544,108 @@ In `storedConfig`, inside the `item.type === "element"` branch, replace the dest
       stored.config = config;
 ```
 
-- [ ] **Step 8: Move the halo behind the attribute in the icon**
+- [ ] **Step 8: Create the shared CSS module**
+
+The surface's fill and its opacity, and the halo, must be written **once** and
+consumed by both element kinds — an icon's chrome and a label's are different
+records but the same surface, and two copies of these rules would drift.
+
+Create `src/card/item-styles.ts`:
+
+```ts
+import { css, type CSSResult, unsafeCSS } from "lit";
+import { haloFilter } from "../halo";
+
+/**
+ * The chrome's surface: what it is made of, and how much of the picture shows
+ * through it. Shared by every element kind, because the theme and the opacity
+ * mean the same thing whatever the item is — only the shape around them (a
+ * disc, a pill, a padding) belongs to the kind.
+ *
+ * The fill sits on a pseudo-element so its opacity is its own: fading the
+ * surface must not fade what stands on it. `border-radius: inherit` is what
+ * lets each kind decide the shape without this rule knowing it.
+ */
+export const chromeFillStyles: CSSResult = css`
+  :host([chrome]) .chrome::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--psc-chrome-fill);
+    opacity: var(--psc-chrome-opacity, 1);
+  }
+`;
+
+/**
+ * The halo, bound to the kind's own size token — an icon scales it on its box,
+ * a label on its body, and the recipe itself lives in one place either way.
+ *
+ * Opt-in since 1.4.0: unconditional until then. The shape and the clipping are
+ * NOT here — they belong to the chrome, and conflating the two is what once
+ * clipped every chromeless icon into a circle.
+ */
+export const haloStyles = (sizeVar: string): CSSResult => css`
+  :host([halo]) .chrome {
+    filter: ${unsafeCSS(haloFilter(sizeVar))};
+  }
+`;
+```
+
+- [ ] **Step 9: Move the halo behind the attribute in the icon**
 
 In `src/card/state-icon-element.ts`:
 
-1. Import the recipe: `import { haloFilter } from "../halo";`
-2. In `static styles`, delete the `filter: drop-shadow(…) drop-shadow(…)` declaration and its long comment from the `.chrome` rule (keep everything else in that rule untouched), and add a new rule immediately after it:
+1. Import the shared blocks: `import { chromeFillStyles, haloStyles } from "./item-styles";`
+2. In `static styles`, delete the `filter: drop-shadow(…) drop-shadow(…)` declaration and its long comment from the `.chrome` rule (keep everything else in that rule untouched), and delete the whole `:host([chrome]) .chrome::before` rule — both now live in the shared module. **Move the explanatory comments with them rather than dropping them**: the paragraph about literal white and black, and about the blur being a share of the size, belongs in `src/halo.ts` where the recipe is; the paragraph about the pseudo-element owning its opacity belongs beside `chromeFillStyles`.
+3. Turn `static styles` into an array so the shared blocks come first and the kind's own rules can still override:
 
 ```ts
-    /* The halo is opt-in since 1.4.0: unconditional until then, it is what an
-       icon needs to stay readable on an unknown photograph, and what it does
-       not need on a plain background. The shape and the clipping below stay a
-       matter for the chrome — conflating the two is what once clipped every
-       chromeless icon into a circle. */
-    :host([halo]) .chrome {
-      filter: ${unsafeCSS(haloFilter("--psc-icon-size"))};
-    }
+  static styles = [
+    chromeFillStyles,
+    haloStyles("--psc-icon-size"),
+    css`
+      /* …everything the icon keeps: :host, clickable, hover, .chrome's box,
+         :host([chrome]) .chrome's radius and overflow, state-badge's rules… */
+    `,
+  ];
 ```
 
-`unsafeCSS` comes from the same `lit` import the file already uses; add it to that import list.
-
-3. In `updated()`, after the `chrome` block:
+4. In `updated()`, after the `chrome` block:
 
 ```ts
     this.toggleAttribute("halo", config.halo === true);
 ```
 
-- [ ] **Step 9: Run everything**
+- [ ] **Step 10: Widen the test harness to read an array of styles**
+
+`cssRules` in `src/tests/card/harness.ts` reads `.cssText` off a single
+`CSSResult`. Given an array it would find `undefined` and return an empty map —
+so every CSS assertion would pass by finding nothing, which is worse than
+failing. Accept both shapes:
+
+```ts
+export const cssRules = (styles: unknown): Map<string, string> => {
+  const sheets = Array.isArray(styles) ? styles : [styles];
+  const text = sheets
+    .map((sheet) => (sheet as { cssText?: string }).cssText ?? "")
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  // …the rest of the function unchanged…
+};
+```
+
+Its existing callers pass `PictureStudioStateIcon.styles` and
+`PictureStudioCard.styles`; both keep working.
+
+- [ ] **Step 11: Run everything**
 
 Run: `pnpm test && pnpm lint && pnpm typecheck`
-Expected: PASS.
+Expected: PASS. The CSS assertions in `src/tests/card/state-icon-element.test.ts`
+must still find their rules — if `cssRules` returns an empty map, Step 10 is
+wrong and the tests are passing on nothing.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add -A
