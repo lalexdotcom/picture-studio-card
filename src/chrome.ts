@@ -9,7 +9,7 @@
  */
 export type ChromeTheme = "none" | "auto" | "light" | "dark";
 
-export interface Chrome {
+export interface IconChrome {
   /** "none" draws nothing at all; the other three name what the fill is made of. */
   theme: ChromeTheme;
   /** border-radius as a percentage of the box — 50 is a disc, 0 a square. */
@@ -26,7 +26,7 @@ export interface Chrome {
  * the ones a chrome would want the day it is switched on: a disc, opaque, and
  * Home Assistant's own 24/40 glyph-to-box ratio.
  */
-export const DEFAULT_CHROME: Chrome = {
+export const DEFAULT_ICON_CHROME: IconChrome = {
   theme: "none",
   radius: 50,
   opacity: 1,
@@ -49,15 +49,15 @@ const finiteOrDefault = (value: unknown, fallback: number): number =>
 // because under a fixed anchor they place an item deliberately over the edge.
 // Clamping here would be the one place the card second-guesses a hand-written
 // config.
-export const normalizeChrome = (raw: unknown): Chrome => {
-  if (typeof raw !== "object" || raw === null) return { ...DEFAULT_CHROME };
+export const normalizeIconChrome = (raw: unknown): IconChrome => {
+  if (typeof raw !== "object" || raw === null) return { ...DEFAULT_ICON_CHROME };
   const chrome = raw as Partial<Record<string, unknown>>;
   const theme = chrome.theme as ChromeTheme;
   return {
-    theme: THEMES.includes(theme) ? theme : DEFAULT_CHROME.theme,
-    radius: finiteOrDefault(chrome.radius, DEFAULT_CHROME.radius),
-    opacity: finiteOrDefault(chrome.opacity, DEFAULT_CHROME.opacity),
-    content_ratio: finiteOrDefault(chrome.content_ratio, DEFAULT_CHROME.content_ratio),
+    theme: THEMES.includes(theme) ? theme : DEFAULT_ICON_CHROME.theme,
+    radius: finiteOrDefault(chrome.radius, DEFAULT_ICON_CHROME.radius),
+    opacity: finiteOrDefault(chrome.opacity, DEFAULT_ICON_CHROME.opacity),
+    content_ratio: finiteOrDefault(chrome.content_ratio, DEFAULT_ICON_CHROME.content_ratio),
   };
 };
 
@@ -66,11 +66,11 @@ export const normalizeChrome = (raw: unknown): Chrome => {
  * editor commit: a partial comparison would either write a `chrome:` block into
  * everyone's YAML on the first drag, or drop numbers someone had tuned.
  */
-export const isDefaultChrome = (chrome: Chrome): boolean =>
-  chrome.theme === DEFAULT_CHROME.theme &&
-  chrome.radius === DEFAULT_CHROME.radius &&
-  chrome.opacity === DEFAULT_CHROME.opacity &&
-  chrome.content_ratio === DEFAULT_CHROME.content_ratio;
+export const isDefaultIconChrome = (chrome: IconChrome): boolean =>
+  chrome.theme === DEFAULT_ICON_CHROME.theme &&
+  chrome.radius === DEFAULT_ICON_CHROME.radius &&
+  chrome.opacity === DEFAULT_ICON_CHROME.opacity &&
+  chrome.content_ratio === DEFAULT_ICON_CHROME.content_ratio;
 
 /**
  * Every mode is a chain of Home Assistant's tokens; the literal at the end is a

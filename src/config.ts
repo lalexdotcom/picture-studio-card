@@ -1,4 +1,4 @@
-import { type Chrome, isDefaultChrome, normalizeChrome } from "./chrome";
+import { type IconChrome, isDefaultIconChrome, normalizeIconChrome } from "./chrome";
 import { type IconSize, isDefaultIconSize, normalizeIconSize } from "./element-size";
 import {
   type Anchor,
@@ -72,7 +72,7 @@ export interface StateIconConfig {
   double_tap_action?: ActionConfig;
   size: IconSize;
   /** Optional: absent means no chrome, which is also what DEFAULT_CHROME says. */
-  chrome?: Chrome;
+  chrome?: IconChrome;
 }
 
 /**
@@ -135,7 +135,7 @@ const normalizeElementConfig = (raw: Record<string, unknown>, index: number): El
     ...raw,
     type: "state-icon",
     size: normalizeIconSize(raw.size),
-    chrome: normalizeChrome(raw.chrome),
+    chrome: normalizeIconChrome(raw.chrome),
   } as StateIconConfig;
 };
 
@@ -223,7 +223,7 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       const { size, chrome, ...rest } = item.config;
       const config: Record<string, unknown> = { ...rest };
       if (!isDefaultIconSize(size)) config.size = size;
-      if (chrome && !isDefaultChrome(chrome)) config.chrome = chrome;
+      if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
       stored.config = config;
     }
     return stored;

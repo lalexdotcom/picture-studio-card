@@ -1,5 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
-import { DEFAULT_CHROME, normalizeChrome } from "../chrome";
+import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
 import type { ElementConfig, StateIconConfig } from "../config";
 import { normalizeIconSize } from "../element-size";
 import type { Anchor } from "../position";
@@ -62,7 +62,7 @@ export const stateIconSchema = (): unknown[] => [
 
 export const toFormData = (config: StateIconConfig): Record<string, unknown> => {
   const { size, chrome, ...rest } = config;
-  const c = chrome ?? DEFAULT_CHROME;
+  const c = chrome ?? DEFAULT_ICON_CHROME;
   return {
     ...rest,
     size_mode: size.mode,
@@ -123,7 +123,7 @@ export const fromFormData = (
   const chromeOut =
     chrome_enabled || config.chrome !== undefined
       ? {
-          chrome: normalizeChrome({
+          chrome: normalizeIconChrome({
             // The checkbox is the switch; the theme control only ever names a surface
             // that draws. Unchecking stores "none" and every number survives it.
             theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
