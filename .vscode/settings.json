@@ -21,7 +21,4 @@
 		"**/dist": true,
 		"**/node_modules": true
 	},
-	"claudeCode.allowDangerouslySkipPermissions": true,
-	"claudeCode.initialPermissionMode": "bypassPermissions",
-	"github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions": true
 }
