@@ -52,7 +52,27 @@ Neither blocks anything; both are worth a minute if the area is reopened.
 
 ---
 
-## 4. Small things noticed and left alone
+## 4. What else does a view type change under our feet?
+
+Opened by the badge outline of 1.3.1: `hui-panel-view` saves the theme's card
+tokens under `--restore-card-*` and then zeroes `--ha-card-border-radius`,
+`--ha-card-border-width` and `--ha-card-box-shadow` for **every** descendant, so
+the instruction crossed our shadow DOM and reached the third-party badges we
+host. HA's own container cards answer it with `:host([ispanel]) #root`; ours now
+does the same on `.item`, and `hui-card` hands us the switch
+(`this._element.isPanel = "panel" === this.layout`).
+
+That was one instance of a shape, not a one-off: a view type redefines something
+for everything below it, and our card relays foreign content in the middle. **Any
+future element kind or nested container should be checked against it before it
+ships.** The sweep that found this one, on the frontend in the container, is the
+one to repeat on other tokens: `grep -roh -- "--ha-card-border-width:[^;}]*"`
+over `frontend_latest/*.js` returned exactly two declarations and led straight to
+the mechanism. `ispanel`, `layout` and `--restore-card-*` are the names to follow.
+
+---
+
+## 5. Small things noticed and left alone
 
 - **The hover grow with a chrome.** `transform: scale(1.04)` on the host now
   scales a filled disc rather than a glyph. Looked at on a real dashboard and
