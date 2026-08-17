@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "@rstest/core";
 import { hasAction, PictureStudioStateIcon } from "../../card/state-icon-element";
 import { ICON_TAG, type StateIconConfig } from "../../config";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
+import { cssRules } from "./harness";
 
 if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudioStateIcon);
 
@@ -242,6 +243,22 @@ describe("chrome", () => {
     await el.updateComplete;
     expect(el.hasAttribute("chrome")).toBe(false);
     expect(el.style.getPropertyValue("--psc-chrome-fill")).toBe("");
+  });
+});
+
+describe("the halo", () => {
+  it("carries its two literal values, each behind a variable a dashboard can set", () => {
+    expect(cssRules(PictureStudioStateIcon.styles).get(".chrome")).toContain(
+      "filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4))) " +
+        "drop-shadow(var(--psc-icon-glow, 0 0 calc(var(--psc-icon-size) * 0.06) rgba(0, 0, 0, 0.2)));",
+    );
+  });
+
+  it("is unconditional, unlike the shape and the clipping it sits with", () => {
+    const chromeOnly = cssRules(PictureStudioStateIcon.styles).get(":host([chrome]) .chrome");
+    expect(chromeOnly).toContain("border-radius");
+    expect(chromeOnly).toContain("overflow: hidden");
+    expect(chromeOnly).not.toContain("filter");
   });
 });
 

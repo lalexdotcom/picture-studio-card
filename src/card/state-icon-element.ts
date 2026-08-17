@@ -217,12 +217,18 @@ export class PictureStudioStateIcon extends LitElement {
          The glow is tuned for the filled silhouette — a chrome's disc, or the
          square an entity picture paints — because that is where these values
          lay the most ink: at 60% the edge read as a dark ring on a light
-         picture rather than as a shadow. Opacity is what does that, so it came
-         down alone and the blur stayed where 1.2.0 put it. The white rim is
-         not part of it either: it is invisible on a light picture and is what
-         carries a dark icon on a dark one, so it keeps its 1.2.0 value. */
+         picture rather than as a shadow, so the opacity came down to 20%.
+         The blur is a share of the icon's own size rather than a length: the
+         fixed 3px it replaces was 12.5% of a 24px icon and 7.5% of a 40px one,
+         which is why a small icon wore the halo as a band. 6% comes to 1.4px at
+         24px, 2.4px at 40px and 2.9px at 48px, and calc() resolves
+         --psc-icon-size whatever it is, so a clamp()ed size carries the halo
+         with it as the card's column changes width.
+         The white rim is part of none of this: a hairline stays a hairline at
+         every size, and it is what carries a dark icon on a dark picture, so it
+         keeps its 1.2.0 value. */
       filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
-        drop-shadow(var(--psc-icon-glow, 0 0 3px rgba(0, 0, 0, 0.2)));
+        drop-shadow(var(--psc-icon-glow, 0 0 calc(var(--psc-icon-size) * 0.06) rgba(0, 0, 0, 0.2)));
     }
     /* The shape and the clipping belong to the chrome: an unshaped, unclipped
        wrapper is exactly what "no chrome" means. */

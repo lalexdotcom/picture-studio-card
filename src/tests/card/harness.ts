@@ -79,6 +79,26 @@ export const badges = (card: PictureStudioCard): FakeChild[] =>
 export const wrappers = (card: PictureStudioCard): HTMLElement[] =>
   Array.from(root(card).querySelectorAll(".item")) as HTMLElement[];
 
+/**
+ * The rules of a component's `static styles`, addressable by selector. This is
+ * the only CSS the suite reads, and it proves nothing about appearance —
+ * happy-dom does no layout. What it guards is that a value, or the block a
+ * value sits in, changes deliberately: 1.3.0 shipped a shape rule that had
+ * drifted out of :host([chrome]) and clipped every chromeless icon into a
+ * circle, and no amount of reading caught it. Our rules are flat, so splitting
+ * on braces is enough to address one by its selector.
+ */
+export const cssRules = (styles: unknown): Map<string, string> => {
+  const text = (styles as { cssText: string }).cssText.replace(/\/\*[\s\S]*?\*\//g, "");
+  const bySelector = new Map<string, string>();
+  for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = (match[1] ?? "").trim().replace(/\s+/g, " ");
+    const body = (match[2] ?? "").replace(/\s+/g, " ").trim();
+    bySelector.set(selector, body);
+  }
+  return bySelector;
+};
+
 export const CONFIG_3 = {
   type: "custom:picture-studio",
   image: "/local/plan.png",
