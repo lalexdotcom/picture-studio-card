@@ -52,10 +52,15 @@ export class PictureStudioCard extends LitElement {
     editing: { state: true },
     // The badge whose form is open in the editor, mirrored here to mark it.
     selected: { state: true },
+    // hui-card assigns this from the view's layout: isPanel = layout === "panel".
+    // Only CSS reads it, hence reflected — and under the name Home Assistant's
+    // own container cards already use, ispanel. See the :host([ispanel]) rule.
+    isPanel: { type: Boolean, reflect: true },
     _config: { state: true },
   };
 
   declare preview: boolean;
+  declare isPanel: boolean;
   declare editing: boolean;
   declare selected: number | undefined;
   declare _config?: PictureStudioConfig;
@@ -615,6 +620,24 @@ export class PictureStudioCard extends LitElement {
       position: absolute;
       width: max-content;
       pointer-events: auto;
+    }
+    /* A panel view saves the theme's card tokens under --restore-card-* and then
+       zeroes them for every descendant, so a card that fills the view carries no
+       border, radius or shadow. Custom properties inherit, so that zeroing
+       crosses into our shadow DOM and reaches a badge, which reads
+       --ha-card-border-width and --ha-card-box-shadow to draw its own outline —
+       a badge in our card lost the outline the same badge wears in a sections
+       view. Home Assistant's own container cards answer this with exactly these
+       three declarations, on the box that holds their children; ours is .item.
+       The host keeps the zeroed values, so the card still touches the edges.
+       Conditional because --restore-card-* exists only under a panel view:
+       applied everywhere, the declarations would be invalid elsewhere and a
+       badge would fall back to its own 1px, overruling a theme that asked for
+       none. */
+    :host([ispanel]) .item {
+      --ha-card-border-radius: var(--restore-card-border-radius);
+      --ha-card-border-width: var(--restore-card-border-width);
+      --ha-card-box-shadow: var(--restore-card-box-shadow);
     }
     /* While editing, the wrapper keeps the pointer and the badge never sees a
        click, so tapping a badge cannot toggle a light. */

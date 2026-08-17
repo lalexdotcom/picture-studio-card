@@ -4,13 +4,25 @@
 
 ### Changed
 
-- **The halo behind an icon is softer.** The dark glow that lifts an icon off
-  the picture under it was drawing a hard ring rather than a shadow on a light
-  picture — most visibly behind a chrome, where it traces the whole disc
-  instead of the strokes of a glyph. It is now wider and fainter. The thin
-  white rim above it is unchanged, since that is what carries a dark icon on a
-  dark picture. Nothing to configure, and a dashboard that sets
-  `--psc-icon-glow` itself still wins.
+- **The halo behind an icon is softer, and its width follows the icon's size.**
+  The dark glow that lifts an icon off the picture under it was drawing a hard
+  ring rather than a shadow on a light picture — most visibly behind a chrome,
+  where it traces the whole disc instead of the strokes of a glyph, and on a
+  small icon, where a fixed width is a large share of the icon. It is now
+  fainter, and its width is a share of the icon's size, so a small icon wears a
+  small halo and a large one keeps the halo it had. The thin white rim above it
+  is unchanged, since that is what carries a dark icon on a dark picture.
+  Nothing to configure, and a dashboard that sets `--psc-icon-glow` itself still
+  wins.
+
+### Fixed
+
+- **A badge in the card lost its outline in a panel view.** The same badge kept
+  it in a sections view, and keeps it in the view's own badge row. A panel view
+  strips the border, the rounding and the shadow of the card that fills it, and
+  that instruction was reaching the badges the card holds. They now look the
+  same wherever the card is placed, and the card itself still fills a panel view
+  edge to edge.
 
 ## 1.3.0 — 2026-08-14
 

@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
-import type { PictureStudioCard } from "../../card/picture-studio-card";
+import { PictureStudioCard } from "../../card/picture-studio-card";
 import { CARD_TAG, CARD_TYPE, ICON_TAG, PROBE_TYPE } from "../../config";
 import type { HomeAssistant } from "../../types";
 import {
   background,
   badges,
   CONFIG_3,
+  cssRules,
   FAKE_TAG,
   flush,
   installHelpers,
@@ -368,5 +369,28 @@ describe("the condition marker", () => {
     await flush();
     expect(wrappers(card)[0]?.classList.contains("conditional")).toBe(false);
     expect(wrappers(card)[0]?.classList.contains("marker-top-left")).toBe(false);
+  });
+});
+
+describe("a panel view's card tokens", () => {
+  it("reflects isPanel, the signal hui-card assigns from the view's layout", async () => {
+    const card = await mountCard(CONFIG_3);
+    expect(card.hasAttribute("ispanel")).toBe(false);
+
+    card.isPanel = true;
+    await card.updateComplete;
+
+    expect(card.hasAttribute("ispanel")).toBe(true);
+  });
+
+  it("restores the three tokens the panel view zeroes, on the items", () => {
+    const items = cssRules(PictureStudioCard.styles).get(":host([ispanel]) .item");
+    expect(items).toContain("--ha-card-border-radius: var(--restore-card-border-radius);");
+    expect(items).toContain("--ha-card-border-width: var(--restore-card-border-width);");
+    expect(items).toContain("--ha-card-box-shadow: var(--restore-card-box-shadow);");
+  });
+
+  it("leaves the host itself zeroed, so the card still touches the view's edges", () => {
+    expect(cssRules(PictureStudioCard.styles).get(":host([ispanel])")).toBeUndefined();
   });
 });
