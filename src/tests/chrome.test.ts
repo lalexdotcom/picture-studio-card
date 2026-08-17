@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@rstest/core";
 import {
-  type IconChrome,
   chromeFill,
   DEFAULT_ICON_CHROME,
   DEFAULT_LABEL_CHROME,
+  type IconChrome,
   isDefaultIconChrome,
   isDefaultLabelChrome,
   normalizeIconChrome,
@@ -39,7 +39,9 @@ describe("normalizeIconChrome", () => {
   });
 
   it("keeps the numbers when the theme is none — a chrome switched off is not erased", () => {
-    expect(normalizeIconChrome({ theme: "none", radius: 8, opacity: 0.5, content_ratio: 1 })).toEqual({
+    expect(
+      normalizeIconChrome({ theme: "none", radius: 8, opacity: 0.5, content_ratio: 1 }),
+    ).toEqual({
       theme: "none",
       radius: 8,
       opacity: 0.5,
@@ -61,7 +63,9 @@ describe("normalizeIconChrome", () => {
   });
 
   it("falls back on values that are not finite numbers", () => {
-    expect(normalizeIconChrome({ radius: "12%", opacity: null, content_ratio: Number.NaN })).toEqual({
+    expect(
+      normalizeIconChrome({ radius: "12%", opacity: null, content_ratio: Number.NaN }),
+    ).toEqual({
       theme: "none",
       radius: 50,
       opacity: 1,
