@@ -21,7 +21,32 @@ Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
 automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published on
 2026-08-17).
 
-Suite: **329 tests**. Bundle: 132.1 kB / 32.2 kB gzip.
+Suite: **347 tests** on `feat/state-label` (329 was 1.3.0's count and was already stale at
+334 when 1.4.0 started). Bundle: 132.1 kB / 32.2 kB gzip.
+
+**`pnpm lint` is not silent on a clean tree**: 6 warnings — `noNonNullAssertion` and
+`useOptionalChain` in `src/tests/config.test.ts` and `src/tests/card/picture-studio-card.test.ts`
+— predate 1.4.0 and are nobody's task. The bar is **zero errors**; an implementer that reports
+"the lint errors are pre-existing" is to be disbelieved and measured
+(`git checkout <base> -- <file> && pnpm lint`), which is how two rounds were lost in 1.4.0.
+
+## Work in progress — 1.4.0, branch `feat/state-label`
+
+**Paused 2026-08-17 at the user's request, HEAD `fb71a6b`, tree clean.** Adding a second
+element kind, `state-label` (an entity's text on the picture), and turning the icon's halo into
+an opt-in. Spec `docs/superpowers/specs/2026-08-17-state-label-design.md`, plan
+`docs/superpowers/plans/2026-08-17-state-label.md`, ten tasks run through the
+subagent-driven-development skill. **The ledger that survives a lost session is
+`.superpowers/sdd/2026-08-17-state-label/progress.md`** — it holds every ruling and the exact
+resume point. Tasks 1 and 2 are complete and reviewed clean; task 3 is next.
+
+Renames already landed, and they are the naming convention from here on — the icon's things say
+"icon", the label's say "label": `Chrome` → `IconChrome` (with `DEFAULT_ICON_CHROME`,
+`normalizeIconChrome`, `isDefaultIconChrome`), beside a new `LabelChrome` family; `IconSize` →
+`ElementSize`, `normalizeIconSize`/`isDefaultIconSize`/`iconSizeCss` → `normalizeElementSize`/
+`isDefaultElementSize`/`elementSizeCss`, each now taking its defaults as a **parameter** so
+`DEFAULT_ICON_SIZE` and `DEFAULT_LABEL_SIZE` can differ. `ChromeTheme`, `THEMES`, `chromeFill`
+and `finiteOrDefault` stay shared and unrenamed.
 
 ## Where things are
 
@@ -167,8 +192,23 @@ items:
 - **No `z-index` in the rendered stacking** — DOM order = list order. One
   exception, reserved to the editor: the selected or dragged item is raised while
   `editing`.
+- **The theme, the opacity and the halo come from one CSS module.** An icon's
+  chrome and a label's are different records, but the surface is the same idea:
+  what it is made of, and how much of the picture shows through. Only the shape
+  around it belongs to the kind — a disc against a pill, a `content_ratio`
+  against a `padding`. So `src/card/item-styles.ts` holds the fill and the halo,
+  each written once, and each element's `static styles` is an array that puts the
+  shared blocks first. The halo takes the kind's own size token as an argument,
+  which is what lets an icon scale it on its box and a label on its body.
+  Consequence for the tests: `cssRules` in the harness must accept an array of
+  `CSSResult`, not only a single one — handed an array it would read `undefined`
+  and return an empty map, so every CSS assertion would pass by finding nothing.
+  That is worse than a failure, and it is the same blind spot that let 1.3.0 ship
+  a rule which clipped every chromeless icon into a circle.
 - **Editor section order, every item family: Interactions straight after
-  Content, Visibility last.** For an element: Entity, Content, Interactions,
+  Content, Visibility last.** *(1.4.0 changes the element order to Entity,
+  Content, Interactions, **Size and position**, **Appearance**, Visibility —
+  Chrome is renamed and moves after Size and position.)* For an element: Entity, Content, Interactions,
   Chrome, Size and position, Visibility. A badge's editor is a third-party
   element we render whole — we cannot reorder inside it — and "after Content" is
   the only formulation that can hold for both families. Every top-level section
