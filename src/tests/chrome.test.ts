@@ -10,7 +10,7 @@ import {
   normalizeLabelChrome,
 } from "../chrome";
 
-describe("DEFAULT_CHROME", () => {
+describe("DEFAULT_ICON_CHROME", () => {
   // The one test allowed to name the constant: it is what it guards.
   it("is a disc, fully opaque, drawing nothing, with Home Assistant's 24/40 ratio", () => {
     expect(DEFAULT_ICON_CHROME).toEqual({
@@ -22,7 +22,7 @@ describe("DEFAULT_CHROME", () => {
   });
 });
 
-describe("normalizeChrome", () => {
+describe("normalizeIconChrome", () => {
   it("defaults a missing chrome to the default record", () => {
     expect(normalizeIconChrome(undefined)).toEqual({
       theme: "none",
@@ -137,7 +137,7 @@ describe("isDefaultLabelChrome", () => {
   });
 });
 
-describe("isDefaultChrome", () => {
+describe("isDefaultIconChrome", () => {
   const base: IconChrome = { theme: "none", radius: 50, opacity: 1, content_ratio: 0.6 };
 
   it("is true only for the untouched record", () => {
