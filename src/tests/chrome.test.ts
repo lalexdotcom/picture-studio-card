@@ -3,8 +3,11 @@ import {
   type IconChrome,
   chromeFill,
   DEFAULT_ICON_CHROME,
+  DEFAULT_LABEL_CHROME,
   isDefaultIconChrome,
+  isDefaultLabelChrome,
   normalizeIconChrome,
+  normalizeLabelChrome,
 } from "../chrome";
 
 describe("DEFAULT_CHROME", () => {
@@ -78,6 +81,59 @@ describe("normalizeChrome", () => {
   it("survives a non-object", () => {
     expect(normalizeIconChrome("dark").theme).toBe("none");
     expect(normalizeIconChrome(null).theme).toBe("none");
+  });
+});
+
+describe("DEFAULT_LABEL_CHROME", () => {
+  // The one test allowed to name the constant: it is what it guards.
+  it("draws nothing, square-cornered, opaque, with a 6px gutter", () => {
+    expect(DEFAULT_LABEL_CHROME).toEqual({
+      theme: "none",
+      radius: 0,
+      pill: false,
+      opacity: 1,
+      padding: 6,
+    });
+  });
+});
+
+describe("normalizeLabelChrome", () => {
+  it("returns the defaults for anything that is not an object", () => {
+    expect(normalizeLabelChrome(undefined)).toEqual(DEFAULT_LABEL_CHROME);
+    expect(normalizeLabelChrome("pill")).toEqual(DEFAULT_LABEL_CHROME);
+    expect(normalizeLabelChrome(null)).toEqual(DEFAULT_LABEL_CHROME);
+  });
+
+  it("keeps any finite number exactly as written — the model never clamps", () => {
+    const chrome = normalizeLabelChrome({ radius: 12.5, padding: 40, opacity: 1.4 });
+    expect(chrome.radius).toBe(12.5);
+    expect(chrome.padding).toBe(40);
+    expect(chrome.opacity).toBe(1.4);
+  });
+
+  it("falls back to the default for a non-finite or missing number", () => {
+    const chrome = normalizeLabelChrome({ radius: "8", padding: Number.NaN });
+    expect(chrome.radius).toBe(0);
+    expect(chrome.padding).toBe(6);
+  });
+
+  it("accepts the four themes and rejects anything else", () => {
+    expect(normalizeLabelChrome({ theme: "dark" }).theme).toBe("dark");
+    expect(normalizeLabelChrome({ theme: "glass" }).theme).toBe("none");
+  });
+
+  it("reads `pill` as a strict boolean and drops unknown keys", () => {
+    expect(normalizeLabelChrome({ pill: true }).pill).toBe(true);
+    expect(normalizeLabelChrome({ pill: "yes" }).pill).toBe(false);
+    expect(normalizeLabelChrome({ blur: 3 })).toEqual(DEFAULT_LABEL_CHROME);
+  });
+});
+
+describe("isDefaultLabelChrome", () => {
+  it("is true only when every field is the default", () => {
+    expect(isDefaultLabelChrome(DEFAULT_LABEL_CHROME)).toBe(true);
+    expect(isDefaultLabelChrome({ ...DEFAULT_LABEL_CHROME, pill: true })).toBe(false);
+    expect(isDefaultLabelChrome({ ...DEFAULT_LABEL_CHROME, padding: 7 })).toBe(false);
   });
 });
 

@@ -73,6 +73,54 @@ export const isDefaultIconChrome = (chrome: IconChrome): boolean =>
   chrome.content_ratio === DEFAULT_ICON_CHROME.content_ratio;
 
 /**
+ * A label's surface. It diverges from the icon's on purpose: `radius` is a
+ * length here, because a percentage of a box whose width belongs to the text
+ * gives a squashed ellipse rather than a rounded end; and there is no
+ * content_ratio, because shrinking a label's content means shrinking the very
+ * body size that `size` already sets.
+ */
+export interface LabelChrome {
+  /** "none" draws nothing at all; the other three name what the fill is made of. */
+  theme: ChromeTheme;
+  /** border-radius in px, ignored when `pill` is on. */
+  radius: number;
+  /** a fully rounded end, whatever the box measures. */
+  pill: boolean;
+  /** the fill's opacity, 0-1. The text is never faded, only the surface. */
+  opacity: number;
+  /** the gutter between the text and the surface's edge, px. */
+  padding: number;
+}
+
+export const DEFAULT_LABEL_CHROME: LabelChrome = {
+  theme: "none",
+  radius: 0,
+  pill: false,
+  opacity: 1,
+  padding: 6,
+};
+
+export const normalizeLabelChrome = (raw: unknown): LabelChrome => {
+  if (typeof raw !== "object" || raw === null) return { ...DEFAULT_LABEL_CHROME };
+  const chrome = raw as Partial<Record<string, unknown>>;
+  const theme = chrome.theme as ChromeTheme;
+  return {
+    theme: THEMES.includes(theme) ? theme : DEFAULT_LABEL_CHROME.theme,
+    radius: finiteOrDefault(chrome.radius, DEFAULT_LABEL_CHROME.radius),
+    pill: chrome.pill === true,
+    opacity: finiteOrDefault(chrome.opacity, DEFAULT_LABEL_CHROME.opacity),
+    padding: finiteOrDefault(chrome.padding, DEFAULT_LABEL_CHROME.padding),
+  };
+};
+
+export const isDefaultLabelChrome = (chrome: LabelChrome): boolean =>
+  chrome.theme === DEFAULT_LABEL_CHROME.theme &&
+  chrome.radius === DEFAULT_LABEL_CHROME.radius &&
+  chrome.pill === DEFAULT_LABEL_CHROME.pill &&
+  chrome.opacity === DEFAULT_LABEL_CHROME.opacity &&
+  chrome.padding === DEFAULT_LABEL_CHROME.padding;
+
+/**
  * Every mode is a chain of Home Assistant's tokens; the literal at the end is a
  * last resort, not a choice.
  *
