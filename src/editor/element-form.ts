@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
 import type { ElementConfig, StateIconConfig } from "../config";
-import { normalizeElementSize } from "../element-size";
+import { DEFAULT_ICON_SIZE, normalizeElementSize } from "../element-size";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
@@ -150,16 +150,19 @@ export const fromFormData = (
     ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
-    size: normalizeElementSize({
-      mode: size_mode,
-      // Math.round on the way back enforces each slider's step:1 contract.
-      // Same deliberate trade as the chrome numbers: a hand-written sub-step
-      // value is rounded the first time the editor commits for that item.
-      min: typeof size_min === "number" ? Math.round(size_min) : size_min,
-      ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
-      max: typeof size_max === "number" ? Math.round(size_max) : size_max,
-      value: typeof size_value === "number" ? Math.round(size_value) : size_value,
-    }),
+    size: normalizeElementSize(
+      {
+        mode: size_mode,
+        // Math.round on the way back enforces each slider's step:1 contract.
+        // Same deliberate trade as the chrome numbers: a hand-written sub-step
+        // value is rounded the first time the editor commits for that item.
+        min: typeof size_min === "number" ? Math.round(size_min) : size_min,
+        ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
+        max: typeof size_max === "number" ? Math.round(size_max) : size_max,
+        value: typeof size_value === "number" ? Math.round(size_value) : size_value,
+      },
+      DEFAULT_ICON_SIZE,
+    ),
     ...chromeOut,
   };
 };

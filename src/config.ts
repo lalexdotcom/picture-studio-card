@@ -1,5 +1,10 @@
 import { type IconChrome, isDefaultIconChrome, normalizeIconChrome } from "./chrome";
-import { type ElementSize, isDefaultElementSize, normalizeElementSize } from "./element-size";
+import {
+  DEFAULT_ICON_SIZE,
+  type ElementSize,
+  isDefaultElementSize,
+  normalizeElementSize,
+} from "./element-size";
 import {
   type Anchor,
   DEFAULT_POSITION,
@@ -134,7 +139,7 @@ const normalizeElementConfig = (raw: Record<string, unknown>, index: number): El
   return {
     ...raw,
     type: "state-icon",
-    size: normalizeElementSize(raw.size),
+    size: normalizeElementSize(raw.size, DEFAULT_ICON_SIZE),
     chrome: normalizeIconChrome(raw.chrome),
   } as StateIconConfig;
 };
@@ -222,7 +227,7 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       // that never touched either key does not grow one.
       const { size, chrome, ...rest } = item.config;
       const config: Record<string, unknown> = { ...rest };
-      if (!isDefaultElementSize(size)) config.size = size;
+      if (!isDefaultElementSize(size, DEFAULT_ICON_SIZE)) config.size = size;
       if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
       stored.config = config;
     }
