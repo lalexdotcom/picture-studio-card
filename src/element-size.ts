@@ -1,8 +1,9 @@
 /**
- * An icon's size, in the two halves of the contract: the card declares
- * `container-type: inline-size` on `.root`, the element derives this clamp.
- * `1cqw` is 1% of `.root`'s width, so the size follows the card — which `vw`,
- * following the window, cannot do in a sections view.
+ * The size of a picture element (icon or label), in the two halves of the
+ * contract: the card declares `container-type: inline-size` on `.root`, the
+ * element derives this clamp. `1cqw` is 1% of `.root`'s width, so the size
+ * follows the card — which `vw`, following the window, cannot do in a
+ * sections view.
  */
 export interface ElementSize {
   /** "auto" uses the card's defaults; "adaptive" clamps own min/ratio/max; "fixed" is exact pixels. */
