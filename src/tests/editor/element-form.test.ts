@@ -362,6 +362,16 @@ describe("elementFormLabel", () => {
     expect(elementFormLabel((() => "") as never, undefined, "size_mode")).toBe("Size");
     expect(elementFormLabel((() => "") as never, undefined, "size_value")).toBe("Value");
   });
+
+  it("labels the two fields whose generic key does not exist", () => {
+    const localize = ((key: string) =>
+      ({
+        "ui.panel.lovelace.editor.badge.entity.displayed_elements": "Éléments affichés",
+        "ui.panel.lovelace.editor.badge.entity.state_content": "Contenu de l'état",
+      })[key] ?? "") as never;
+    expect(elementFormLabel(localize, undefined, "displayed_elements")).toBe("Éléments affichés");
+    expect(elementFormLabel(localize, undefined, "state_content")).toBe("Contenu de l'état");
+  });
 });
 
 describe("elementFormHelper", () => {

@@ -3,7 +3,7 @@ import { normalizeLabelShow, type StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
-export const labelSchema = (showTimeFormat: boolean): unknown[] => [
+export const labelSchema = (showTimeFormat: boolean, localize: LocalizeFunc): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
@@ -18,7 +18,13 @@ export const labelSchema = (showTimeFormat: boolean): unknown[] => [
           select: {
             mode: "list",
             multiple: true,
-            options: ["name", "state"].map((value) => ({ value, label: value })),
+            options: ["name", "state"].map((value) => ({
+              value,
+              label:
+                localize(
+                  `ui.panel.lovelace.editor.badge.entity.displayed_elements_options.${value}`,
+                ) || value,
+            })),
           },
         },
       },

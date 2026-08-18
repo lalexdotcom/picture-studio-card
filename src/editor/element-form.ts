@@ -134,6 +134,12 @@ export const elementFormLabel = (
   if (name === "chrome_pill") return localizeOwn(hass, "chrome_pill");
   if (name === "chrome_padding") return localizeOwn(hass, "chrome_padding");
   if (name === "chrome_theme") return themeModeTitle(localize);
+  // Two fields whose ui.panel.lovelace.editor.card.generic.<name> key does not
+  // exist, so the fallthrough put the raw key on screen. Home Assistant has both
+  // under the entity badge, which is the editor this form mirrors.
+  if (name === "displayed_elements" || name === "state_content") {
+    return localize(`ui.panel.lovelace.editor.badge.entity.${name}`) || name;
+  }
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
 
@@ -250,7 +256,7 @@ export class PictureStudioElementForm extends LitElement {
     // "timestamp" / "uptime", and domain-specific attributes (calendar, sun, …).
     const showTimeFormat =
       isLabel && stateLabelIsTimeBased(element.type === "state-label" ? element : undefined, hass);
-    const schema = isLabel ? labelSchema(showTimeFormat) : iconSchema();
+    const schema = isLabel ? labelSchema(showTimeFormat, hass.localize) : iconSchema();
     const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
     const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
