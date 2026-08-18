@@ -108,7 +108,7 @@ export class PictureStudioBadgeForm extends LitElement {
           @click=${() =>
             this.dispatchEvent(new CustomEvent("go-back", { bubbles: true, composed: true }))}
           ><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
-        <span class="title">${choiceLabel(this.hass.localize, { type: this.badge.type ?? "", isCustom: false })}</span>
+        <span class="title">${choiceLabel(this.hass.localize, { type: this.badge.type ?? "", isCustom: false }) || "badge"}</span>
       </div>
       <div class="form"></div>
       ${
