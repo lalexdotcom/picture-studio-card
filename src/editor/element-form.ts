@@ -301,6 +301,7 @@ export class PictureStudioElementForm extends LitElement {
                                     ></ha-form>
                                   `
                             }
+                            <div class="pill-separator"></div>
                             <ha-form
                               .hass=${hass}
                               .data=${data}
@@ -388,12 +389,12 @@ export class PictureStudioElementForm extends LitElement {
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
     }
-    /* The switch takes its natural width and the radius takes the rest —
-       ha-form's own grid can only make equal columns, which is why this row is
-       ours rather than a type:"grid" entry. */
+    /* The switch takes its natural width, the separator takes its natural width,
+       and the radius takes the rest — ha-form's own grid can only make equal
+       columns, which is why this row is ours rather than a type:"grid" entry. */
     .pill-row {
       display: grid;
-      grid-template-columns: max-content 1fr;
+      grid-template-columns: max-content max-content 1fr;
       align-items: center;
       gap: var(--ha-space-5, 20px);
     }
@@ -413,10 +414,20 @@ export class PictureStudioElementForm extends LitElement {
       font-weight: var(--wa-form-control-label-font-weight);
       line-height: var(--wa-form-control-label-line-height);
     }
-    /* Hidden, not removed: the radius keeps its box, so ticking the switch does
-       not reflow the row. visibility also takes it out of the tab order and out
-       of a screen reader, which opacity would not. */
-    .pill-row[data-pill] > :last-child {
+    /* Vertical counterpart of .separator: same colour and thickness, 12px on
+       each side (the transposition of .separator's 12px top/bottom margin).
+       align-self: stretch gives it height — an empty div with only a side
+       border has no intrinsic height, and align-items: center on the grid would
+       leave it zero-height and invisible. */
+    .pill-separator {
+      border-inline-start: 1px solid var(--divider-color);
+      margin: 0 var(--ha-space-3, 12px);
+      align-self: stretch;
+    }
+    /* Hidden, not removed: ticking the switch must not reflow the row, so both
+       the separator and the radius keep their boxes. visibility also takes them
+       out of the tab order and screen reader, which opacity would not. */
+    .pill-row[data-pill] > :nth-child(n+2) {
       visibility: hidden;
     }
     picture-studio-visibility-section {

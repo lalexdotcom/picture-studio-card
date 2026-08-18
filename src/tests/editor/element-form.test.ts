@@ -507,10 +507,10 @@ describe("the theme mode labels", () => {
 });
 
 describe("PictureStudioElementForm — pill-row CSS", () => {
-  it("lays the row out as a two-column grid so the switch keeps its natural width", () => {
+  it("lays the row out as a three-column grid: switch, separator, radius", () => {
     const rule = cssRules(PictureStudioElementForm.styles).get(".pill-row");
     expect(rule).toContain("display: grid");
-    expect(rule).toContain("grid-template-columns: max-content 1fr");
+    expect(rule).toContain("grid-template-columns: max-content max-content 1fr");
   });
 
   it("gives the row a 20px gap between the switch control and the radius", () => {
@@ -518,9 +518,11 @@ describe("PictureStudioElementForm — pill-row CSS", () => {
     expect(rule).toContain("gap: var(--ha-space-5, 20px)");
   });
 
-  it("hides the radius with visibility so the box stays reserved when the pill is on", () => {
+  it("hides both separator and radius with visibility when the pill is on", () => {
+    // :last-child would only hide the radius; :nth-child(n+2) covers both the
+    // separator (child 2) and the radius (child 3).
     const rule = cssRules(PictureStudioElementForm.styles).get(
-      ".pill-row[data-pill] > :last-child",
+      ".pill-row[data-pill] > :nth-child(n+2)",
     );
     expect(rule).toContain("visibility: hidden");
   });
@@ -530,6 +532,16 @@ describe("PictureStudioElementForm — pill-row CSS", () => {
     expect(rule).toContain("display: flex");
     expect(rule).toContain("align-items: center");
     expect(rule).toContain("gap: var(--ha-space-4, 16px)");
+  });
+
+  it("draws .pill-separator as a vertical line matching .separator's colour and thickness", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-separator");
+    expect(rule).toContain("border-inline-start: 1px solid var(--divider-color)");
+    // 12px is the transposition of .separator's 12px top/bottom margin.
+    expect(rule).toContain("margin: 0 var(--ha-space-3, 12px)");
+    // align-self: stretch gives it height — an empty div with only a side
+    // border has no intrinsic height and would be invisible without this.
+    expect(rule).toContain("align-self: stretch");
   });
 
   it("gives .pill-label the section-label typography without a bottom margin", () => {
