@@ -2,17 +2,19 @@ import { afterEach, describe, expect, it } from "@rstest/core";
 import type { StateIconConfig } from "../../config";
 import { ELEMENT_FORM_TAG } from "../../config";
 import {
-  chromeSchema,
-  chromeToggleSchema,
+  appearanceToggleSchema,
   elementFormHelper,
   elementFormLabel,
-  fromFormData,
   PictureStudioElementForm,
-  stateIconSchema,
-  stateIconSizeSchema,
-  themeModeTitle,
-  toFormData,
 } from "../../editor/element-form";
+import {
+  iconChromeSchema as chromeSchema,
+  iconFromFormData as fromFormData,
+  iconSchema as stateIconSchema,
+  iconSizeSchema as stateIconSizeSchema,
+  themeModeTitle,
+  iconToFormData as toFormData,
+} from "../../editor/state-icon-form";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
 
 const base = { type: "state-icon" as const, size: DEFAULT_ICON_SIZE };
@@ -200,8 +202,8 @@ describe("PictureStudioElementForm — radio group change", () => {
 
   it("emits element-changed with the chosen mode and all other keys intact", async () => {
     const form = await mountForm("auto");
-    // The size panel is the second ha-expansion-panel (the chrome panel is first).
-    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    // Size and position is the first ha-expansion-panel; Appearance follows it.
+    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[0];
     const group = sizePanel?.querySelector("ha-radio-group");
     expect(group).not.toBeNull();
     if (!group) return; // TypeScript guard; the assertion above already fails the test
@@ -230,6 +232,19 @@ describe("PictureStudioElementForm — radio group change", () => {
     expect(detail.element.size.value).toBe(DEFAULT_ICON_SIZE.value);
     expect(detail.element.size.ratio).toBe(DEFAULT_ICON_SIZE.ratio);
   });
+
+  it("renders Size and position before Appearance", async () => {
+    const form = await mountForm("auto");
+    const headers = [...(form.shadowRoot?.querySelectorAll('[slot="header"]') ?? [])].map((el) =>
+      el.textContent?.trim(),
+    );
+    // localize is stubbed as `L:${key}`, so the Appearance title arrives as the
+    // borrowed Home Assistant key rather than as a translated word.
+    expect(headers).toEqual([
+      "Size and position",
+      "L:ui.panel.lovelace.editor.card.map.appearance",
+    ]);
+  });
 });
 
 describe("toFormData / fromFormData", () => {
@@ -242,6 +257,7 @@ describe("toFormData / fromFormData", () => {
       size_ratio: 8,
       size_max: 48,
       size_value: 48,
+      halo_enabled: false,
       chrome_enabled: false,
       chrome_theme: "auto",
       chrome_radius: 50,
@@ -251,8 +267,10 @@ describe("toFormData / fromFormData", () => {
   });
 
   it("round-trips an adaptive size", () => {
+    // halo: false — fromFormData always emits a concrete boolean (not undefined).
     const config = {
       ...base,
+      halo: false as const,
       size: { mode: "adaptive" as const, min: 10, ratio: 1, max: 20, value: 48 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
@@ -262,19 +280,33 @@ describe("toFormData / fromFormData", () => {
     // ratio is 4 (integer) — a non-integer would be rounded by toFormData and
     // not equal config.size.ratio on the way back. That rounding is deliberate:
     // hand-written sub-step values are rounded on the first editor commit.
+    // halo: false — fromFormData always emits a concrete boolean (not undefined).
     const config = {
       ...base,
+      halo: false as const,
       size: { mode: "fixed" as const, min: 40, ratio: 4, max: 70, value: 64 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
   });
 
   it("round-trips an auto size", () => {
+    // halo: false — fromFormData always emits a concrete boolean (not undefined).
     const config = {
       ...base,
+      halo: false as const,
       size: { mode: "auto" as const, min: 10, ratio: 1, max: 20, value: 32 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
+  });
+
+  it("carries the halo as its own checkbox", () => {
+    expect(toFormData(base).halo_enabled).toBe(false);
+    expect(toFormData({ ...base, halo: true }).halo_enabled).toBe(true);
+  });
+
+  it("writes the halo as a plain boolean", () => {
+    expect(fromFormData(base, { ...toFormData(base), halo_enabled: true }).halo).toBe(true);
+    expect(fromFormData(base, { ...toFormData(base), halo_enabled: false }).halo).toBe(false);
   });
 
   it("switching back to auto keeps the numbers so unchecking restores them", () => {
@@ -331,21 +363,27 @@ describe("elementFormLabel", () => {
 
 describe("elementFormHelper", () => {
   it("returns the HA colour helper text for the color field", () => {
-    expect(elementFormHelper(localize, "color")).toBe(
+    expect(elementFormHelper(localize, undefined, "color")).toBe(
       "L:ui.panel.lovelace.editor.badge.entity.color_helper",
     );
   });
 
   it("falls back to the English string when localize returns empty", () => {
-    expect(elementFormHelper((() => "") as never, "color")).toBe(
+    expect(elementFormHelper((() => "") as never, undefined, "color")).toBe(
       "Inactive state (for example, off or closed) will not be colored.",
     );
   });
 
+  it("returns the halo helper string for halo_enabled", () => {
+    expect(elementFormHelper(localize, undefined, "halo_enabled")).toBe(
+      "Adds a shadow and a light rim so the element stays readable on any picture.",
+    );
+  });
+
   it("returns undefined for every other field", () => {
-    expect(elementFormHelper(localize, "icon")).toBeUndefined();
-    expect(elementFormHelper(localize, "name")).toBeUndefined();
-    expect(elementFormHelper(localize, "tap_action")).toBeUndefined();
+    expect(elementFormHelper(localize, undefined, "icon")).toBeUndefined();
+    expect(elementFormHelper(localize, undefined, "name")).toBeUndefined();
+    expect(elementFormHelper(localize, undefined, "tap_action")).toBeUndefined();
   });
 });
 
@@ -458,8 +496,10 @@ describe("the chrome schema", () => {
     }
   });
 
-  it("puts the toggle in its own schema, so it can be rendered above the theme", () => {
-    expect(JSON.stringify(chromeToggleSchema())).toContain("chrome_enabled");
+  it("puts both toggles in one shared schema, rendered above the chrome controls", () => {
+    const json = JSON.stringify(appearanceToggleSchema());
+    expect(json).toContain("chrome_enabled");
+    expect(json).toContain("halo_enabled");
   });
 });
 

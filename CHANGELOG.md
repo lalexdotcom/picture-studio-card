@@ -1,5 +1,21 @@
 # Changelog
 
+## unreleased
+
+### Added
+
+- **The `state-label` element now has a full editor.** Clicking a text label in
+  the item list opens an editor panel with entity, display content, interactions,
+  size and position, and appearance — the same sections an icon offers, adapted
+  for text. Previously it opened a blank panel.
+
+### Changed
+
+- **The Chrome section is now called Appearance and moves after Size and
+  position.** It gains a "Stand out" checkbox that adds the halo shadow to the
+  element; the checkbox was previously only available via YAML. Both icons and
+  labels have the checkbox.
+
 ## 1.3.1 — 2026-08-17
 
 ### Changed

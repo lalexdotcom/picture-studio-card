@@ -4,6 +4,7 @@ import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
 import "./visibility-section";
+import { elementLabel } from "./element-catalog";
 import { PLACEMENT_ICON } from "./icons";
 import {
   iconChromeSchema,
@@ -14,21 +15,16 @@ import {
   themeModeLabel,
   themeModeTitle,
 } from "./state-icon-form";
+import {
+  labelChromeSchema,
+  labelFromFormData,
+  labelSchema,
+  labelSizeSchema,
+  labelToFormData,
+} from "./state-label-form";
 
-// Re-export with pre-Task-7 names so existing tests pass while the two-commit
-// split keeps each commit green. Removed in the feat commit when callers
-// switch to per-kind imports.
-export {
-  iconChromeSchema as chromeSchema,
-  iconFromFormData as fromFormData,
-  iconSchema as stateIconSchema,
-  iconSizeSchema as stateIconSizeSchema,
-  iconToFormData as toFormData,
-  themeModeLabel,
-  themeModeTitle,
-} from "./state-icon-form";
-
-export const chromeToggleSchema = (): unknown[] => [
+export const appearanceToggleSchema = (): unknown[] => [
+  { name: "halo_enabled", selector: { boolean: {} } },
   { name: "chrome_enabled", selector: { boolean: {} } },
 ];
 
@@ -47,20 +43,30 @@ export const elementFormLabel = (
   if (name === "color" || name === "show_entity_picture") {
     return localize(`ui.panel.lovelace.editor.badge.entity.${name}`) || name;
   }
+  if (name === "halo_enabled") return localizeOwn(hass, "halo_enabled");
   if (name === "chrome_enabled") return localizeOwn(hass, "chrome_enabled");
   if (name === "chrome_radius") return localizeOwn(hass, "chrome_radius");
   if (name === "chrome_opacity") return localizeOwn(hass, "chrome_opacity");
   if (name === "chrome_content_ratio") return localizeOwn(hass, "chrome_content_ratio");
+  if (name === "chrome_pill") return localizeOwn(hass, "chrome_pill");
+  if (name === "chrome_padding") return localizeOwn(hass, "chrome_padding");
   if (name === "chrome_theme") return themeModeTitle(localize);
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
 
-export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
+export const elementFormHelper = (
+  localize: LocalizeFunc,
+  hass: HomeAssistant | undefined,
+  name: string,
+): string | undefined => {
   if (name === "color")
     return (
       localize("ui.panel.lovelace.editor.badge.entity.color_helper") ||
       "Inactive state (for example, off or closed) will not be colored."
     );
+  // ha-form-boolean renders the helper as the checkbox's own hint, permanently
+  // visible — which is what a tooltip icon could not be on a phone.
+  if (name === "halo_enabled") return localizeOwn(hass, "halo_enabled_helper");
   return undefined;
 };
 
@@ -77,47 +83,46 @@ export class PictureStudioElementForm extends LitElement {
   declare anchor?: Anchor;
   declare visibility?: VisibilityCondition[];
 
+  /** Merge `ev.detail.value` onto the complete flat record and dispatch. */
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
-    if (!this.element) return;
-    // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
-    if (this.element.type !== "state-icon") return;
-    const data = { ...iconToFormData(this.element), ...ev.detail.value };
-    this.dispatchEvent(
-      new CustomEvent("element-changed", {
-        detail: { element: iconFromFormData(this.element, data) },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const element = this.element;
+    if (!element) return;
+    const data = { ...this._toData(element), ...ev.detail.value };
+    this._dispatch(element, data);
   };
 
+  /** Mode radio-group fires "change" on the group; we read the new value from it. */
   private _modeChanged = (ev: Event): void => {
-    if (!this.element) return;
-    // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
-    if (this.element.type !== "state-icon") return;
+    const element = this.element;
+    if (!element) return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
-    const data = { ...iconToFormData(this.element), size_mode: value };
-    this.dispatchEvent(
-      new CustomEvent("element-changed", {
-        detail: { element: iconFromFormData(this.element, data) },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const data = { ...this._toData(element), size_mode: value };
+    this._dispatch(element, data);
   };
 
+  /** Chrome-theme radio-group: selecting a theme also switches the chrome on. */
   private _chromeThemeChanged = (ev: Event): void => {
-    if (!this.element) return;
-    // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
-    if (this.element.type !== "state-icon") return;
+    const element = this.element;
+    if (!element) return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
-    const data = { ...iconToFormData(this.element), chrome_theme: value, chrome_enabled: true };
+    const data = { ...this._toData(element), chrome_theme: value, chrome_enabled: true };
+    this._dispatch(element, data);
+  };
+
+  private _toData = (element: ElementConfig): Record<string, unknown> =>
+    element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
+
+  private _dispatch = (element: ElementConfig, data: Record<string, unknown>): void => {
+    const updated: ElementConfig =
+      element.type === "state-label"
+        ? labelFromFormData(element, data)
+        : iconFromFormData(element, data);
     this.dispatchEvent(
       new CustomEvent("element-changed", {
-        detail: { element: iconFromFormData(this.element, data) },
+        detail: { element: updated },
         bubbles: true,
         composed: true,
       }),
@@ -128,19 +133,21 @@ export class PictureStudioElementForm extends LitElement {
     const element = this.element;
     const hass = this.hass;
     if (!element || !hass) return nothing;
-    // Transitional: widening ElementConfig to a union left this form written for
-    // the icon alone. Task 7 rewrites it to pick a schema per kind; until then a
-    // label opens a blank panel rather than a wrong one.
-    if (element.type !== "state-icon") return nothing;
 
     // Check at render time whether ha-radio-group is available.
     // If it is not, size_mode falls back to a vertical ha-form select — correct
     // but not horizontal. The check is lazy (render time, not module load) so a
     // chunk that registers the element after ours is still found.
     const radioGroupAvailable = !!customElements.get("ha-radio-group");
-    const data = iconToFormData(element);
+
+    const isLabel = element.type === "state-label";
+    const data =
+      element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
+    const schema = isLabel ? labelSchema() : iconSchema();
+    const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
+    const chromeSchema = isLabel ? labelChromeSchema : iconChromeSchema;
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
-    const helper = (s: { name: string }) => elementFormHelper(hass.localize, s.name);
+    const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
 
     return html`
       <div class="header">
@@ -150,64 +157,16 @@ export class PictureStudioElementForm extends LitElement {
             this.dispatchEvent(
               new CustomEvent("go-back", { bubbles: true, composed: true }),
             )}><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
-        <span class="title">${element.type}</span>
+        <span class="title">${elementLabel(hass.localize, element.type)}</span>
       </div>
       <ha-form
         .hass=${hass}
         .data=${data}
-        .schema=${iconSchema()}
+        .schema=${schema}
         .computeLabel=${label}
         .computeHelper=${helper}
         @value-changed=${this._valueChanged}
       ></ha-form>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${localizeOwn(hass, "chrome")}
-        </div>
-        <div class="content">
-          <ha-form
-            .hass=${hass}
-            .data=${data}
-            .schema=${chromeToggleSchema()}
-            .computeLabel=${label}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-          ${
-            data.chrome_enabled
-              ? html`
-                  ${
-                    radioGroupAvailable
-                      ? html`
-                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
-                          <ha-radio-group
-                            orientation="horizontal"
-                            .value=${(data.chrome_theme as string) ?? "auto"}
-                            @change=${this._chromeThemeChanged}
-                          >
-                            ${(["auto", "light", "dark"] as const).map(
-                              (value) => html`
-                                <ha-radio-option .value=${value}
-                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
-                                >
-                              `,
-                            )}
-                          </ha-radio-group>
-                        `
-                      : nothing
-                  }
-                  <ha-form
-                    .hass=${hass}
-                    .data=${data}
-                    .schema=${iconChromeSchema(hass.localize, radioGroupAvailable)}
-                    .computeLabel=${label}
-                    @value-changed=${this._valueChanged}
-                  ></ha-form>
-                `
-              : nothing
-          }
-        </div>
-      </ha-expansion-panel>
       <ha-expansion-panel outlined>
         <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">
@@ -239,7 +198,7 @@ export class PictureStudioElementForm extends LitElement {
           <ha-form
             .hass=${hass}
             .data=${data}
-            .schema=${iconSizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
+            .schema=${sizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
             .computeLabel=${label}
             @value-changed=${this._valueChanged}
           ></ha-form>
@@ -249,6 +208,55 @@ export class PictureStudioElementForm extends LitElement {
             .hass=${hass}
             .anchor=${this.anchor}
           ></picture-studio-anchor-picker>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${hass.localize("ui.panel.lovelace.editor.card.map.appearance") || "Appearance"}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${appearanceToggleSchema()}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+          ${
+            data.chrome_enabled
+              ? html`
+                  ${
+                    radioGroupAvailable
+                      ? html`
+                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
+                          <ha-radio-group
+                            orientation="horizontal"
+                            .value=${(data.chrome_theme as string) ?? "auto"}
+                            @change=${this._chromeThemeChanged}
+                          >
+                            ${(["auto", "light", "dark"] as const).map(
+                              (value) => html`
+                                <ha-radio-option .value=${value}
+                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
+                                >
+                              `,
+                            )}
+                          </ha-radio-group>
+                        `
+                      : nothing
+                  }
+                  <ha-form
+                    .hass=${hass}
+                    .data=${data}
+                    .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
+                    .computeLabel=${label}
+                    @value-changed=${this._valueChanged}
+                  ></ha-form>
+                `
+              : nothing
+          }
         </div>
       </ha-expansion-panel>
       <picture-studio-visibility-section

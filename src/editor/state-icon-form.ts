@@ -174,7 +174,7 @@ export const iconChromeSchema = (
 ];
 
 export const iconToFormData = (config: StateIconConfig): Record<string, unknown> => {
-  const { size, chrome, ...rest } = config;
+  const { size, chrome, halo, ...rest } = config;
   const c = chrome ?? DEFAULT_ICON_CHROME;
   return {
     ...rest,
@@ -186,6 +186,7 @@ export const iconToFormData = (config: StateIconConfig): Record<string, unknown>
     size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
     size_max: typeof size.max === "number" ? Math.round(size.max) : size.max,
     size_value: typeof size.value === "number" ? Math.round(size.value) : size.value,
+    halo_enabled: halo === true,
     chrome_enabled: c.theme !== "none",
     // The control never offers "none", so an off chrome pre-selects the theme
     // that checking the box will give it.
@@ -223,6 +224,7 @@ export const iconFromFormData = (
     size_ratio,
     size_max,
     size_value,
+    halo_enabled,
     chrome_enabled,
     chrome_theme,
     chrome_radius,
@@ -256,9 +258,10 @@ export const iconFromFormData = (
         }
       : {};
   return {
-    ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome">),
+    ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome" | "halo">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
+    halo: halo_enabled === true,
     size: normalizeElementSize(
       {
         mode: size_mode,
