@@ -245,7 +245,14 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
     }
 
     const position = normalizePosition(entry.position);
-    const anchor = parseAnchor(entry.anchor);
+    // Since 1.4.0 the anchor lives inside `position`: it says which point of the
+    // item the coordinates refer to, so it belongs with them. Read from beside
+    // `position` too — that is where 1.2.0 through 1.3.x wrote it, and a config
+    // is never rewritten in the old place. The new place wins when a config
+    // somehow carries both, so there is one answer rather than a merge.
+    const anchor = parseAnchor(
+      (isRecord(entry.position) ? entry.position.anchor : undefined) ?? entry.anchor,
+    );
     const visibility = normalizeVisibility(entry.visibility, index);
     const base = { position, anchor, ...(visibility ? { visibility } : {}) };
 
@@ -268,11 +275,17 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
   items: config.items.map((item) => {
     const stored: Record<string, unknown> = {
       ...item,
-      position: storedPosition(item.position),
+      // The anchor qualifies the coordinates, so it is written with them. The
+      // default is the absence of the key, so a config that never used an anchor
+      // comes back exactly as it went in.
+      position: {
+        ...storedPosition(item.position),
+        ...(item.anchor === "auto" ? {} : { anchor: item.anchor }),
+      },
     };
-    // The default is the absence of the key, so a config that never used an
-    // anchor comes back exactly as it went in.
-    if (item.anchor === "auto") delete stored.anchor;
+    // Always: `...item` copies the in-memory field, and item level is the one
+    // place the anchor must never be written back to.
+    delete stored.anchor;
     // Same rule as the anchor at its default, and the same rule Home Assistant
     // applies in its own editor: an empty list says nothing while looking like
     // it says something.

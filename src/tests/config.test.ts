@@ -671,7 +671,7 @@ describe("anchor", () => {
       ],
     });
     const stored = storedConfig(config) as { items: Record<string, unknown>[] };
-    expect(stored.items[0]?.anchor).toBe("center");
+    expect((stored.items[0]?.position as Record<string, unknown>)?.anchor).toBe("center");
   });
 
   it("leaves a config that uses no anchor byte-identical across the round trip", () => {
@@ -683,12 +683,98 @@ describe("anchor", () => {
   });
 
   it("keeps an out-of-range coordinate across the round trip", () => {
+    // Since 1.4.0 the anchor lives inside `position`, so the canonical
+    // round-trip form has it there — not beside the item.
     const raw = {
       ...base,
       items: [
-        { type: "badge", position: { top: "-10%", left: "130%" }, anchor: "center", config: badge },
+        { type: "badge", position: { top: "-10%", left: "130%", anchor: "center" }, config: badge },
       ],
     };
     expect(storedConfig(normalizeConfig(raw))).toEqual(raw);
+  });
+});
+
+describe("anchor lives inside position", () => {
+  it("reads an anchor written inside position", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "20%", anchor: "center" },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    expect(config.items[0]?.anchor).toBe("center");
+  });
+
+  it("still reads an anchor left beside position, as 1.2.0 wrote it", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "20%" },
+          anchor: "bottom-right",
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    expect(config.items[0]?.anchor).toBe("bottom-right");
+  });
+
+  it("prefers the new place when a config carries both", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "20%", anchor: "center" },
+          anchor: "top-left",
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    expect(config.items[0]?.anchor).toBe("center");
+  });
+
+  it("writes the anchor inside position and never beside it", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "20%" },
+          anchor: "center-right",
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    const item = (storedConfig(config).items as Record<string, unknown>[])[0];
+    expect(item?.position).toEqual({ top: "10%", left: "20%", anchor: "center-right" });
+    expect(item).not.toHaveProperty("anchor");
+  });
+
+  it("omits an auto anchor entirely, so an untouched config comes back as it went in", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "20%" },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    const item = (storedConfig(config).items as Record<string, unknown>[])[0];
+    expect(item?.position).toEqual({ top: "10%", left: "20%" });
+    expect(item).not.toHaveProperty("anchor");
   });
 });
