@@ -245,6 +245,14 @@ export class PictureStudioCard extends LitElement {
       this._unregisterCard?.();
       this._unregisterCard = undefined;
     }
+
+    // Elements only. A badge is a third party: inventing a property on it is the
+    // same trespass as writing our keys into its config.
+    this._config?.items.forEach((item, index) => {
+      if (item.type !== "element") return;
+      const child = this._elements[index];
+      if (child) (child as HTMLElement & { editing?: boolean }).editing = this.editing;
+    });
   }
 
   connectedCallback(): void {

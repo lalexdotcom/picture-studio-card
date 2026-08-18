@@ -220,3 +220,45 @@ describe("what a hass tick costs", () => {
     expect(el.style.getPropertyValue("--psc-label-size")).toBe("");
   });
 });
+
+describe("a label with nothing to show", () => {
+  it("renders nothing at all on a dashboard, chrome or not", async () => {
+    const el = await mount({
+      entity: "sensor.a",
+      show: [],
+      chrome: { theme: "auto", radius: 8, pill: false, opacity: 1, padding: 6 },
+    });
+    expect(el.shadowRoot?.querySelector(".chrome")).toBeNull();
+    expect(el.shadowRoot?.querySelector(".placeholder")).toBeNull();
+  });
+
+  it("draws a placeholder once the card says it is editing", async () => {
+    const el = await mount({ entity: "sensor.a", show: [] });
+    el.editing = true;
+    await el.updateComplete;
+    const placeholder = el.shadowRoot?.querySelector(".placeholder");
+    expect(placeholder).not.toBeNull();
+    expect(placeholder?.textContent?.trim()).toBe("Empty");
+    // No chrome behind it: the placeholder is the whole item while it is empty.
+    expect(el.shadowRoot?.querySelector(".chrome")).toBeNull();
+  });
+
+  it("goes back to its normal rendering as soon as something is shown", async () => {
+    const el = await mount({ entity: "sensor.a", show: ["state"] });
+    el.editing = true;
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".placeholder")).toBeNull();
+    expect(el.shadowRoot?.querySelector(".chrome")).not.toBeNull();
+  });
+
+  it("dresses the placeholder as a warning, in one colour at three strengths", () => {
+    const rule = cssRules(PictureStudioStateLabel.styles).get(".placeholder");
+    expect(rule).toContain("border: 1px dashed var(--warning-color)");
+    expect(rule).toContain("color: var(--warning-color)");
+    expect(rule).toContain("color-mix(in srgb, var(--warning-color) 15%, transparent)");
+    expect(rule).toContain("border-radius: 2px");
+    expect(rule).toContain("padding: 2px 4px");
+    // Not the error colour: the config is valid, the outcome is merely invisible.
+    expect(rule).not.toContain("--error-color");
+  });
+});
