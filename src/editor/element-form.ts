@@ -30,6 +30,16 @@ import {
 // The time-keyed state_content values come from HA's source; keeping the
 // same list means time_format appears exactly when ha-state-display would
 // render a clock rather than text.
+//
+// THIS IS A COPY OF A NON-EXPORTED HOME ASSISTANT FUNCTION. On a version bump,
+// re-read `Rf` in the entity-badge editor's chunk (grep the shipped frontend
+// for `time_format`) and reconcile the four tables below — HA adds domains and
+// device classes without touching any public API, so this drifts silently.
+// The drift is cosmetic and recoverable: when a table falls behind, the field
+// merely stops being offered for that entity kind, and `time_format` written by
+// hand still round-trips through the editor untouched. That is why the copy was
+// accepted here while decision 6 of the spec refused the same trade for the
+// state colour, where drift would silently render the wrong colour instead.
 const TIME_BASED_CONTENT = ["last_updated", "last_changed", "last_triggered"] as const;
 // Domains whose default "state" attribute already is a datetime value.
 const TIME_DOMAINS = new Set([
