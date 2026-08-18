@@ -918,10 +918,11 @@ git commit -m "feat(config): a second element kind, closed set untouched"
 
 **Files:**
 - Create: `src/card/state-label-element.ts`, `src/tests/card/state-label-element.test.ts`
-- Modify: `src/index.ts`
+- Modify: `src/index.ts`, `src/card/picture-studio-card.ts`
+- Test: `src/tests/card/picture-studio-card.test.ts`
 
 **Interfaces:**
-- Consumes: `StateLabelConfig`, `LABEL_TAG` (Task 4); `haloFilter` (Task 3); `elementSizeCss`, `DEFAULT_LABEL_SIZE` (Task 2); `chromeFill`, `LabelChrome` (Task 1).
+- Consumes: `StateLabelConfig`, `LABEL_TAG` (Task 4); `haloFilter` (Task 3); `elementSizeCss`, `DEFAULT_LABEL_SIZE` (Task 2); `chromeFill`, `LabelChrome` (Task 1); `chromeFillStyles` and `haloStyles(sizeVar)` from `src/card/item-styles.ts` (Task 3).
 - Produces: `class PictureStudioStateLabel`, registered on `LABEL_TAG`. Public CSS tokens `--psc-label-size`, `--psc-label-outline`, `--psc-label-glow`.
 
 **Reference:** `src/card/state-icon-element.ts` is the model for the lifecycle, the action handling and the chrome wrapper. Reuse its shape; do not invent a second one.
@@ -1175,10 +1176,17 @@ const labelColor = (color?: string): string | undefined => {
 
 then the `clickable` block and the action-handler block, copied verbatim from the icon.
 
-`static styles`:
+`static styles` — an **array**, so the blocks Task 3 factored out come first and
+this kind's own rules can still override them. The fill (its theme and its
+opacity) and the halo are **not** written here: they live in
+`src/card/item-styles.ts` and are shared with the icon. Only the shape around
+them belongs to this kind.
 
 ```ts
-  static styles = css`
+  static styles = [
+    chromeFillStyles,
+    haloStyles("--psc-label-size"),
+    css`
     :host {
       display: block;
       transition: transform 120ms ease-out;
@@ -1210,19 +1218,6 @@ then the `clickable` block and the action-handler block, copied verbatim from th
       padding: var(--psc-chrome-padding, 0) calc(var(--psc-chrome-padding, 0) * 1.6);
       overflow: hidden;
     }
-    :host([halo]) .chrome {
-      filter: ${unsafeCSS(haloFilter("--psc-label-size"))};
-    }
-    /* The fill sits on a pseudo-element so its opacity is its own: fading the
-       surface must not fade the text standing on it. */
-    :host([chrome]) .chrome::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: var(--psc-chrome-fill);
-      opacity: var(--psc-chrome-opacity, 1);
-    }
     .content {
       position: relative;
       display: flex;
@@ -1242,7 +1237,8 @@ then the `clickable` block and the action-handler block, copied verbatim from th
       font-size: 0.75em;
       color: var(--secondary-text-color);
     }
-  `;
+    `,
+  ];
 ```
 
 - [ ] **Step 4: Run to verify it passes**
@@ -1258,12 +1254,36 @@ In `src/index.ts`, import `PictureStudioStateLabel` and `LABEL_TAG`, then add be
 if (!customElements.get(LABEL_TAG)) customElements.define(LABEL_TAG, PictureStudioStateLabel);
 ```
 
-- [ ] **Step 6: Run everything**
+- [ ] **Step 6: Let the card create it**
+
+Moved here from Task 4 on purpose: until Step 5 above, `LABEL_TAG` named an
+element nothing had registered, and an undefined custom element renders nothing
+at all, silently. In `src/card/picture-studio-card.ts`, `_createChild` picks the
+tag from the kind:
+
+```ts
+  private _createChild(
+    item: PictureItem,
+    helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
+  ): LovelaceBadgeElement {
+    if (item.type === "badge") return helpers.createBadgeElement(item.config);
+    const tag = item.config.type === "state-label" ? LABEL_TAG : ICON_TAG;
+    const el = document.createElement(tag) as unknown as LovelaceBadgeElement;
+    el.setConfig(item.config as unknown as BadgeConfig);
+    return el;
+  }
+```
+
+Add `LABEL_TAG` to the import from `../config`. Cover it with a card test that a
+`state-label` item mounts the label tag and a `state-icon` item still mounts the
+icon tag — the existing card suite's harness registers the icon already.
+
+- [ ] **Step 7: Run everything**
 
 Run: `pnpm test && pnpm lint && pnpm typecheck && pnpm build`
 Expected: PASS, and a bundle that builds.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A
