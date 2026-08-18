@@ -1,5 +1,5 @@
 import { DEFAULT_LABEL_CHROME, normalizeLabelChrome } from "../chrome";
-import type { StateLabelConfig } from "../config";
+import { normalizeLabelShow, type StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
@@ -150,14 +150,11 @@ export const labelChromeSchema = (_localize: LocalizeFunc): unknown[] => [
 ];
 
 export const labelToFormData = (config: StateLabelConfig): Record<string, unknown> => {
-  const { size, chrome, halo, show_name, show_state, ...rest } = config;
+  const { size, chrome, halo, show, ...rest } = config;
   const c = chrome ?? DEFAULT_LABEL_CHROME;
-  const displayed: string[] = [];
-  if (show_name) displayed.push("name");
-  if (show_state) displayed.push("state");
   return {
     ...rest,
-    displayed_elements: displayed,
+    displayed_elements: [...show],
     size_mode: size.mode,
     size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
     size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
@@ -227,8 +224,9 @@ export const labelFromFormData = (
     ...(rest as Omit<StateLabelConfig, "type" | "size" | "chrome" | "halo">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
-    show_name: shown.includes("name"),
-    show_state: shown.includes("state"),
+    // The control's own value, normalized rather than trusted: ha-form hands
+    // back whatever was in `.data`, and the model owns the shape.
+    show: normalizeLabelShow(shown),
     halo: halo_enabled === true,
     size: normalizeElementSize(
       {

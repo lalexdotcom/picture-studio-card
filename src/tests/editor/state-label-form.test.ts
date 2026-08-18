@@ -15,6 +15,7 @@ const base: StateLabelConfig = {
   type: "state-label",
   entity: "sensor.a",
   size: DEFAULT_LABEL_SIZE,
+  show: [],
 };
 
 const names = (schema: unknown[]): string[] =>
@@ -60,11 +61,12 @@ describe("labelSchema", () => {
 });
 
 describe("labelToFormData", () => {
-  it("flattens the two displayed parts into one multi-select", () => {
-    expect(
-      labelToFormData({ ...base, show_name: true, show_state: true }).displayed_elements,
-    ).toEqual(["name", "state"]);
-    expect(labelToFormData(base).displayed_elements).toEqual([]);
+  it("flattens the show list into one multi-select", () => {
+    expect(labelToFormData({ ...base, show: ["name", "state"] }).displayed_elements).toEqual([
+      "name",
+      "state",
+    ]);
+    expect(labelToFormData({ ...base, show: [] }).displayed_elements).toEqual([]);
   });
 
   it("shows the chrome numbers even when the chrome is off, so unchecking loses nothing", () => {
@@ -103,14 +105,12 @@ describe("labelFromFormData", () => {
   const round = (data: Record<string, unknown>) =>
     labelFromFormData(base, { ...labelToFormData(base), ...data });
 
-  it("splits the multi-select back into two booleans", () => {
+  it("maps the multi-select back to the show list", () => {
     expect(round({ displayed_elements: ["state"] })).toMatchObject({
-      show_name: false,
-      show_state: true,
+      show: ["state"],
     });
     expect(round({ displayed_elements: [] })).toMatchObject({
-      show_name: false,
-      show_state: false,
+      show: [],
     });
   });
 

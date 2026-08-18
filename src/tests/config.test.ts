@@ -546,7 +546,7 @@ describe("state-label config", () => {
           {
             type: "element",
             position: { top: "1%", left: "1%" },
-            config: { type: "state-label", entity: "sensor.a", show_state: true },
+            config: { type: "state-label", entity: "sensor.a" },
           },
         ],
       }),
@@ -555,7 +555,6 @@ describe("state-label config", () => {
     expect(item0.config).toEqual({
       type: "state-label",
       entity: "sensor.a",
-      show_state: true,
     });
   });
 
@@ -776,5 +775,51 @@ describe("anchor lives inside position", () => {
     const item = (storedConfig(config).items as Record<string, unknown>[])[0];
     expect(item?.position).toEqual({ top: "10%", left: "20%" });
     expect(item).not.toHaveProperty("anchor");
+  });
+});
+
+describe("a label's show list", () => {
+  const label = (config: Record<string, unknown>) =>
+    normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [{ type: "element", position: { top: "1%", left: "1%" }, config }],
+    }).items[0]?.config as { show: string[] };
+
+  it("shows the state when the config says nothing", () => {
+    expect(label({ type: "state-label", entity: "sensor.a" }).show).toEqual(["state"]);
+  });
+
+  it("keeps what it is given, in the order the form produced", () => {
+    expect(
+      label({ type: "state-label", entity: "sensor.a", show: ["state", "name"] }).show,
+    ).toEqual(["state", "name"]);
+  });
+
+  it("drops an entry it cannot honour, and a duplicate", () => {
+    expect(
+      label({ type: "state-label", entity: "sensor.a", show: ["name", "icon", "name"] }).show,
+    ).toEqual(["name"]);
+  });
+
+  it("keeps an empty list rather than replacing it with the default", () => {
+    expect(label({ type: "state-label", entity: "sensor.a", show: [] }).show).toEqual([]);
+  });
+
+  it("omits the list from storage when it is the default, and keeps it otherwise", () => {
+    const stored = (config: Record<string, unknown>) => {
+      const normalized = normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/p.png",
+        items: [{ type: "element", position: { top: "1%", left: "1%" }, config }],
+      });
+      const item = (storedConfig(normalized).items as Record<string, unknown>[])[0];
+      return item?.config as Record<string, unknown>;
+    };
+    expect(stored({ type: "state-label", entity: "sensor.a" })).not.toHaveProperty("show");
+    expect(stored({ type: "state-label", entity: "sensor.a", show: [] }).show).toEqual([]);
+    expect(stored({ type: "state-label", entity: "sensor.a", show: ["name"] }).show).toEqual([
+      "name",
+    ]);
   });
 });

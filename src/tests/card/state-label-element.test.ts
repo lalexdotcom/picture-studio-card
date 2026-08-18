@@ -8,7 +8,7 @@ if (!customElements.get(LABEL_TAG)) customElements.define(LABEL_TAG, PictureStud
 
 const mount = async (config: Partial<StateLabelConfig>) => {
   const el = document.createElement(LABEL_TAG) as PictureStudioStateLabel;
-  el.setConfig({ type: "state-label", size: DEFAULT_LABEL_SIZE, ...config });
+  el.setConfig({ type: "state-label", size: DEFAULT_LABEL_SIZE, show: ["state"], ...config });
   el.hass = {
     states: {
       "sensor.a": { entity_id: "sensor.a", state: "21.5", attributes: { friendly_name: "Salon" } },
@@ -32,20 +32,30 @@ afterEach(() => {
 
 describe("displayed parts", () => {
   it("shows the state alone by default", async () => {
-    const el = await mount({ entity: "sensor.a", show_state: true });
+    const el = await mount({ entity: "sensor.a", show: ["state"] });
     expect(el.shadowRoot?.querySelector(".name")).toBeNull();
     expect(text(el)).toContain("21,5 °C");
   });
 
   it("shows the name above the state when both are asked for", async () => {
-    const el = await mount({ entity: "sensor.a", show_name: true, show_state: true });
+    const el = await mount({ entity: "sensor.a", show: ["name", "state"] });
     expect(el.shadowRoot?.querySelector(".name")?.textContent).toBe("Salon");
     expect(text(el)).toBe("Salon 21,5 °C");
   });
 
   it("renders nothing but an empty content box when neither is asked for", async () => {
-    const el = await mount({ entity: "sensor.a" });
+    const el = await mount({ entity: "sensor.a", show: [] });
     expect(text(el)).toBe("");
+  });
+
+  it("shows the state when show says nothing, and honours a list", async () => {
+    const stateOnly = await mount({ entity: "sensor.a", show: ["state"] });
+    expect(stateOnly.shadowRoot?.querySelector(".name")).toBeNull();
+    expect(text(stateOnly)).toContain("21,5 °C");
+
+    const nameOnly = await mount({ entity: "sensor.a", show: ["name"] });
+    expect(nameOnly.shadowRoot?.querySelector(".state")).toBeNull();
+    expect(nameOnly.shadowRoot?.querySelector(".name")?.textContent).toBe("Salon");
   });
 });
 
@@ -54,7 +64,7 @@ describe("state rendering", () => {
   // nothing at all, silently. happy-dom never defines it, so this suite always
   // walks the fallback — which is exactly the path that must not be a blank.
   it("falls back to formatEntityState when state-display is undefined", async () => {
-    const el = await mount({ entity: "sensor.a", show_state: true });
+    const el = await mount({ entity: "sensor.a", show: ["state"] });
     expect(el.shadowRoot?.querySelector("state-display")).toBeNull();
     expect(text(el)).toBe("21,5 °C");
   });
@@ -62,7 +72,7 @@ describe("state rendering", () => {
 
 describe("size, halo and chrome", () => {
   it("drives the font size, not a box", async () => {
-    const el = await mount({ entity: "sensor.a", show_state: true });
+    const el = await mount({ entity: "sensor.a", show: ["state"] });
     expect(el.style.getPropertyValue("--psc-label-size")).toBe("clamp(11px, 3cqw, 20px)");
   });
 
@@ -117,39 +127,39 @@ describe("size, halo and chrome", () => {
 
 describe("colour", () => {
   it("writes nothing for `none`, so the theme decides", async () => {
-    const el = await mount({ entity: "sensor.a", color: "none", show_state: true });
+    const el = await mount({ entity: "sensor.a", color: "none", show: ["state"] });
     expect(el.style.getPropertyValue("--psc-label-color")).toBe("");
   });
 
   it("maps a palette name onto Home Assistant's own variable", async () => {
-    const el = await mount({ entity: "sensor.a", color: "red", show_state: true });
+    const el = await mount({ entity: "sensor.a", color: "red", show: ["state"] });
     expect(el.style.getPropertyValue("--psc-label-color")).toBe("var(--red-color)");
   });
 
   it("passes an unknown value through as a plain CSS colour", async () => {
-    const el = await mount({ entity: "sensor.a", color: "#abcdef", show_state: true });
+    const el = await mount({ entity: "sensor.a", color: "#abcdef", show: ["state"] });
     expect(el.style.getPropertyValue("--psc-label-color")).toBe("#abcdef");
   });
 
   it("honours the state colour, which is the whole point of 1.4.0's reversal", async () => {
-    const el = await mount({ entity: "light.a", color: "state", show_state: true });
+    const el = await mount({ entity: "light.a", color: "state", show: ["state"] });
     expect(el.style.getPropertyValue("--psc-label-color")).toBe(
       "var(--state-light-on-color, var(--state-light-active-color, var(--state-active-color)))",
     );
   });
 
   it("dims the state line by the bulb's brightness, and only under `state`", async () => {
-    const dimmed = await mount({ entity: "light.a", color: "state", show_state: true });
+    const dimmed = await mount({ entity: "light.a", color: "state", show: ["state"] });
     expect(dimmed.style.getPropertyValue("--psc-label-brightness")).toBe("brightness(74.6%)");
     // A named colour is the user overruling the entity, so nothing dims it.
-    const named = await mount({ entity: "light.a", color: "red", show_state: true });
+    const named = await mount({ entity: "light.a", color: "red", show: ["state"] });
     expect(named.style.getPropertyValue("--psc-label-brightness")).toBe("");
   });
 
   it("hands the same colour to the hover veil, and withdraws both together", async () => {
-    const lit = await mount({ entity: "light.a", color: "red", show_state: true });
+    const lit = await mount({ entity: "light.a", color: "red", show: ["state"] });
     expect(lit.style.getPropertyValue("--psc-item-color")).toBe("var(--red-color)");
-    const off = await mount({ entity: "light.off", color: "red", show_state: true });
+    const off = await mount({ entity: "light.off", color: "red", show: ["state"] });
     expect(off.style.getPropertyValue("--psc-item-color")).toBe("");
     expect(off.style.getPropertyValue("--psc-label-color")).toBe("");
   });
@@ -185,7 +195,7 @@ describe("the shared interaction block", () => {
 
 describe("what a hass tick costs", () => {
   it("turns away a tick that moved another entity", async () => {
-    const el = await mount({ entity: "light.a", color: "state", show_state: true });
+    const el = await mount({ entity: "light.a", color: "state", show: ["state"] });
     el.style.removeProperty("--psc-label-size");
     const states = (el.hass as { states: Record<string, unknown> }).states;
     el.hass = {
@@ -197,7 +207,7 @@ describe("what a hass tick costs", () => {
   });
 
   it("follows its own entity, and leaves the config-only tokens alone", async () => {
-    const el = await mount({ entity: "light.a", color: "state", show_state: true });
+    const el = await mount({ entity: "light.a", color: "state", show: ["state"] });
     el.style.removeProperty("--psc-label-size");
     const states = (el.hass as { states: Record<string, unknown> }).states;
     el.hass = {

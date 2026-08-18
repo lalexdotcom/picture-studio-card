@@ -21,7 +21,7 @@ export const stubElementConfig = (type: string): ElementConfig => {
   if (type === "state-label") {
     // A label with nothing shown is an invisible item: showing the state is the
     // only stub that renders something the moment it is dropped.
-    return { type: "state-label", show_state: true, size: { ...DEFAULT_LABEL_SIZE } };
+    return { type: "state-label", show: ["state"], size: { ...DEFAULT_LABEL_SIZE } };
   }
   throw new Error(`picture-studio: unknown element type "${type}"`);
 };

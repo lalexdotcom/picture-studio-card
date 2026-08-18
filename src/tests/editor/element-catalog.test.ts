@@ -33,7 +33,7 @@ describe("stubElementConfig", () => {
   it("stubs a label showing its state, at the label's own default size", () => {
     expect(stubElementConfig("state-label")).toEqual({
       type: "state-label",
-      show_state: true,
+      show: ["state"],
       size: DEFAULT_LABEL_SIZE,
     });
   });

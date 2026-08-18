@@ -584,6 +584,7 @@ describe("PictureStudioElementForm — pill switch — fallback", () => {
     el.element = {
       type: "state-label",
       size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
       chrome: { theme: "auto", radius: 50, pill: false, opacity: 1, padding: 6 },
     } as StateLabelConfig;
     document.body.append(el);
@@ -637,6 +638,7 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     el.element = {
       type: "state-label",
       size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
       chrome: { theme: "auto", radius: 50, pill, opacity: 1, padding: 6 },
     } as StateLabelConfig;
     document.body.append(el);

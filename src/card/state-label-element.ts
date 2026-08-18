@@ -90,13 +90,13 @@ export class PictureStudioStateLabel extends LitElement {
       <div class="chrome">
         <div class="content">
           ${
-            config.show_name && stateObj
+            config.show.includes("name") && stateObj
               ? html`<span class="name"
-                >${this._hass?.formatEntityName?.(stateObj, config.name) ?? ""}</span
-              >`
+                  >${this._hass?.formatEntityName?.(stateObj, config.name) ?? ""}</span
+                >`
               : nothing
           }
-          ${config.show_state ? this._renderState(stateObj) : nothing}
+          ${config.show.includes("state") ? this._renderState(stateObj) : nothing}
         </div>
       </div>
     `;
