@@ -7,6 +7,8 @@ import {
   PictureStudioBadgeList,
   splitChoiceValue,
 } from "../../editor/badge-list";
+import { DEFAULT_LABEL_SIZE } from "../../element-size";
+import { cssRules } from "../card/harness";
 
 const localize = ((key: string) =>
   ({
@@ -183,6 +185,44 @@ describe("the list reads top-down while the array stores bottom-up", () => {
       "light.1",
       "light.2",
     ]);
+  });
+
+  it("marks a label that shows nothing, and leaves the others alone", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "element",
+        position: { top: 1, left: 1 },
+        anchor: "auto",
+        config: { type: "state-label", entity: "sensor.a", show: [], size: DEFAULT_LABEL_SIZE },
+      },
+      {
+        type: "element",
+        position: { top: 2, left: 2 },
+        anchor: "auto",
+        config: {
+          type: "state-label",
+          entity: "sensor.b",
+          show: ["state"],
+          size: DEFAULT_LABEL_SIZE,
+        },
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    // Display is reversed: sensor.b on top, sensor.a below.
+    expect(rows[0]?.querySelector(".empty")).toBeNull();
+    expect(rows[1]?.querySelector(".empty")).not.toBeNull();
+  });
+
+  it("wears a bare warning icon, not the visibility pill's dress", () => {
+    const rules = cssRules(PictureStudioBadgeList.styles);
+    expect(rules.get(".empty")).toContain("color: var(--warning-color)");
+    expect(rules.get(".empty")).toContain("--mdc-icon-size: 16px");
+    // No pill: no background, no radius. That belongs to .conditional alone.
+    expect(rules.get(".empty")).not.toContain("background");
+    expect(rules.get(".empty")).not.toContain("border-radius");
   });
 });
 
