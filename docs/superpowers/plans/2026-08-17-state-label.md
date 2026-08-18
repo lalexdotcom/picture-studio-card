@@ -1877,12 +1877,61 @@ git commit -m "feat(editor): an Appearance section, and a form per kind"
 ### Task 8: the add menu and the form headers
 
 **Files:**
-- Modify: `src/editor/badge-list.ts`, `src/editor/badge-form.ts`
-- Test: `src/tests/editor/badge-list.test.ts`
+- Modify: `src/editor/badge-list.ts`, `src/editor/badge-form.ts`, `src/editor/icons.ts`
+- Test: `src/tests/editor/badge-list.test.ts`, `src/tests/editor/icons.test.ts`
 
 **Interfaces:**
 - Consumes: `elementLabel` (existing), `choiceLabel` (existing).
-- Produces: nothing new.
+- Produces: `itemIcon` giving each element kind its own glyph.
+
+- [ ] **Step 0: One glyph per element kind**
+
+`itemIcon(family, _type)` in `src/editor/icons.ts` ignores the type today, and
+says so in a comment: *"the day one badge kind deserves its own glyph, this
+function is the only thing to open."* That day is now, on the element side —
+two kinds sharing `mdi:shape-outline` tells a reader nothing about which is
+which.
+
+```ts
+const BADGE_ICON = "mdi:label";
+/** Falls back to the family's own glyph for a kind we do not know by name. */
+const ELEMENT_ICON = "mdi:shape-outline";
+const ELEMENT_ICONS: Record<string, string> = {
+  "state-icon": "mdi:brightness-7",
+  "state-label": "mdi:card-text-outline",
+};
+
+export const itemIcon = (family: "badge" | "element", type: string): string =>
+  family === "badge" ? BADGE_ICON : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);
+```
+
+Both names exist in the Material Design set Home Assistant serves — verified
+against `static/mdi/` in the running container. The `_type` parameter loses its
+underscore, and the doc comment above the function must lose the sentence that
+says the type is unused: it would now be false.
+
+Test it, asserting the literal names — this is the only thing that guards them:
+
+```ts
+describe("itemIcon", () => {
+  it("gives each element kind its own glyph", () => {
+    expect(itemIcon("element", "state-icon")).toBe("mdi:brightness-7");
+    expect(itemIcon("element", "state-label")).toBe("mdi:card-text-outline");
+  });
+
+  it("falls back to the family glyph for an unknown element kind", () => {
+    expect(itemIcon("element", "state-gauge")).toBe("mdi:shape-outline");
+  });
+
+  it("gives every badge the family glyph, whatever its type", () => {
+    expect(itemIcon("badge", "entity")).toBe("mdi:label");
+    expect(itemIcon("badge", "custom:mushroom-template-badge")).toBe("mdi:label");
+  });
+});
+```
+
+Existing assertions on the add menu's icons in
+`src/tests/editor/badge-list.test.ts` will need their expected values updated.
 
 - [ ] **Step 1: Write the failing tests**
 
