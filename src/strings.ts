@@ -25,6 +25,11 @@ const STRINGS = {
     chrome_radius: "Radius",
     chrome_opacity: "Opacity",
     chrome_content_ratio: "Content",
+    halo_enabled: "Stand out",
+    halo_enabled_helper:
+      "Adds a shadow and a light rim so the element stays readable on any picture.",
+    chrome_pill: "Pill",
+    chrome_padding: "Padding",
   },
   fr: {
     items: "Items",
@@ -43,6 +48,11 @@ const STRINGS = {
     chrome_radius: "Rayon",
     chrome_opacity: "Opacité",
     chrome_content_ratio: "Contenu",
+    halo_enabled: "Détacher",
+    halo_enabled_helper:
+      "Ajoute une ombre et un liseré clair pour rester lisible sur n'importe quelle image.",
+    chrome_pill: "Pilule",
+    chrome_padding: "Marge",
   },
 } as const;
 
