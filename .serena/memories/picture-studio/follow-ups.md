@@ -86,24 +86,44 @@ text fidelity at rest against a pixel jump during the grow under `anchor: auto`.
 
 ---
 
-## 7. Two defects found by the 1.4.0 branch review, not yet fixed
+## 7. ~~Two defects found by the 1.4.0 branch review~~ — DONE 2026-08-18
 
-**Found 2026-08-18, both verified in the code, neither fixed — the user closed
-the session on the report.** Both predate the day's work; they came in with the
-state label.
+Both fixed on `feat/config-tidy-up`: the label's display keys became one `show`
+list that storage omits at its default, and the four form labels now resolve
+through Home Assistant's own entity-badge keys. Kept until the branch merges.
 
-- **A label writes `show_name: false` / `show_state: false` into the stored
-  YAML.** `labelFromFormData` returns them as explicit booleans and
-  `storedConfig` spreads them through `...rest` untouched, while `size`,
-  `chrome` and `halo` are all filtered at their defaults. It breaks the rule the
-  same function states three lines above — *the default is the absence of the
-  key* — and it grows a line in every label a user ever opens. The fix belongs
-  beside `if (halo) config.halo = true`.
+---
 
-- **The `displayed_elements` options are unlocalized.**
-  `options: ["name", "state"].map((value) => ({ value, label: value }))` in
-  `state-label-form.ts` puts the raw lowercase English values on screen, inside a
-  form where every other control is localized. Home Assistant's own strings exist
-  and resolve at our floor: `ui.panel.lovelace.editor.card.generic.show_name`
-  ("Afficher le nom") and `…show_state` ("Afficher l'état") — checked in the
-  container's French `lovelace` fragment.
+## 8. One kind still falls back to the icon, in two places
+
+**Raised by the 1.4.0 final whole-branch review, shipped deliberately.** The
+config tidy-up removed the implicit "anything that is not a state-label is a
+state-icon" from `_dispatch` and `_createChild`. Two siblings still carry it:
+`_toData` in `element-form.ts`, and the identical inline ternary in that file's
+`render()` which feeds `.data` to `ha-form`.
+
+Unreachable today — `normalizeElementConfig` raises on an unknown kind before
+anything reaches them — and harmless even if it were reached, because `_dispatch`
+now no-ops for an unknown kind, so garbled icon-shaped data would be built and
+discarded rather than stored. The reviewer's verdict was ship, and the ruling
+that parked it is recorded in the branch's history.
+
+The fix is the same two-leg `if / else if` the other two sites now use, in one
+cleanup commit. **Do it the day a third element kind is designed, and before it
+is written** — that is the day all four sites stop being unreachable at once.
+
+---
+
+## 9. `_createChild` returning undefined misaligns the card's child arrays
+
+**Raised by the same review, shipped for the same reason.** Task 6 gave
+`_createChild` an `undefined` return for an unknown kind. Its caller returns
+early without pushing, so `_elements` and `_wrappers` stop being index-aligned
+with `_config.items`: with items A, B, C and B unknown, `_elements` is `[A, C]`,
+and the flag or wrapper meant for C lands on nothing while B's index reaches C.
+
+The `if (child)` and `if (!wrapper) return` guards stop it crashing, not
+misrouting. Unreachable today for the same reason as follow-up 8, and it becomes
+reachable on the same day — so the two are one piece of work. Push a
+placeholder rather than skipping, or filter the items list once and iterate the
+filtered pairs.
