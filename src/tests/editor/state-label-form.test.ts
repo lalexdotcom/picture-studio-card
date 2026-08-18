@@ -1,7 +1,12 @@
 import { describe, expect, it } from "@rstest/core";
 import { DEFAULT_LABEL_CHROME } from "../../chrome";
 import type { StateLabelConfig } from "../../config";
-import { labelFromFormData, labelSchema, labelToFormData } from "../../editor/state-label-form";
+import {
+  labelChromeSchema,
+  labelFromFormData,
+  labelSchema,
+  labelToFormData,
+} from "../../editor/state-label-form";
 import { DEFAULT_LABEL_SIZE } from "../../element-size";
 
 const base: StateLabelConfig = {
@@ -118,5 +123,50 @@ describe("labelFromFormData", () => {
   it("converts percent back to 0-1 for opacity", () => {
     const on = round({ chrome_enabled: true, chrome_opacity: 62 });
     expect(on.chrome?.opacity).toBeCloseTo(0.62, 5);
+  });
+});
+
+describe("labelChromeSchema", () => {
+  const localize = (() => "") as never;
+
+  it("hides chrome_radius when pill is true", () => {
+    const schema = labelChromeSchema(localize, false, true);
+    const flat: string[] = [];
+    for (const row of schema) {
+      const r = row as { name?: string; schema?: { name: string }[] };
+      if (r.schema) flat.push(...r.schema.map((s) => s.name));
+      else if (r.name) flat.push(r.name);
+    }
+    expect(flat).toContain("chrome_pill");
+    expect(flat).not.toContain("chrome_radius");
+  });
+
+  it("shows chrome_radius when pill is false", () => {
+    const schema = labelChromeSchema(localize, false, false);
+    const flat: string[] = [];
+    for (const row of schema) {
+      const r = row as { name?: string; schema?: { name: string }[] };
+      if (r.schema) flat.push(...r.schema.map((s) => s.name));
+      else if (r.name) flat.push(r.name);
+    }
+    expect(flat).toContain("chrome_radius");
+  });
+
+  it("a typed radius survives the pill being ticked and then unticked", () => {
+    // Prove the invariant: labelToFormData always puts chrome_radius in data,
+    // even when the pill is on. ha-form merges changed fields onto the full
+    // data object, so a hidden row's value is never lost.
+    const config = {
+      ...base,
+      chrome: { ...DEFAULT_LABEL_CHROME, theme: "auto" as const, radius: 7, pill: true },
+    };
+    // tick: pill on, radius still in data
+    const tickedData = labelToFormData(config);
+    expect(tickedData.chrome_pill).toBe(true);
+    expect(tickedData.chrome_radius).toBe(7);
+
+    // untick: pill off, restore from the same data record
+    const restored = labelFromFormData(config, { ...tickedData, chrome_pill: false });
+    expect(restored.chrome?.radius).toBe(7);
   });
 });

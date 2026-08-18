@@ -145,7 +145,6 @@ export class PictureStudioElementForm extends LitElement {
       element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
     const schema = isLabel ? labelSchema() : iconSchema();
     const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
-    const chromeSchema = isLabel ? labelChromeSchema : iconChromeSchema;
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
     const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
 
@@ -250,7 +249,15 @@ export class PictureStudioElementForm extends LitElement {
                   <ha-form
                     .hass=${hass}
                     .data=${data}
-                    .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
+                    .schema=${
+                      isLabel
+                        ? labelChromeSchema(
+                            hass.localize,
+                            radioGroupAvailable,
+                            data.chrome_pill === true,
+                          )
+                        : iconChromeSchema(hass.localize, radioGroupAvailable)
+                    }
                     .computeLabel=${label}
                     @value-changed=${this._valueChanged}
                   ></ha-form>

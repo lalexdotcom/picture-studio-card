@@ -129,12 +129,27 @@ export const labelChromeSchema = (
   // omits chrome_theme. When false, the select stays so the theme is still
   // changeable — ha-form is the guarantee that it renders.
   radioGroupAvailable = false,
+  pill = false,
 ): unknown[] => [
   ...(radioGroupAvailable ? [] : [themeSelectRow(localize)]),
-  { name: "chrome_pill", selector: { boolean: {} } },
   {
-    name: "chrome_radius",
-    selector: { number: { min: 0, max: 24, step: 1, unit_of_measurement: "px" } },
+    name: "",
+    type: "grid",
+    // Two columns, so the checkbox and the radius it excludes read as one
+    // decision rather than two rows. When the pill is on, the grid holds the
+    // checkbox alone.
+    column_min_width: "100px",
+    schema: [
+      { name: "chrome_pill", selector: { boolean: {} } },
+      ...(pill
+        ? []
+        : [
+            {
+              name: "chrome_radius",
+              selector: { number: { min: 0, max: 24, step: 1, unit_of_measurement: "px" } },
+            },
+          ]),
+    ],
   },
   {
     name: "chrome_opacity",

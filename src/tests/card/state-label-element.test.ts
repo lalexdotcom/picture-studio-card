@@ -57,7 +57,7 @@ describe("state rendering", () => {
 describe("size, halo and chrome", () => {
   it("drives the font size, not a box", async () => {
     const el = await mount({ entity: "sensor.a", show_state: true });
-    expect(el.style.getPropertyValue("--psc-label-size")).toBe("clamp(11px, 4cqw, 20px)");
+    expect(el.style.getPropertyValue("--psc-label-size")).toBe("clamp(11px, 3cqw, 20px)");
   });
 
   it("wears the halo attribute only when asked", async () => {
@@ -101,6 +101,11 @@ describe("size, halo and chrome", () => {
   it("never wraps", () => {
     const rule = cssRules(PictureStudioStateLabel.styles).find((r) => r.selector === ".content");
     expect(rule?.text).toContain("white-space: nowrap");
+  });
+
+  it("gives the state the badge weight token, not the default 400", () => {
+    const rule = cssRules(PictureStudioStateLabel.styles).find((r) => r.selector === ".state");
+    expect(rule?.text).toContain("font-weight: var(--ha-font-weight-medium, 500)");
   });
 });
 

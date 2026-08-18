@@ -267,6 +267,13 @@ export class PictureStudioStateLabel extends LitElement {
         font-size: 0.75em;
         color: var(--secondary-text-color);
       }
+      /* The weight Home Assistant gives a badge's own state — 500, not bold. Our
+         text stands beside badges on the same picture, and at the default 400 it
+         read lighter than them. The token rather than the number, so a theme that
+         redefines its scale carries the label with it. */
+      .state {
+        font-weight: var(--ha-font-weight-medium, 500);
+      }
     `,
   ];
 }

@@ -38,7 +38,7 @@ export const DEFAULT_ICON_SIZE: ElementSize = {
  */
 export const DEFAULT_LABEL_SIZE: ElementSize = {
   mode: "auto",
-  ratio: 4,
+  ratio: 3,
   min: 11,
   max: 20,
   value: 14,

@@ -163,7 +163,7 @@ describe("DEFAULT_LABEL_SIZE", () => {
   it("is a text body, roughly half an icon's ratio", () => {
     expect(DEFAULT_LABEL_SIZE).toEqual({
       mode: "auto",
-      ratio: 4,
+      ratio: 3,
       min: 11,
       max: 20,
       value: 14,
@@ -174,7 +174,7 @@ describe("DEFAULT_LABEL_SIZE", () => {
 describe("elementSizeCss with explicit defaults", () => {
   it("uses the given defaults in auto mode, not the icon's", () => {
     const size = { mode: "auto" as const, ratio: 99, min: 99, max: 99, value: 99 };
-    expect(elementSizeCss(size, DEFAULT_LABEL_SIZE)).toBe("clamp(11px, 4cqw, 20px)");
+    expect(elementSizeCss(size, DEFAULT_LABEL_SIZE)).toBe("clamp(11px, 3cqw, 20px)");
     expect(elementSizeCss(size, DEFAULT_ICON_SIZE)).toBe("clamp(24px, 8cqw, 48px)");
   });
 
