@@ -592,8 +592,9 @@ describe("PictureStudioElementForm — pill switch — fallback", () => {
     const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
     const pillRow = panel?.querySelector(".pill-row");
     expect(pillRow).not.toBeNull();
-    // Fallback: ha-form is present, the hand-rendered ha-switch is not.
-    expect(pillRow?.querySelector("ha-form")).not.toBeNull();
+    // Fallback: both children are ha-form (pill + radius).  In the hand-rendered
+    // branch only one ha-form remains (radius only), so the count discriminates.
+    expect(pillRow?.querySelectorAll("ha-form").length).toBe(2);
     expect(pillRow?.querySelector("ha-switch")).toBeNull();
   });
 });
@@ -677,7 +678,9 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     cb.dispatchEvent(new Event("change", { bubbles: true }));
 
     expect(events).toHaveLength(1);
-    const changed = events[0] as CustomEvent<{ element: StateLabelConfig }>;
+    const first = events[0];
+    if (!first) throw new Error("expected one element-changed event");
+    const changed = first as CustomEvent<{ element: StateLabelConfig }>;
     expect(changed.detail.element.type).toBe("state-label");
     expect(changed.detail.element.chrome?.pill).toBe(true);
     // The chrome theme must survive the toggle — _pillChanged merges onto the

@@ -154,8 +154,8 @@ export class PictureStudioElementForm extends LitElement {
     const radioGroupAvailable = !!customElements.get("ha-radio-group");
 
     // ha-selector-boolean (the path labelPillSchema takes) mounts ha-switch
-    // inside ha-formfield. We render ha-switch directly — our .section-label
-    // span is already the label, so ha-formfield's slot mechanism is redundant.
+    // inside ha-formfield. We render ha-switch directly — our .pill-label span
+    // is already the label, so ha-formfield's slot mechanism is redundant.
     // The check is lazy for the same reason as above. Falls back to ha-form if
     // the element is absent.
     const switchAvailable = !!customElements.get("ha-switch");
