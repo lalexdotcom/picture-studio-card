@@ -32,22 +32,25 @@ Suite: **347 tests** on `feat/state-label` (329 was 1.3.0's count and was alread
 
 ## Work in progress — 1.4.0, branch `feat/state-label`
 
-**Paused 2026-08-18 at the user's request, HEAD `ad88902`, tree clean, 402 tests green.** Adding
-a second element kind, `state-label` (an entity's text on the picture), and turning the icon's
-halo into an opt-in. Spec `docs/superpowers/specs/2026-08-17-state-label-design.md`, plan
-`docs/superpowers/plans/2026-08-17-state-label.md`, now **twelve** tasks — two were inserted
-mid-run from the user's first look at a real dashboard — run through the
-subagent-driven-development skill. **The ledger that survives a lost session is
-`.superpowers/sdd/2026-08-17-state-label/progress.md`** — it holds every ruling and the exact
-resume point.
+**Paused 2026-08-18 (usage quota), HEAD `12d2aaf`, tree clean, 424 tests green, lint 0 errors.**
+Adding a second element kind, `state-label` (an entity's text on the picture), and turning the
+icon's halo into an opt-in. Spec `docs/superpowers/specs/2026-08-17-state-label-design.md`, plan
+`docs/superpowers/plans/2026-08-17-state-label.md` — fourteen tasks, four of them inserted
+mid-run from the user's own browser walk. **The ledger that survives a lost session is
+`.superpowers/sdd/2026-08-17-state-label/progress.md`**: every ruling, every deferred minor, and
+the exact resume point.
 
-Tasks 1-9 are complete and reviewed clean: both chrome records, the size defaults as a
-parameter, the halo opt-in with its shared CSS module, the model, the element itself, the
-strings, the editor split per kind, the add menu and glyphs, and the polish from that first
-look. **Remaining: task 10** (a badge keeps one name across the add menu, the item list and the
-edit panel — a Shortcut shows its `text` and wears `mdi:label-variant`, a custom badge shows the
-name its library registered instead of `custom:…`), **task 11** (README and CHANGELOG), **task
-12** (the browser walk). Then the whole-branch review, then the branch is finishable.
+**All code tasks are done and reviewed.** What remains: the rest of the user's browser walk (a
+sections view is the only view type not yet exercised), the whole-branch review on a capable
+model — point it at the ledger's five deferred minors — then
+superpowers:finishing-a-development-branch, then the 1.4.0 bump (the user's call) and the user's
+push.
+
+**Validated in the user's browser already**: the halo gone when "Stand out" is off; a chromeless,
+halo-less icon on an entity WITH a picture keeping square corners, which kills the 1.3.0 clipping
+regression for good; `state-display` loading; a composed `state_content`; the pill at a long
+content; center-right anchoring; adaptive sizing in a panel view; and the whole Appearance
+section's layout.
 
 What 1.4.0 has settled so far, beyond the spec: the element glyphs are `mdi:brightness-7` for
 the icon and `mdi:card-text-outline` for the label; a label's adaptive default is

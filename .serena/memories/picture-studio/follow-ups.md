@@ -87,11 +87,13 @@ Two pieces travel with this one:
 
 ## 4. The hover, now that the grow has been rejected
 
-**Reopened 2026-08-18, and no longer hypothetical.** `transform: scale(1.04)`
-was kept in 1.3.0 on a second look. With a chrome on it, the user has now
-looked again and decided it "ne colle pas bien" — they want a tinted fill on
-hover instead, for both element kinds, and an alternative designed rather than
-a value tweaked. Nothing is decided beyond that.
+**The grow is GONE as of 1.4.0 — there is no hover treatment at all right now.**
+`transform: scale(1.04)` and its transition were removed from both element
+kinds on 2026-08-18 (commit `12d2aaf`); the cursor is the whole affordance, as
+it was before 1.2.0. The user rejected the grow after looking at it twice with
+a chrome underneath, and asked for a tinted fill instead — designed, not
+tweaked. **Nothing is decided about the replacement**, so this is the first
+thing to brainstorm when the area reopens.
 
 What is already established, so the next session starts from facts:
 
