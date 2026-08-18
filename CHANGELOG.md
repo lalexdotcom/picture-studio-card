@@ -12,7 +12,9 @@
   position** rather than before it.
 - **The panel you get when editing an item now shows the item's name** — "State
   icon", "Entity badge" — instead of its technical type. The add menu and the
-  item list agree on the same name.
+  item list agree on the same name: a Shortcut badge shows the **Text** you
+  gave it, and a custom badge shows the name its library registered rather
+  than the raw `custom:…` tag.
 - **The add menu lists the elements before the badges.**
 
 ### Added
