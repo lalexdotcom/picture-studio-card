@@ -207,6 +207,22 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this.select(undefined);
   };
 
+  /**
+   * A form opens at the top of itself, not at the scroll position of whatever
+   * was showing before — the list, or the previous item's form. The dialog owns
+   * the scroll container, several shadow roots above us, so nothing of ours can
+   * address it: `scrollIntoView` is the one call that reaches it, because the
+   * browser scrolls every ancestor container whatever tree it lives in.
+   *
+   * Guarded on the transition rather than on the value: an item's form re-renders
+   * on every keystroke and every hass tick, and scrolling on each of them would
+   * fight the user's own scrolling.
+   */
+  protected updated(changed: Map<string, unknown>): void {
+    if (!changed.has("_editingIndex") || this._editingIndex === undefined) return;
+    this.scrollIntoView({ block: "start" });
+  }
+
   protected render() {
     const config = this._config;
     const hass = this.hass;
