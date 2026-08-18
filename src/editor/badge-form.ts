@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
-import { badgeCatalog, choiceLabel, resolveBadgeClass } from "./badge-catalog";
+import { badgeCatalog, CUSTOM_PREFIX, choiceLabel, resolveBadgeClass } from "./badge-catalog";
 import { PLACEMENT_ICON } from "./icons";
 import "./visibility-section";
 
@@ -104,7 +104,10 @@ export class PictureStudioBadgeForm extends LitElement {
     const _type = this.badge.type ?? "";
     const _found = badgeCatalog(window.customBadges).find((c) => c.type === _type);
     const _title =
-      choiceLabel(this.hass.localize, _found ?? { type: _type, isCustom: false }) || "badge";
+      choiceLabel(
+        this.hass.localize,
+        _found ?? { type: _type, isCustom: _type.startsWith(CUSTOM_PREFIX) },
+      ) || "badge";
     return html`
       <div class="header">
         <ha-icon-button
