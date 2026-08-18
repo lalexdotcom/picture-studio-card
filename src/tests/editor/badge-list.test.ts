@@ -13,10 +13,26 @@ const localize = ((key: string) =>
   })[key] ?? "") as never;
 
 describe("addChoices", () => {
-  it("prefixes every entry with its family", () => {
+  it("formats the first and last entries with the right value, label, and icon", () => {
     const choices = addChoices(localize, undefined);
+    expect(choices[0]).toEqual({
+      value: "element:state-icon",
+      label: "Éléments: Icône d'état",
+      icon: "mdi:brightness-7",
+    });
+    expect(choices.at(-1)).toEqual({
+      value: "badge:shortcut",
+      label: "Badges: shortcut",
+      icon: "mdi:label",
+    });
+    // Compound "Family: Name" format — would fail if the separator or the
+    // localize prefix path broke for any entry.
     expect(
-      choices.every((c) => c.value.startsWith("badge:") || c.value.startsWith("element:")),
+      choices.every((c) =>
+        c.value.startsWith("badge:")
+          ? c.label.startsWith("Badges: ")
+          : c.label.startsWith("Éléments: "),
+      ),
     ).toBe(true);
   });
 
