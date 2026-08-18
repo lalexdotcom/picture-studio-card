@@ -10,7 +10,7 @@ import type { HomeAssistant } from "./types";
 const STRINGS = {
   en: {
     items: "Items",
-    stacking_hint: "The last items in the list are drawn on top.",
+    stacking_hint: "The first items in the list are drawn on top.",
     anchor: "Position",
     anchor_anchored: "Anchored",
     ratio: "Ratio",
@@ -32,7 +32,7 @@ const STRINGS = {
   },
   fr: {
     items: "Items",
-    stacking_hint: "Les derniers items de la liste sont au-dessus.",
+    stacking_hint: "Les premiers items de la liste sont au-dessus.",
     anchor: "Position",
     anchor_anchored: "Ancré",
     ratio: "Ratio",

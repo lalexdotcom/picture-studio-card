@@ -83,6 +83,25 @@ export class PictureStudioBadgeList extends LitElement {
     this.items = [];
   }
 
+  /**
+   * The list reads top-down, the array stores bottom-up — so the first row is
+   * the item painted last, the one the eye sees on top of the picture. Layer
+   * lists have worked this way since Photoshop, and the array keeps the meaning
+   * it has always had: the last item wins, which is what `z-index`-free DOM
+   * order gives us and what every config already written says.
+   *
+   * The flip is its own inverse, so one function serves both directions. It
+   * stops here, at the component boundary: every event this element fires
+   * carries an array index, so the editor, `items.ts` and the card never learn
+   * that a display order exists. That matters most for `item-edit`, whose index
+   * becomes `_editingIndex` and travels all the way to the card to mark the
+   * selected item — a display index escaping through there would highlight the
+   * wrong item on the picture.
+   */
+  private _flip(index: number): number {
+    return this.items.length - 1 - index;
+  }
+
   private _fire(type: string, detail?: unknown): void {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
@@ -94,39 +113,86 @@ export class PictureStudioBadgeList extends LitElement {
     if (choice) this._fire("item-add", choice);
   }
 
+  /**
+   * The add menu. `placement="bottom-end"` is how Home Assistant opens its own
+   * dropdowns from a right-hand trigger — the menu hangs under the button and
+   * aligns on its right edge rather than running off the dialog. An unsupported
+   * placement would only fall back to the default position, so the guard the
+   * project asks for elsewhere is not needed: nothing disappears.
+   */
+  private _addMenu(localize: LocalizeFunc) {
+    return html`
+      <ha-dropdown class="add" placement="bottom-end" @wa-select=${this._add}>
+        <ha-button slot="trigger" appearance="filled" size="s">
+          <ha-icon icon="mdi:plus" slot="start"></ha-icon>
+          ${localize("ui.common.add") || "Add"}
+        </ha-button>
+        ${addChoices(localize, window.customBadges).map(
+          (c) => html`<ha-dropdown-item .value=${c.value}
+            ><ha-icon slot="icon" .icon=${c.icon}></ha-icon>${c.label}</ha-dropdown-item
+          >`,
+        )}
+      </ha-dropdown>
+    `;
+  }
+
   protected render() {
     // Rendered before hass lands on the first paint; degrade to the raw key, as HA does.
     const localize: LocalizeFunc = this.hass?.localize ?? (() => "");
     // Built once per render: the whole badge catalogue would otherwise be rebuilt
     // once per row, on every hass tick.
     const catalog = badgeCatalog(window.customBadges);
+    // Top-down: the first row is the item drawn last, hence on top. A copy —
+    // reverse() mutates, and `items` belongs to the editor. Everything below is
+    // built from `rows`, so a row's index is a display index throughout, and
+    // _flip is applied exactly where one leaves this element.
+    const rows = [...this.items].reverse();
     // Resolved once per render rather than once per row.
-    const labels = this.items.map((item) => {
+    const labels = rows.map((item) => {
       if (item.type !== "badge") return rowLabel(item, this.hass);
       const type = String(item.config.type ?? "");
       const choice = catalog.find((c) => c.type === type);
       return rowLabel(item, this.hass, choice ? choiceLabel(localize, choice) : undefined);
     });
-    const kinds = this.items.map((item) => kindLabel(item, localize, catalog));
+    const kinds = rows.map((item) => kindLabel(item, localize, catalog));
 
     return html`
-      <!-- Our own string, not Home Assistant's "Badges": the list has carried
-           two families since 1.2.0, and naming it after one of them was true
-           for exactly one release. -->
-      <h3>${localizeOwn(this.hass, "items")}</h3>
-      <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
+      <div class="header">
+        <div class="titles">
+          <!-- Our own string, not Home Assistant's "Badges": the list has carried
+               two families since 1.2.0, and naming it after one of them was true
+               for exactly one release. -->
+          <h3>${localizeOwn(this.hass, "items")}</h3>
+          <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
+        </div>
+        ${this._addMenu(localize)}
+      </div>
       <ha-sortable
         handle-selector=".handle"
         draggable-selector=".item"
         @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
           ev.stopPropagation();
-          this._fire("item-moved", ev.detail);
+          // ha-sortable reports the positions of the rows it can see, which are
+          // display positions. Flipping both is equivalent to reversing the
+          // array, moving, and reversing back — the splice is symmetric under
+          // reversal — and it keeps one mechanism in the file rather than two.
+          this._fire("item-moved", {
+            oldIndex: this._flip(ev.detail.oldIndex),
+            newIndex: this._flip(ev.detail.newIndex),
+          });
         }}
       >
         <div class="rows">
           ${repeat(
-            this.items,
-            (_item, index) => index,
+            rows,
+            // Keyed by the ARRAY index, not the row's own. `repeat` reuses a row
+            // whose key did not move, and an item is added to the end of the
+            // array — which is the top of the list. Keyed by display position,
+            // every row's key would shift on every insertion, so every row would
+            // be re-rendered and, worse, each DOM row would come to serve a
+            // different item: the focus a keyboard user is holding stays on the
+            // node and follows the position, not the item it was on.
+            (_item, index) => this._flip(index),
             (item, index) => html`
               <div class="item">
                 <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
@@ -160,41 +226,57 @@ export class PictureStudioBadgeList extends LitElement {
                 }
                 <ha-icon-button
                   .label=${localize("ui.common.edit") || "Edit"}
-                  @click=${() => this._fire("item-edit", { index })}
+                  @click=${() => this._fire("item-edit", { index: this._flip(index) })}
                   ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
                   .label=${localize("ui.common.delete") || "Delete"}
-                  @click=${() => this._fire("item-removed", { index })}
+                  @click=${() => this._fire("item-removed", { index: this._flip(index) })}
                   ><ha-icon icon="mdi:close"></ha-icon></ha-icon-button>
               </div>
             `,
           )}
         </div>
       </ha-sortable>
-      <ha-dropdown class="add" @wa-select=${this._add}>
-        <ha-button slot="trigger" appearance="filled" size="s">
-          <ha-icon icon="mdi:plus" slot="start"></ha-icon>
-          ${localize("ui.common.add") || "Add"}
-        </ha-button>
-        ${addChoices(localize, window.customBadges).map(
-          (c) => html`<ha-dropdown-item .value=${c.value}
-            ><ha-icon slot="icon" .icon=${c.icon}></ha-icon>${c.label}</ha-dropdown-item
-          >`,
-        )}
-      </ha-dropdown>
     `;
   }
 
   static styles = css`
+    /* The title, its caption and the add button on one line. The button is
+       aligned on the block's last line rather than centred on the pair: beside a
+       two-line title, centring floats it between the heading and the caption and
+       reads as belonging to neither. */
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--ha-space-2, 8px);
+      /* The gap the rows keep between themselves, so the header reads as the
+         first thing in the same rhythm rather than as a block glued to the list.
+         It sits on the row rather than on the caption: the button is taller than
+         the text beside it, and a margin under the text alone would leave the
+         button nearly touching the first item. */
+      margin-bottom: var(--ha-space-2, 8px);
+    }
+    /* The heading and its caption move as one block, so the flex row has two
+       children rather than three. */
+    .titles {
+      min-width: 0;
+    }
+    .add {
+      flex: none;
+    }
     /* Otherwise unstyled, as picture-elements' "Elements" heading is: only the
        gap below is dropped, so the hint reads as its caption. */
     h3 {
+      margin-top: 0;
       margin-bottom: var(--ha-space-1);
     }
     .hint {
       color: var(--secondary-text-color);
       font-size: var(--ha-font-size-s);
-      margin: 0 0 var(--ha-space-2);
+      /* No margin of its own: the header row below carries the whole gap, and a
+         second one here would also push the button off the caption's baseline. */
+      margin: 0;
     }
     /* The geometry of Home Assistant's own entity list — the one the Entities,
        Distribution and History Graph editors all draw through hui-entity-editor:
