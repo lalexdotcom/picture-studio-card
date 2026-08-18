@@ -20,8 +20,8 @@ describe("addChoices", () => {
       icon: "mdi:label",
     });
     expect(choices.at(-1)).toEqual({
-      value: "element:state-icon",
-      label: "Éléments: Icône d'état",
+      value: "element:state-label",
+      label: "Éléments: state-label",
       icon: "mdi:shape-outline",
     });
   });

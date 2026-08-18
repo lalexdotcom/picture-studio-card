@@ -337,6 +337,7 @@ export class PictureStudioElementForm extends LitElement {
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
     if (!this.element) return;
+    if (this.element.type !== "state-icon") return;
     const data = { ...toFormData(this.element), ...ev.detail.value };
     this.dispatchEvent(
       new CustomEvent("element-changed", {
@@ -352,6 +353,7 @@ export class PictureStudioElementForm extends LitElement {
   // exactly one way a config change leaves this component.
   private _modeChanged = (ev: Event): void => {
     if (!this.element) return;
+    if (this.element.type !== "state-icon") return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
     const data = { ...toFormData(this.element), size_mode: value };
@@ -366,6 +368,7 @@ export class PictureStudioElementForm extends LitElement {
 
   private _chromeThemeChanged = (ev: Event): void => {
     if (!this.element) return;
+    if (this.element.type !== "state-icon") return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
     const data = { ...toFormData(this.element), chrome_theme: value, chrome_enabled: true };
@@ -382,6 +385,7 @@ export class PictureStudioElementForm extends LitElement {
     const element = this.element;
     const hass = this.hass;
     if (!element || !hass) return nothing;
+    if (element.type !== "state-icon") return nothing;
 
     // Check at render time whether ha-radio-group is available.
     // If it is not, size_mode falls back to a vertical ha-form select — correct

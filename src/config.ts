@@ -1,6 +1,14 @@
-import { type IconChrome, isDefaultIconChrome, normalizeIconChrome } from "./chrome";
+import {
+  type IconChrome,
+  isDefaultIconChrome,
+  isDefaultLabelChrome,
+  type LabelChrome,
+  normalizeIconChrome,
+  normalizeLabelChrome,
+} from "./chrome";
 import {
   DEFAULT_ICON_SIZE,
+  DEFAULT_LABEL_SIZE,
   type ElementSize,
   isDefaultElementSize,
   normalizeElementSize,
@@ -21,6 +29,7 @@ export const LIST_TAG = "picture-studio-badge-list";
 export const FORM_TAG = "picture-studio-badge-form";
 export const PICKER_TAG = "picture-studio-anchor-picker";
 export const ICON_TAG = "picture-studio-state-icon";
+export const LABEL_TAG = "picture-studio-state-label";
 export const ELEMENT_FORM_TAG = "picture-studio-element-form";
 export const PROBE_TAG = "picture-studio-visibility-probe";
 export const VISIBILITY_SECTION_TAG = "picture-studio-visibility-section";
@@ -62,7 +71,7 @@ export interface ElementItem extends ItemBase {
 
 export type PictureItem = BadgeItem | ElementItem;
 
-export type ElementConfig = StateIconConfig;
+export type ElementConfig = StateIconConfig | StateLabelConfig;
 
 export interface StateIconConfig {
   type: "state-icon";
@@ -80,6 +89,36 @@ export interface StateIconConfig {
   chrome?: IconChrome;
   /** Optional: absent means no halo. Opt-in since 1.4.0. */
   halo?: boolean;
+}
+
+/**
+ * An entity's text on the picture. The mirror image of the state-icon: it keeps
+ * the half of Home Assistant's entity-badge form the icon left behind — the
+ * name, the displayed parts and the composed state content — and renders it
+ * through HA's own `state-display`.
+ */
+export interface StateLabelConfig {
+  type: "state-label";
+  /** Optional: a freshly added label has no entity until one is picked. */
+  entity?: string;
+  /** May hold the composed sentinels the entity_name selector stores. */
+  name?: string;
+  /** "none" or a theme colour. Never "state" — see the spec, decision 6. */
+  color?: string;
+  show_name?: boolean;
+  show_state?: boolean;
+  /** What `state-display` composes; a list joins its parts. */
+  state_content?: string | string[];
+  time_format?: string;
+  tap_action?: ActionConfig;
+  hold_action?: ActionConfig;
+  double_tap_action?: ActionConfig;
+  /** Drives font-size rather than a box. */
+  size: ElementSize;
+  /** Optional: absent means no halo. */
+  halo?: boolean;
+  /** Optional: absent means no chrome, which is also what DEFAULT_LABEL_CHROME says. */
+  chrome?: LabelChrome;
 }
 
 /**
@@ -134,20 +173,31 @@ export const normalizeElementConfig = (
   raw: Record<string, unknown>,
   index: number,
 ): ElementConfig => {
-  if (raw.type !== "state-icon") {
-    throw new Error(`picture-studio: items[${index}].config must have a \`type\` — "state-icon"`);
-  }
   // Unknown keys are kept, for the same reason an unreadable item raises instead
   // of vanishing: storedConfig rewrites the whole config on every editor commit,
   // so anything dropped here would be dropped from the user's YAML on the first
   // drag.
-  return {
-    ...raw,
-    type: "state-icon",
-    size: normalizeElementSize(raw.size, DEFAULT_ICON_SIZE),
-    chrome: normalizeIconChrome(raw.chrome),
-    halo: raw.halo === true,
-  } as StateIconConfig;
+  if (raw.type === "state-icon") {
+    return {
+      ...raw,
+      type: "state-icon",
+      size: normalizeElementSize(raw.size, DEFAULT_ICON_SIZE),
+      chrome: normalizeIconChrome(raw.chrome),
+      halo: raw.halo === true,
+    } as StateIconConfig;
+  }
+  if (raw.type === "state-label") {
+    return {
+      ...raw,
+      type: "state-label",
+      size: normalizeElementSize(raw.size, DEFAULT_LABEL_SIZE),
+      chrome: normalizeLabelChrome(raw.chrome),
+      halo: raw.halo === true,
+    } as StateLabelConfig;
+  }
+  throw new Error(
+    `picture-studio: items[${index}].config must have a \`type\` — "state-icon" or "state-label"`,
+  );
 };
 
 /**
@@ -233,10 +283,17 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       // that never touched either key does not grow one.
       const { size, chrome, halo, ...rest } = item.config;
       const config: Record<string, unknown> = { ...rest };
-      if (!isDefaultElementSize(size, DEFAULT_ICON_SIZE)) config.size = size;
-      if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
-      // The default is the absence of the key, as with the anchor: a config
-      // that never asked for a halo does not grow the key.
+      const isLabel = item.config.type === "state-label";
+      const sizeDefaults = isLabel ? DEFAULT_LABEL_SIZE : DEFAULT_ICON_SIZE;
+      if (!isDefaultElementSize(size, sizeDefaults)) config.size = size;
+      // The guard is what narrows the optional type, not a redundancy — two
+      // reviewers have flagged it, and it is correct.
+      if (chrome) {
+        const isDefault = isLabel
+          ? isDefaultLabelChrome(chrome as LabelChrome)
+          : isDefaultIconChrome(chrome as IconChrome);
+        if (!isDefault) config.chrome = chrome;
+      }
       if (halo) config.halo = true;
       stored.config = config;
     }
