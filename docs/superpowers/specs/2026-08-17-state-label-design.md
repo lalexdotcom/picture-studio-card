@@ -351,3 +351,59 @@ CHANGELOG heading reads `unreleased` and both change together at delivery, with
 the git tag. The CHANGELOG opens on `Changed`: the halo is no longer drawn by
 default and is ticked in Appearance, and that section now comes after Size and
 position.
+
+## Verification
+
+Walked by the user in a real Home Assistant, in a panel view and a sections view,
+on the branch build served from `dist/`.
+
+**The 1.3.0 regression is dead.** A chromeless, halo-less icon on an entity *with
+a picture* renders square, right-angled, unclipped, with no rim and no glow. That
+is the hardest case for the defect that shipped in 1.3.0 — where `border-radius`
+and `overflow: hidden` had drifted out of `:host([chrome])` and rounded every
+icon that had no chrome — and it renders correctly. The three separations hold:
+the shape belongs to the chrome, the halo to its own rule, and the absence of
+both leaves nothing behind.
+
+**Confirmed in the browser:** the halo disappears when *Stand out* is off and
+returns when it is ticked; `state-display` is present in the DOM, so its chunk
+loads in a dashboard and the `formatEntityState` fallback is never taken in
+normal use; a composed `state_content` renders (`HS · 29% · 345, 75 · 6 minutes
+ago · On`); a pill stays a pill at long content; the name/state hierarchy reads
+correctly on two lines; anchoring holds at center-right; and adaptive sizing
+tracks the card's width in a panel view.
+
+**Changed as a result of the walk**, each with its own task rather than a tweak:
+
+- The adaptive default was `4cqw` and crowded the icons beside it — now `3cqw`,
+  so `clamp(11px, 3cqw, 20px)`.
+- The label's state read lighter than the badges around it, being at the default
+  400 while `ha-badge` styles both of its lines at `--ha-font-weight-medium`. It
+  now carries that token. Not bold: what separates a badge's name from its state
+  is size and colour, which this label already did.
+- *Pill* and *Radius* shared a row where ticking the switch removed the radius
+  from the DOM and collapsed the row. The radius is now hidden with
+  `visibility: hidden` and keeps its box, so the layout does not move; the row is
+  hand-rendered because `ha-form`'s grid only makes equal columns and could not
+  give the switch its natural width.
+- That switch had silently become a checkbox: `ha-form` has two boolean paths,
+  and `selector: { boolean: {} }` — ours — goes through `ha-selector-boolean` to
+  an `ha-switch`, while `type: "boolean"` goes to `ha-form-boolean` and a
+  checkbox. Reading the wrong one is what produced the wrong widget.
+- The row's label sat off-centre because it reused `.section-label`, a class
+  whose `margin-block-end` exists to space it *above* a control group; no
+  `align-items: center` can undo a margin. It has its own class now.
+- A separator matching the anchor section's divider now sits between the two
+  controls, and the row's `gap` was removed so the separator carries the spacing
+  alone — the two places are equal by construction rather than by two numbers
+  someone has to keep in step.
+- **The hover grow is gone**, on both kinds. `transform: scale(1.04)` dated from
+  1.2.0, when an item was a glyph; with a chrome under it, it grows a filled disc
+  or a filled pill and reads wrong. It was removed rather than tuned: what
+  replaces it is a tinted fill, which is a design question of its own. Until then
+  the cursor is the whole affordance, as it was before 1.2.0.
+
+**Settled without the browser**: `state-display` declares no stylesheet at all,
+only properties and a `render()` returning text — so an inherited property set on
+its host reaches its text unopposed, and the label's font weight needs no
+`::part` and no token.
