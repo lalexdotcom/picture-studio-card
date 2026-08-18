@@ -57,11 +57,35 @@ Neither blocks anything; both are worth a minute if the area is reopened.
 
 ---
 
-## 4. The hover grow, if a chrome ever makes it look wrong
+## 4. The hover, now that the grow has been rejected
 
-`transform: scale(1.04)` on the host now scales a filled disc rather than a
-glyph. Looked at on a real dashboard and kept — the impression that it was
-off-centre did not survive a second look. If it is ever revisited, the
-alternative already sketched is to drop the scale when a chrome is on and
-brighten the fill instead, which is what Home Assistant's own tiles and badges
-do.
+**Reopened 2026-08-18, and no longer hypothetical.** `transform: scale(1.04)`
+was kept in 1.3.0 on a second look. With a chrome on it, the user has now
+looked again and decided it "ne colle pas bien" — they want a tinted fill on
+hover instead, for both element kinds, and an alternative designed rather than
+a value tweaked. Nothing is decided beyond that.
+
+What is already established, so the next session starts from facts:
+
+- **`ha-badge` has no `:hover` rule at all.** It uses a Material ripple:
+  `--ha-ripple-color: var(--badge-color)`, `--ha-ripple-hover-opacity: .04`,
+  `--ha-ripple-pressed-opacity: .12`. "The chosen colour, dimmed" is a **4%**
+  veil of the badge's own colour, 12% when pressed.
+- **The "dashboard only, not the editor" half needs no code.** The card already
+  sets `.editing .item > * { pointer-events: none }`, so no hover reaches an
+  element while editing, and the editor's own feedback is
+  `.editing .item:hover { box-shadow: 0 0 0 4px rgba(primary, .35) }`.
+- **A veil tinted by the entity's state is not available.** `state-badge`
+  computes that colour inline and writes it onto an internal child; nothing is
+  exposed. It is the same wall that made `state-label` offer no state colour at
+  all. `currentColor` at 4%, behind a token a dashboard could override, was the
+  proposal on the table when the session ended.
+- **`interactionStyles` is still duplicated** in `state-icon-element.ts` and
+  `state-label-element.ts` — the transition, the `clickable` cursor and the
+  hover. Whatever replaces the scale is the moment to factor it into
+  `src/card/item-styles.ts`, beside the fill and the halo that already live
+  there.
+
+Two questions were put to the user and not answered: does the tint **replace**
+the scale when a chrome is present, or join it; and is `currentColor` an
+acceptable veil given the state colour is out of reach.

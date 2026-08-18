@@ -32,13 +32,29 @@ Suite: **347 tests** on `feat/state-label` (329 was 1.3.0's count and was alread
 
 ## Work in progress — 1.4.0, branch `feat/state-label`
 
-**Paused 2026-08-17 at the user's request, HEAD `fb71a6b`, tree clean.** Adding a second
-element kind, `state-label` (an entity's text on the picture), and turning the icon's halo into
-an opt-in. Spec `docs/superpowers/specs/2026-08-17-state-label-design.md`, plan
-`docs/superpowers/plans/2026-08-17-state-label.md`, ten tasks run through the
+**Paused 2026-08-18 at the user's request, HEAD `ad88902`, tree clean, 402 tests green.** Adding
+a second element kind, `state-label` (an entity's text on the picture), and turning the icon's
+halo into an opt-in. Spec `docs/superpowers/specs/2026-08-17-state-label-design.md`, plan
+`docs/superpowers/plans/2026-08-17-state-label.md`, now **twelve** tasks — two were inserted
+mid-run from the user's first look at a real dashboard — run through the
 subagent-driven-development skill. **The ledger that survives a lost session is
 `.superpowers/sdd/2026-08-17-state-label/progress.md`** — it holds every ruling and the exact
-resume point. Tasks 1 and 2 are complete and reviewed clean; task 3 is next.
+resume point.
+
+Tasks 1-9 are complete and reviewed clean: both chrome records, the size defaults as a
+parameter, the halo opt-in with its shared CSS module, the model, the element itself, the
+strings, the editor split per kind, the add menu and glyphs, and the polish from that first
+look. **Remaining: task 10** (a badge keeps one name across the add menu, the item list and the
+edit panel — a Shortcut shows its `text` and wears `mdi:label-variant`, a custom badge shows the
+name its library registered instead of `custom:…`), **task 11** (README and CHANGELOG), **task
+12** (the browser walk). Then the whole-branch review, then the branch is finishable.
+
+What 1.4.0 has settled so far, beyond the spec: the element glyphs are `mdi:brightness-7` for
+the icon and `mdi:card-text-outline` for the label; a label's adaptive default is
+`clamp(11px, 3cqw, 20px)`; its state carries `var(--ha-font-weight-medium, 500)`, which is
+`ha-badge`'s own weight and not bold — a badge styles **both** its lines at 500 and separates
+them by size and colour, which is what our label already did; and `pill` hides the radius
+control, because a radius beside a ticked pill is a setting that saves cleanly and does nothing.
 
 Renames already landed, and they are the naming convention from here on — the icon's things say
 "icon", the label's say "label": `Chrome` → `IconChrome` (with `DEFAULT_ICON_CHROME`,
