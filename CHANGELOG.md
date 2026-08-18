@@ -2,19 +2,29 @@
 
 ## unreleased
 
-### Added
-
-- **The `state-label` element now has a full editor.** Clicking a text label in
-  the item list opens an editor panel with entity, display content, interactions,
-  size and position, and appearance — the same sections an icon offers, adapted
-  for text. Previously it opened a blank panel.
-
 ### Changed
 
-- **The Chrome section is now called Appearance and moves after Size and
-  position.** It gains a "Stand out" checkbox that adds the halo shadow to the
-  element; the checkbox was previously only available via YAML. Both icons and
-  labels have the checkbox.
+- **The halo around an icon** — the light rim and soft shadow that keep it
+  readable on a photograph — is no longer drawn automatically. It is now a
+  **Stand out** checkbox at the top of the new **Appearance** section, off by
+  default, so icons placed before this release lose it until you tick the box.
+- **The Chrome section is now Appearance**, and it comes after **Size and
+  position** rather than before it.
+- **The panel you get when editing an item now shows the item's name** — "State
+  icon", "Entity badge" — instead of its technical type. The add menu and the
+  item list agree on the same name.
+- **The add menu lists the elements before the badges.**
+
+### Added
+
+- **A new element kind, State label**: an entity's text placed on the picture.
+  Show its name, its state, or both, compose what the state says the same way a
+  badge does, pick a colour, and size it from the card's width like every other
+  item. It can stand on the same surface an icon can, with a pill or rounded
+  corners and a padding of your own.
+- **Each item kind now has its own glyph** in the editor's item list and add
+  menu: a sun for a state icon, a text card for a state label, and distinct
+  label shapes for the core and custom badge families.
 
 ## 1.3.1 — 2026-08-17
 
