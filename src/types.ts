@@ -29,6 +29,8 @@ export interface HomeAssistant {
     name?: string | { type: string } | { type: string }[],
     options?: { separator?: string },
   ) => string;
+  /** Renders the entity's state as a display string, respecting state_content. */
+  formatEntityState?: (stateObj: HassEntity, stateContent?: string | string[]) => string;
   [key: string]: unknown;
 }
 

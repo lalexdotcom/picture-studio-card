@@ -1,6 +1,7 @@
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
-import { CARD_TAG, ICON_TAG } from "../../config";
+import { PictureStudioStateLabel } from "../../card/state-label-element";
+import { CARD_TAG, ICON_TAG, LABEL_TAG } from "../../config";
 
 /**
  * Stands in for a badge or the background element. It counts what the CARD
@@ -46,6 +47,7 @@ export const installHelpers = (): void => {
   define(FAKE_TAG, FakeChild);
   define(CARD_TAG, PictureStudioCard);
   define(ICON_TAG, PictureStudioStateIcon);
+  define(LABEL_TAG, PictureStudioStateLabel);
   (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({
     createHuiElement: makeChild,
     createBadgeElement: makeChild,

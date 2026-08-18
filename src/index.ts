@@ -1,5 +1,6 @@
 import { PictureStudioCard } from "./card/picture-studio-card";
 import { PictureStudioStateIcon } from "./card/state-icon-element";
+import { PictureStudioStateLabel } from "./card/state-label-element";
 import { PictureStudioVisibilityProbe } from "./card/visibility-probe";
 import {
   CARD_TAG,
@@ -7,6 +8,7 @@ import {
   ELEMENT_FORM_TAG,
   FORM_TAG,
   ICON_TAG,
+  LABEL_TAG,
   LIST_TAG,
   PICKER_TAG,
   PROBE_TAG,
@@ -41,6 +43,7 @@ if (!customElements.get(PICKER_TAG)) {
 }
 
 if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudioStateIcon);
+if (!customElements.get(LABEL_TAG)) customElements.define(LABEL_TAG, PictureStudioStateLabel);
 
 if (!customElements.get(ELEMENT_FORM_TAG)) {
   customElements.define(ELEMENT_FORM_TAG, PictureStudioElementForm);
