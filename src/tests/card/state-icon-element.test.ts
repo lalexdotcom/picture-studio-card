@@ -247,18 +247,17 @@ describe("chrome", () => {
 });
 
 describe("the halo", () => {
-  it("carries its two literal values, each behind a variable a dashboard can set", () => {
-    expect(cssRules(PictureStudioStateIcon.styles).get(".chrome")).toContain(
-      "filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4))) " +
-        "drop-shadow(var(--psc-icon-glow, 0 0 calc(var(--psc-icon-size) * 0.06) rgba(0, 0, 0, 0.2)));",
-    );
+  it("wears the halo attribute only when the config asks for it", async () => {
+    expect((await mount({ entity: "light.a" })).hasAttribute("halo")).toBe(false);
+    expect((await mount({ entity: "light.a", halo: true })).hasAttribute("halo")).toBe(true);
   });
 
-  it("is unconditional, unlike the shape and the clipping it sits with", () => {
-    const chromeOnly = cssRules(PictureStudioStateIcon.styles).get(":host([chrome]) .chrome");
-    expect(chromeOnly).toContain("border-radius");
-    expect(chromeOnly).toContain("overflow: hidden");
-    expect(chromeOnly).not.toContain("filter");
+  it("draws the halo behind :host([halo]) and nowhere else", () => {
+    const rules = cssRules(PictureStudioStateIcon.styles);
+    const unconditional = rules.find((r) => r.selector === ".chrome");
+    expect(unconditional?.text).not.toContain("drop-shadow");
+    const gated = rules.find((r) => r.selector === ":host([halo]) .chrome");
+    expect(gated?.text).toContain("drop-shadow");
   });
 });
 

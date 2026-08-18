@@ -78,6 +78,8 @@ export interface StateIconConfig {
   size: ElementSize;
   /** Optional: absent means no chrome, which is also what DEFAULT_CHROME says. */
   chrome?: IconChrome;
+  /** Optional: absent means no halo. Opt-in since 1.4.0. */
+  halo?: boolean;
 }
 
 /**
@@ -128,7 +130,10 @@ const normalizePosition = (raw: unknown): Position => {
   };
 };
 
-const normalizeElementConfig = (raw: Record<string, unknown>, index: number): ElementConfig => {
+export const normalizeElementConfig = (
+  raw: Record<string, unknown>,
+  index: number,
+): ElementConfig => {
   if (raw.type !== "state-icon") {
     throw new Error(`picture-studio: items[${index}].config must have a \`type\` — "state-icon"`);
   }
@@ -141,6 +146,7 @@ const normalizeElementConfig = (raw: Record<string, unknown>, index: number): El
     type: "state-icon",
     size: normalizeElementSize(raw.size, DEFAULT_ICON_SIZE),
     chrome: normalizeIconChrome(raw.chrome),
+    halo: raw.halo === true,
   } as StateIconConfig;
 };
 
@@ -225,10 +231,13 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       // Only when every field is a default: a mode may be off and still carry
       // numbers the user typed, and dropping the key would lose them. A config
       // that never touched either key does not grow one.
-      const { size, chrome, ...rest } = item.config;
+      const { size, chrome, halo, ...rest } = item.config;
       const config: Record<string, unknown> = { ...rest };
       if (!isDefaultElementSize(size, DEFAULT_ICON_SIZE)) config.size = size;
       if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
+      // The default is the absence of the key, as with the anchor: a config
+      // that never asked for a halo does not grow the key.
+      if (halo) config.halo = true;
       stored.config = config;
     }
     return stored;

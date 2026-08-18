@@ -4,6 +4,7 @@ import {
   hasVisibility,
   imagePath,
   normalizeConfig,
+  normalizeElementConfig,
   type StateIconConfig,
   storedConfig,
   stubConfig,
@@ -141,6 +142,7 @@ describe("normalizeConfig", () => {
         entity: "light.a",
         size: DEFAULT_ICON_SIZE,
         chrome: { theme: "none", radius: 50, opacity: 1, content_ratio: 0.6 },
+        halo: false,
       },
     });
   });
@@ -461,6 +463,46 @@ describe("element chrome", () => {
       opacity: 1,
       content_ratio: 0.6,
     });
+  });
+});
+
+describe("element halo", () => {
+  it("normalises `halo` to a strict boolean, absent meaning off", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/a.png",
+      items: [
+        { type: "element", position: { top: "1%", left: "1%" }, config: { type: "state-icon" } },
+      ],
+    });
+    expect((config.items[0]!.config as StateIconConfig).halo).toBe(false);
+  });
+
+  it("reads `halo: true` and rejects a truthy non-boolean", () => {
+    const on = normalizeElementConfig({ type: "state-icon", halo: true }, 0) as StateIconConfig;
+    const off = normalizeElementConfig({ type: "state-icon", halo: "yes" }, 0) as StateIconConfig;
+    expect(on.halo).toBe(true);
+    expect(off.halo).toBe(false);
+  });
+
+  it("stores `halo` only when it is on", () => {
+    const withHalo = storedConfig(
+      normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/a.png",
+        items: [
+          {
+            type: "element",
+            position: { top: "1%", left: "1%" },
+            config: { type: "state-icon", halo: true },
+          },
+          { type: "element", position: { top: "2%", left: "2%" }, config: { type: "state-icon" } },
+        ],
+      }),
+    );
+    const items = withHalo.items as { config: Record<string, unknown> }[];
+    expect(items[0]!.config.halo).toBe(true);
+    expect("halo" in items[1]!.config).toBe(false);
   });
 });
 

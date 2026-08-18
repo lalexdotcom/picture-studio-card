@@ -3,6 +3,7 @@ import { chromeFill } from "../chrome";
 import type { StateIconConfig } from "../config";
 import { DEFAULT_ICON_SIZE, elementSizeCss } from "../element-size";
 import type { ActionConfig, HomeAssistant } from "../types";
+import { chromeFillStyles, haloStyles } from "./item-styles";
 
 /** Home Assistant's own one-liner: an action counts when set and not "none". */
 export const hasAction = (action?: ActionConfig): boolean =>
@@ -141,6 +142,8 @@ export class PictureStudioStateIcon extends LitElement {
       }
     }
 
+    this.toggleAttribute("halo", config.halo === true);
+
     // Absent tap_action means clickable (the default action is more-info).
     // Mirrors Home Assistant's own badge.hasAction getter exactly: the cursor
     // disappears only when all three actions are explicitly set to "none".
@@ -168,7 +171,10 @@ export class PictureStudioStateIcon extends LitElement {
     });
   }
 
-  static styles = css`
+  static styles = [
+    chromeFillStyles,
+    haloStyles("--psc-icon-size"),
+    css`
     :host {
       display: block;
       line-height: 0;
@@ -206,29 +212,6 @@ export class PictureStudioStateIcon extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      /* Moved off :host so the wrapper carries the whole chrome, halo included.
-         The icon stands on the user's picture, not on the theme's background,
-         so its contrast has to hold against an unknown image — which no theme
-         token can promise. Hence literal white and black here, and only here.
-         drop-shadow rather than a border or a box-shadow: it traces the
-         rendered silhouette, so it follows the glyph when there is no chrome
-         and the disc when there is one. Both are exposed as variables so a
-         dashboard can dial them without forking the element.
-         The glow is tuned for the filled silhouette — a chrome's disc, or the
-         square an entity picture paints — because that is where these values
-         lay the most ink: at 60% the edge read as a dark ring on a light
-         picture rather than as a shadow, so the opacity came down to 20%.
-         The blur is a share of the icon's own size rather than a length: the
-         fixed 3px it replaces was 12.5% of a 24px icon and 7.5% of a 40px one,
-         which is why a small icon wore the halo as a band. 6% comes to 1.4px at
-         24px, 2.4px at 40px and 2.9px at 48px, and calc() resolves
-         --psc-icon-size whatever it is, so a clamp()ed size carries the halo
-         with it as the card's column changes width.
-         The white rim is part of none of this: a hairline stays a hairline at
-         every size, and it is what carries a dark icon on a dark picture, so it
-         keeps its 1.2.0 value. */
-      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
-        drop-shadow(var(--psc-icon-glow, 0 0 calc(var(--psc-icon-size) * 0.06) rgba(0, 0, 0, 0.2)));
     }
     /* The shape and the clipping belong to the chrome: an unshaped, unclipped
        wrapper is exactly what "no chrome" means. */
@@ -238,16 +221,6 @@ export class PictureStudioStateIcon extends LitElement {
          to the chrome's own silhouette — the chrome becomes the picture's
          frame rather than a disc behind it. */
       overflow: hidden;
-    }
-    /* The fill sits on a pseudo-element so its opacity is its own: fading the
-       surface must not fade the icon standing on it. */
-    :host([chrome]) .chrome::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: var(--psc-chrome-fill);
-      opacity: var(--psc-chrome-opacity, 1);
     }
     /* state-badge paints an entity picture as a background-image on its own
        host and the glyph as a child sized by --mdc-icon-size, so scaling the
@@ -277,5 +250,6 @@ export class PictureStudioStateIcon extends LitElement {
       align-items: center;
       justify-content: center;
     }
-  `;
+  `,
+  ];
 }
