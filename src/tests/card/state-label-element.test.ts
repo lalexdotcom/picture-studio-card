@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it } from "@rstest/core";
 import { PictureStudioStateLabel } from "../../card/state-label-element";
 import { LABEL_TAG, type StateLabelConfig } from "../../config";
 import { DEFAULT_LABEL_SIZE } from "../../element-size";
@@ -23,6 +23,10 @@ const mount = async (config: Partial<StateLabelConfig>) => {
 
 const text = (el: PictureStudioStateLabel) =>
   el.shadowRoot?.querySelector(".content")?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+
+afterEach(() => {
+  document.body.replaceChildren();
+});
 
 describe("displayed parts", () => {
   it("shows the state alone by default", async () => {
