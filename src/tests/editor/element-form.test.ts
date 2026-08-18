@@ -219,8 +219,10 @@ describe("PictureStudioElementForm — radio group change", () => {
     group.dispatchEvent(new Event("change", { bubbles: true }));
 
     expect(events).toHaveLength(1);
+    const first = events[0];
+    if (!first) throw new Error("expected one element-changed event");
     const detail = (
-      events[0] as CustomEvent<{ element: { type: string; size: typeof DEFAULT_ICON_SIZE } }>
+      first as CustomEvent<{ element: { type: string; size: typeof DEFAULT_ICON_SIZE } }>
     ).detail;
     // The kind travels with the rest: the card rewrites the whole config on every
     // editor commit, so an element that lost its `type` would be erased from the
