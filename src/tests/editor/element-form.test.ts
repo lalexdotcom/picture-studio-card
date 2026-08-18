@@ -513,9 +513,11 @@ describe("PictureStudioElementForm — pill-row CSS", () => {
     expect(rule).toContain("grid-template-columns: max-content max-content 1fr");
   });
 
-  it("gives the row a 20px gap between the switch control and the radius", () => {
+  it("leaves the row's spacing to the separator, as the anchor section does", () => {
     const rule = cssRules(PictureStudioElementForm.styles).get(".pill-row");
-    expect(rule).toContain("gap: var(--ha-space-5, 20px)");
+    // A gap here would add to the separator's own margins and put the two
+    // controls twice as far apart as the anchor section's divider does.
+    expect(rule).not.toContain("gap:");
   });
 
   it("hides both separator and radius with visibility when the pill is on", () => {

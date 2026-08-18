@@ -392,11 +392,13 @@ export class PictureStudioElementForm extends LitElement {
     /* The switch takes its natural width, the separator takes its natural width,
        and the radius takes the rest — ha-form's own grid can only make equal
        columns, which is why this row is ours rather than a type:"grid" entry. */
+    /* No gap: the separator carries the whole spacing, exactly as it does above
+       the anchor picker, so the two places are spaced identically by
+       construction rather than by two numbers someone has to keep equal. */
     .pill-row {
       display: grid;
       grid-template-columns: max-content max-content 1fr;
       align-items: center;
-      gap: var(--ha-space-5, 20px);
     }
     /* Label and switch sit inline; the gap is the space between them that
        ha-selector-boolean's shadow DOM does not expose as a token. */
