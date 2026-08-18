@@ -285,6 +285,20 @@ items:
   re-emits it**, so `.data` must always be the complete flat record. That is what
   keeps a field alive while the active schema hides it — and what makes the
   chrome's conditional controls safe.
+- **`ha-form`'s two boolean paths render DIFFERENT controls.** A schema entry
+  written `{ name, selector: { boolean: {} } }` goes through
+  `ha-selector-boolean`, which mounts `<ha-formfield><ha-switch>` — a switch. A
+  schema entry written `{ name, type: "boolean" }` goes through
+  `ha-form-boolean`, which mounts `<ha-checkbox>` with the label in its slot.
+  Reading the wrong one turned a switch into a checkbox in 1.4.0, and only the
+  user's eye caught it. Neither exposes a token for the gap between its label and
+  its control: `ha-checkbox`'s custom properties cover colours, size and the
+  required marker, and `::part` crosses one shadow boundary where there are two.
+  Owning the control is the only way to set that spacing.
+- **`.section-label` in `element-form.ts` carries `margin-block-end: 0.5em`**,
+  because it exists to sit *above* a control group. Beside a control in a flex
+  row it pushes the text off centre, and `align-items: center` cannot undo a
+  margin. A label in the inline position needs its own class.
 - **`ha-form` takes `icon: "mdi:…"` as first-class beside `iconPath:`.**
 - **`ha-selector-select` in `mode: "list"`** never passes `orientation` to
   `ha-radio-group`, and there is no exported part, so no CSS can make it
