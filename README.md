@@ -195,7 +195,7 @@ items:
       show_name: false           # optional; default false
       show_state: true           # optional; default false
       name: ___device_name___    # optional; composed sentinels or plain text
-      color: none                # none | a theme colour name
+      color: none                # state | none | a theme colour name
       state_content: state       # optional; string or list of strings
       time_format: "24"          # optional; only when state_content carries a time
       tap_action: { action: more-info }
@@ -252,6 +252,11 @@ Coordinates outside `0-100` are allowed and kept as written: under a fixed ancho
 they are how you place an item deliberately over the edge. Dragging never creates
 an overflow and never worsens one — an item already hanging off the edge can be
 pulled back in but not pushed further out, and once fully inside it stays there.
+
+#### Which item is on top
+
+Items overlap in the order `items` gives them: **the last one in the YAML is
+drawn over the others**. There is no `z-index` to set.
 
 #### Visibility
 
@@ -334,6 +339,28 @@ The glow and outline tokens are `drop-shadow()` values used inside a CSS
 `filter:`. Setting one on the element's host tag or any ancestor overrides the
 default for that element. `--psc-icon-size` and `--psc-label-size` are written
 by the card and can be read by custom CSS.
+
+**Both kinds**, for the hover:
+
+| Token | Default | What it controls |
+|---|---|---|
+| `--psc-hover-opacity` | `0.04` | How much of its colour an item on a surface takes under the mouse |
+| `--psc-pressed-opacity` | `0.12` | The same, while the pointer is held down |
+| `--psc-item-color` | the item's own colour | What the hover tints with; falls back to the inactive grey when the item names no colour |
+
+#### What an item does under the mouse
+
+Only an item you can click reacts — one that has at least one action, which is
+every item unless you set tap, hold and double tap all to **No action**.
+
+What it does depends on whether it stands on a surface. **With a surface**, the
+surface takes a veil of the item's own colour — the same 4% Home Assistant gives
+a badge, 12% while you hold the pointer down. **Without a surface**, there is
+nothing to tint: a glyph or a line of text sits directly on the photograph,
+where a 4% veil would be invisible. So the item grows by 8% instead.
+
+Nothing reacts while you are editing the card: the whole picture belongs to
+placing items there.
 
 #### YAML-only keys
 

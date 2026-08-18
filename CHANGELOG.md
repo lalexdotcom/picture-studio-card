@@ -16,6 +16,22 @@
   gave it, and a custom badge shows the name its library registered rather
   than the raw `custom:…` tag.
 - **The add menu lists the elements before the badges.**
+- **The Add button sits on the Items line**, to the right of the title, instead
+  of below the list — so it stays in the same place however many items you have.
+- **Opening an item now shows you the top of its form.** It used to inherit
+  wherever you had scrolled to before, which could open a form halfway down
+  itself.
+- **The item list now reads top-down.** The first row is the item drawn on top
+  of the picture, and a new item lands at the top of the list — which is how a
+  layer list reads everywhere else. Your YAML is unchanged: `items` still stores
+  the item on top last, and the list is simply the mirror of it. The note under
+  the list says so.
+- **Items react to the mouse again, and they react to it differently.** An item
+  standing on a surface tints that surface with its own colour while the pointer
+  is over it — the shading Home Assistant gives a badge, and deeper while you
+  hold the button down. An item with no surface grows slightly instead, as it
+  did before, because a shading laid over a photograph cannot be seen. Only
+  items you can click react, and nothing reacts while you are editing the card.
 
 ### Added
 
