@@ -33,11 +33,13 @@ export const labelSchema = (showTimeFormat: boolean): unknown[] => [
       ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
       {
         name: "color",
-        // No include_state: a label cannot honour it. state-badge computes the
-        // state colour inline and exposes nothing, and copying that computation
-        // would drift from Home Assistant version to version. See the spec,
-        // decision 6.
-        selector: { ui_color: { default_color: "none", include_none: true } },
+        // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
+        // own recipe, so a label honours "state" exactly as an icon does. The
+        // default stays "none" — a label is text first, and text that changes
+        // colour on its own is a choice, not a default. See the spec, decision 6.
+        selector: {
+          ui_color: { default_color: "none", include_none: true, include_state: true },
+        },
       },
     ],
   },

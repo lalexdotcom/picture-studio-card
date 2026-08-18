@@ -51,11 +51,11 @@ describe("labelSchema", () => {
     ]);
   });
 
-  it("offers no state colour, and no `No color` trap it cannot honour", () => {
+  it("offers the state colour, and defaults to naming none", () => {
     const color = JSON.stringify(labelSchema(false));
     expect(color).toContain('"default_color":"none"');
     expect(color).toContain('"include_none":true');
-    expect(color).not.toContain("include_state");
+    expect(color).toContain('"include_state":true');
   });
 });
 

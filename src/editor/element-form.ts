@@ -37,9 +37,11 @@ import {
 // device classes without touching any public API, so this drifts silently.
 // The drift is cosmetic and recoverable: when a table falls behind, the field
 // merely stops being offered for that entity kind, and `time_format` written by
-// hand still round-trips through the editor untouched. That is why the copy was
-// accepted here while decision 6 of the spec refused the same trade for the
-// state colour, where drift would silently render the wrong colour instead.
+// hand still round-trips through the editor untouched. Decision 6 of the spec
+// once cited this copy as the acceptable case against the state colour; it was
+// reversed inside 1.4.0 once the state colour turned out to be a chain of CSS
+// variable names rather than a computation, and `src/state-color.ts` now carries
+// the same kind of copy under the same kind of guarantee.
 const TIME_BASED_CONTENT = ["last_updated", "last_changed", "last_triggered"] as const;
 // Domains whose default "state" attribute already is a datetime value.
 const TIME_DOMAINS = new Set([

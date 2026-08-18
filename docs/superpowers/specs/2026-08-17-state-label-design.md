@@ -107,24 +107,75 @@ global `html {}` at `1` and nothing in the bundle changes it. There is no
 query does something HA cannot, on the only basis that matters here — the card's
 width, not the screen's.
 
-### 6. No state colour on a label in 1.4.0
+### 6. State colour on a label — REVERSED on 2026-08-18, the label honours it
 
-`state-icon` computes no colour: it hands `.color` to `state-badge`, which calls
-`stateColorCss(stateObj)`, adds `rgb_color` for lights, a brightness filter and
-an `hvac_action` case, then writes the result inline onto its internal
-`<ha-state-icon>`. None of it is reachable from outside, and `hui-entity-badge`
-duplicates the same computation on its side.
+**This decision was overturned inside 1.4.0, before release. Its original text is
+kept below because the reversal is only intelligible beside it.**
 
-Reimplementing it was rejected: a copy of a non-exported HA function drifts
-silently across versions. Stealing the colour from a hidden `state-badge` at
-runtime is fragile and invisible to the test suite; it is parked as a follow-up,
-not adopted.
+> `state-icon` computes no colour: it hands `.color` to `state-badge`, which calls
+> `stateColorCss(stateObj)`, adds `rgb_color` for lights, a brightness filter and
+> an `hvac_action` case, then writes the result inline onto its internal
+> `<ha-state-icon>`. None of it is reachable from outside, and `hui-entity-badge`
+> duplicates the same computation on its side.
+>
+> Reimplementing it was rejected: a copy of a non-exported HA function drifts
+> silently across versions. Stealing the colour from a hidden `state-badge` at
+> runtime is fragile and invisible to the test suite; it is parked as a follow-up,
+> not adopted.
 
-So the label's selector simply omits `include_state`:
+**What changed is the premise, not the appetite.** The rejection assumed the copy
+would duplicate a *colour computation*. It does not. `stateColorCss` computes no
+colour at all: it returns a chain of nested `var()` fallbacks and the theme
+resolves it —
+
+```
+var(--state-light-on-color, var(--state-light-active-color, var(--state-active-color)))
+```
+
+— so what a copy duplicates is a **token naming convention**, the one every
+published theme redefines and which therefore cannot move quietly. And it
+degrades instead of breaking: a domain HA adds that our list misses falls through
+to `--state-active-color` / `--state-inactive-color`, HA's own last resort. The
+colour goes less specific, never wrong. That is a materially smaller risk than
+"drifts silently", and it is the one the reversal accepts.
+
+The alternative was measured and refused for the record: a hidden `state-badge`
+read through `getComputedStyle` reaches into a third party's shadow root (a
+selector that is not a contract, so it breaks *silently* — the very failure the
+original decision feared), yields a resolved `rgb()` that freezes the theme in
+place, needs a render tick, and costs a forced style recalculation per item per
+`hass` tick.
+
+Two precedents already stood in the tree, one of them in the file this decision
+governs: `NAMED_COLORS` in `state-label-element.ts` was already a copy of
+`computeCssColor`, and `TIME_BASED_CONTENT` in `element-form.ts` is an assumed
+copy whose comment cited *this* decision as its contrast. That comment is now
+wrong and is corrected with the reversal.
+
+**What lands instead:** `src/state-color.ts`, a pure module carrying the token
+chain, `stateActive`, the battery, group and `hvac_action` special cases, the
+`rgb_color` override and the brightness filter, with the upstream file list and
+the build it was reconciled against (`20260729.6`) in its header. It serves both
+element kinds, so an icon and a label standing side by side cannot disagree.
+
+The label's selector gains the flag, and keeps `none` as its default — a label is
+text first:
 
 ```js
-{ name: "color", selector: { ui_color: { include_none: true, default_color: "none" } } }
+{ name: "color", selector: { ui_color: { include_none: true, include_state: true, default_color: "none" } } }
 ```
+
+Two consequences worth stating, because both are behaviour changes:
+
+- **The brightness filter reaches a label's state line.** A dimmed bulb dims its
+  label exactly as it dims an icon; a config that does not want that names a
+  colour outright, which never takes the `state` branch. It sits on `.state`
+  alone — the line carrying the colour, the counterpart of the glyph — so a name
+  keeps its own.
+- **A named colour now only applies while the entity is active**, which is what
+  `state-badge` does and what the editor's own helper text has always promised.
+  Before the reversal the label coloured an inactive entity too, contradicting
+  the note displayed right under the field.
 
 `none` means "I name no colour, the theme decides". `computeCssColor` maps
 palette names to `var(--<name>-color)` but returns `none` unchanged, and
@@ -339,8 +390,6 @@ Three points structure it:
 ## Out of scope
 
 - The `image` element kind — the last picture-elements type with no equivalent.
-- State colour on a label; the "borrow it from a hidden `state-badge`" approach
-  is to be studied separately.
 - A maximum width, and therefore wrapping or truncation.
 - `chrome` moving to item level: settled, it does not.
 
