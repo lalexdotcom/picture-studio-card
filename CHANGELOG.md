@@ -4,6 +4,13 @@
 
 ### Changed
 
+- **A label now says what it shows in one place.** `show: [state, name]` replaces
+  the two separate switches, and a label that says nothing shows its state. An
+  empty list draws nothing at all — the editor marks those so you can still find
+  them.
+- **`anchor` moved inside `position`**, where the coordinates it qualifies live.
+  Dashboards written before this release keep working, and are rewritten the
+  first time you move an item.
 - **The halo around an icon** — the light rim and soft shadow that keep it
   readable on a photograph — is no longer drawn automatically. It is now a
   **Stand out** checkbox at the top of the new **Appearance** section, off by
