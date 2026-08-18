@@ -1979,7 +1979,240 @@ git commit -m "feat(editor): the items first, and a header that says what you ar
 
 ---
 
-### Task 9: documentation
+### Task 9: polish from the first browser look
+
+**Files:**
+- Modify: `src/element-size.ts`, `src/card/state-label-element.ts`, `src/editor/state-label-form.ts`, `src/editor/element-form.ts`
+- Test: `src/tests/element-size.test.ts`, `src/tests/card/state-label-element.test.ts`, `src/tests/editor/state-label-form.test.ts`
+
+**Interfaces:**
+- Consumes: everything from Tasks 1-8.
+- Produces: `labelChromeSchema(localize, radioGroupAvailable, pill)` — one argument wider.
+
+**Why this task exists.** The user put the card in front of a real dashboard and
+came back with four things. They are not a redesign; they are the corrections a
+first look always produces, and they land before the full walk of Task 11.
+
+- [ ] **Step 1: The adaptive default becomes 3%**
+
+In `src/element-size.ts`, `DEFAULT_LABEL_SIZE.ratio` goes from `4` to `3`. The
+user read it on a real card: at 4 the label crowded the icons beside it.
+
+Update the two literal expectations in `src/tests/element-size.test.ts` — the
+`DEFAULT_LABEL_SIZE` constant test and the `clamp(11px, 4cqw, 20px)` string,
+which becomes `clamp(11px, 3cqw, 20px)`. They assert literals on purpose: they
+are what guards these numbers.
+
+- [ ] **Step 2: The state carries Home Assistant's own text weight**
+
+Our label renders at the default 400 while a badge renders at 500, which is why
+it reads lighter than the badges beside it. Verified in the shipped frontend —
+`ha-badge` styles both of its lines the same way:
+
+```css
+.content { font-size: var(--ha-badge-font-size, var(--ha-font-size-s));
+           font-weight: var(--ha-font-weight-medium);
+           color: var(--primary-text-color) }
+.label   { font-size: var(--ha-font-size-xs);
+           font-weight: var(--ha-font-weight-medium);
+           color: var(--secondary-text-color) }
+```
+
+So in `src/card/state-label-element.ts`, the `.state` rule gains:
+
+```css
+    /* The weight Home Assistant gives a badge's own state — 500, not bold. Our
+       text stands beside badges on the same picture, and at the default 400 it
+       read lighter than them. The token rather than the number, so a theme that
+       redefines its scale carries the label with it. */
+    .state {
+      font-weight: var(--ha-font-weight-medium, 500);
+    }
+```
+
+The name keeps its own weight: size and colour already separate it, exactly as
+they do in a badge.
+
+**A caveat for Task 11, not for here.** The state is rendered by
+`<state-display>` when that element is defined, and by a plain `<span>` when it
+is not. `font-weight` inherits, so both paths should pick this up — but only a
+browser can confirm `state-display` does not reset it internally. happy-dom
+never defines that element, so the suite can only ever prove the span.
+
+Test what the suite can see: the `.state` rule carries the token.
+
+- [ ] **Step 3: Pill and radius are mutually exclusive**
+
+A pill's radius is whatever saturates the box, so a radius control beside a
+ticked pill is a setting that saves cleanly and does nothing — the failure mode
+this project has paid for four times. Hide it.
+
+`labelChromeSchema` takes the pill's current value and omits the radius row:
+
+```ts
+export const labelChromeSchema = (
+  localize: LocalizeFunc,
+  radioGroupAvailable = false,
+  pill = false,
+): unknown[] => [
+  ...(radioGroupAvailable ? [] : [themeSelectRow(localize)]),
+  {
+    name: "",
+    type: "grid",
+    // Two columns, so the checkbox and the radius it excludes read as one
+    // decision rather than two rows. When the pill is on, the grid holds the
+    // checkbox alone.
+    column_min_width: "100px",
+    schema: [
+      { name: "chrome_pill", selector: { boolean: {} } },
+      ...(pill
+        ? []
+        : [
+            {
+              name: "chrome_radius",
+              selector: { number: { min: 0, max: 24, step: 1, unit_of_measurement: "px" } },
+            },
+          ]),
+    ],
+  },
+  { name: "chrome_opacity", selector: { number: { min: 0, max: 100, step: 1, unit_of_measurement: "%" } } },
+  { name: "chrome_padding", selector: { number: { min: 0, max: 24, step: 1, unit_of_measurement: "px" } } },
+];
+```
+
+`element-form.ts` passes `data.chrome_pill === true` as the third argument.
+
+**The invariant holds and must be checked, not assumed:** `toFormData` still puts
+`chrome_radius` in `.data` whether or not the schema shows it, so ticking the
+pill and unticking it returns the radius the user had typed. `ha-form` merges the
+changed field onto the whole `.data` it was given, which is what makes hiding a
+row safe. Add a round-trip test proving a typed radius survives a pill being
+ticked and unticked.
+
+- [ ] **Step 4: Run everything**
+
+Run: `pnpm test && pnpm lint && pnpm typecheck && pnpm build`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat(label): the weight of a badge, and a radius a pill cannot contradict"
+```
+
+---
+
+### Task 10: a badge is named the way the menu names it
+
+**Files:**
+- Modify: `src/editor/icons.ts`, `src/editor/items.ts`, `src/editor/badge-list.ts`, `src/editor/badge-form.ts`
+- Test: `src/tests/editor/icons.test.ts`, `src/tests/editor/items.test.ts`, `src/tests/editor/badge-list.test.ts`
+
+**Interfaces:**
+- Consumes: `badgeCatalog(custom)` and `choiceLabel(localize, choice)` from `src/editor/badge-catalog.ts`.
+- Produces: `rowLabel(item, hass, badgeName?)` — one optional argument wider.
+
+**Why this task exists.** The user saw the item list and the edit panel next to
+the add menu, and the three disagreed about what a badge is called. A Mushroom
+badge the menu calls "Template" appears in the list as
+`custom:mushroom-template-badge`, and a Shortcut badge — whose whole content is
+a piece of text — appears as `shortcut`.
+
+**The rule this task brushes against, and does not break.** A badge's `config`
+belongs to a third party: we never validate it and never rewrite it. Reading a
+key to *label a row* is not that, and `rowLabel` already reads `entity`, `name`
+and `type` for exactly this purpose. Adding `text` to that list is the same act;
+writing to it would not be.
+
+- [ ] **Step 1: The Shortcut badge gets its own glyph**
+
+`itemIcon` gained a per-kind lookup for elements in Task 8. Badges need the same
+shape now that two of them differ:
+
+```ts
+const BADGE_ICON = "mdi:label";
+const BADGE_ICONS: Record<string, string> = {
+  shortcut: "mdi:label-variant",
+};
+```
+
+and the badge branch becomes `BADGE_ICONS[type] ?? BADGE_ICON`. Test the literal
+names, and test that a custom badge still falls back to the family glyph.
+
+- [ ] **Step 2: A Shortcut badge shows its text**
+
+`rowLabel` in `src/editor/items.ts` reads a badge's `name` today. A Shortcut has
+no `name`; its editor's field is `text` — verified in the shipped frontend, whose
+`hui-shortcut-badge-editor` schema carries `name:"text"`. So the badge branch
+reads `text` when the type is `shortcut`:
+
+```ts
+  // A Shortcut badge has no `name`: what it displays is `text`, and that is the
+  // only thing on it a user would recognise. Read for the row's label only —
+  // a badge's payload is still never validated and never rewritten.
+  const named =
+    item.type === "badge"
+      ? ((item.config as { name?: string; text?: string }).name ??
+         (item.config.type === "shortcut"
+           ? (item.config as { text?: string }).text
+           : undefined))
+      : undefined;
+```
+
+Test a shortcut with text, a shortcut without text (it must fall back, not show
+an empty row), and confirm an entity badge is unaffected.
+
+- [ ] **Step 3: A custom badge is named by the catalogue, in the list**
+
+`rowLabel` currently ends its badge chain on `config.type`, which for a custom
+badge is `custom:mushroom-template-badge`. The name the menu uses comes from
+`choiceLabel`, which reads the `name` the library registered — but that needs
+`window.customBadges`, and `items.ts` is pure.
+
+So the caller supplies it. `rowLabel` takes an optional third argument:
+
+```ts
+export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel
+```
+
+used in the badge branch in place of the raw type — `named ?? entityId ?? badgeName ?? config.type ?? "badge"` — and ignored entirely for an element. `badge-list.ts`
+already builds `badgeCatalog(window.customBadges)` for its own use; it passes
+`choiceLabel(localize, choice)` for the matching entry, or `undefined` when the
+type is in no catalogue.
+
+The prefix stays out of it: `"Badges: "` is the add menu's way of grouping a
+flat list of choices, and a row that already sits in a list of items does not
+need to be told its family twice.
+
+Test: a custom badge whose library registered a name shows that name; one whose
+type is in no catalogue still shows its raw type rather than nothing.
+
+- [ ] **Step 4: The edit panel agrees with the list**
+
+`src/editor/badge-form.ts` builds `{ type, isCustom: false }` by hand and hands
+it to `choiceLabel`. For a custom badge that discards the registered name, so the
+header shows the raw type while the list beside it shows "Template". Look the
+type up in `badgeCatalog(window.customBadges)` and pass the choice that is
+actually there; keep the `|| "badge"` terminal fallback Task 8 added.
+
+Test that a custom badge's header shows the registered name.
+
+- [ ] **Step 5: Run everything**
+
+Run: `pnpm test && pnpm lint && pnpm typecheck`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "feat(editor): a badge keeps one name, in the menu, the list and the panel"
+```
+
+---
+
+### Task 11: documentation
 
 **Files:**
 - Modify: `README.md`, `CHANGELOG.md`
@@ -2042,7 +2275,7 @@ git commit -m "docs: what changes for someone configuring the card"
 
 ---
 
-### Task 10: the browser walk
+### Task 12: the browser walk
 
 **Files:** none — this task produces a Verification record appended to the spec.
 
