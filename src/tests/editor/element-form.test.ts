@@ -531,18 +531,30 @@ describe("PictureStudioElementForm — pill-row CSS", () => {
     expect(rule).toContain("align-items: center");
     expect(rule).toContain("gap: var(--ha-space-4, 16px)");
   });
+
+  it("gives .pill-label the section-label typography without a bottom margin", () => {
+    // .section-label has margin-block-end: 0.5em for its stacked role above a
+    // control. That margin shifts the text off-centre in a flex row beside a
+    // switch. .pill-label carries the same colour/weight/line-height but omits
+    // the margin so align-items: center on .pill-control can do its job.
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-label");
+    expect(rule).toContain("color: var(--wa-form-control-label-color)");
+    expect(rule).toContain("font-weight: var(--wa-form-control-label-font-weight)");
+    expect(rule).toContain("line-height: var(--wa-form-control-label-line-height)");
+    expect(rule).not.toContain("margin");
+  });
 });
 
 // ── Pill switch render path tests ─────────────────────────────────────────────
 //
-// happy-dom does not register HA's components, so ha-checkbox is absent by
+// happy-dom does not register HA's components, so ha-switch is absent by
 // default and the form takes the fallback branch.  The hand-rendered branch is
 // exercised by the second describe, which registers a stub via beforeAll — a
 // timing that guarantees the fallback describe's tests still run without the
 // stub, then the stub lands just before the hand-rendered tests start.
 
 describe("PictureStudioElementForm — pill switch — fallback", () => {
-  // ha-checkbox is NOT registered here.  This describe must appear before the
+  // ha-switch is NOT registered here.  This describe must appear before the
   // hand-rendered describe so its tests execute while the stub is still absent.
 
   const hass = {
@@ -567,33 +579,33 @@ describe("PictureStudioElementForm — pill switch — fallback", () => {
     document.body.replaceChildren();
   });
 
-  it("ha-checkbox is not registered when this test runs", () => {
+  it("ha-switch is not registered when this test runs", () => {
     // Guards the ordering contract: if this assertion fails, the fallback branch
     // is not being tested — the stub arrived early and both describes exercise
     // the hand-rendered path.
-    expect(customElements.get("ha-checkbox")).toBeUndefined();
+    expect(customElements.get("ha-switch")).toBeUndefined();
   });
 
-  it("renders ha-form for the pill when ha-checkbox is absent", async () => {
+  it("renders ha-form for the pill when ha-switch is absent", async () => {
     const form = await mountLabelWithChrome();
     // The Appearance panel is the second ha-expansion-panel in the form.
     const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
     const pillRow = panel?.querySelector(".pill-row");
     expect(pillRow).not.toBeNull();
-    // Fallback: ha-form is present, the hand-rendered ha-checkbox is not.
+    // Fallback: ha-form is present, the hand-rendered ha-switch is not.
     expect(pillRow?.querySelector("ha-form")).not.toBeNull();
-    expect(pillRow?.querySelector("ha-checkbox")).toBeNull();
+    expect(pillRow?.querySelector("ha-switch")).toBeNull();
   });
 });
 
 describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
-  // Register a minimal stub so customElements.get("ha-checkbox") returns a
+  // Register a minimal stub so customElements.get("ha-switch") returns a
   // non-undefined value and the form takes the hand-rendered path.
   // beforeAll runs just before this describe's first test, which is after every
   // test in the fallback describe above — preserving the ordering contract.
   beforeAll(() => {
-    if (!customElements.get("ha-checkbox")) {
-      customElements.define("ha-checkbox", class extends HTMLElement {});
+    if (!customElements.get("ha-switch")) {
+      customElements.define("ha-switch", class extends HTMLElement {});
     }
   });
 
@@ -619,12 +631,12 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     document.body.replaceChildren();
   });
 
-  it("renders .pill-control with ha-checkbox when ha-checkbox is registered", async () => {
+  it("renders .pill-control with ha-switch when ha-switch is registered", async () => {
     const form = await mountLabelWithChrome();
     const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
     const pillControl = panel?.querySelector(".pill-control");
     expect(pillControl).not.toBeNull();
-    expect(pillControl?.querySelector("ha-checkbox")).not.toBeNull();
+    expect(pillControl?.querySelector("ha-switch")).not.toBeNull();
     // The first child is .pill-control, not an ha-form fallback.
     const pillRow = panel?.querySelector(".pill-row");
     expect(pillRow?.firstElementChild?.tagName.toLowerCase()).toBe("div");
@@ -635,7 +647,7 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
 
     const formOff = await mountLabelWithChrome(false);
     const panelOff = formOff.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
-    const cbOff = panelOff?.querySelector(".pill-control ha-checkbox") as CheckableEl | null;
+    const cbOff = panelOff?.querySelector(".pill-control ha-switch") as CheckableEl | null;
     expect(cbOff).not.toBeNull();
     if (!cbOff) return;
     expect(cbOff.checked).toBe(false);
@@ -643,7 +655,7 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
 
     const formOn = await mountLabelWithChrome(true);
     const panelOn = formOn.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
-    const cbOn = panelOn?.querySelector(".pill-control ha-checkbox") as CheckableEl | null;
+    const cbOn = panelOn?.querySelector(".pill-control ha-switch") as CheckableEl | null;
     expect(cbOn).not.toBeNull();
     if (!cbOn) return;
     expect(cbOn.checked).toBe(true);
@@ -656,11 +668,11 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
 
     const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
-    const cb = panel?.querySelector(".pill-control ha-checkbox") as CheckableEl | null;
+    const cb = panel?.querySelector(".pill-control ha-switch") as CheckableEl | null;
     expect(cb).not.toBeNull();
     if (!cb) return;
 
-    // Simulate ha-checkbox firing a change event; _pillChanged reads .checked.
+    // Simulate ha-switch firing a change event; _pillChanged reads .checked.
     cb.checked = true;
     cb.dispatchEvent(new Event("change", { bubbles: true }));
 

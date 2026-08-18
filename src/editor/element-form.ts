@@ -115,7 +115,7 @@ export class PictureStudioElementForm extends LitElement {
     this._dispatch(element, data);
   };
 
-  /** Pill ha-checkbox: read the checked state and merge onto the full record. */
+  /** Pill ha-switch: read the checked state and merge onto the full record. */
   private _pillChanged = (ev: Event): void => {
     const element = this.element;
     if (!element) return;
@@ -153,10 +153,12 @@ export class PictureStudioElementForm extends LitElement {
     // chunk that registers the element after ours is still found.
     const radioGroupAvailable = !!customElements.get("ha-radio-group");
 
-    // ha-form-boolean mounts ha-checkbox internally. We render it directly so
-    // we can control the gap between label and switch. The check is lazy for the
-    // same reason as above. Falls back to ha-form if the element is absent.
-    const switchAvailable = !!customElements.get("ha-checkbox");
+    // ha-selector-boolean (the path labelPillSchema takes) mounts ha-switch
+    // inside ha-formfield. We render ha-switch directly — our .section-label
+    // span is already the label, so ha-formfield's slot mechanism is redundant.
+    // The check is lazy for the same reason as above. Falls back to ha-form if
+    // the element is absent.
+    const switchAvailable = !!customElements.get("ha-switch");
 
     const isLabel = element.type === "state-label";
     const data =
@@ -280,13 +282,13 @@ export class PictureStudioElementForm extends LitElement {
                               switchAvailable
                                 ? html`
                                     <div class="pill-control">
-                                      <span class="section-label"
+                                      <span class="pill-label"
                                         >${localizeOwn(hass, "chrome_pill")}</span
                                       >
-                                      <ha-checkbox
+                                      <ha-switch
                                         .checked=${data.chrome_pill === true}
                                         @change=${this._pillChanged}
-                                      ></ha-checkbox>
+                                      ></ha-switch>
                                     </div>
                                   `
                                 : html`
@@ -396,11 +398,20 @@ export class PictureStudioElementForm extends LitElement {
       gap: var(--ha-space-5, 20px);
     }
     /* Label and switch sit inline; the gap is the space between them that
-       ha-form-boolean's shadow DOM did not expose as a token. */
+       ha-selector-boolean's shadow DOM does not expose as a token. */
     .pill-control {
       display: flex;
       align-items: center;
       gap: var(--ha-space-4, 16px);
+    }
+    /* .section-label carries margin-block-end: 0.5em for its stacked role
+       (above a radio group or anchor picker). Used beside a switch in a flex
+       row, that margin shifts the text off the centre line. This class keeps
+       the same typography without the positional margin. */
+    .pill-label {
+      color: var(--wa-form-control-label-color);
+      font-weight: var(--wa-form-control-label-font-weight);
+      line-height: var(--wa-form-control-label-line-height);
     }
     /* Hidden, not removed: the radius keeps its box, so ticking the switch does
        not reflow the row. visibility also takes it out of the tab order and out
