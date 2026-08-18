@@ -18,6 +18,8 @@ import {
 import {
   labelChromeSchema,
   labelFromFormData,
+  labelPillSchema,
+  labelRadiusSchema,
   labelSchema,
   labelSizeSchema,
   labelToFormData,
@@ -246,16 +248,34 @@ export class PictureStudioElementForm extends LitElement {
                         `
                       : nothing
                   }
+                                    ${
+                                      isLabel
+                                        ? html`
+                          <div class="pill-row" ?data-pill=${data.chrome_pill === true}>
+                            <ha-form
+                              .hass=${hass}
+                              .data=${data}
+                              .schema=${labelPillSchema()}
+                              .computeLabel=${label}
+                              @value-changed=${this._valueChanged}
+                            ></ha-form>
+                            <ha-form
+                              .hass=${hass}
+                              .data=${data}
+                              .schema=${labelRadiusSchema()}
+                              .computeLabel=${label}
+                              @value-changed=${this._valueChanged}
+                            ></ha-form>
+                          </div>
+                        `
+                                        : nothing
+                                    }
                   <ha-form
                     .hass=${hass}
                     .data=${data}
                     .schema=${
                       isLabel
-                        ? labelChromeSchema(
-                            hass.localize,
-                            radioGroupAvailable,
-                            data.chrome_pill === true,
-                          )
+                        ? labelChromeSchema(hass.localize, radioGroupAvailable)
                         : iconChromeSchema(hass.localize, radioGroupAvailable)
                     }
                     .computeLabel=${label}
@@ -327,6 +347,21 @@ export class PictureStudioElementForm extends LitElement {
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
+    }
+    /* The switch takes its natural width and the radius takes the rest —
+       ha-form's own grid can only make equal columns, which is why this row is
+       ours rather than a type:"grid" entry. */
+    .pill-row {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      align-items: center;
+      gap: var(--ha-space-4, 16px);
+    }
+    /* Hidden, not removed: the radius keeps its box, so ticking the switch does
+       not reflow the row. visibility also takes it out of the tab order and out
+       of a screen reader, which opacity would not. */
+    .pill-row[data-pill] > :last-child {
+      visibility: hidden;
     }
     picture-studio-visibility-section {
       display: block;

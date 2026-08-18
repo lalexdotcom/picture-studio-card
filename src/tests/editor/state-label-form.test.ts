@@ -4,6 +4,8 @@ import type { StateLabelConfig } from "../../config";
 import {
   labelChromeSchema,
   labelFromFormData,
+  labelPillSchema,
+  labelRadiusSchema,
   labelSchema,
   labelToFormData,
 } from "../../editor/state-label-form";
@@ -129,33 +131,35 @@ describe("labelFromFormData", () => {
 describe("labelChromeSchema", () => {
   const localize = (() => "") as never;
 
-  it("hides chrome_radius when pill is true", () => {
-    const schema = labelChromeSchema(localize, false, true);
-    const flat: string[] = [];
-    for (const row of schema) {
-      const r = row as { name?: string; schema?: { name: string }[] };
-      if (r.schema) flat.push(...r.schema.map((s) => s.name));
-      else if (r.name) flat.push(r.name);
-    }
-    expect(flat).toContain("chrome_pill");
+  it("no longer owns chrome_pill or chrome_radius — they live in their own schemas", () => {
+    const flat = names(labelChromeSchema(localize, false));
+    expect(flat).not.toContain("chrome_pill");
     expect(flat).not.toContain("chrome_radius");
   });
 
-  it("shows chrome_radius when pill is false", () => {
-    const schema = labelChromeSchema(localize, false, false);
-    const flat: string[] = [];
-    for (const row of schema) {
-      const r = row as { name?: string; schema?: { name: string }[] };
-      if (r.schema) flat.push(...r.schema.map((s) => s.name));
-      else if (r.name) flat.push(r.name);
-    }
-    expect(flat).toContain("chrome_radius");
+  it("still owns chrome_opacity and chrome_padding", () => {
+    const flat = names(labelChromeSchema(localize, false));
+    expect(flat).toContain("chrome_opacity");
+    expect(flat).toContain("chrome_padding");
+  });
+});
+
+describe("labelPillSchema", () => {
+  it("contains exactly chrome_pill", () => {
+    expect(names(labelPillSchema())).toEqual(["chrome_pill"]);
+  });
+});
+
+describe("labelRadiusSchema", () => {
+  it("contains exactly chrome_radius", () => {
+    expect(names(labelRadiusSchema())).toEqual(["chrome_radius"]);
   });
 
   it("a typed radius survives the pill being ticked and then unticked", () => {
     // Prove the invariant: labelToFormData always puts chrome_radius in data,
-    // even when the pill is on. ha-form merges changed fields onto the full
-    // data object, so a hidden row's value is never lost.
+    // even when the pill is on. The radius is now hidden by CSS rather than
+    // removed from the schema, so the value is preserved in the ha-form data
+    // object throughout the pill toggle.
     const config = {
       ...base,
       chrome: { ...DEFAULT_LABEL_CHROME, theme: "auto" as const, radius: 7, pill: true },

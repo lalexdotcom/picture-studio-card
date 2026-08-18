@@ -16,6 +16,7 @@ import {
   iconToFormData as toFormData,
 } from "../../editor/state-icon-form";
 import { DEFAULT_ICON_SIZE } from "../../element-size";
+import { cssRules } from "../card/harness";
 
 const base = { type: "state-icon" as const, size: DEFAULT_ICON_SIZE };
 const localize = ((key: string) => `L:${key}`) as never;
@@ -512,5 +513,20 @@ describe("the theme mode labels", () => {
 
   it("falls back to English if the key ever goes away", () => {
     expect(themeModeTitle((() => "") as never)).toBe("Theme mode");
+  });
+});
+
+describe("PictureStudioElementForm — pill-row CSS", () => {
+  it("lays the row out as a two-column grid so the switch keeps its natural width", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-row");
+    expect(rule).toContain("display: grid");
+    expect(rule).toContain("grid-template-columns: max-content 1fr");
+  });
+
+  it("hides the radius with visibility so the box stays reserved when the pill is on", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(
+      ".pill-row[data-pill] > :last-child",
+    );
+    expect(rule).toContain("visibility: hidden");
   });
 });
