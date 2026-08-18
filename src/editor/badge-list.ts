@@ -97,11 +97,16 @@ export class PictureStudioBadgeList extends LitElement {
   protected render() {
     // Rendered before hass lands on the first paint; degrade to the raw key, as HA does.
     const localize: LocalizeFunc = this.hass?.localize ?? (() => "");
-    // Resolved once per render rather than three times per row.
-    const labels = this.items.map((item) => rowLabel(item, this.hass));
-    // Same reason, and it matters more: without this the whole badge catalogue
-    // would be rebuilt once per row, on every hass tick.
+    // Built once per render: the whole badge catalogue would otherwise be rebuilt
+    // once per row, on every hass tick.
     const catalog = badgeCatalog(window.customBadges);
+    // Resolved once per render rather than once per row.
+    const labels = this.items.map((item) => {
+      if (item.type !== "badge") return rowLabel(item, this.hass);
+      const type = String(item.config.type ?? "");
+      const choice = catalog.find((c) => c.type === type);
+      return rowLabel(item, this.hass, choice ? choiceLabel(localize, choice) : undefined);
+    });
     const kinds = this.items.map((item) => kindLabel(item, localize, catalog));
 
     return html`

@@ -97,7 +97,7 @@ export interface RowLabel {
  * registry, or a Home Assistant too old to compose names all still say
  * something. The id says more than nothing.
  */
-export const rowLabel = (item: PictureItem, hass?: HomeAssistant): RowLabel => {
+export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel => {
   const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
   const stateObj = entityId ? hass?.states?.[entityId] : undefined;
 
@@ -105,7 +105,16 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant): RowLabel => {
   // choice by whoever configured that badge, and Home Assistant's own lists
   // only skip this because they have no such field to read. Never read for an
   // element, where `name` may hold composed sentinels.
-  const named = item.type === "badge" ? (item.config as { name?: string }).name : undefined;
+  // A Shortcut badge has no `name`: what it displays is `text`, and that is the
+  // only thing on it a user would recognise. Read for the row's label only —
+  // a badge's payload is still never validated and never rewritten.
+  const named =
+    item.type === "badge"
+      ? ((item.config as { name?: string; text?: string }).name ??
+        (item.config.type === "shortcut"
+          ? (item.config as { text?: string }).text || undefined
+          : undefined))
+      : undefined;
 
   if (entityId && stateObj && hass?.formatEntityName) {
     const format = hass.formatEntityName;
@@ -134,7 +143,7 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant): RowLabel => {
   }
 
   const config = item.config as { entity?: string; type?: string };
-  const primary = named ?? entityId ?? config.type ?? "badge";
+  const primary = named ?? entityId ?? badgeName ?? config.type ?? "badge";
   if (config.type && config.type !== primary) return { primary, secondary: config.type };
   return { primary };
 };

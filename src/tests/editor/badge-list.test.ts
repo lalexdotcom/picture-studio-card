@@ -23,7 +23,7 @@ describe("addChoices", () => {
     expect(choices.at(-1)).toEqual({
       value: "badge:shortcut",
       label: "Badges: shortcut",
-      icon: "mdi:label",
+      icon: "mdi:label-variant",
     });
     // Compound "Family: Name" format — would fail if the separator or the
     // localize prefix path broke for any entry.
@@ -61,6 +61,13 @@ describe("kindLabel", () => {
   it("falls back to the raw type for a badge the catalogue does not know", () => {
     expect(kindLabel(badge("custom:mushroom-template-badge"), localize, catalog)).toBe(
       "custom:mushroom-template-badge",
+    );
+  });
+
+  it("names a custom badge through its registered name when the library is loaded", () => {
+    const withCustom = badgeCatalog([{ type: "mushroom-template-badge", name: "Template" }]);
+    expect(kindLabel(badge("custom:mushroom-template-badge"), localize, withCustom)).toBe(
+      "Template",
     );
   });
 });

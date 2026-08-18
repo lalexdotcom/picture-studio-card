@@ -228,6 +228,30 @@ describe("rowLabel", () => {
     const label = rowLabel(badge({ type: "entity", entity: "light.gone" }));
     expect(label.primary).not.toBe(label.secondary);
   });
+
+  it("shows a shortcut badge's text as the primary label", () => {
+    expect(rowLabel(badge({ type: "shortcut", text: "Open office" }))).toEqual({
+      primary: "Open office",
+      secondary: "shortcut",
+    });
+  });
+
+  it("falls back for a shortcut badge with no text rather than showing an empty label", () => {
+    expect(rowLabel(badge({ type: "shortcut" }))).toEqual({ primary: "shortcut" });
+    expect(rowLabel(badge({ type: "shortcut", text: "" }))).toEqual({ primary: "shortcut" });
+  });
+
+  it("uses the catalogue name when badgeName is supplied", () => {
+    expect(
+      rowLabel(badge({ type: "custom:mushroom-template-badge" }), undefined, "Template"),
+    ).toEqual({ primary: "Template", secondary: "custom:mushroom-template-badge" });
+  });
+
+  it("falls back to the raw type when no badgeName is supplied", () => {
+    expect(rowLabel(badge({ type: "custom:mushroom-template-badge" }))).toEqual({
+      primary: "custom:mushroom-template-badge",
+    });
+  });
 });
 
 describe("rowLabel for an element", () => {

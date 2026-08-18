@@ -16,6 +16,9 @@
 export const PLACEMENT_ICON = "mdi:crop-free";
 
 const BADGE_ICON = "mdi:label";
+const BADGE_ICONS: Record<string, string> = {
+  shortcut: "mdi:label-variant",
+};
 /** Falls back to the family's own glyph for a kind we do not know by name. */
 const ELEMENT_ICON = "mdi:shape-outline";
 const ELEMENT_ICONS: Record<string, string> = {
@@ -27,10 +30,11 @@ const ELEMENT_ICONS: Record<string, string> = {
  * The glyph that tells one kind of item from another, in the list and in the
  * add menu.
  *
- * Badges all share one glyph — what counts there is "this is a badge", not
- * which badge. For elements, each kind carries its own icon so a reader can
- * tell a state icon from a state label at a glance. `ELEMENT_ICONS` maps the
- * known kinds; `ELEMENT_ICON` is the fallback for any kind we do not yet name.
+ * For badges, `BADGE_ICONS` maps the known kinds to their own glyph; `BADGE_ICON`
+ * is the fallback for any badge kind we do not yet name. For elements, each kind
+ * carries its own icon so a reader can tell a state icon from a state label at a
+ * glance. `ELEMENT_ICONS` maps the known kinds; `ELEMENT_ICON` is the fallback
+ * for any kind we do not yet name.
  */
 export const itemIcon = (family: "badge" | "element", type: string): string =>
-  family === "badge" ? BADGE_ICON : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);
+  family === "badge" ? (BADGE_ICONS[type] ?? BADGE_ICON) : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);
