@@ -1,173 +1,37 @@
 import { css, html, LitElement, nothing } from "lit";
-import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
-import type { ElementConfig, StateIconConfig } from "../config";
-import { DEFAULT_ICON_SIZE, normalizeElementSize } from "../element-size";
+import type { ElementConfig } from "../config";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
 import "./visibility-section";
 import { PLACEMENT_ICON } from "./icons";
+import {
+  iconChromeSchema,
+  iconFromFormData,
+  iconSchema,
+  iconSizeSchema,
+  iconToFormData,
+  themeModeLabel,
+  themeModeTitle,
+} from "./state-icon-form";
 
-const THEME_KEY = "ui.panel.lovelace.editor.card.map";
-const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
+// Re-export with pre-Task-7 names so existing tests pass while the two-commit
+// split keeps each commit green. Removed in the feat commit when callers
+// switch to per-kind imports.
+export {
+  iconChromeSchema as chromeSchema,
+  iconFromFormData as fromFormData,
+  iconSchema as stateIconSchema,
+  iconSizeSchema as stateIconSizeSchema,
+  iconToFormData as toFormData,
+  themeModeLabel,
+  themeModeTitle,
+} from "./state-icon-form";
 
-const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBACK): string =>
-  localize(`${THEME_KEY}.theme_modes.${value}`) || THEME_FALLBACK[value];
-
-export const themeModeTitle = (localize: LocalizeFunc): string =>
-  localize(`${THEME_KEY}.theme_mode`) || "Theme mode";
-
-export const stateIconSchema = (): unknown[] => [
-  { name: "entity", selector: { entity: {} } },
-  {
-    name: "content",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:text-short",
-    schema: [
-      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "color",
-            selector: { ui_color: { default_color: "state", include_state: true } },
-          },
-          { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
-          { name: "show_entity_picture", selector: { boolean: {} } },
-        ],
-      },
-    ],
-  },
-  {
-    name: "interactions",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:gesture-tap",
-    schema: [
-      { name: "tap_action", selector: { ui_action: { default_action: "more-info" } } },
-      {
-        name: "",
-        type: "optional_actions",
-        flatten: true,
-        schema: ["hold_action", "double_tap_action"].map((name) => ({
-          name,
-          selector: { ui_action: { default_action: "none" } },
-        })),
-      },
-    ],
-  },
+export const chromeToggleSchema = (): unknown[] => [
+  { name: "chrome_enabled", selector: { boolean: {} } },
 ];
 
-export const toFormData = (config: StateIconConfig): Record<string, unknown> => {
-  const { size, chrome, ...rest } = config;
-  const c = chrome ?? DEFAULT_ICON_CHROME;
-  return {
-    ...rest,
-    size_mode: size.mode,
-    // Math.round enforces each slider's step:1 contract (same trade as the chrome
-    // numbers below). size_mode is a string; the read path (normalizeIconSize)
-    // keeps any finite number as written — rounding belongs to the editor only.
-    size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
-    size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
-    size_max: typeof size.max === "number" ? Math.round(size.max) : size.max,
-    size_value: typeof size.value === "number" ? Math.round(size.value) : size.value,
-    chrome_enabled: c.theme !== "none",
-    // The control never offers "none", so an off chrome pre-selects the theme
-    // that checking the box will give it.
-    chrome_theme: c.theme === "none" ? "auto" : c.theme,
-    // Math.round enforces the slider's step:1 contract. A hand-written value
-    // with finer precision (e.g. 12.5) is rounded the first time the editor
-    // commits anything for that item — including a drag. This is a deliberate
-    // trade: the slider guides, and hand-authored precision outside the slider's
-    // step is not a use-case the editor supports.
-    chrome_radius: Math.round(c.radius),
-    // opacity and content_ratio are 0-1 in config; the form shows them as
-    // 0-100 percent. Math.round avoids floating-point display drift
-    // (e.g. 0.6 * 100 = 60.00000000000001 without it).
-    chrome_opacity: Math.round(c.opacity * 100),
-    chrome_content_ratio: Math.round(c.content_ratio * 100),
-  };
-};
-
-export const fromFormData = (
-  config: StateIconConfig,
-  data: Record<string, unknown>,
-): StateIconConfig => {
-  // Invariant: `data` must be the complete flat record (all ten chrome and size
-  // fields present, whether or not the active schema shows them). ha-form enforces
-  // this: its value-changed handler merges the changed child onto the `.data` it
-  // was given and re-emits the whole thing —
-  //   this.data = { ...this.data, ...newValue };
-  //   fireEvent(this, "value-changed", { value: this.data });
-  // — so every field we pass to `.data` comes back regardless of which rows the
-  // current mode's schema is showing. Passing `toFormData(element)` (all ten
-  // fields) as `.data` is therefore what keeps the non-visible fields alive.
-  const {
-    size_mode,
-    size_min,
-    size_ratio,
-    size_max,
-    size_value,
-    chrome_enabled,
-    chrome_theme,
-    chrome_radius,
-    chrome_opacity,
-    chrome_content_ratio,
-    ...rest
-  } = data;
-  // Chrome is written when it was present before (numbers must survive unchecking)
-  // or when the user explicitly enables it. When the original had no chrome and
-  // the box is off, the key is omitted entirely so an absent chrome still round-trips.
-  const chromeOut =
-    chrome_enabled || config.chrome !== undefined
-      ? {
-          chrome: normalizeIconChrome({
-            // The checkbox is the switch; the theme control only ever names a surface
-            // that draws. Unchecking stores "none" and every number survives it.
-            theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
-            // Math.round on the way back enforces the slider's step:1 contract.
-            // A typed decimal (e.g. 12.5 for radius, 61 for an opacity dragged
-            // to 0.61 by hand) is rounded the first time the editor commits for
-            // that item. Deliberate: hand-authored sub-step precision is not a
-            // use-case the editor supports.
-            radius: typeof chrome_radius === "number" ? Math.round(chrome_radius) : chrome_radius,
-            // The form speaks percent (0-100); config stores 0-1. Divide back;
-            // normalizeChrome validates if the field is missing or non-numeric.
-            opacity:
-              typeof chrome_opacity === "number"
-                ? Math.round(chrome_opacity) / 100
-                : chrome_opacity,
-            content_ratio:
-              typeof chrome_content_ratio === "number"
-                ? Math.round(chrome_content_ratio) / 100
-                : chrome_content_ratio,
-          }),
-        }
-      : {};
-  return {
-    ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome">),
-    // The kind is ours, never the form's: a stray `type` field cannot rename it.
-    type: config.type,
-    size: normalizeElementSize(
-      {
-        mode: size_mode,
-        // Math.round on the way back enforces each slider's step:1 contract.
-        // Same deliberate trade as the chrome numbers: a hand-written sub-step
-        // value is rounded the first time the editor commits for that item.
-        min: typeof size_min === "number" ? Math.round(size_min) : size_min,
-        ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
-        max: typeof size_max === "number" ? Math.round(size_max) : size_max,
-        value: typeof size_value === "number" ? Math.round(size_value) : size_value,
-      },
-      DEFAULT_ICON_SIZE,
-    ),
-    ...chromeOut,
-  };
-};
-
-/** Home Assistant's own mapping, plus the two keys its catalogue has not got. */
 export const elementFormLabel = (
   localize: LocalizeFunc,
   hass: HomeAssistant | undefined,
@@ -190,127 +54,6 @@ export const elementFormLabel = (
   if (name === "chrome_theme") return themeModeTitle(localize);
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
-
-export const stateIconSizeSchema = (
-  mode: "auto" | "adaptive" | "fixed",
-  localize: LocalizeFunc,
-  hass: HomeAssistant | undefined,
-  // When true, the caller renders ha-radio-group for mode selection and the
-  // schema omits size_mode. When false (the default), size_mode is included as
-  // a vertical ha-form select — correct but not horizontal — guaranteed to
-  // load because ha-selector pulls its own sub-components.
-  radioGroupAvailable = false,
-): unknown[] => {
-  const modeField = {
-    name: "size_mode",
-    selector: {
-      select: {
-        mode: "list",
-        options: [
-          { value: "auto", label: localize("ui.common.auto") || "Automatic" },
-          { value: "adaptive", label: localizeOwn(hass, "size_mode_adaptive") },
-          { value: "fixed", label: localizeOwn(hass, "size_mode_fixed") },
-        ],
-      },
-    },
-  };
-  // When the radio group handles mode selection, it is not repeated in the
-  // form. In the fallback path the select stays so the user can still change
-  // the mode — ha-form is the guarantee that it renders.
-  const preamble = radioGroupAvailable ? [] : [modeField];
-  if (mode === "adaptive") {
-    return [
-      ...preamble,
-      {
-        name: "size_ratio",
-        selector: {
-          // A percentage of the card's width is a value you feel rather than
-          // type, so size_ratio gets a slider (no mode: "box"). The two adaptive
-          // pixel bounds keep "box" because exact pixel values are typed, not
-          // dragged. The fixed size is also a slider — a value you feel.
-          number: { min: 1, max: 100, step: 1, unit_of_measurement: "%" },
-        },
-      },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "size_min",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-          {
-            name: "size_max",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-        ],
-      },
-    ];
-  }
-  if (mode === "fixed") {
-    return [
-      ...preamble,
-      {
-        name: "size_value",
-        selector: { number: { min: 8, max: 128, step: 1, unit_of_measurement: "px" } },
-      },
-    ];
-  }
-  // auto — no numeric fields
-  return preamble;
-};
-
-/** The checkbox, alone, so the theme control can be rendered between it and the numbers. */
-export const chromeToggleSchema = (): unknown[] => [
-  { name: "chrome_enabled", selector: { boolean: {} } },
-];
-
-export const chromeSchema = (
-  localize: LocalizeFunc,
-  // When true, the caller renders ha-radio-group for the theme and the schema
-  // omits chrome_theme. When false, the select stays so the theme is still
-  // changeable — ha-form is the guarantee that it renders.
-  radioGroupAvailable = false,
-): unknown[] => [
-  ...(radioGroupAvailable
-    ? []
-    : [
-        {
-          name: "chrome_theme",
-          selector: {
-            select: {
-              mode: "dropdown",
-              options: (["auto", "light", "dark"] as const).map((value) => ({
-                value,
-                label: themeModeLabel(localize, value),
-              })),
-            },
-          },
-        },
-      ]),
-  {
-    name: "chrome_radius",
-    selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%" } },
-  },
-  {
-    name: "chrome_opacity",
-    selector: { number: { min: 0, max: 100, step: 1, unit_of_measurement: "%" } },
-  },
-  {
-    name: "chrome_content_ratio",
-    // The model keeps any finite number as written — no clamping. Hand-written
-    // YAML is trusted exactly as written, consistent with how coordinates are
-    // treated. The form starts at 10 because a ratio of zero renders an
-    // invisible icon and nothing in the editor would explain why: the form
-    // guides, the model tolerates.
-    // The form shows 0-100 percent; fromFormData converts back to 0-1.
-    selector: { number: { min: 10, max: 100, step: 1, unit_of_measurement: "%" } },
-  },
-];
 
 export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
   if (name === "color")
@@ -339,29 +82,26 @@ export class PictureStudioElementForm extends LitElement {
     if (!this.element) return;
     // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
     if (this.element.type !== "state-icon") return;
-    const data = { ...toFormData(this.element), ...ev.detail.value };
+    const data = { ...iconToFormData(this.element), ...ev.detail.value };
     this.dispatchEvent(
       new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, data) },
+        detail: { element: iconFromFormData(this.element, data) },
         bubbles: true,
         composed: true,
       }),
     );
   };
 
-  // Handles a change event from ha-radio-group (the horizontal mode control).
-  // Emits element-changed through the same path as _valueChanged so there is
-  // exactly one way a config change leaves this component.
   private _modeChanged = (ev: Event): void => {
     if (!this.element) return;
     // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
     if (this.element.type !== "state-icon") return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
-    const data = { ...toFormData(this.element), size_mode: value };
+    const data = { ...iconToFormData(this.element), size_mode: value };
     this.dispatchEvent(
       new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, data) },
+        detail: { element: iconFromFormData(this.element, data) },
         bubbles: true,
         composed: true,
       }),
@@ -374,10 +114,10 @@ export class PictureStudioElementForm extends LitElement {
     if (this.element.type !== "state-icon") return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
-    const data = { ...toFormData(this.element), chrome_theme: value, chrome_enabled: true };
+    const data = { ...iconToFormData(this.element), chrome_theme: value, chrome_enabled: true };
     this.dispatchEvent(
       new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, data) },
+        detail: { element: iconFromFormData(this.element, data) },
         bubbles: true,
         composed: true,
       }),
@@ -398,6 +138,9 @@ export class PictureStudioElementForm extends LitElement {
     // but not horizontal. The check is lazy (render time, not module load) so a
     // chunk that registers the element after ours is still found.
     const radioGroupAvailable = !!customElements.get("ha-radio-group");
+    const data = iconToFormData(element);
+    const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
+    const helper = (s: { name: string }) => elementFormHelper(hass.localize, s.name);
 
     return html`
       <div class="header">
@@ -411,10 +154,10 @@ export class PictureStudioElementForm extends LitElement {
       </div>
       <ha-form
         .hass=${hass}
-        .data=${toFormData(element)}
-        .schema=${stateIconSchema()}
-        .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-        .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
+        .data=${data}
+        .schema=${iconSchema()}
+        .computeLabel=${label}
+        .computeHelper=${helper}
         @value-changed=${this._valueChanged}
       ></ha-form>
       <ha-expansion-panel outlined>
@@ -425,13 +168,13 @@ export class PictureStudioElementForm extends LitElement {
         <div class="content">
           <ha-form
             .hass=${hass}
-            .data=${toFormData(element)}
+            .data=${data}
             .schema=${chromeToggleSchema()}
-            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            .computeLabel=${label}
             @value-changed=${this._valueChanged}
           ></ha-form>
           ${
-            toFormData(element).chrome_enabled
+            data.chrome_enabled
               ? html`
                   ${
                     radioGroupAvailable
@@ -439,7 +182,7 @@ export class PictureStudioElementForm extends LitElement {
                           <span class="section-label">${themeModeTitle(hass.localize)}</span>
                           <ha-radio-group
                             orientation="horizontal"
-                            .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
+                            .value=${(data.chrome_theme as string) ?? "auto"}
                             @change=${this._chromeThemeChanged}
                           >
                             ${(["auto", "light", "dark"] as const).map(
@@ -455,9 +198,9 @@ export class PictureStudioElementForm extends LitElement {
                   }
                   <ha-form
                     .hass=${hass}
-                    .data=${toFormData(element)}
-                    .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
-                    .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+                    .data=${data}
+                    .schema=${iconChromeSchema(hass.localize, radioGroupAvailable)}
+                    .computeLabel=${label}
                     @value-changed=${this._valueChanged}
                   ></ha-form>
                 `
@@ -495,9 +238,9 @@ export class PictureStudioElementForm extends LitElement {
           }
           <ha-form
             .hass=${hass}
-            .data=${toFormData(element)}
-            .schema=${stateIconSizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
-            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            .data=${data}
+            .schema=${iconSizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
+            .computeLabel=${label}
             @value-changed=${this._valueChanged}
           ></ha-form>
           <div class="separator"></div>
@@ -555,7 +298,7 @@ export class PictureStudioElementForm extends LitElement {
       border-top: 1px solid var(--divider-color);
       margin: var(--ha-space-3, 12px) 0;
     }
-    /* Both section headings ("Taille" above the mode control and "Position"
+    /* Both section headings (\"Taille\" above the mode control and \"Position\"
        above the anchor picker) share this class so they are identical by
        construction. The declarations resolve to the same values that Home
        Assistant's own wa-form-control labels use, so the pair follows HA's
