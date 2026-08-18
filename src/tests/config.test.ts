@@ -475,7 +475,8 @@ describe("element halo", () => {
         { type: "element", position: { top: "1%", left: "1%" }, config: { type: "state-icon" } },
       ],
     });
-    expect((config.items[0]!.config as StateIconConfig).halo).toBe(false);
+    const [item] = config.items as unknown as [{ config: StateIconConfig }];
+    expect(item.config.halo).toBe(false);
   });
 
   it("reads `halo: true` and rejects a truthy non-boolean", () => {
@@ -500,9 +501,12 @@ describe("element halo", () => {
         ],
       }),
     );
-    const items = withHalo.items as { config: Record<string, unknown> }[];
-    expect(items[0]!.config.halo).toBe(true);
-    expect("halo" in items[1]!.config).toBe(false);
+    const [first, second] = withHalo.items as [
+      { config: Record<string, unknown> },
+      { config: Record<string, unknown> },
+    ];
+    expect(first.config.halo).toBe(true);
+    expect("halo" in second.config).toBe(false);
   });
 });
 

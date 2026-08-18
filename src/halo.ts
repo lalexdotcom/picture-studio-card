@@ -7,12 +7,17 @@
  * contrast has to hold against an unknown image, which no theme token can
  * promise. Hence literal white and black here, and only here.
  *
+ * The glow is tuned for the filled silhouette — a chrome's disc, or the square
+ * an entity picture paints — because that is where these values lay the most
+ * ink: at 60% the edge read as a dark ring on a light picture rather than as a
+ * shadow, so the opacity came down to 20%.
+ *
  * The blur is a share of the element's own size value rather than a length: a
  * fixed 3px was 12.5% of a 24px icon and 7.5% of a 40px one, which is why a
- * small icon wore the halo as a band. 6% comes to 1.4px at 24px and 2.9px at
- * 48px, and calc() resolves the token whatever it holds — including a clamp()ed
- * value that changes with the card's width. The white rim is part of none of
- * this: a hairline stays a hairline at every size.
+ * small icon wore the halo as a band. 6% comes to 1.4px at 24px, 2.4px at 40px
+ * and 2.9px at 48px, and calc() resolves the token whatever it holds —
+ * including a clamp()ed value that changes with the card's width. The white rim
+ * is part of none of this: a hairline stays a hairline at every size.
  *
  * Both halves are exposed as variables so a dashboard can dial them without
  * forking the element.

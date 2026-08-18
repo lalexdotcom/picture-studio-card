@@ -259,6 +259,15 @@ describe("the halo", () => {
     const gated = rules.find((r) => r.selector === ":host([halo]) .chrome");
     expect(gated?.text).toContain("drop-shadow");
   });
+
+  it("keeps the shape and the clipping under the chrome, away from the halo", () => {
+    const shaped = cssRules(PictureStudioStateIcon.styles).get(":host([chrome]) .chrome");
+    expect(shaped).toContain("border-radius");
+    expect(shaped).toContain("overflow: hidden");
+    // The halo lives in its own rule. These two conflated once, and every icon
+    // without a chrome came out a circle.
+    expect(shaped).not.toContain("filter");
+  });
 });
 
 describe("the action relay", () => {
