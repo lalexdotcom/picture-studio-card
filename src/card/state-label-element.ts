@@ -219,14 +219,13 @@ export class PictureStudioStateLabel extends LitElement {
     css`
       :host {
         display: block;
-        transition: transform 120ms ease-out;
       }
       :host([clickable]) {
         cursor: pointer;
       }
-      :host([clickable]:hover) {
-        transform: scale(1.04);
-      }
+      /* No hover treatment, same as the icon: the grow this replaced scaled a
+         filled surface rather than text and read wrong. Its replacement is
+         designed separately; until then the cursor is the whole affordance. */
       /* The chrome. Always present, styled only when the config asks for it, so
          the DOM shape never depends on the config. Unlike the icon's, this box is
          not a square we chose: its width belongs to the text, so a chrome widens

@@ -181,23 +181,14 @@ export class PictureStudioStateIcon extends LitElement {
       /* Captured from the page, where the theme defines it, so it can be handed
          back to state-badge below. A custom theme keeps deciding the value. */
       --psc-inactive-color: var(--state-inactive-color);
-      /* Long enough to read as motion: at 90ms the grow registered as a flicker
-         rather than an animation. */
-      transition: transform 120ms ease-out;
     }
     /* Pointer when there is something to click. */
     :host([clickable]) {
       cursor: pointer;
     }
-    /* Subtle grow on hover: scale goes on the host — the card's wrapper carries
-       translate(…) and must not be touched; 50% 50% is the default
-       transform-origin, so the icon scales from its own centre regardless of
-       the item's anchor. No guard for edit mode needed: the card already sets
-       .editing .item > * { pointer-events: none }, so hover never reaches
-       this host while a drag is running. */
-    :host([clickable]:hover) {
-      transform: scale(1.04);
-    }
+    /* No hover treatment: the grow this replaced scaled a filled disc rather
+       than a glyph once a chrome was on, and read wrong. What takes its place
+       is designed separately — until then the cursor is the whole affordance. */
     /* The chrome. Always present, styled only when the config asks for it, so
        the DOM shape never depends on the config. */
     .chrome {
