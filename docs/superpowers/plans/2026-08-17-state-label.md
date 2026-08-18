@@ -2294,6 +2294,107 @@ git commit -m "docs: what changes for someone configuring the card"
 
 ---
 
+### Task 13: a row that does not move when you tick it
+
+**Files:**
+- Modify: `src/editor/state-label-form.ts`, `src/editor/element-form.ts`
+- Test: `src/tests/editor/state-label-form.test.ts`
+
+**Interfaces:**
+- Produces: `labelPillSchema()`, `labelRadiusSchema()`, and `labelChromeSchema(localize, radioGroupAvailable)` back to two arguments and no longer carrying either row.
+
+**What is wrong today.** Task 9 hid the radius by omitting it from the schema, so its field
+leaves the DOM and the row collapses; and `ha-form`'s grid only makes equal columns
+(`minmax(var(--form-grid-min-width), 1fr)`), so the switch takes half the width. The user's
+requirement is that ticking the switch changes **nothing** about the layout.
+
+- [ ] **Step 1: Split the two rows out of the chrome schema**
+
+`labelChromeSchema` drops its `pill` parameter and both rows, keeping only the theme row and
+`chrome_opacity` / `chrome_padding`. Two new one-field schemas take their place:
+
+```ts
+export const labelPillSchema = (): unknown[] => [
+  { name: "chrome_pill", selector: { boolean: {} } },
+];
+
+export const labelRadiusSchema = (): unknown[] => [
+  {
+    name: "chrome_radius",
+    selector: { number: { min: 0, max: 24, step: 1, unit_of_measurement: "px" } },
+  },
+];
+```
+
+**The radius stays in the schema on purpose.** It is hidden by CSS, not removed — that is what
+reserves its space, and it keeps `.data` the complete flat record the whole form depends on.
+
+- [ ] **Step 2: Render the row in `element-form.ts`**
+
+Inside the Appearance section, between the theme control and the remaining chrome fields:
+
+```ts
+              <div class="pill-row" ?data-pill=${data.chrome_pill === true}>
+                <ha-form
+                  .hass=${hass}
+                  .data=${data}
+                  .schema=${labelPillSchema()}
+                  .computeLabel=${label}
+                  @value-changed=${this._valueChanged}
+                ></ha-form>
+                <ha-form
+                  .hass=${hass}
+                  .data=${data}
+                  .schema=${labelRadiusSchema()}
+                  .computeLabel=${label}
+                  @value-changed=${this._valueChanged}
+                ></ha-form>
+              </div>
+```
+
+Both forms receive the same complete `data`, as every other form in this file does.
+
+- [ ] **Step 3: The three CSS lines that do the work**
+
+```css
+    /* The switch takes its natural width and the radius takes the rest —
+       ha-form's own grid can only make equal columns, which is why this row is
+       ours rather than a `type: "grid"` entry. */
+    .pill-row {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      align-items: center;
+      gap: var(--ha-space-4, 16px);
+    }
+    /* Hidden, not removed: the radius keeps its box, so ticking the switch does
+       not reflow the row. visibility also takes it out of the tab order and out
+       of a screen reader, which opacity would not. */
+    .pill-row[data-pill] > :last-child {
+      visibility: hidden;
+    }
+```
+
+- [ ] **Step 4: Test what the suite can see**
+
+The schema split is testable: `labelChromeSchema` no longer contains `chrome_pill` or
+`chrome_radius`; the two new schemas each contain exactly one. Keep Task 9's round-trip test —
+a typed radius must still survive the pill being ticked and unticked, and it now survives for a
+different reason, so the test matters more rather than less. The CSS rules are assertable through
+`cssRules`, as the card and the elements already do.
+
+- [ ] **Step 5: Run everything**
+
+Run: `pnpm test && pnpm lint && pnpm typecheck`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "fix(editor): a pill that hides the radius without moving the row"
+```
+
+---
+
 ### Task 12: the browser walk
 
 **Files:** none — this task produces a Verification record appended to the spec.
