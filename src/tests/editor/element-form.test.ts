@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
-import type { StateIconConfig } from "../../config";
+import { afterEach, beforeAll, describe, expect, it } from "@rstest/core";
+import type { StateIconConfig, StateLabelConfig } from "../../config";
 import { ELEMENT_FORM_TAG } from "../../config";
 import {
   appearanceToggleSchema,
@@ -15,7 +15,7 @@ import {
   themeModeTitle,
   iconToFormData as toFormData,
 } from "../../editor/state-icon-form";
-import { DEFAULT_ICON_SIZE } from "../../element-size";
+import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE } from "../../element-size";
 import { cssRules } from "../card/harness";
 
 const base = { type: "state-icon" as const, size: DEFAULT_ICON_SIZE };
@@ -513,10 +513,163 @@ describe("PictureStudioElementForm — pill-row CSS", () => {
     expect(rule).toContain("grid-template-columns: max-content 1fr");
   });
 
+  it("gives the row a 20px gap between the switch control and the radius", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-row");
+    expect(rule).toContain("gap: var(--ha-space-5, 20px)");
+  });
+
   it("hides the radius with visibility so the box stays reserved when the pill is on", () => {
     const rule = cssRules(PictureStudioElementForm.styles).get(
       ".pill-row[data-pill] > :last-child",
     );
     expect(rule).toContain("visibility: hidden");
+  });
+
+  it("gives .pill-control a flex row with a 16px gap between label and switch", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-control");
+    expect(rule).toContain("display: flex");
+    expect(rule).toContain("align-items: center");
+    expect(rule).toContain("gap: var(--ha-space-4, 16px)");
+  });
+});
+
+// ── Pill switch render path tests ─────────────────────────────────────────────
+//
+// happy-dom does not register HA's components, so ha-checkbox is absent by
+// default and the form takes the fallback branch.  The hand-rendered branch is
+// exercised by the second describe, which registers a stub via beforeAll — a
+// timing that guarantees the fallback describe's tests still run without the
+// stub, then the stub lands just before the hand-rendered tests start.
+
+describe("PictureStudioElementForm — pill switch — fallback", () => {
+  // ha-checkbox is NOT registered here.  This describe must appear before the
+  // hand-rendered describe so its tests execute while the stub is still absent.
+
+  const hass = {
+    localize: ((key: string) => `L:${key}`) as never,
+    states: {},
+  } as never;
+
+  const mountLabelWithChrome = async (): Promise<PictureStudioElementForm> => {
+    const el = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    el.hass = hass;
+    el.element = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      chrome: { theme: "auto", radius: 50, pill: false, opacity: 1, padding: 6 },
+    } as StateLabelConfig;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("ha-checkbox is not registered when this test runs", () => {
+    // Guards the ordering contract: if this assertion fails, the fallback branch
+    // is not being tested — the stub arrived early and both describes exercise
+    // the hand-rendered path.
+    expect(customElements.get("ha-checkbox")).toBeUndefined();
+  });
+
+  it("renders ha-form for the pill when ha-checkbox is absent", async () => {
+    const form = await mountLabelWithChrome();
+    // The Appearance panel is the second ha-expansion-panel in the form.
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const pillRow = panel?.querySelector(".pill-row");
+    expect(pillRow).not.toBeNull();
+    // Fallback: ha-form is present, the hand-rendered ha-checkbox is not.
+    expect(pillRow?.querySelector("ha-form")).not.toBeNull();
+    expect(pillRow?.querySelector("ha-checkbox")).toBeNull();
+  });
+});
+
+describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
+  // Register a minimal stub so customElements.get("ha-checkbox") returns a
+  // non-undefined value and the form takes the hand-rendered path.
+  // beforeAll runs just before this describe's first test, which is after every
+  // test in the fallback describe above — preserving the ordering contract.
+  beforeAll(() => {
+    if (!customElements.get("ha-checkbox")) {
+      customElements.define("ha-checkbox", class extends HTMLElement {});
+    }
+  });
+
+  const hass = {
+    localize: ((key: string) => `L:${key}`) as never,
+    states: {},
+  } as never;
+
+  const mountLabelWithChrome = async (pill: boolean = false): Promise<PictureStudioElementForm> => {
+    const el = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    el.hass = hass;
+    el.element = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      chrome: { theme: "auto", radius: 50, pill, opacity: 1, padding: 6 },
+    } as StateLabelConfig;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("renders .pill-control with ha-checkbox when ha-checkbox is registered", async () => {
+    const form = await mountLabelWithChrome();
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const pillControl = panel?.querySelector(".pill-control");
+    expect(pillControl).not.toBeNull();
+    expect(pillControl?.querySelector("ha-checkbox")).not.toBeNull();
+    // The first child is .pill-control, not an ha-form fallback.
+    const pillRow = panel?.querySelector(".pill-row");
+    expect(pillRow?.firstElementChild?.tagName.toLowerCase()).toBe("div");
+  });
+
+  it("binds .checked to the current chrome_pill value", async () => {
+    type CheckableEl = HTMLElement & { checked?: boolean };
+
+    const formOff = await mountLabelWithChrome(false);
+    const panelOff = formOff.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const cbOff = panelOff?.querySelector(".pill-control ha-checkbox") as CheckableEl | null;
+    expect(cbOff).not.toBeNull();
+    if (!cbOff) return;
+    expect(cbOff.checked).toBe(false);
+    document.body.replaceChildren();
+
+    const formOn = await mountLabelWithChrome(true);
+    const panelOn = formOn.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const cbOn = panelOn?.querySelector(".pill-control ha-checkbox") as CheckableEl | null;
+    expect(cbOn).not.toBeNull();
+    if (!cbOn) return;
+    expect(cbOn.checked).toBe(true);
+  });
+
+  it("emits element-changed with chrome_pill toggled and all other keys intact", async () => {
+    type CheckableEl = HTMLElement & { checked?: boolean };
+    const form = await mountLabelWithChrome(false);
+    const events: CustomEvent[] = [];
+    form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
+
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const cb = panel?.querySelector(".pill-control ha-checkbox") as CheckableEl | null;
+    expect(cb).not.toBeNull();
+    if (!cb) return;
+
+    // Simulate ha-checkbox firing a change event; _pillChanged reads .checked.
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(events).toHaveLength(1);
+    const changed = events[0] as CustomEvent<{ element: StateLabelConfig }>;
+    expect(changed.detail.element.type).toBe("state-label");
+    expect(changed.detail.element.chrome?.pill).toBe(true);
+    // The chrome theme must survive the toggle — _pillChanged merges onto the
+    // full record, it does not invent new keys.
+    expect(changed.detail.element.chrome?.theme).toBe("auto");
   });
 });

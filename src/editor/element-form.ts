@@ -115,6 +115,16 @@ export class PictureStudioElementForm extends LitElement {
     this._dispatch(element, data);
   };
 
+  /** Pill ha-checkbox: read the checked state and merge onto the full record. */
+  private _pillChanged = (ev: Event): void => {
+    const element = this.element;
+    if (!element) return;
+    const checked = (ev.currentTarget as { checked?: boolean }).checked;
+    if (checked === undefined) return;
+    const data = { ...this._toData(element), chrome_pill: checked };
+    this._dispatch(element, data);
+  };
+
   private _toData = (element: ElementConfig): Record<string, unknown> =>
     element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
 
@@ -142,6 +152,11 @@ export class PictureStudioElementForm extends LitElement {
     // but not horizontal. The check is lazy (render time, not module load) so a
     // chunk that registers the element after ours is still found.
     const radioGroupAvailable = !!customElements.get("ha-radio-group");
+
+    // ha-form-boolean mounts ha-checkbox internally. We render it directly so
+    // we can control the gap between label and switch. The check is lazy for the
+    // same reason as above. Falls back to ha-form if the element is absent.
+    const switchAvailable = !!customElements.get("ha-checkbox");
 
     const isLabel = element.type === "state-label";
     const data =
@@ -261,13 +276,29 @@ export class PictureStudioElementForm extends LitElement {
                     isLabel
                       ? html`
                           <div class="pill-row" ?data-pill=${data.chrome_pill === true}>
-                            <ha-form
-                              .hass=${hass}
-                              .data=${data}
-                              .schema=${labelPillSchema()}
-                              .computeLabel=${label}
-                              @value-changed=${this._valueChanged}
-                            ></ha-form>
+                            ${
+                              switchAvailable
+                                ? html`
+                                    <div class="pill-control">
+                                      <span class="section-label"
+                                        >${localizeOwn(hass, "chrome_pill")}</span
+                                      >
+                                      <ha-checkbox
+                                        .checked=${data.chrome_pill === true}
+                                        @change=${this._pillChanged}
+                                      ></ha-checkbox>
+                                    </div>
+                                  `
+                                : html`
+                                    <ha-form
+                                      .hass=${hass}
+                                      .data=${data}
+                                      .schema=${labelPillSchema()}
+                                      .computeLabel=${label}
+                                      @value-changed=${this._valueChanged}
+                                    ></ha-form>
+                                  `
+                            }
                             <ha-form
                               .hass=${hass}
                               .data=${data}
@@ -361,6 +392,13 @@ export class PictureStudioElementForm extends LitElement {
     .pill-row {
       display: grid;
       grid-template-columns: max-content 1fr;
+      align-items: center;
+      gap: var(--ha-space-5, 20px);
+    }
+    /* Label and switch sit inline; the gap is the space between them that
+       ha-form-boolean's shadow DOM did not expose as a token. */
+    .pill-control {
+      display: flex;
       align-items: center;
       gap: var(--ha-space-4, 16px);
     }
