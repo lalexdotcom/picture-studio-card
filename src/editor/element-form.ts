@@ -215,17 +215,26 @@ export class PictureStudioElementForm extends LitElement {
     element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
 
   private _dispatch = (element: ElementConfig, data: Record<string, unknown>): void => {
-    const updated: ElementConfig =
-      element.type === "state-label"
-        ? labelFromFormData(element, data)
-        : iconFromFormData(element, data);
-    this.dispatchEvent(
-      new CustomEvent("element-changed", {
-        detail: { element: updated },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    if (element.type === "state-label") {
+      this.dispatchEvent(
+        new CustomEvent("element-changed", {
+          detail: { element: labelFromFormData(element, data) },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    } else if (element.type === "state-icon") {
+      this.dispatchEvent(
+        new CustomEvent("element-changed", {
+          detail: { element: iconFromFormData(element, data) },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+    // No else. An unknown kind never reaches this form — normalizeElementConfig
+    // raises first — and defaulting it to the icon would corrupt its config with
+    // icon-only keys the day a third kind exists.
   };
 
   protected render() {

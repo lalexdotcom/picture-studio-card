@@ -392,6 +392,7 @@ export class PictureStudioCard extends LitElement {
         // The only branch the second family costs: our element answers setConfig
         // and hass exactly like a badge element, so every other path is shared.
         const child = this._createChild(item, helpers);
+        if (!child) return;
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
 
@@ -424,9 +425,15 @@ export class PictureStudioCard extends LitElement {
   private _createChild(
     item: PictureItem,
     helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
-  ): LovelaceBadgeElement {
+  ): LovelaceBadgeElement | undefined {
     if (item.type === "badge") return helpers.createBadgeElement(item.config);
-    const tag = item.config.type === "state-label" ? LABEL_TAG : ICON_TAG;
+    let tag: string | undefined;
+    if (item.config.type === "state-label") tag = LABEL_TAG;
+    else if (item.config.type === "state-icon") tag = ICON_TAG;
+    // No else. An unknown kind never reaches this method — normalizeElementConfig
+    // raises first — and defaulting it to the icon would corrupt its config with
+    // icon-only keys the day a third kind exists.
+    if (!tag) return undefined;
     const el = document.createElement(tag) as unknown as LovelaceBadgeElement;
     el.setConfig(item.config as unknown as BadgeConfig);
     return el;

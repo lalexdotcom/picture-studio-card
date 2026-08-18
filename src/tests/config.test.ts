@@ -194,6 +194,22 @@ describe("normalizeConfig", () => {
       }),
     ).toThrow(/items\[0\]/);
   });
+
+  it("raises on an unknown element kind rather than treating it as an icon", () => {
+    expect(() =>
+      normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/p.png",
+        items: [
+          {
+            type: "element",
+            position: { top: "1%", left: "1%" },
+            config: { type: "state-gauge", entity: "sensor.a" },
+          },
+        ],
+      }),
+    ).toThrow(/state-icon.*state-label/);
+  });
 });
 
 describe("stubConfig", () => {
