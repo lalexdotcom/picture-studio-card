@@ -2395,6 +2395,98 @@ git commit -m "fix(editor): a pill that hides the radius without moving the row"
 
 ---
 
+### Task 14: the switch becomes ours, so its spacing can be
+
+**Files:**
+- Modify: `src/editor/element-form.ts`
+- Test: `src/tests/editor/element-form.test.ts`
+
+**Why.** Two spacings are wrong: 4px between the "Pill" label and its switch, and 16px between
+the pill control and the radius. The second is our own `gap`. The first is **inside** Home
+Assistant's component — `ha-form` renders `ha-form-boolean`, which renders its control with the
+label in a slot and the spacing in its own shadow DOM. Its exposed tokens cover colours, size and
+the required marker, nothing else, and `::part` crosses only one shadow boundary where there are
+two. So the control becomes ours, exactly as the anchor picker and the theme radio group already
+are, and for the same reason.
+
+- [ ] **Step 1: Read what `ha-form-boolean` actually renders**
+
+Before writing anything, find `ha-form-boolean` in the running container's bundle
+(`/usr/local/lib/python3.14/site-packages/hass_frontend/frontend_latest/`) and see which control
+it mounts. Render **the same one**, so the checkbox does not silently become a different-looking
+widget. Note the finding in your report.
+
+- [ ] **Step 2: Hand-render the pill control, with a fallback**
+
+An undefined custom element renders **nothing at all, silently** — so the hand-rendered branch is
+guarded and the `ha-form` stays as the fallback, the same shape the theme control uses:
+
+```ts
+    const switchAvailable = !!customElements.get("<the tag from Step 1>");
+```
+
+```ts
+                ${
+                  switchAvailable
+                    ? html`
+                        <div class="pill-control">
+                          <span class="section-label">${localizeOwn(hass, "chrome_pill")}</span>
+                          <!-- the control from Step 1, .checked bound to data.chrome_pill -->
+                        </div>
+                      `
+                    : html`
+                        <ha-form
+                          .hass=${hass}
+                          .data=${data}
+                          .schema=${labelPillSchema()}
+                          .computeLabel=${label}
+                          @value-changed=${this._valueChanged}
+                        ></ha-form>
+                      `
+                }
+```
+
+The change handler follows `_chromeThemeChanged` in this same file: read the control's state,
+merge it onto the complete form data, emit. Do not invent a second way to emit — `.data` must
+stay the complete flat record, and the existing handler is the shape that guarantees it.
+
+- [ ] **Step 3: The two spacings**
+
+```css
+    .pill-row {
+      gap: var(--ha-space-5, 20px);
+    }
+    .pill-control {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-4, 16px);
+    }
+```
+
+Keep `.pill-row`'s `grid-template-columns: max-content 1fr` and its `align-items: center`, and
+keep the `visibility: hidden` rule that reserves the radius's box — ticking the switch must still
+change nothing about the layout.
+
+- [ ] **Step 4: Test what the suite can see**
+
+The two CSS rules are assertable through `cssRules`. The fallback branch is the one happy-dom
+takes unless a stub is registered, so a test that registers a stub for the control's tag and one
+that does not, together, cover both branches — that is how the theme radio group is already
+tested in this file.
+
+- [ ] **Step 5: Run everything**
+
+Run: `pnpm test && pnpm lint && pnpm typecheck`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "fix(editor): the pill switch is ours, and so is the room around it"
+```
+
+---
+
 ### Task 12: the browser walk
 
 **Files:** none — this task produces a Verification record appended to the spec.
