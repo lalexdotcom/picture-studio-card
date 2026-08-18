@@ -311,3 +311,58 @@ describe("the action relay", () => {
     expect(seen).toHaveLength(0);
   });
 });
+
+describe("the shared interaction block", () => {
+  it("is part of the icon's styles, veil and grow together", () => {
+    const rules = cssRules(PictureStudioStateIcon.styles);
+    expect(rules.get(":host([clickable])")).toContain("cursor: pointer");
+    expect(rules.get(":host([chrome]) .chrome::after")).toContain("var(--psc-item-color");
+    expect(rules.get(":host([clickable]:not([chrome]):hover)")).toContain("scale(1.08)");
+  });
+
+  it("writes the veil's colour from the same recipe state-badge paints with", async () => {
+    const el = await mount({ entity: "light.a" });
+    expect(el.style.getPropertyValue("--psc-item-color")).toBe(
+      "var(--state-light-on-color, var(--state-light-active-color, var(--state-active-color)))",
+    );
+    // `color: none` names nothing, so the veil falls back to the inactive grey.
+    const plain = await mount({ entity: "light.a", color: "none" });
+    expect(plain.style.getPropertyValue("--psc-item-color")).toBe("");
+  });
+});
+
+describe("what a hass tick costs", () => {
+  const tick = (el: PictureStudioStateIcon, states: Record<string, unknown>) => {
+    el.hass = { ...(el.hass as object), states } as never;
+    return el.updateComplete;
+  };
+
+  it("does not touch the host again when another entity moved", async () => {
+    const el = await mount({ entity: "light.a" });
+    // Cleared by hand: only a re-render would put it back, so its absence after
+    // the tick is the proof that nothing ran.
+    el.style.removeProperty("--psc-icon-size");
+    await tick(el, {
+      "light.a": (el.hass as { states: Record<string, unknown> }).states["light.a"],
+      "light.b": { entity_id: "light.b", state: "on", attributes: {} },
+    });
+    expect(el.style.getPropertyValue("--psc-icon-size")).toBe("");
+  });
+
+  it("rewrites the colour, and only the colour, when its own entity moves", async () => {
+    const el = await mount({ entity: "light.a" });
+    el.style.removeProperty("--psc-icon-size");
+    await tick(el, { "light.a": { entity_id: "light.a", state: "off", attributes: {} } });
+    expect(el.style.getPropertyValue("--psc-item-color")).toContain("--state-light-off-color");
+    // The size follows the config, which did not change.
+    expect(el.style.getPropertyValue("--psc-icon-size")).toBe("");
+  });
+
+  it("rewrites everything when the config changes", async () => {
+    const el = await mount({ entity: "light.a" });
+    el.style.removeProperty("--psc-icon-size");
+    el.setConfig({ type: "state-icon", size: DEFAULT_ICON_SIZE, entity: "light.a" });
+    await el.updateComplete;
+    expect(el.style.getPropertyValue("--psc-icon-size")).not.toBe("");
+  });
+});

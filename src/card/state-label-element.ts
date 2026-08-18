@@ -1,9 +1,11 @@
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { chromeFill } from "../chrome";
 import type { StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, elementSizeCss } from "../element-size";
+import { hassRenderChanged } from "../has-changed";
+import { itemColorCss, stateColorBrightness } from "../state-color";
 import type { HassEntity, HomeAssistant } from "../types";
-import { chromeFillStyles, haloStyles } from "./item-styles";
+import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
 import { hasAction } from "./state-icon-element";
 
 interface ActionHandlerElement extends HTMLElement {
@@ -18,49 +20,6 @@ const actionHandler = (): ActionHandlerElement | undefined => {
 };
 
 /**
- * Home Assistant's own mapping from a ui_color name to a CSS value. Copied
- * because computeCssColor is not exported: the palette names and the three
- * text-ish names resolve to `--<name>-color`, anything else is handed through
- * as a plain CSS colour. "none" is ours to intercept — `color: none` is not
- * valid CSS, and the point of "none" is that we name nothing at all.
- */
-const NAMED_COLORS = new Set([
-  "primary",
-  "accent",
-  "disabled",
-  "red",
-  "pink",
-  "purple",
-  "deep-purple",
-  "indigo",
-  "blue",
-  "light-blue",
-  "cyan",
-  "teal",
-  "green",
-  "light-green",
-  "lime",
-  "yellow",
-  "amber",
-  "orange",
-  "deep-orange",
-  "brown",
-  "light-grey",
-  "grey",
-  "dark-grey",
-  "blue-grey",
-  "black",
-  "white",
-  "primary-text",
-  "secondary-text",
-]);
-
-const labelColor = (color?: string): string | undefined => {
-  if (!color || color === "none") return undefined;
-  return NAMED_COLORS.has(color) ? `var(--${color}-color)` : color;
-};
-
-/**
  * A text-only item. Renders an entity's name, its state, or both, on top of
  * the photograph. Uses Home Assistant's own `state-display` when it is
  * registered; falls back to `formatEntityState` so the label is never blank.
@@ -68,11 +27,14 @@ const labelColor = (color?: string): string | undefined => {
 export class PictureStudioStateLabel extends LitElement {
   static properties = {
     _config: { state: true },
+    _hass: { state: true },
   };
 
   // No accessibility modifier — just declare, matching the rest of the codebase.
   declare _config?: StateLabelConfig;
-  private _hass?: HomeAssistant;
+  // Reactive, not a plain field: shouldUpdate below reads the previous value out
+  // of changedProperties, which only a declared property records.
+  declare _hass?: HomeAssistant;
   private _clickFallback = false;
 
   constructor() {
@@ -99,14 +61,24 @@ export class PictureStudioStateLabel extends LitElement {
   }
 
   set hass(hass: HomeAssistant) {
+    // Reactive assignment, not requestUpdate("_config") — see the icon's setter:
+    // claiming a config change on every tick is what made the guard below
+    // unwritable.
     this._hass = hass;
-    // Unlike the card, this element renders from hass on every tick: the state
-    // it displays needs to follow the entity.
-    this.requestUpdate("_config");
   }
 
   get hass(): HomeAssistant | undefined {
     return this._hass;
+  }
+
+  /** Same guard as the icon's, for the same reason. */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    if (changed.has("_config") || !changed.has("_hass")) return true;
+    return hassRenderChanged(
+      changed.get("_hass") as HomeAssistant | undefined,
+      this._hass,
+      this._config?.entity,
+    );
   }
 
   protected render() {
@@ -152,15 +124,40 @@ export class PictureStudioStateLabel extends LitElement {
     return html`<span class="state">${this._hass?.formatEntityState?.(stateObj) ?? ""}</span>`;
   }
 
-  /** The host's own custom properties, written after render rather than during it. */
-  protected updated(): void {
+  /**
+   * The host's own custom properties, written after render rather than during it.
+   *
+   * Split the same way the icon's is, for the same reason: the colour and the
+   * brightness follow the entity, everything below follows the config alone.
+   */
+  protected updated(changed: PropertyValues): void {
     const config = this._config;
     if (!config) return;
-    this.style.setProperty("--psc-label-size", elementSizeCss(config.size, DEFAULT_LABEL_SIZE));
 
-    const color = labelColor(config.color);
-    if (color) this.style.setProperty("--psc-label-color", color);
-    else this.style.removeProperty("--psc-label-color");
+    // The entity is read here as well as in render(): the colour is a host
+    // property, and a host property is written after the render, not during it.
+    const stateObj = config.entity ? this._hass?.states?.[config.entity] : undefined;
+    const color = itemColorCss(stateObj, config.color);
+    if (color) {
+      this.style.setProperty("--psc-label-color", color);
+      // The same value under the name the shared hover reads, so the veil is
+      // tinted by whatever the item is showing.
+      this.style.setProperty("--psc-item-color", color);
+    } else {
+      this.style.removeProperty("--psc-label-color");
+      this.style.removeProperty("--psc-item-color");
+    }
+
+    // A dimmed bulb dims its label exactly as it dims an icon — the symmetry is
+    // the point, and a config that does not want it names a colour outright,
+    // which takes the branch above and never reaches this one.
+    const brightness = stateObj && config.color === "state" ? stateColorBrightness(stateObj) : "";
+    if (brightness) this.style.setProperty("--psc-label-brightness", brightness);
+    else this.style.removeProperty("--psc-label-brightness");
+
+    if (!changed.has("_config")) return;
+
+    this.style.setProperty("--psc-label-size", elementSizeCss(config.size, DEFAULT_LABEL_SIZE));
 
     const chrome = config.chrome;
     const on = !!chrome && chrome.theme !== "none";
@@ -216,16 +213,14 @@ export class PictureStudioStateLabel extends LitElement {
   static styles = [
     chromeFillStyles,
     haloStyles("--psc-label-size"),
+    interactionStyles,
     css`
       :host {
         display: block;
+        /* Captured from the page, where the theme defines it, so the hover veil
+           has a colour to fall back on when the item names none. */
+        --psc-inactive-color: var(--state-inactive-color);
       }
-      :host([clickable]) {
-        cursor: pointer;
-      }
-      /* No hover treatment, same as the icon: the grow this replaced scaled a
-         filled surface rather than text and read wrong. Its replacement is
-         designed separately; until then the cursor is the whole affordance. */
       /* The chrome. Always present, styled only when the config asks for it, so
          the DOM shape never depends on the config. Unlike the icon's, this box is
          not a square we chose: its width belongs to the text, so a chrome widens
@@ -272,6 +267,11 @@ export class PictureStudioStateLabel extends LitElement {
          redefines its scale carries the label with it. */
       .state {
         font-weight: var(--ha-font-weight-medium, 500);
+        /* The dimming a lit bulb applies to its own colour. On .state alone: it
+           is the line that carries the state colour, so it is the exact
+           counterpart of the glyph state-badge dims. A name is not a state and
+           keeps its own. */
+        filter: var(--psc-label-brightness, none);
       }
     `,
   ];

@@ -1,9 +1,11 @@
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { chromeFill } from "../chrome";
 import type { StateIconConfig } from "../config";
 import { DEFAULT_ICON_SIZE, elementSizeCss } from "../element-size";
+import { hassRenderChanged } from "../has-changed";
+import { itemColorCss } from "../state-color";
 import type { ActionConfig, HomeAssistant } from "../types";
-import { chromeFillStyles, haloStyles } from "./item-styles";
+import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
 
 /** Home Assistant's own one-liner: an action counts when set and not "none". */
 export const hasAction = (action?: ActionConfig): boolean =>
@@ -36,11 +38,14 @@ const actionHandler = (): ActionHandlerElement | undefined => {
 export class PictureStudioStateIcon extends LitElement {
   static properties = {
     _config: { state: true },
+    _hass: { state: true },
   };
 
   // No accessibility modifier — just declare, matching the rest of the codebase.
   declare _config?: StateIconConfig;
-  private _hass?: HomeAssistant;
+  // Reactive, not a plain field: shouldUpdate below reads the previous value out
+  // of changedProperties, which only a declared property records.
+  declare _hass?: HomeAssistant;
   private _clickFallback = false;
 
   constructor() {
@@ -67,14 +72,29 @@ export class PictureStudioStateIcon extends LitElement {
   }
 
   set hass(hass: HomeAssistant) {
+    // A plain assignment: `_hass` is reactive, so this schedules the update and
+    // records the previous value. It used to call requestUpdate("_config"),
+    // which claimed the config had changed on every tick of any entity — the
+    // one lie that made a per-tick guard impossible to write.
     this._hass = hass;
-    // Unlike the card, this element renders from hass on every tick: the state
-    // object it hands to state-badge is what makes the icon follow the entity.
-    this.requestUpdate("_config");
   }
 
   get hass(): HomeAssistant | undefined {
     return this._hass;
+  }
+
+  /**
+   * The card hands every item every `hass` publication, and Home Assistant
+   * publishes on every state change in the house. Render only when something we
+   * draw from actually moved.
+   */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    if (changed.has("_config") || !changed.has("_hass")) return true;
+    return hassRenderChanged(
+      changed.get("_hass") as HomeAssistant | undefined,
+      this._hass,
+      this._config?.entity,
+    );
   }
 
   protected render() {
@@ -115,10 +135,31 @@ export class PictureStudioStateIcon extends LitElement {
     `;
   }
 
-  /** The host's own custom property, written after render rather than during it. */
-  protected updated(): void {
+  /**
+   * The host's own custom properties, written after render rather than during it.
+   *
+   * Split in two on purpose. The colour follows the **entity**, so it is rewritten
+   * on every update this element allows. Everything else follows the **config**,
+   * which does not move on a state change — and rewriting it anyway is what made
+   * a floorplan call into HA's action-handler singleton once per item per tick.
+   * `shouldUpdate` already turns most ticks away; this is what the ones that get
+   * through cost.
+   */
+  protected updated(changed: PropertyValues): void {
     const config = this._config;
     if (!config) return;
+
+    // The colour state-badge paints inside its own shadow root, computed a
+    // second time on our side because nothing exposes it — and needed here only
+    // to tint the hover veil. The default matches what render() hands the badge,
+    // so the two never disagree.
+    const stateObj = config.entity ? this._hass?.states?.[config.entity] : undefined;
+    const itemColor = itemColorCss(stateObj, config.color ?? "state");
+    if (itemColor) this.style.setProperty("--psc-item-color", itemColor);
+    else this.style.removeProperty("--psc-item-color");
+
+    if (!changed.has("_config")) return;
+
     this.style.setProperty("--psc-icon-size", elementSizeCss(config.size, DEFAULT_ICON_SIZE));
 
     // A chrome that is absent and a chrome whose theme is "none" are the same
@@ -174,21 +215,16 @@ export class PictureStudioStateIcon extends LitElement {
   static styles = [
     chromeFillStyles,
     haloStyles("--psc-icon-size"),
+    interactionStyles,
     css`
     :host {
       display: block;
       line-height: 0;
       /* Captured from the page, where the theme defines it, so it can be handed
-         back to state-badge below. A custom theme keeps deciding the value. */
+         back to state-badge below — and so the hover veil has a colour to fall
+         back on when the item names none. */
       --psc-inactive-color: var(--state-inactive-color);
     }
-    /* Pointer when there is something to click. */
-    :host([clickable]) {
-      cursor: pointer;
-    }
-    /* No hover treatment: the grow this replaced scaled a filled disc rather
-       than a glyph once a chrome was on, and read wrong. What takes its place
-       is designed separately — until then the cursor is the whole affordance. */
     /* The chrome. Always present, styled only when the config asks for it, so
        the DOM shape never depends on the config. */
     .chrome {
