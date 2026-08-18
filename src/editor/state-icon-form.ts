@@ -145,14 +145,7 @@ export const iconSizeSchema = (
   return preamble;
 };
 
-export const iconChromeSchema = (
-  localize: LocalizeFunc,
-  // When true, the caller renders ha-radio-group for the theme and the schema
-  // omits chrome_theme. When false, the select stays so the theme is still
-  // changeable — ha-form is the guarantee that it renders.
-  radioGroupAvailable = false,
-): unknown[] => [
-  ...(radioGroupAvailable ? [] : [themeSelectRow(localize)]),
+export const iconChromeSchema = (_localize: LocalizeFunc): unknown[] => [
   {
     name: "chrome_radius",
     selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%" } },

@@ -131,14 +131,18 @@ describe("labelFromFormData", () => {
 describe("labelChromeSchema", () => {
   const localize = (() => "") as never;
 
+  it("never owns chrome_theme — the theme control is hand-rendered in element-form", () => {
+    expect(names(labelChromeSchema(localize))).not.toContain("chrome_theme");
+  });
+
   it("no longer owns chrome_pill or chrome_radius — they live in their own schemas", () => {
-    const flat = names(labelChromeSchema(localize, false));
+    const flat = names(labelChromeSchema(localize));
     expect(flat).not.toContain("chrome_pill");
     expect(flat).not.toContain("chrome_radius");
   });
 
   it("still owns chrome_opacity and chrome_padding", () => {
-    const flat = names(labelChromeSchema(localize, false));
+    const flat = names(labelChromeSchema(localize));
     expect(flat).toContain("chrome_opacity");
     expect(flat).toContain("chrome_padding");
   });

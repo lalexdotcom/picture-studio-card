@@ -3,8 +3,6 @@ import type { StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
-import { themeSelectRow } from "./state-icon-form";
-
 export const labelSchema = (): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
@@ -134,14 +132,7 @@ export const labelRadiusSchema = (): unknown[] => [
   },
 ];
 
-export const labelChromeSchema = (
-  localize: LocalizeFunc,
-  // When true, the caller renders ha-radio-group for the theme and the schema
-  // omits chrome_theme. When false, the select stays so the theme is still
-  // changeable — ha-form is the guarantee that it renders.
-  radioGroupAvailable = false,
-): unknown[] => [
-  ...(radioGroupAvailable ? [] : [themeSelectRow(localize)]),
+export const labelChromeSchema = (_localize: LocalizeFunc): unknown[] => [
   {
     name: "chrome_opacity",
     selector: { number: { min: 0, max: 100, step: 1, unit_of_measurement: "%" } },

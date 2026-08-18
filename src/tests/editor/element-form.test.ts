@@ -476,25 +476,15 @@ describe("chrome fields", () => {
 describe("the chrome schema", () => {
   const localize = ((key: string) => key) as never;
 
-  it("offers the three drawing themes and never none", () => {
-    const options = JSON.stringify(chromeSchema(localize, false));
-    expect(options).toContain("auto");
-    expect(options).toContain("light");
-    expect(options).toContain("dark");
-    expect(options).not.toContain('"none"');
+  it("never owns chrome_theme — the theme control is hand-rendered in element-form", () => {
+    expect(JSON.stringify(chromeSchema(localize))).not.toContain("chrome_theme");
   });
 
-  it("drops the theme field when the radio group renders it", () => {
-    expect(JSON.stringify(chromeSchema(localize, true))).not.toContain("chrome_theme");
-  });
-
-  it("shows the three numbers either way — they are kept, not lost", () => {
-    for (const available of [true, false]) {
-      const json = JSON.stringify(chromeSchema(localize, available));
-      expect(json).toContain("chrome_radius");
-      expect(json).toContain("chrome_opacity");
-      expect(json).toContain("chrome_content_ratio");
-    }
+  it("shows the three numbers", () => {
+    const json = JSON.stringify(chromeSchema(localize));
+    expect(json).toContain("chrome_radius");
+    expect(json).toContain("chrome_opacity");
+    expect(json).toContain("chrome_content_ratio");
   });
 
   it("puts both toggles in one shared schema, rendered above the chrome controls", () => {

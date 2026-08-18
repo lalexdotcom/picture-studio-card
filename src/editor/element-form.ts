@@ -14,6 +14,7 @@ import {
   iconToFormData,
   themeModeLabel,
   themeModeTitle,
+  themeSelectRow,
 } from "./state-icon-form";
 import {
   labelChromeSchema,
@@ -246,11 +247,19 @@ export class PictureStudioElementForm extends LitElement {
                             )}
                           </ha-radio-group>
                         `
-                      : nothing
+                      : html`
+                          <ha-form
+                            .hass=${hass}
+                            .data=${data}
+                            .schema=${[themeSelectRow(hass.localize)]}
+                            .computeLabel=${label}
+                            @value-changed=${this._valueChanged}
+                          ></ha-form>
+                        `
                   }
-                                    ${
-                                      isLabel
-                                        ? html`
+                  ${
+                    isLabel
+                      ? html`
                           <div class="pill-row" ?data-pill=${data.chrome_pill === true}>
                             <ha-form
                               .hass=${hass}
@@ -268,15 +277,13 @@ export class PictureStudioElementForm extends LitElement {
                             ></ha-form>
                           </div>
                         `
-                                        : nothing
-                                    }
+                      : nothing
+                  }
                   <ha-form
                     .hass=${hass}
                     .data=${data}
                     .schema=${
-                      isLabel
-                        ? labelChromeSchema(hass.localize, radioGroupAvailable)
-                        : iconChromeSchema(hass.localize, radioGroupAvailable)
+                      isLabel ? labelChromeSchema(hass.localize) : iconChromeSchema(hass.localize)
                     }
                     .computeLabel=${label}
                     @value-changed=${this._valueChanged}
