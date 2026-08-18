@@ -9,6 +9,7 @@ const localize = ((key: string) =>
     "ui.panel.lovelace.editor.card.picture-elements.elements": "Éléments",
     "ui.panel.lovelace.editor.badge.entity.name": "Entité",
     "ui.panel.lovelace.editor.card.picture-elements.element_types.state-icon": "Icône d'état",
+    "ui.panel.lovelace.editor.card.picture-elements.element_types.state-label": "Libellé d'état",
   })[key] ?? "") as never;
 
 describe("addChoices", () => {
@@ -21,7 +22,7 @@ describe("addChoices", () => {
     });
     expect(choices.at(-1)).toEqual({
       value: "element:state-label",
-      label: "Éléments: state-label",
+      label: "Éléments: Libellé d'état",
       icon: "mdi:shape-outline",
     });
   });

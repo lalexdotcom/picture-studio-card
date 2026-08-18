@@ -337,6 +337,7 @@ export class PictureStudioElementForm extends LitElement {
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
     if (!this.element) return;
+    // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
     if (this.element.type !== "state-icon") return;
     const data = { ...toFormData(this.element), ...ev.detail.value };
     this.dispatchEvent(
@@ -353,6 +354,7 @@ export class PictureStudioElementForm extends LitElement {
   // exactly one way a config change leaves this component.
   private _modeChanged = (ev: Event): void => {
     if (!this.element) return;
+    // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
     if (this.element.type !== "state-icon") return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
@@ -368,6 +370,7 @@ export class PictureStudioElementForm extends LitElement {
 
   private _chromeThemeChanged = (ev: Event): void => {
     if (!this.element) return;
+    // Transitional: this form handles state-icon only until Task 7 rewrites it per kind.
     if (this.element.type !== "state-icon") return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
@@ -385,6 +388,9 @@ export class PictureStudioElementForm extends LitElement {
     const element = this.element;
     const hass = this.hass;
     if (!element || !hass) return nothing;
+    // Transitional: widening ElementConfig to a union left this form written for
+    // the icon alone. Task 7 rewrites it to pick a schema per kind; until then a
+    // label opens a blank panel rather than a wrong one.
     if (element.type !== "state-icon") return nothing;
 
     // Check at render time whether ha-radio-group is available.
