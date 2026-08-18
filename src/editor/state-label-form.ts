@@ -3,7 +3,7 @@ import type { StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
-export const labelSchema = (): unknown[] => [
+export const labelSchema = (showTimeFormat: boolean): unknown[] => [
   { name: "entity", selector: { entity: {} } },
   {
     name: "content",
@@ -27,6 +27,10 @@ export const labelSchema = (): unknown[] => [
         selector: { ui_state_content: { allow_name: true } },
         context: { filter_entity: "entity" },
       },
+      // Mirrors the entity-badge editor: shown only when the selected
+      // state_content carries a time value that ha-state-display renders as a
+      // clock — same condition, same selector.
+      ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
       {
         name: "color",
         // No include_state: a label cannot honour it. state-badge computes the

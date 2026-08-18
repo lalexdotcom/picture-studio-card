@@ -1,5 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
-import type { ElementConfig } from "../config";
+import type { ElementConfig, StateLabelConfig } from "../config";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
@@ -25,6 +25,74 @@ import {
   labelSizeSchema,
   labelToFormData,
 } from "./state-label-form";
+
+// Mirrors the entity-badge editor's isTimeSeries (Rf) function.
+// The time-keyed state_content values come from HA's source; keeping the
+// same list means time_format appears exactly when ha-state-display would
+// render a clock rather than text.
+const TIME_BASED_CONTENT = ["last_updated", "last_changed", "last_triggered"] as const;
+// Domains whose default "state" attribute already is a datetime value.
+const TIME_DOMAINS = new Set([
+  "ai_task",
+  "button",
+  "conversation",
+  "datetime",
+  "event",
+  "image",
+  "input_button",
+  "notify",
+  "scene",
+  "stt",
+  "tag",
+  "tts",
+  "wake_word",
+]);
+// Sensor device classes that carry a unix timestamp as their state.
+const TIME_DEVICE_CLASSES = ["timestamp", "uptime"] as const;
+// Per-domain attributes that represent a point in time.
+const DOMAIN_TIME_ATTRS: Record<string, string[]> = {
+  calendar: ["start_time", "end_time"],
+  input_datetime: ["timestamp"],
+  sun: ["next_dawn", "next_dusk", "next_midnight", "next_noon", "next_rising", "next_setting"],
+};
+
+/**
+ * Returns true when the label's current state_content will be rendered as a
+ * time by ha-state-display — the condition that makes time_format meaningful.
+ * Reproduces HA's entity-badge editor check without importing it.
+ */
+const stateLabelIsTimeBased = (
+  element: StateLabelConfig | undefined,
+  hass: HomeAssistant,
+): boolean => {
+  const entity = element?.entity;
+  const stateContent = element?.state_content;
+  const contentList = Array.isArray(stateContent)
+    ? stateContent
+    : stateContent
+      ? [stateContent]
+      : [];
+  if (
+    stateContent &&
+    contentList.some((v) => (TIME_BASED_CONTENT as readonly string[]).includes(v))
+  )
+    return true;
+  if (!entity) return false;
+  const domain = entity.split(".")[0] ?? "";
+  if (!stateContent || contentList.includes("state")) {
+    if (TIME_DOMAINS.has(domain)) return true;
+    const stateObj = hass.states[entity];
+    if (stateObj) {
+      const dc =
+        domain === "sensor"
+          ? (stateObj.attributes["device_class"] as string | undefined)
+          : undefined;
+      if (dc && (TIME_DEVICE_CLASSES as readonly string[]).includes(dc)) return true;
+    }
+  }
+  const domainAttrs = DOMAIN_TIME_ATTRS[domain];
+  return !!(domainAttrs && stateContent && contentList.some((v) => domainAttrs.includes(v)));
+};
 
 export const appearanceToggleSchema = (): unknown[] => [
   { name: "halo_enabled", selector: { boolean: {} } },
@@ -163,7 +231,14 @@ export class PictureStudioElementForm extends LitElement {
     const isLabel = element.type === "state-label";
     const data =
       element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
-    const schema = isLabel ? labelSchema() : iconSchema();
+    // Mirrors the entity-badge editor's Rf check: show time_format only when
+    // the selected state_content carries a time value. The time-based keys are
+    // the same three HA uses ("last_updated", "last_changed", "last_triggered"),
+    // plus domain defaults (e.g. datetime, button) and sensor device classes
+    // "timestamp" / "uptime", and domain-specific attributes (calendar, sun, …).
+    const showTimeFormat =
+      isLabel && stateLabelIsTimeBased(element.type === "state-label" ? element : undefined, hass);
+    const schema = isLabel ? labelSchema(showTimeFormat) : iconSchema();
     const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
     const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);

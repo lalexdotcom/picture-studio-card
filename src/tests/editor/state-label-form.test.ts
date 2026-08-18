@@ -25,7 +25,7 @@ const names = (schema: unknown[]): string[] =>
 
 describe("labelSchema", () => {
   it("keeps the half of the badge form the icon left behind", () => {
-    expect(names(labelSchema())).toEqual([
+    expect(names(labelSchema(false))).toEqual([
       "entity",
       "name",
       "displayed_elements",
@@ -37,8 +37,22 @@ describe("labelSchema", () => {
     ]);
   });
 
+  it("inserts time_format after state_content when showTimeFormat is true", () => {
+    expect(names(labelSchema(true))).toEqual([
+      "entity",
+      "name",
+      "displayed_elements",
+      "state_content",
+      "time_format",
+      "color",
+      "tap_action",
+      "hold_action",
+      "double_tap_action",
+    ]);
+  });
+
   it("offers no state colour, and no `No color` trap it cannot honour", () => {
-    const color = JSON.stringify(labelSchema());
+    const color = JSON.stringify(labelSchema(false));
     expect(color).toContain('"default_color":"none"');
     expect(color).toContain('"include_none":true');
     expect(color).not.toContain("include_state");
