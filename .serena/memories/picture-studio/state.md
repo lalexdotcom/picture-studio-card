@@ -9,7 +9,7 @@ mouse".
 today one kind, `state-icon`, an icon that reflects an entity's state, sizes
 itself from the **card's** width, and since 1.3.0 can stand on a **chrome**.
 
-**1.3.0 is published** — pushed on 2026-08-17, tag `v1.3.0` on `62b4f80`, `main`
+**1.3.1 is the published release** — tag `v1.3.1` on `6ef4338`, five fixes after 1.3.0 (both halo corrections and the panel-view card tokens among them). 1.3.0 was tag `v1.3.0` on `62b4f80`, `main`
 level with `origin/main`. It was merged on 2026-08-14 (merge commit `d67941f`,
 `--no-ff`, branch `feat/icon-chrome` deleted); its two features are per-item
 `visibility` and the icon chrome. The chain that published it is unchanged: a

@@ -57,6 +57,34 @@ Neither blocks anything; both are worth a minute if the area is reopened.
 
 ---
 
+## 5. The item list reads top-down, the array does not
+
+**Asked 2026-08-18, nothing designed.** The list shows the items in array order,
+so the item painted on top sits at the bottom of the list — the reverse of what
+the picture shows. The user wants the list reversed **at display only**: first
+row = topmost item, adding an item inserts at the top of the list (still the end
+of the array), and the legend flips from "The last items in the list are drawn
+on top" to something saying the first ones are.
+
+**The question the user raised, and the answer given:** should the array be
+reversed too, so YAML and form agree? **No.** The array's order is the paint
+order — "the last is on top" is a property of the rendering, not a display
+preference — and reversing it would change the meaning of every config already
+written, migration included. Reversing only the view is the established pattern:
+a layer list reads top-down while the file stores bottom-up, in Photoshop, in
+Figma, in every map editor. The legend carries the explanation and the README
+covers the YAML. **Not re-litigated unless the user reopens it.**
+
+Two pieces travel with this one:
+
+- **The "Add" button moves onto the "Items" + legend line, to its right.** If the
+  menu's anchor is settable, open it bottom-right.
+- **The item form must scroll to the top when it opens.** It currently inherits
+  the scroll position of whatever was showing before — the list, or the previous
+  item's form — so a form can open halfway down itself.
+
+---
+
 ## 4. The hover, now that the grow has been rejected
 
 **Reopened 2026-08-18, and no longer hypothetical.** `transform: scale(1.04)`
