@@ -1,6 +1,7 @@
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
-import { CARD_TAG, ICON_TAG } from "../../config";
+import { PictureStudioStateLabel } from "../../card/state-label-element";
+import { CARD_TAG, ICON_TAG, LABEL_TAG } from "../../config";
 
 /**
  * Stands in for a badge or the background element. It counts what the CARD
@@ -46,6 +47,7 @@ export const installHelpers = (): void => {
   define(FAKE_TAG, FakeChild);
   define(CARD_TAG, PictureStudioCard);
   define(ICON_TAG, PictureStudioStateIcon);
+  define(LABEL_TAG, PictureStudioStateLabel);
   (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({
     createHuiElement: makeChild,
     createBadgeElement: makeChild,
@@ -88,15 +90,22 @@ export const wrappers = (card: PictureStudioCard): HTMLElement[] =>
  * circle, and no amount of reading caught it. Our rules are flat, so splitting
  * on braces is enough to address one by its selector.
  */
-export const cssRules = (styles: unknown): Map<string, string> => {
-  const text = (styles as { cssText: string }).cssText.replace(/\/\*[\s\S]*?\*\//g, "");
+export const cssRules = (
+  styles: unknown,
+): { selector: string; text: string }[] & { get(selector: string): string | undefined } => {
+  const sheets = Array.isArray(styles) ? styles : [styles];
+  const text = sheets
+    .map((sheet) => (sheet as { cssText?: string }).cssText ?? "")
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
   const bySelector = new Map<string, string>();
   for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const selector = (match[1] ?? "").trim().replace(/\s+/g, " ");
     const body = (match[2] ?? "").replace(/\s+/g, " ").trim();
     bySelector.set(selector, body);
   }
-  return bySelector;
+  const rules = [...bySelector.entries()].map(([selector, text]) => ({ selector, text }));
+  return Object.assign(rules, { get: (sel: string) => bySelector.get(sel) });
 };
 
 export const CONFIG_3 = {

@@ -10,7 +10,7 @@ import type { HomeAssistant } from "./types";
 const STRINGS = {
   en: {
     items: "Items",
-    stacking_hint: "The last items in the list are drawn on top.",
+    stacking_hint: "The first items in the list are drawn on top.",
     anchor: "Position",
     anchor_anchored: "Anchored",
     ratio: "Ratio",
@@ -20,15 +20,19 @@ const STRINGS = {
     size_mode_fixed: "Fixed",
     size_value: "Value",
     visibility: "Visibility",
-    chrome: "Chrome",
     chrome_enabled: "Draw a chrome",
     chrome_radius: "Radius",
     chrome_opacity: "Opacity",
     chrome_content_ratio: "Content",
+    halo_enabled: "Stand out",
+    halo_enabled_helper:
+      "Adds a shadow and a light rim so the element stays readable on any picture.",
+    chrome_pill: "Pill",
+    chrome_padding: "Padding",
   },
   fr: {
     items: "Items",
-    stacking_hint: "Les derniers items de la liste sont au-dessus.",
+    stacking_hint: "Les premiers items de la liste sont au-dessus.",
     anchor: "Position",
     anchor_anchored: "Ancré",
     ratio: "Ratio",
@@ -38,11 +42,15 @@ const STRINGS = {
     size_mode_fixed: "Fixe",
     size_value: "Valeur",
     visibility: "Visibilité",
-    chrome: "Habillage",
     chrome_enabled: "Dessiner un habillage",
     chrome_radius: "Rayon",
     chrome_opacity: "Opacité",
     chrome_content_ratio: "Contenu",
+    halo_enabled: "Détacher",
+    halo_enabled_helper:
+      "Ajoute une ombre et un liseré clair pour rester lisible sur n'importe quelle image.",
+    chrome_pill: "Pilule",
+    chrome_padding: "Marge",
   },
 } as const;
 

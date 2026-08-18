@@ -20,13 +20,17 @@ Badges from other frontend plugins appear in the picker next to the built-in one
 
 ![Adding a Mushroom template badge from the picker and dragging it onto the plan](docs/images/custom-badge.gif)
 
-## Icons
+## Elements
 
 A badge carries a pill, a label and one fixed size. When what you want on the
-plan is an icon — and you want it big — add an **icon** item instead: the same
-entity, name, icon and colour controls, without the pill.
+plan is something else, add an **element** item instead: the same entity, name
+and colour controls, without the pill.
 
-You choose [how big it is](#icon-size) and [what it stands on](#chrome).
+Two kinds are available: a **state icon** that reflects an entity's icon and
+colour, and a **state label** that places the entity's name, state, or both as
+text on the picture.
+
+You choose [how big each is](#element-size) and [what it stands on](#appearance).
 
 ## Install
 
@@ -96,24 +100,34 @@ the item they place.
 - **Automatic** *(default)* — the anchor follows the coordinate.
 - **Anchored** — the coordinates place the point you pick in the grid.
 
-#### Icon size
+#### Element size
 
-An icon's size follows the **card**, not the screen: in a sections view a narrow
-column gets a smaller icon than a wide one, and the same card on a phone scales
-down with it. Three modes decide how closely:
+An element's size follows the **card**, not the screen: in a sections view a
+narrow column gives a smaller element than a wide one, and the same card on a
+phone scales down with it. Three modes decide how closely:
 
 - **Automatic** *(default)*
 - **Adaptive** — your own ratio, between your own bounds.
 - **Fixed** — one size in pixels, which follows nothing.
 
-### Chrome
+An icon's size is the box that contains it. A label's size is its font size —
+the box is as wide as the text.
+
+### Appearance
+
+A **halo** lifts an element off the picture with a faint white rim and a soft
+shadow behind it. It is off by default — tick **Stand out** in an item's
+Appearance section to add it. The checkbox is available on both icons and labels.
 
 A **chrome** surrounds an item with its own surface.
 
 - **Theme** — **Auto**, **Light** or **Dark**.
-- **Radius** — a disc, a square, or anything between.
+- **Radius** — rounded corners. For an icon: a percentage of its box. For a
+  label: pixels.
 - **Opacity** — fades the surface alone.
-- **Content** — how much of the surface its contents take.
+- **Content** — how much of the surface an icon's glyph takes.
+- **Pill** (label only) — fully rounded ends, regardless of the box's width.
+- **Padding** (label only) — the gutter between the text and the surface edge.
 
 ### YAML reference
 
@@ -149,9 +163,9 @@ items:
         entity: input_boolean.show_badge
         state: "on"
 
-  - type: element                # the other family
+  - type: element
     config:
-      type: state-icon           # the only element kind so far
+      type: state-icon
       entity: light.salon
       icon: mdi:floor-lamp       # optional; the entity's state icon otherwise
       color: state               # state | none | a theme colour name
@@ -164,6 +178,7 @@ items:
         min: 24                  # adaptive only — px
         max: 48                  # adaptive only — px
         value: 48                # fixed only — px
+      halo: false                # optional; absent means no halo
       chrome:                    # optional; absent means no chrome
         theme: none              # none | auto | light | dark
         radius: 50               # % of the box — 50 is a disc, 0 a square
@@ -172,6 +187,34 @@ items:
     position:
       top: 45%
       left: 20%
+
+  - type: element
+    config:
+      type: state-label
+      entity: sensor.temperature
+      show_name: false           # optional; default false
+      show_state: true           # optional; default false
+      name: ___device_name___    # optional; composed sentinels or plain text
+      color: none                # state | none | a theme colour name
+      state_content: state       # optional; string or list of strings
+      time_format: "24"          # optional; only when state_content carries a time
+      tap_action: { action: more-info }
+      size:
+        mode: auto               # auto | adaptive | fixed (absent => auto)
+        ratio: 3                 # adaptive only — % of card width
+        min: 11                  # adaptive only — px
+        max: 20                  # adaptive only — px
+        value: 14                # fixed only — px
+      halo: false                # optional; absent means no halo
+      chrome:                    # optional; absent means no chrome
+        theme: none              # none | auto | light | dark
+        radius: 8                # px — border-radius (ignored when pill: true)
+        pill: false              # fully rounded ends
+        opacity: 1               # the surface's opacity, 0-1
+        padding: 6               # px — gutter between text and surface edge
+    position:
+      top: 50%
+      left: 30%
 ```
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
@@ -186,11 +229,15 @@ Both forms render identically; the editor displays either one.
 
 #### Positions, anchors and sizes
 
-An icon's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices the
-editor offers. `adaptive` reads `min`, `ratio` and `max`, `fixed` reads `value`,
-and the numbers a mode does not use are kept as you left them. `auto` is
-`ratio: 8`, `min: 24` and `max: 48` — 8% of the card's width, never under 24px
-and never over 48px — whatever the item's own numbers say.
+An element's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices
+the editor offers. `adaptive` reads `min`, `ratio` and `max`, `fixed` reads
+`value`, and the numbers a mode does not use are kept as you left them.
+
+For a **state icon**, `auto` is `ratio: 8`, `min: 24` and `max: 48` — 8% of
+the card's width, never under 24px and never over 48px. For a **state label**,
+`auto` is `ratio: 3`, `min: 11` and `max: 20` — 3% of the card's width, never
+under 11px and never over 20px. An icon's size is the box; a label's is the
+font size.
 
 `top` and `left` accept `30%` or a bare `30`. The editor writes the percent form
 back and keeps two decimals, which is the precision dragging produces.
@@ -205,6 +252,11 @@ Coordinates outside `0-100` are allowed and kept as written: under a fixed ancho
 they are how you place an item deliberately over the edge. Dragging never creates
 an overflow and never worsens one — an item already hanging off the edge can be
 pulled back in but not pushed further out, and once fully inside it stays there.
+
+#### Which item is on top
+
+Items overlap in the order `items` gives them: **the last one in the YAML is
+drawn over the others**. There is no `z-index` to set.
 
 #### Visibility
 
@@ -222,12 +274,13 @@ The card's own visibility is native to Home Assistant and needs nothing from
 this card: the Lovelace engine evaluates `config.visibility` on every card,
 and the edit dialog's "Visibility" tab is generic to all cards.
 
-#### Chrome keys
+#### Appearance keys
 
 Anything drawn on a photograph competes with whatever the picture happens to
-show. `chrome` gives an item a surface to stand on instead. Icons offer it
-today; it is written to belong to an item rather than to one kind of item, so
-other kinds can take it up as they arrive.
+show. `halo` adds a white rim and a soft shadow so the element lifts off the
+picture — absent or `false` means no halo. `chrome` gives an item a surface to
+stand on instead. Both keys belong to the item rather than one kind of item, and
+both are off by default.
 
 `theme` is the switch as well as the choice. `none` — the default, and what an
 absent `chrome` means — draws nothing. `auto` uses the same background your
@@ -235,20 +288,79 @@ dashboard's cards use, so the surface follows your theme. `light` and `dark`
 force one or the other, which is what you want when the picture is dark and the
 theme is not, or the reverse.
 
-`radius` is a percentage of the box: `50` is a disc, `0` a square, anything
-between a rounded square. `opacity` fades the surface only — what stands on it
-keeps its own colour. `content_ratio` is the share of the box the content takes:
-`0.6` matches Home Assistant's own icons, and `1` makes the content fill the box
-entirely, which turns the chrome into a frame around an entity picture rather
-than a disc behind it.
+`opacity` fades the surface only — the content keeps its own colour.
+
+**Icon chrome** (`type: state-icon`): `radius` is a percentage of the box —
+`50` is a disc, `0` a square, anything between a rounded square.
+`content_ratio` is the share of the box the glyph takes: `0.6` matches Home
+Assistant's own icons, and `1` fills the box entirely, which turns the chrome
+into a frame around an entity picture rather than a disc behind it.
+
+**Label chrome** (`type: state-label`): `radius` is in pixels — a percentage
+would draw an ellipse on a wide text box rather than a rounded corner.
+`pill: true` overrides `radius` with fully rounded ends, and is why enabling it
+hides the radius control in the editor. `padding` is the gutter between the
+text and the surface edge, in pixels.
 
 The numbers are kept when you switch the surface back to `none`, so trying a
 chrome out and turning it off costs you nothing.
 
-Note that `size` is the size of the whole thing: switching a chrome on does not
-make an item bigger, it makes what is inside it smaller. Nothing else about the
-item changes — where it sits, how it drags and what it does when clicked are the
-same with or without a surface.
+Note that for an icon, `size` is the size of the whole thing: switching a chrome
+on does not make the item bigger, it makes what is inside it smaller. For a
+label the chrome widens the item — the text box belongs to the text, and the
+surface grows around it.
+
+#### CSS tokens
+
+Both element kinds expose CSS custom properties you can override in your
+dashboard's card or theme.
+
+**State icon** (`type: state-icon`):
+
+| Token | Default | What it controls |
+|---|---|---|
+| `--psc-icon-size` | set by the card | The icon's box size, as the `size` mode produces it |
+| `--psc-icon-outline` | `0 0 1px rgba(255,255,255,0.4)` | The white rim in the halo filter |
+| `--psc-icon-glow` | `0 0 calc(size × 0.06) rgba(0,0,0,0.2)` | The dark shadow in the halo filter |
+
+**State label** (`type: state-label`):
+
+| Token | Default | What it controls |
+|---|---|---|
+| `--psc-label-size` | set by the card | The label's font size, as the `size` mode produces it |
+| `--psc-label-outline` | `0 0 1px rgba(255,255,255,0.4)` | The white rim in the halo filter |
+| `--psc-label-glow` | `0 0 calc(size × 0.06) rgba(0,0,0,0.2)` | The dark shadow in the halo filter |
+
+The state value inside a label uses the font weight `--ha-font-weight-medium`
+(500), which is Home Assistant's own token for the weight it gives a badge's
+state. A theme that redefines that token carries the label with it.
+
+The glow and outline tokens are `drop-shadow()` values used inside a CSS
+`filter:`. Setting one on the element's host tag or any ancestor overrides the
+default for that element. `--psc-icon-size` and `--psc-label-size` are written
+by the card and can be read by custom CSS.
+
+**Both kinds**, for the hover:
+
+| Token | Default | What it controls |
+|---|---|---|
+| `--psc-hover-opacity` | `0.04` | How much of its colour an item on a surface takes under the mouse |
+| `--psc-pressed-opacity` | `0.12` | The same, while the pointer is held down |
+| `--psc-item-color` | the item's own colour | What the hover tints with; falls back to the inactive grey when the item names no colour |
+
+#### What an item does under the mouse
+
+Only an item you can click reacts — one that has at least one action, which is
+every item unless you set tap, hold and double tap all to **No action**.
+
+What it does depends on whether it stands on a surface. **With a surface**, the
+surface takes a veil of the item's own colour — the same 4% Home Assistant gives
+a badge, 12% while you hold the pointer down. **Without a surface**, there is
+nothing to tint: a glyph or a line of text sits directly on the photograph,
+where a 4% veil would be invisible. So the item grows by 8% instead.
+
+Nothing reacts while you are editing the card: the whole picture belongs to
+placing items there.
 
 #### YAML-only keys
 
@@ -260,7 +372,7 @@ The card sizes itself to the image by default. If you resize it to a height the 
 
 ## Roadmap
 
-Icons arrived in 1.2.0. Later versions will place more kinds of content on the image — labels, buttons — drawn to sit alongside today's Home Assistant cards rather than to reproduce anything older.
+Icons arrived in 1.2.0 and text labels in 1.4.0. Later versions will place more kinds of content on the image — buttons — drawn to sit alongside today's Home Assistant cards rather than to reproduce anything older.
 
 ## Development
 

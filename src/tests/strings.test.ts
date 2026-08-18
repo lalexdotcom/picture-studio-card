@@ -8,28 +8,28 @@ const hass = (over: Partial<HomeAssistant>): HomeAssistant =>
 describe("localizeOwn", () => {
   it("prefers the stored locale over the resolved language", () => {
     const out = localizeOwn(hass({ language: "en", locale: { language: "fr" } }), "stacking_hint");
-    expect(out).toBe("Les derniers items de la liste sont au-dessus.");
+    expect(out).toBe("Les premiers items de la liste sont au-dessus.");
   });
 
   it("falls back to the resolved language when no locale is stored", () => {
-    expect(localizeOwn(hass({ language: "fr" }), "stacking_hint")).toContain("Les derniers items");
+    expect(localizeOwn(hass({ language: "fr" }), "stacking_hint")).toContain("Les premiers items");
   });
 
   it("degrades a regional variant to its base language", () => {
     expect(localizeOwn(hass({ language: "fr-CA" }), "stacking_hint")).toContain(
-      "Les derniers items",
+      "Les premiers items",
     );
   });
 
   it("falls back to English for an untranslated language", () => {
     expect(localizeOwn(hass({ language: "de" }), "stacking_hint")).toBe(
-      "The last items in the list are drawn on top.",
+      "The first items in the list are drawn on top.",
     );
   });
 
   it("survives a missing hass", () => {
     expect(localizeOwn(undefined, "stacking_hint")).toBe(
-      "The last items in the list are drawn on top.",
+      "The first items in the list are drawn on top.",
     );
   });
 });
@@ -56,33 +56,42 @@ describe("size_and_position string", () => {
   });
 });
 
-describe("chrome strings", () => {
+describe("appearance strings", () => {
   const KEYS = [
-    "chrome",
+    "halo_enabled",
+    "halo_enabled_helper",
     "chrome_enabled",
     "chrome_radius",
     "chrome_opacity",
     "chrome_content_ratio",
+    "chrome_pill",
+    "chrome_padding",
   ] as const;
 
-  it("serves the section and its fields in English", () => {
+  it("serves the section's own fields in English", () => {
     expect(KEYS.map((key) => localizeOwn(undefined, key))).toEqual([
-      "Chrome",
+      "Stand out",
+      "Adds a shadow and a light rim so the element stays readable on any picture.",
       "Draw a chrome",
       "Radius",
       "Opacity",
       "Content",
+      "Pill",
+      "Padding",
     ]);
   });
 
-  it("serves the same five in French", () => {
+  it("serves the same eight in French", () => {
     const fr = hass({ language: "fr" });
     expect(KEYS.map((key) => localizeOwn(fr, key))).toEqual([
-      "Habillage",
+      "Détacher",
+      "Ajoute une ombre et un liseré clair pour rester lisible sur n'importe quelle image.",
       "Dessiner un habillage",
       "Rayon",
       "Opacité",
       "Contenu",
+      "Pilule",
+      "Marge",
     ]);
   });
 });

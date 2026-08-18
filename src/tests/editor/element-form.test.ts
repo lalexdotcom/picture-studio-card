@@ -1,19 +1,22 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
-import type { StateIconConfig } from "../../config";
+import { afterEach, beforeAll, describe, expect, it } from "@rstest/core";
+import type { StateIconConfig, StateLabelConfig } from "../../config";
 import { ELEMENT_FORM_TAG } from "../../config";
 import {
-  chromeSchema,
-  chromeToggleSchema,
+  appearanceToggleSchema,
   elementFormHelper,
   elementFormLabel,
-  fromFormData,
   PictureStudioElementForm,
-  stateIconSchema,
-  stateIconSizeSchema,
-  themeModeTitle,
-  toFormData,
 } from "../../editor/element-form";
-import { DEFAULT_ICON_SIZE } from "../../element-size";
+import {
+  iconChromeSchema as chromeSchema,
+  iconFromFormData as fromFormData,
+  iconSchema as stateIconSchema,
+  iconSizeSchema as stateIconSizeSchema,
+  themeModeTitle,
+  iconToFormData as toFormData,
+} from "../../editor/state-icon-form";
+import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE } from "../../element-size";
+import { cssRules } from "../card/harness";
 
 const base = { type: "state-icon" as const, size: DEFAULT_ICON_SIZE };
 const localize = ((key: string) => `L:${key}`) as never;
@@ -200,8 +203,8 @@ describe("PictureStudioElementForm — radio group change", () => {
 
   it("emits element-changed with the chosen mode and all other keys intact", async () => {
     const form = await mountForm("auto");
-    // The size panel is the second ha-expansion-panel (the chrome panel is first).
-    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    // Size and position is the first ha-expansion-panel; Appearance follows it.
+    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[0];
     const group = sizePanel?.querySelector("ha-radio-group");
     expect(group).not.toBeNull();
     if (!group) return; // TypeScript guard; the assertion above already fails the test
@@ -216,8 +219,10 @@ describe("PictureStudioElementForm — radio group change", () => {
     group.dispatchEvent(new Event("change", { bubbles: true }));
 
     expect(events).toHaveLength(1);
+    const first = events[0];
+    if (!first) throw new Error("expected one element-changed event");
     const detail = (
-      events[0] as CustomEvent<{ element: { type: string; size: typeof DEFAULT_ICON_SIZE } }>
+      first as CustomEvent<{ element: { type: string; size: typeof DEFAULT_ICON_SIZE } }>
     ).detail;
     // The kind travels with the rest: the card rewrites the whole config on every
     // editor commit, so an element that lost its `type` would be erased from the
@@ -229,6 +234,19 @@ describe("PictureStudioElementForm — radio group change", () => {
     expect(detail.element.size.max).toBe(DEFAULT_ICON_SIZE.max);
     expect(detail.element.size.value).toBe(DEFAULT_ICON_SIZE.value);
     expect(detail.element.size.ratio).toBe(DEFAULT_ICON_SIZE.ratio);
+  });
+
+  it("renders Size and position before Appearance", async () => {
+    const form = await mountForm("auto");
+    const headers = [...(form.shadowRoot?.querySelectorAll('[slot="header"]') ?? [])].map((el) =>
+      el.textContent?.trim(),
+    );
+    // localize is stubbed as `L:${key}`, so the Appearance title arrives as the
+    // borrowed Home Assistant key rather than as a translated word.
+    expect(headers).toEqual([
+      "Size and position",
+      "L:ui.panel.lovelace.editor.card.map.appearance",
+    ]);
   });
 });
 
@@ -242,6 +260,7 @@ describe("toFormData / fromFormData", () => {
       size_ratio: 8,
       size_max: 48,
       size_value: 48,
+      halo_enabled: false,
       chrome_enabled: false,
       chrome_theme: "auto",
       chrome_radius: 50,
@@ -251,8 +270,10 @@ describe("toFormData / fromFormData", () => {
   });
 
   it("round-trips an adaptive size", () => {
+    // halo: false — fromFormData always emits a concrete boolean (not undefined).
     const config = {
       ...base,
+      halo: false as const,
       size: { mode: "adaptive" as const, min: 10, ratio: 1, max: 20, value: 48 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
@@ -262,19 +283,33 @@ describe("toFormData / fromFormData", () => {
     // ratio is 4 (integer) — a non-integer would be rounded by toFormData and
     // not equal config.size.ratio on the way back. That rounding is deliberate:
     // hand-written sub-step values are rounded on the first editor commit.
+    // halo: false — fromFormData always emits a concrete boolean (not undefined).
     const config = {
       ...base,
+      halo: false as const,
       size: { mode: "fixed" as const, min: 40, ratio: 4, max: 70, value: 64 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
   });
 
   it("round-trips an auto size", () => {
+    // halo: false — fromFormData always emits a concrete boolean (not undefined).
     const config = {
       ...base,
+      halo: false as const,
       size: { mode: "auto" as const, min: 10, ratio: 1, max: 20, value: 32 },
     };
     expect(fromFormData(config, toFormData(config))).toEqual(config);
+  });
+
+  it("carries the halo as its own checkbox", () => {
+    expect(toFormData(base).halo_enabled).toBe(false);
+    expect(toFormData({ ...base, halo: true }).halo_enabled).toBe(true);
+  });
+
+  it("writes the halo as a plain boolean", () => {
+    expect(fromFormData(base, { ...toFormData(base), halo_enabled: true }).halo).toBe(true);
+    expect(fromFormData(base, { ...toFormData(base), halo_enabled: false }).halo).toBe(false);
   });
 
   it("switching back to auto keeps the numbers so unchecking restores them", () => {
@@ -331,21 +366,27 @@ describe("elementFormLabel", () => {
 
 describe("elementFormHelper", () => {
   it("returns the HA colour helper text for the color field", () => {
-    expect(elementFormHelper(localize, "color")).toBe(
+    expect(elementFormHelper(localize, undefined, "color")).toBe(
       "L:ui.panel.lovelace.editor.badge.entity.color_helper",
     );
   });
 
   it("falls back to the English string when localize returns empty", () => {
-    expect(elementFormHelper((() => "") as never, "color")).toBe(
+    expect(elementFormHelper((() => "") as never, undefined, "color")).toBe(
       "Inactive state (for example, off or closed) will not be colored.",
     );
   });
 
+  it("returns the halo helper string for halo_enabled", () => {
+    expect(elementFormHelper(localize, undefined, "halo_enabled")).toBe(
+      "Adds a shadow and a light rim so the element stays readable on any picture.",
+    );
+  });
+
   it("returns undefined for every other field", () => {
-    expect(elementFormHelper(localize, "icon")).toBeUndefined();
-    expect(elementFormHelper(localize, "name")).toBeUndefined();
-    expect(elementFormHelper(localize, "tap_action")).toBeUndefined();
+    expect(elementFormHelper(localize, undefined, "icon")).toBeUndefined();
+    expect(elementFormHelper(localize, undefined, "name")).toBeUndefined();
+    expect(elementFormHelper(localize, undefined, "tap_action")).toBeUndefined();
   });
 });
 
@@ -437,29 +478,21 @@ describe("chrome fields", () => {
 describe("the chrome schema", () => {
   const localize = ((key: string) => key) as never;
 
-  it("offers the three drawing themes and never none", () => {
-    const options = JSON.stringify(chromeSchema(localize, false));
-    expect(options).toContain("auto");
-    expect(options).toContain("light");
-    expect(options).toContain("dark");
-    expect(options).not.toContain('"none"');
+  it("never owns chrome_theme — the theme control is hand-rendered in element-form", () => {
+    expect(JSON.stringify(chromeSchema(localize))).not.toContain("chrome_theme");
   });
 
-  it("drops the theme field when the radio group renders it", () => {
-    expect(JSON.stringify(chromeSchema(localize, true))).not.toContain("chrome_theme");
+  it("shows the three numbers", () => {
+    const json = JSON.stringify(chromeSchema(localize));
+    expect(json).toContain("chrome_radius");
+    expect(json).toContain("chrome_opacity");
+    expect(json).toContain("chrome_content_ratio");
   });
 
-  it("shows the three numbers either way — they are kept, not lost", () => {
-    for (const available of [true, false]) {
-      const json = JSON.stringify(chromeSchema(localize, available));
-      expect(json).toContain("chrome_radius");
-      expect(json).toContain("chrome_opacity");
-      expect(json).toContain("chrome_content_ratio");
-    }
-  });
-
-  it("puts the toggle in its own schema, so it can be rendered above the theme", () => {
-    expect(JSON.stringify(chromeToggleSchema())).toContain("chrome_enabled");
+  it("puts both toggles in one shared schema, rendered above the chrome controls", () => {
+    const json = JSON.stringify(appearanceToggleSchema());
+    expect(json).toContain("chrome_enabled");
+    expect(json).toContain("halo_enabled");
   });
 });
 
@@ -472,5 +505,202 @@ describe("the theme mode labels", () => {
 
   it("falls back to English if the key ever goes away", () => {
     expect(themeModeTitle((() => "") as never)).toBe("Theme mode");
+  });
+});
+
+describe("PictureStudioElementForm — pill-row CSS", () => {
+  it("lays the row out as a three-column grid: switch, separator, radius", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-row");
+    expect(rule).toContain("display: grid");
+    expect(rule).toContain("grid-template-columns: max-content max-content 1fr");
+  });
+
+  it("leaves the row's spacing to the separator, as the anchor section does", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-row");
+    // A gap here would add to the separator's own margins and put the two
+    // controls twice as far apart as the anchor section's divider does.
+    expect(rule).not.toContain("gap:");
+  });
+
+  it("hides both separator and radius with visibility when the pill is on", () => {
+    // :last-child would only hide the radius; :nth-child(n+2) covers both the
+    // separator (child 2) and the radius (child 3).
+    const rule = cssRules(PictureStudioElementForm.styles).get(
+      ".pill-row[data-pill] > :nth-child(n+2)",
+    );
+    expect(rule).toContain("visibility: hidden");
+  });
+
+  it("gives .pill-control a flex row with a 16px gap between label and switch", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-control");
+    expect(rule).toContain("display: flex");
+    expect(rule).toContain("align-items: center");
+    expect(rule).toContain("gap: var(--ha-space-4, 16px)");
+  });
+
+  it("draws .pill-separator as a vertical line matching .separator's colour and thickness", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-separator");
+    expect(rule).toContain("border-inline-start: 1px solid var(--divider-color)");
+    // 12px is the transposition of .separator's 12px top/bottom margin.
+    expect(rule).toContain("margin: 0 var(--ha-space-3, 12px)");
+    // align-self: stretch gives it height — an empty div with only a side
+    // border has no intrinsic height and would be invisible without this.
+    expect(rule).toContain("align-self: stretch");
+  });
+
+  it("gives .pill-label the section-label typography without a bottom margin", () => {
+    // .section-label has margin-block-end: 0.5em for its stacked role above a
+    // control. That margin shifts the text off-centre in a flex row beside a
+    // switch. .pill-label carries the same colour/weight/line-height but omits
+    // the margin so align-items: center on .pill-control can do its job.
+    const rule = cssRules(PictureStudioElementForm.styles).get(".pill-label");
+    expect(rule).toContain("color: var(--wa-form-control-label-color)");
+    expect(rule).toContain("font-weight: var(--wa-form-control-label-font-weight)");
+    expect(rule).toContain("line-height: var(--wa-form-control-label-line-height)");
+    expect(rule).not.toContain("margin");
+  });
+});
+
+// ── Pill switch render path tests ─────────────────────────────────────────────
+//
+// happy-dom does not register HA's components, so ha-switch is absent by
+// default and the form takes the fallback branch.  The hand-rendered branch is
+// exercised by the second describe, which registers a stub via beforeAll — a
+// timing that guarantees the fallback describe's tests still run without the
+// stub, then the stub lands just before the hand-rendered tests start.
+
+describe("PictureStudioElementForm — pill switch — fallback", () => {
+  // ha-switch is NOT registered here.  This describe must appear before the
+  // hand-rendered describe so its tests execute while the stub is still absent.
+
+  const hass = {
+    localize: ((key: string) => `L:${key}`) as never,
+    states: {},
+  } as never;
+
+  const mountLabelWithChrome = async (): Promise<PictureStudioElementForm> => {
+    const el = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    el.hass = hass;
+    el.element = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      chrome: { theme: "auto", radius: 50, pill: false, opacity: 1, padding: 6 },
+    } as StateLabelConfig;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("ha-switch is not registered when this test runs", () => {
+    // Guards the ordering contract: if this assertion fails, the fallback branch
+    // is not being tested — the stub arrived early and both describes exercise
+    // the hand-rendered path.
+    expect(customElements.get("ha-switch")).toBeUndefined();
+  });
+
+  it("renders ha-form for the pill when ha-switch is absent", async () => {
+    const form = await mountLabelWithChrome();
+    // The Appearance panel is the second ha-expansion-panel in the form.
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const pillRow = panel?.querySelector(".pill-row");
+    expect(pillRow).not.toBeNull();
+    // Fallback: both children are ha-form (pill + radius).  In the hand-rendered
+    // branch only one ha-form remains (radius only), so the count discriminates.
+    expect(pillRow?.querySelectorAll("ha-form").length).toBe(2);
+    expect(pillRow?.querySelector("ha-switch")).toBeNull();
+  });
+});
+
+describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
+  // Register a minimal stub so customElements.get("ha-switch") returns a
+  // non-undefined value and the form takes the hand-rendered path.
+  // beforeAll runs just before this describe's first test, which is after every
+  // test in the fallback describe above — preserving the ordering contract.
+  beforeAll(() => {
+    if (!customElements.get("ha-switch")) {
+      customElements.define("ha-switch", class extends HTMLElement {});
+    }
+  });
+
+  const hass = {
+    localize: ((key: string) => `L:${key}`) as never,
+    states: {},
+  } as never;
+
+  const mountLabelWithChrome = async (pill: boolean = false): Promise<PictureStudioElementForm> => {
+    const el = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    el.hass = hass;
+    el.element = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      chrome: { theme: "auto", radius: 50, pill, opacity: 1, padding: 6 },
+    } as StateLabelConfig;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("renders .pill-control with ha-switch when ha-switch is registered", async () => {
+    const form = await mountLabelWithChrome();
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const pillControl = panel?.querySelector(".pill-control");
+    expect(pillControl).not.toBeNull();
+    expect(pillControl?.querySelector("ha-switch")).not.toBeNull();
+    // The first child is .pill-control, not an ha-form fallback.
+    const pillRow = panel?.querySelector(".pill-row");
+    expect(pillRow?.firstElementChild?.tagName.toLowerCase()).toBe("div");
+  });
+
+  it("binds .checked to the current chrome_pill value", async () => {
+    type CheckableEl = HTMLElement & { checked?: boolean };
+
+    const formOff = await mountLabelWithChrome(false);
+    const panelOff = formOff.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const cbOff = panelOff?.querySelector(".pill-control ha-switch") as CheckableEl | null;
+    expect(cbOff).not.toBeNull();
+    if (!cbOff) return;
+    expect(cbOff.checked).toBe(false);
+    document.body.replaceChildren();
+
+    const formOn = await mountLabelWithChrome(true);
+    const panelOn = formOn.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const cbOn = panelOn?.querySelector(".pill-control ha-switch") as CheckableEl | null;
+    expect(cbOn).not.toBeNull();
+    if (!cbOn) return;
+    expect(cbOn.checked).toBe(true);
+  });
+
+  it("emits element-changed with chrome_pill toggled and all other keys intact", async () => {
+    type CheckableEl = HTMLElement & { checked?: boolean };
+    const form = await mountLabelWithChrome(false);
+    const events: CustomEvent[] = [];
+    form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
+
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const cb = panel?.querySelector(".pill-control ha-switch") as CheckableEl | null;
+    expect(cb).not.toBeNull();
+    if (!cb) return;
+
+    // Simulate ha-switch firing a change event; _pillChanged reads .checked.
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(events).toHaveLength(1);
+    const first = events[0];
+    if (!first) throw new Error("expected one element-changed event");
+    const changed = first as CustomEvent<{ element: StateLabelConfig }>;
+    expect(changed.detail.element.type).toBe("state-label");
+    expect(changed.detail.element.chrome?.pill).toBe(true);
+    // The chrome theme must survive the toggle — _pillChanged merges onto the
+    // full record, it does not invent new keys.
+    expect(changed.detail.element.chrome?.theme).toBe("auto");
   });
 });

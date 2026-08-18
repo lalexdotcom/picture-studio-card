@@ -247,18 +247,26 @@ describe("chrome", () => {
 });
 
 describe("the halo", () => {
-  it("carries its two literal values, each behind a variable a dashboard can set", () => {
-    expect(cssRules(PictureStudioStateIcon.styles).get(".chrome")).toContain(
-      "filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4))) " +
-        "drop-shadow(var(--psc-icon-glow, 0 0 calc(var(--psc-icon-size) * 0.06) rgba(0, 0, 0, 0.2)));",
-    );
+  it("wears the halo attribute only when the config asks for it", async () => {
+    expect((await mount({ entity: "light.a" })).hasAttribute("halo")).toBe(false);
+    expect((await mount({ entity: "light.a", halo: true })).hasAttribute("halo")).toBe(true);
   });
 
-  it("is unconditional, unlike the shape and the clipping it sits with", () => {
-    const chromeOnly = cssRules(PictureStudioStateIcon.styles).get(":host([chrome]) .chrome");
-    expect(chromeOnly).toContain("border-radius");
-    expect(chromeOnly).toContain("overflow: hidden");
-    expect(chromeOnly).not.toContain("filter");
+  it("draws the halo behind :host([halo]) and nowhere else", () => {
+    const rules = cssRules(PictureStudioStateIcon.styles);
+    const unconditional = rules.find((r) => r.selector === ".chrome");
+    expect(unconditional?.text).not.toContain("drop-shadow");
+    const gated = rules.find((r) => r.selector === ":host([halo]) .chrome");
+    expect(gated?.text).toContain("drop-shadow");
+  });
+
+  it("keeps the shape and the clipping under the chrome, away from the halo", () => {
+    const shaped = cssRules(PictureStudioStateIcon.styles).get(":host([chrome]) .chrome");
+    expect(shaped).toContain("border-radius");
+    expect(shaped).toContain("overflow: hidden");
+    // The halo lives in its own rule. These two conflated once, and every icon
+    // without a chrome came out a circle.
+    expect(shaped).not.toContain("filter");
   });
 });
 
@@ -301,5 +309,60 @@ describe("the action relay", () => {
     document.body.addEventListener("hass-action", (ev) => seen.push(ev));
     el.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("the shared interaction block", () => {
+  it("is part of the icon's styles, veil and grow together", () => {
+    const rules = cssRules(PictureStudioStateIcon.styles);
+    expect(rules.get(":host([clickable])")).toContain("cursor: pointer");
+    expect(rules.get(":host([chrome]) .chrome::after")).toContain("var(--psc-item-color");
+    expect(rules.get(":host([clickable]:not([chrome]):hover)")).toContain("scale(1.08)");
+  });
+
+  it("writes the veil's colour from the same recipe state-badge paints with", async () => {
+    const el = await mount({ entity: "light.a" });
+    expect(el.style.getPropertyValue("--psc-item-color")).toBe(
+      "var(--state-light-on-color, var(--state-light-active-color, var(--state-active-color)))",
+    );
+    // `color: none` names nothing, so the veil falls back to the inactive grey.
+    const plain = await mount({ entity: "light.a", color: "none" });
+    expect(plain.style.getPropertyValue("--psc-item-color")).toBe("");
+  });
+});
+
+describe("what a hass tick costs", () => {
+  const tick = (el: PictureStudioStateIcon, states: Record<string, unknown>) => {
+    el.hass = { ...(el.hass as object), states } as never;
+    return el.updateComplete;
+  };
+
+  it("does not touch the host again when another entity moved", async () => {
+    const el = await mount({ entity: "light.a" });
+    // Cleared by hand: only a re-render would put it back, so its absence after
+    // the tick is the proof that nothing ran.
+    el.style.removeProperty("--psc-icon-size");
+    await tick(el, {
+      "light.a": (el.hass as { states: Record<string, unknown> }).states["light.a"],
+      "light.b": { entity_id: "light.b", state: "on", attributes: {} },
+    });
+    expect(el.style.getPropertyValue("--psc-icon-size")).toBe("");
+  });
+
+  it("rewrites the colour, and only the colour, when its own entity moves", async () => {
+    const el = await mount({ entity: "light.a" });
+    el.style.removeProperty("--psc-icon-size");
+    await tick(el, { "light.a": { entity_id: "light.a", state: "off", attributes: {} } });
+    expect(el.style.getPropertyValue("--psc-item-color")).toContain("--state-light-off-color");
+    // The size follows the config, which did not change.
+    expect(el.style.getPropertyValue("--psc-icon-size")).toBe("");
+  });
+
+  it("rewrites everything when the config changes", async () => {
+    const el = await mount({ entity: "light.a" });
+    el.style.removeProperty("--psc-icon-size");
+    el.setConfig({ type: "state-icon", size: DEFAULT_ICON_SIZE, entity: "light.a" });
+    await el.updateComplete;
+    expect(el.style.getPropertyValue("--psc-icon-size")).not.toBe("");
   });
 });

@@ -23,7 +23,7 @@ interface BadgeClass {
  * here. If Home Assistant adds a native badge type, add it here too; until then
  * that type stays usable from YAML, since rendering does not filter on this list.
  */
-const CUSTOM_PREFIX = "custom:";
+export const CUSTOM_PREFIX = "custom:";
 
 export const CORE_BADGES: BadgeChoice[] = [
   { type: "entity", isCustom: false },

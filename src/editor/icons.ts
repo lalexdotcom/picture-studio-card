@@ -1,3 +1,5 @@
+import { CUSTOM_PREFIX } from "./badge-catalog";
+
 /**
  * Icon names shared by more than one editor component.
  *
@@ -16,20 +18,31 @@
 export const PLACEMENT_ICON = "mdi:crop-free";
 
 const BADGE_ICON = "mdi:label";
+/** A third-party badge, whatever it turns out to be: outlined, so it reads as
+    "not one of Home Assistant's own" at a glance. Every custom type shares it,
+    because we have no way to know what any of them draws. */
+const CUSTOM_BADGE_ICON = "mdi:label-outline";
+const BADGE_ICONS: Record<string, string> = {
+  shortcut: "mdi:label-variant",
+};
+/** Falls back to the family's own glyph for a kind we do not know by name. */
 const ELEMENT_ICON = "mdi:shape-outline";
+const ELEMENT_ICONS: Record<string, string> = {
+  "state-icon": "mdi:brightness-7",
+  "state-label": "mdi:card-text-outline",
+};
 
 /**
  * The glyph that tells one kind of item from another, in the list and in the
  * add menu.
  *
- * One per entry, and deliberately the same one twice where two entries share a
- * family: what it has to carry is "which sort of thing is this", not "which
- * exact type". The add menu keeps its "Badges: …" / "Elements: …" prefixes, and
- * those are what teach the pairing — the icon alone would have to be learned
- * from nothing.
- *
- * `type` is unused today and stays in the signature on purpose: the day one
- * badge kind deserves its own glyph, this function is the only thing to open.
+ * For badges, `BADGE_ICONS` maps known core kinds to their own glyph. A
+ * `custom:` type that is not in that map gets `CUSTOM_BADGE_ICON` (outlined),
+ * which reads as "not one of Home Assistant's own" at a glance. Any other core
+ * badge falls back to `BADGE_ICON`. For elements, `ELEMENT_ICONS` maps the known
+ * kinds; `ELEMENT_ICON` is the fallback.
  */
-export const itemIcon = (family: "badge" | "element", _type: string): string =>
-  family === "badge" ? BADGE_ICON : ELEMENT_ICON;
+export const itemIcon = (family: "badge" | "element", type: string): string =>
+  family === "badge"
+    ? (BADGE_ICONS[type] ?? (type.startsWith(CUSTOM_PREFIX) ? CUSTOM_BADGE_ICON : BADGE_ICON))
+    : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);

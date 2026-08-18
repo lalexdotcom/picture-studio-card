@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@rstest/core";
 import { elementCatalog, elementLabel, stubElementConfig } from "../../editor/element-catalog";
-import { DEFAULT_ICON_SIZE } from "../../element-size";
+import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE } from "../../element-size";
 
 describe("elementCatalog", () => {
-  it("offers the kinds we implement", () => {
-    expect(elementCatalog()).toEqual([{ type: "state-icon" }]);
+  it("offers both kinds, the icon first", () => {
+    expect(elementCatalog()).toEqual([{ type: "state-icon" }, { type: "state-label" }]);
   });
 });
 
@@ -28,5 +28,17 @@ describe("stubElementConfig", () => {
       type: "state-icon",
       size: DEFAULT_ICON_SIZE,
     });
+  });
+
+  it("stubs a label showing its state, at the label's own default size", () => {
+    expect(stubElementConfig("state-label")).toEqual({
+      type: "state-label",
+      show_state: true,
+      size: DEFAULT_LABEL_SIZE,
+    });
+  });
+
+  it("still raises on an unknown kind", () => {
+    expect(() => stubElementConfig("state-gauge")).toThrow();
   });
 });

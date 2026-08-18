@@ -1,10 +1,11 @@
 /**
- * An icon's size, in the two halves of the contract: the card declares
- * `container-type: inline-size` on `.root`, the element derives this clamp.
- * `1cqw` is 1% of `.root`'s width, so the size follows the card — which `vw`,
- * following the window, cannot do in a sections view.
+ * The size of a picture element (icon or label), in the two halves of the
+ * contract: the card declares `container-type: inline-size` on `.root`, the
+ * element derives this clamp. `1cqw` is 1% of `.root`'s width, so the size
+ * follows the card — which `vw`, following the window, cannot do in a
+ * sections view.
  */
-export interface IconSize {
+export interface ElementSize {
   /** "auto" uses the card's defaults; "adaptive" clamps own min/ratio/max; "fixed" is exact pixels. */
   mode: "auto" | "adaptive" | "fixed";
   /** adaptive only — % of the card's width */
@@ -23,7 +24,7 @@ export interface IconSize {
  * chosen against the viewport. Against the card, a steeper ratio between tighter
  * bounds holds the icon's proportion across column widths.
  */
-export const DEFAULT_ICON_SIZE: IconSize = {
+export const DEFAULT_ICON_SIZE: ElementSize = {
   mode: "auto",
   ratio: 8,
   min: 24,
@@ -31,12 +32,25 @@ export const DEFAULT_ICON_SIZE: IconSize = {
   value: 48,
 };
 
+/**
+ * A label's own defaults. Half the icon's ratio, so a label reads at roughly
+ * half an icon's height standing beside it, with a floor that stays legible and
+ * a ceiling that stops a wide card from turning a label into a headline.
+ */
+export const DEFAULT_LABEL_SIZE: ElementSize = {
+  mode: "auto",
+  ratio: 3,
+  min: 11,
+  max: 20,
+  value: 14,
+};
+
 const finite = (value: unknown, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 /** Keeps what it was given: `auto` is an override at render, never an erasure. */
-export const normalizeIconSize = (raw: unknown): IconSize => {
-  if (typeof raw !== "object" || raw === null) return { ...DEFAULT_ICON_SIZE };
+export const normalizeElementSize = (raw: unknown, defaults: ElementSize): ElementSize => {
+  if (typeof raw !== "object" || raw === null) return { ...defaults };
   // Use string-keyed record so we can read both the new `mode` field and the
   // legacy `auto` field without TypeScript narrowing complaints.
   const size = raw as Partial<Record<string, unknown>>;
@@ -56,10 +70,10 @@ export const normalizeIconSize = (raw: unknown): IconSize => {
 
   return {
     mode,
-    ratio: finite(size.ratio, DEFAULT_ICON_SIZE.ratio),
-    min: finite(size.min, DEFAULT_ICON_SIZE.min),
-    max: finite(size.max, DEFAULT_ICON_SIZE.max),
-    value: finite(size.value, DEFAULT_ICON_SIZE.value),
+    ratio: finite(size.ratio, defaults.ratio),
+    min: finite(size.min, defaults.min),
+    max: finite(size.max, defaults.max),
+    value: finite(size.value, defaults.value),
   };
 };
 
@@ -67,12 +81,12 @@ export const normalizeIconSize = (raw: unknown): IconSize => {
  * All five fields, not just `mode`: a size can be automatic and still carry
  * numbers the user typed, and dropping it from the stored config would lose them.
  */
-export const isDefaultIconSize = (size: IconSize): boolean =>
-  size.mode === DEFAULT_ICON_SIZE.mode &&
-  size.min === DEFAULT_ICON_SIZE.min &&
-  size.ratio === DEFAULT_ICON_SIZE.ratio &&
-  size.max === DEFAULT_ICON_SIZE.max &&
-  size.value === DEFAULT_ICON_SIZE.value;
+export const isDefaultElementSize = (size: ElementSize, defaults: ElementSize): boolean =>
+  size.mode === defaults.mode &&
+  size.min === defaults.min &&
+  size.ratio === defaults.ratio &&
+  size.max === defaults.max &&
+  size.value === defaults.value;
 
 /**
  * The only reader of `auto`, and the whole of the override: under it the card's
@@ -83,10 +97,10 @@ export const isDefaultIconSize = (size: IconSize): boolean =>
  * and rejecting a value while the user is still typing it is worse than the
  * documented behaviour.
  */
-export const iconSizeCss = (size: IconSize): string => {
+export const elementSizeCss = (size: ElementSize, defaults: ElementSize): string => {
   if (size.mode === "fixed") return `${size.value}px`;
   if (size.mode === "auto") {
-    const { min, ratio, max } = DEFAULT_ICON_SIZE;
+    const { min, ratio, max } = defaults;
     return `clamp(${min}px, ${ratio}cqw, ${max}px)`;
   }
   // adaptive

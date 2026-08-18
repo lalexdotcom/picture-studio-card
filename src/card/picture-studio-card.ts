@@ -6,6 +6,7 @@ import {
   hasVisibility,
   ICON_TAG,
   imagePath,
+  LABEL_TAG,
   normalizeConfig,
   type PictureItem,
   type PictureStudioConfig,
@@ -417,7 +418,8 @@ export class PictureStudioCard extends LitElement {
     helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
   ): LovelaceBadgeElement {
     if (item.type === "badge") return helpers.createBadgeElement(item.config);
-    const el = document.createElement(ICON_TAG) as unknown as LovelaceBadgeElement;
+    const tag = item.config.type === "state-label" ? LABEL_TAG : ICON_TAG;
+    const el = document.createElement(tag) as unknown as LovelaceBadgeElement;
     el.setConfig(item.config as unknown as BadgeConfig);
     return el;
   }

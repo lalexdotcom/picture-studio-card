@@ -1,8 +1,11 @@
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { chromeFill } from "../chrome";
 import type { StateIconConfig } from "../config";
-import { iconSizeCss } from "../element-size";
+import { DEFAULT_ICON_SIZE, elementSizeCss } from "../element-size";
+import { hassRenderChanged } from "../has-changed";
+import { itemColorCss } from "../state-color";
 import type { ActionConfig, HomeAssistant } from "../types";
+import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
 
 /** Home Assistant's own one-liner: an action counts when set and not "none". */
 export const hasAction = (action?: ActionConfig): boolean =>
@@ -35,11 +38,14 @@ const actionHandler = (): ActionHandlerElement | undefined => {
 export class PictureStudioStateIcon extends LitElement {
   static properties = {
     _config: { state: true },
+    _hass: { state: true },
   };
 
   // No accessibility modifier — just declare, matching the rest of the codebase.
   declare _config?: StateIconConfig;
-  private _hass?: HomeAssistant;
+  // Reactive, not a plain field: shouldUpdate below reads the previous value out
+  // of changedProperties, which only a declared property records.
+  declare _hass?: HomeAssistant;
   private _clickFallback = false;
 
   constructor() {
@@ -66,14 +72,29 @@ export class PictureStudioStateIcon extends LitElement {
   }
 
   set hass(hass: HomeAssistant) {
+    // A plain assignment: `_hass` is reactive, so this schedules the update and
+    // records the previous value. It used to call requestUpdate("_config"),
+    // which claimed the config had changed on every tick of any entity — the
+    // one lie that made a per-tick guard impossible to write.
     this._hass = hass;
-    // Unlike the card, this element renders from hass on every tick: the state
-    // object it hands to state-badge is what makes the icon follow the entity.
-    this.requestUpdate("_config");
   }
 
   get hass(): HomeAssistant | undefined {
     return this._hass;
+  }
+
+  /**
+   * The card hands every item every `hass` publication, and Home Assistant
+   * publishes on every state change in the house. Render only when something we
+   * draw from actually moved.
+   */
+  protected shouldUpdate(changed: PropertyValues): boolean {
+    if (changed.has("_config") || !changed.has("_hass")) return true;
+    return hassRenderChanged(
+      changed.get("_hass") as HomeAssistant | undefined,
+      this._hass,
+      this._config?.entity,
+    );
   }
 
   protected render() {
@@ -114,11 +135,32 @@ export class PictureStudioStateIcon extends LitElement {
     `;
   }
 
-  /** The host's own custom property, written after render rather than during it. */
-  protected updated(): void {
+  /**
+   * The host's own custom properties, written after render rather than during it.
+   *
+   * Split in two on purpose. The colour follows the **entity**, so it is rewritten
+   * on every update this element allows. Everything else follows the **config**,
+   * which does not move on a state change — and rewriting it anyway is what made
+   * a floorplan call into HA's action-handler singleton once per item per tick.
+   * `shouldUpdate` already turns most ticks away; this is what the ones that get
+   * through cost.
+   */
+  protected updated(changed: PropertyValues): void {
     const config = this._config;
     if (!config) return;
-    this.style.setProperty("--psc-icon-size", iconSizeCss(config.size));
+
+    // The colour state-badge paints inside its own shadow root, computed a
+    // second time on our side because nothing exposes it — and needed here only
+    // to tint the hover veil. The default matches what render() hands the badge,
+    // so the two never disagree.
+    const stateObj = config.entity ? this._hass?.states?.[config.entity] : undefined;
+    const itemColor = itemColorCss(stateObj, config.color ?? "state");
+    if (itemColor) this.style.setProperty("--psc-item-color", itemColor);
+    else this.style.removeProperty("--psc-item-color");
+
+    if (!changed.has("_config")) return;
+
+    this.style.setProperty("--psc-icon-size", elementSizeCss(config.size, DEFAULT_ICON_SIZE));
 
     // A chrome that is absent and a chrome whose theme is "none" are the same
     // thing — the record exists so numbers survive being switched off.
@@ -140,6 +182,8 @@ export class PictureStudioStateIcon extends LitElement {
         this.style.removeProperty(name);
       }
     }
+
+    this.toggleAttribute("halo", config.halo === true);
 
     // Absent tap_action means clickable (the default action is more-info).
     // Mirrors Home Assistant's own badge.hasAction getter exactly: the cursor
@@ -168,29 +212,18 @@ export class PictureStudioStateIcon extends LitElement {
     });
   }
 
-  static styles = css`
+  static styles = [
+    chromeFillStyles,
+    haloStyles("--psc-icon-size"),
+    interactionStyles,
+    css`
     :host {
       display: block;
       line-height: 0;
       /* Captured from the page, where the theme defines it, so it can be handed
-         back to state-badge below. A custom theme keeps deciding the value. */
+         back to state-badge below — and so the hover veil has a colour to fall
+         back on when the item names none. */
       --psc-inactive-color: var(--state-inactive-color);
-      /* Long enough to read as motion: at 90ms the grow registered as a flicker
-         rather than an animation. */
-      transition: transform 120ms ease-out;
-    }
-    /* Pointer when there is something to click. */
-    :host([clickable]) {
-      cursor: pointer;
-    }
-    /* Subtle grow on hover: scale goes on the host — the card's wrapper carries
-       translate(…) and must not be touched; 50% 50% is the default
-       transform-origin, so the icon scales from its own centre regardless of
-       the item's anchor. No guard for edit mode needed: the card already sets
-       .editing .item > * { pointer-events: none }, so hover never reaches
-       this host while a drag is running. */
-    :host([clickable]:hover) {
-      transform: scale(1.04);
     }
     /* The chrome. Always present, styled only when the config asks for it, so
        the DOM shape never depends on the config. */
@@ -206,29 +239,6 @@ export class PictureStudioStateIcon extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      /* Moved off :host so the wrapper carries the whole chrome, halo included.
-         The icon stands on the user's picture, not on the theme's background,
-         so its contrast has to hold against an unknown image — which no theme
-         token can promise. Hence literal white and black here, and only here.
-         drop-shadow rather than a border or a box-shadow: it traces the
-         rendered silhouette, so it follows the glyph when there is no chrome
-         and the disc when there is one. Both are exposed as variables so a
-         dashboard can dial them without forking the element.
-         The glow is tuned for the filled silhouette — a chrome's disc, or the
-         square an entity picture paints — because that is where these values
-         lay the most ink: at 60% the edge read as a dark ring on a light
-         picture rather than as a shadow, so the opacity came down to 20%.
-         The blur is a share of the icon's own size rather than a length: the
-         fixed 3px it replaces was 12.5% of a 24px icon and 7.5% of a 40px one,
-         which is why a small icon wore the halo as a band. 6% comes to 1.4px at
-         24px, 2.4px at 40px and 2.9px at 48px, and calc() resolves
-         --psc-icon-size whatever it is, so a clamp()ed size carries the halo
-         with it as the card's column changes width.
-         The white rim is part of none of this: a hairline stays a hairline at
-         every size, and it is what carries a dark icon on a dark picture, so it
-         keeps its 1.2.0 value. */
-      filter: drop-shadow(var(--psc-icon-outline, 0 0 1px rgba(255, 255, 255, 0.4)))
-        drop-shadow(var(--psc-icon-glow, 0 0 calc(var(--psc-icon-size) * 0.06) rgba(0, 0, 0, 0.2)));
     }
     /* The shape and the clipping belong to the chrome: an unshaped, unclipped
        wrapper is exactly what "no chrome" means. */
@@ -238,16 +248,6 @@ export class PictureStudioStateIcon extends LitElement {
          to the chrome's own silhouette — the chrome becomes the picture's
          frame rather than a disc behind it. */
       overflow: hidden;
-    }
-    /* The fill sits on a pseudo-element so its opacity is its own: fading the
-       surface must not fade the icon standing on it. */
-    :host([chrome]) .chrome::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: var(--psc-chrome-fill);
-      opacity: var(--psc-chrome-opacity, 1);
     }
     /* state-badge paints an entity picture as a background-image on its own
        host and the glyph as a child sized by --mdc-icon-size, so scaling the
@@ -277,5 +277,6 @@ export class PictureStudioStateIcon extends LitElement {
       align-items: center;
       justify-content: center;
     }
-  `;
+  `,
+  ];
 }

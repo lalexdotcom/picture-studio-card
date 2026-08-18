@@ -1,14 +1,17 @@
 import { describe, expect, it } from "@rstest/core";
+import { DEFAULT_LABEL_CHROME, type LabelChrome } from "../chrome";
 import {
   CARD_TYPE,
   hasVisibility,
   imagePath,
   normalizeConfig,
+  normalizeElementConfig,
   type StateIconConfig,
+  type StateLabelConfig,
   storedConfig,
   stubConfig,
 } from "../config";
-import { DEFAULT_ICON_SIZE } from "../element-size";
+import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE, type ElementSize } from "../element-size";
 
 describe("imagePath", () => {
   it("keeps a hand-written path as-is", () => {
@@ -141,6 +144,7 @@ describe("normalizeConfig", () => {
         entity: "light.a",
         size: DEFAULT_ICON_SIZE,
         chrome: { theme: "none", radius: 50, opacity: 1, content_ratio: 0.6 },
+        halo: false,
       },
     });
   });
@@ -461,6 +465,122 @@ describe("element chrome", () => {
       opacity: 1,
       content_ratio: 0.6,
     });
+  });
+});
+
+describe("element halo", () => {
+  it("normalises `halo` to a strict boolean, absent meaning off", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/a.png",
+      items: [
+        { type: "element", position: { top: "1%", left: "1%" }, config: { type: "state-icon" } },
+      ],
+    });
+    const item = config.items[0];
+    if (!item) throw new Error("expected an item");
+    expect((item.config as StateIconConfig).halo).toBe(false);
+  });
+
+  it("reads `halo: true` and rejects a truthy non-boolean", () => {
+    const on = normalizeElementConfig({ type: "state-icon", halo: true }, 0) as StateIconConfig;
+    const off = normalizeElementConfig({ type: "state-icon", halo: "yes" }, 0) as StateIconConfig;
+    expect(on.halo).toBe(true);
+    expect(off.halo).toBe(false);
+  });
+
+  it("stores `halo` only when it is on", () => {
+    const withHalo = storedConfig(
+      normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/a.png",
+        items: [
+          {
+            type: "element",
+            position: { top: "1%", left: "1%" },
+            config: { type: "state-icon", halo: true },
+          },
+          { type: "element", position: { top: "2%", left: "2%" }, config: { type: "state-icon" } },
+        ],
+      }),
+    );
+    const [first, second] = withHalo.items as [
+      { config: Record<string, unknown> },
+      { config: Record<string, unknown> },
+    ];
+    expect(first.config.halo).toBe(true);
+    expect("halo" in second.config).toBe(false);
+  });
+});
+
+describe("state-label config", () => {
+  const label = (raw: Record<string, unknown>) =>
+    normalizeElementConfig({ type: "state-label", ...raw }, 0) as StateLabelConfig;
+
+  it("defaults size and chrome to the label's own records", () => {
+    const config = label({});
+    expect(config.size).toEqual(DEFAULT_LABEL_SIZE);
+    expect(config.chrome).toEqual(DEFAULT_LABEL_CHROME);
+    expect(config.halo).toBe(false);
+  });
+
+  it("keeps unknown keys, because storedConfig rewrites the whole config", () => {
+    expect((label({ prefix: "~" }) as StateLabelConfig & Record<string, unknown>).prefix).toBe("~");
+  });
+
+  it("drops an unknown key inside its closed records", () => {
+    expect(label({ chrome: { blur: 3 } }).chrome).toEqual(DEFAULT_LABEL_CHROME);
+  });
+
+  it("still raises on an absent or unknown kind", () => {
+    expect(() => normalizeElementConfig({}, 2)).toThrow(/items\[2\]/);
+    expect(() => normalizeElementConfig({ type: "state-gauge" }, 0)).toThrow();
+  });
+
+  it("round-trips through storedConfig without growing default keys", () => {
+    const stored = storedConfig(
+      normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/a.png",
+        items: [
+          {
+            type: "element",
+            position: { top: "1%", left: "1%" },
+            config: { type: "state-label", entity: "sensor.a", show_state: true },
+          },
+        ],
+      }),
+    );
+    const [item0] = stored.items as [{ config: unknown }];
+    expect(item0.config).toEqual({
+      type: "state-label",
+      entity: "sensor.a",
+      show_state: true,
+    });
+  });
+
+  it("stores a non-default label chrome and size", () => {
+    const stored = storedConfig(
+      normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/a.png",
+        items: [
+          {
+            type: "element",
+            position: { top: "1%", left: "1%" },
+            config: {
+              type: "state-label",
+              chrome: { theme: "auto", pill: true },
+              size: { mode: "fixed", value: 18 },
+            },
+          },
+        ],
+      }),
+    );
+    const [item0] = stored.items as [{ config: Record<string, unknown> }];
+    const config = item0.config;
+    expect((config.chrome as LabelChrome).pill).toBe(true);
+    expect((config.size as ElementSize).mode).toBe("fixed");
   });
 });
 

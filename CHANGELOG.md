@@ -1,5 +1,49 @@
 # Changelog
 
+## unreleased
+
+### Changed
+
+- **The halo around an icon** — the light rim and soft shadow that keep it
+  readable on a photograph — is no longer drawn automatically. It is now a
+  **Stand out** checkbox at the top of the new **Appearance** section, off by
+  default, so icons placed before this release lose it until you tick the box.
+- **The Chrome section is now Appearance**, and it comes after **Size and
+  position** rather than before it.
+- **The panel you get when editing an item now shows the item's name** — "State
+  icon", "Entity badge" — instead of its technical type. The add menu and the
+  item list agree on the same name: a Shortcut badge shows the **Text** you
+  gave it, and a custom badge shows the name its library registered rather
+  than the raw `custom:…` tag.
+- **The add menu lists the elements before the badges.**
+- **The Add button sits on the Items line**, to the right of the title, instead
+  of below the list — so it stays in the same place however many items you have.
+- **Opening an item now shows you the top of its form.** It used to inherit
+  wherever you had scrolled to before, which could open a form halfway down
+  itself.
+- **The item list now reads top-down.** The first row is the item drawn on top
+  of the picture, and a new item lands at the top of the list — which is how a
+  layer list reads everywhere else. Your YAML is unchanged: `items` still stores
+  the item on top last, and the list is simply the mirror of it. The note under
+  the list says so.
+- **Items react to the mouse again, and they react to it differently.** An item
+  standing on a surface tints that surface with its own colour while the pointer
+  is over it — the shading Home Assistant gives a badge, and deeper while you
+  hold the button down. An item with no surface grows slightly instead, as it
+  did before, because a shading laid over a photograph cannot be seen. Only
+  items you can click react, and nothing reacts while you are editing the card.
+
+### Added
+
+- **A new element kind, State label**: an entity's text placed on the picture.
+  Show its name, its state, or both, compose what the state says the same way a
+  badge does, pick a colour, and size it from the card's width like every other
+  item. It can stand on the same surface an icon can, with a pill or rounded
+  corners and a padding of your own.
+- **Each item kind now has its own glyph** in the editor's item list and add
+  menu: a sun for a state icon, a text card for a state label, and distinct
+  label shapes for the core and custom badge families.
+
 ## 1.3.1 — 2026-08-17
 
 ### Changed

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
-import { CARD_TAG, CARD_TYPE, ICON_TAG, PROBE_TYPE } from "../../config";
+import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TYPE } from "../../config";
 import type { HomeAssistant } from "../../types";
 import {
   background,
@@ -176,6 +176,30 @@ describe("mixed item families", () => {
     await card.updateComplete;
     await flush();
     expect(root(card).querySelector(ICON_TAG)).toBe(before);
+  });
+});
+
+describe("element tag routing", () => {
+  it("mounts the label tag for a state-label item", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [{ type: "element", config: { type: "state-label", entity: "sensor.a" } }],
+    });
+    expect(root(card).querySelector(".item")?.firstElementChild?.tagName.toLowerCase()).toBe(
+      LABEL_TAG,
+    );
+  });
+
+  it("still mounts the icon tag for a state-icon item", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [{ type: "element", config: { type: "state-icon", entity: "light.b" } }],
+    });
+    expect(root(card).querySelector(".item")?.firstElementChild?.tagName.toLowerCase()).toBe(
+      ICON_TAG,
+    );
   });
 });
 

@@ -1,170 +1,116 @@
 import { css, html, LitElement, nothing } from "lit";
-import { DEFAULT_CHROME, normalizeChrome } from "../chrome";
-import type { ElementConfig, StateIconConfig } from "../config";
-import { normalizeIconSize } from "../element-size";
+import type { ElementConfig, StateLabelConfig } from "../config";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
 import "./visibility-section";
+import { elementLabel } from "./element-catalog";
 import { PLACEMENT_ICON } from "./icons";
+import {
+  iconChromeSchema,
+  iconFromFormData,
+  iconSchema,
+  iconSizeSchema,
+  iconToFormData,
+  themeModeLabel,
+  themeModeTitle,
+  themeSelectRow,
+} from "./state-icon-form";
+import {
+  labelChromeSchema,
+  labelFromFormData,
+  labelPillSchema,
+  labelRadiusSchema,
+  labelSchema,
+  labelSizeSchema,
+  labelToFormData,
+} from "./state-label-form";
 
-const THEME_KEY = "ui.panel.lovelace.editor.card.map";
-const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
+// Mirrors the entity-badge editor's isTimeSeries (Rf) function.
+// The time-keyed state_content values come from HA's source; keeping the
+// same list means time_format appears exactly when ha-state-display would
+// render a clock rather than text.
+//
+// THIS IS A COPY OF A NON-EXPORTED HOME ASSISTANT FUNCTION. On a version bump,
+// re-read `Rf` in the entity-badge editor's chunk (grep the shipped frontend
+// for `time_format`) and reconcile the four tables below — HA adds domains and
+// device classes without touching any public API, so this drifts silently.
+// The drift is cosmetic and recoverable: when a table falls behind, the field
+// merely stops being offered for that entity kind, and `time_format` written by
+// hand still round-trips through the editor untouched. Decision 6 of the spec
+// once cited this copy as the acceptable case against the state colour; it was
+// reversed inside 1.4.0 once the state colour turned out to be a chain of CSS
+// variable names rather than a computation, and `src/state-color.ts` now carries
+// the same kind of copy under the same kind of guarantee.
+const TIME_BASED_CONTENT = ["last_updated", "last_changed", "last_triggered"] as const;
+// Domains whose default "state" attribute already is a datetime value.
+const TIME_DOMAINS = new Set([
+  "ai_task",
+  "button",
+  "conversation",
+  "datetime",
+  "event",
+  "image",
+  "input_button",
+  "notify",
+  "scene",
+  "stt",
+  "tag",
+  "tts",
+  "wake_word",
+]);
+// Sensor device classes that carry a unix timestamp as their state.
+const TIME_DEVICE_CLASSES = ["timestamp", "uptime"] as const;
+// Per-domain attributes that represent a point in time.
+const DOMAIN_TIME_ATTRS: Record<string, string[]> = {
+  calendar: ["start_time", "end_time"],
+  input_datetime: ["timestamp"],
+  sun: ["next_dawn", "next_dusk", "next_midnight", "next_noon", "next_rising", "next_setting"],
+};
 
-const themeModeLabel = (localize: LocalizeFunc, value: keyof typeof THEME_FALLBACK): string =>
-  localize(`${THEME_KEY}.theme_modes.${value}`) || THEME_FALLBACK[value];
+/**
+ * Returns true when the label's current state_content will be rendered as a
+ * time by ha-state-display — the condition that makes time_format meaningful.
+ * Reproduces HA's entity-badge editor check without importing it.
+ */
+const stateLabelIsTimeBased = (
+  element: StateLabelConfig | undefined,
+  hass: HomeAssistant,
+): boolean => {
+  const entity = element?.entity;
+  const stateContent = element?.state_content;
+  const contentList = Array.isArray(stateContent)
+    ? stateContent
+    : stateContent
+      ? [stateContent]
+      : [];
+  if (
+    stateContent &&
+    contentList.some((v) => (TIME_BASED_CONTENT as readonly string[]).includes(v))
+  )
+    return true;
+  if (!entity) return false;
+  const domain = entity.split(".")[0] ?? "";
+  if (!stateContent || contentList.includes("state")) {
+    if (TIME_DOMAINS.has(domain)) return true;
+    const stateObj = hass.states[entity];
+    if (stateObj) {
+      const dc =
+        domain === "sensor"
+          ? (stateObj.attributes["device_class"] as string | undefined)
+          : undefined;
+      if (dc && (TIME_DEVICE_CLASSES as readonly string[]).includes(dc)) return true;
+    }
+  }
+  const domainAttrs = DOMAIN_TIME_ATTRS[domain];
+  return !!(domainAttrs && stateContent && contentList.some((v) => domainAttrs.includes(v)));
+};
 
-export const themeModeTitle = (localize: LocalizeFunc): string =>
-  localize(`${THEME_KEY}.theme_mode`) || "Theme mode";
-
-export const stateIconSchema = (): unknown[] => [
-  { name: "entity", selector: { entity: {} } },
-  {
-    name: "content",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:text-short",
-    schema: [
-      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "color",
-            selector: { ui_color: { default_color: "state", include_state: true } },
-          },
-          { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
-          { name: "show_entity_picture", selector: { boolean: {} } },
-        ],
-      },
-    ],
-  },
-  {
-    name: "interactions",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:gesture-tap",
-    schema: [
-      { name: "tap_action", selector: { ui_action: { default_action: "more-info" } } },
-      {
-        name: "",
-        type: "optional_actions",
-        flatten: true,
-        schema: ["hold_action", "double_tap_action"].map((name) => ({
-          name,
-          selector: { ui_action: { default_action: "none" } },
-        })),
-      },
-    ],
-  },
+export const appearanceToggleSchema = (): unknown[] => [
+  { name: "halo_enabled", selector: { boolean: {} } },
+  { name: "chrome_enabled", selector: { boolean: {} } },
 ];
 
-export const toFormData = (config: StateIconConfig): Record<string, unknown> => {
-  const { size, chrome, ...rest } = config;
-  const c = chrome ?? DEFAULT_CHROME;
-  return {
-    ...rest,
-    size_mode: size.mode,
-    // Math.round enforces each slider's step:1 contract (same trade as the chrome
-    // numbers below). size_mode is a string; the read path (normalizeIconSize)
-    // keeps any finite number as written — rounding belongs to the editor only.
-    size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
-    size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
-    size_max: typeof size.max === "number" ? Math.round(size.max) : size.max,
-    size_value: typeof size.value === "number" ? Math.round(size.value) : size.value,
-    chrome_enabled: c.theme !== "none",
-    // The control never offers "none", so an off chrome pre-selects the theme
-    // that checking the box will give it.
-    chrome_theme: c.theme === "none" ? "auto" : c.theme,
-    // Math.round enforces the slider's step:1 contract. A hand-written value
-    // with finer precision (e.g. 12.5) is rounded the first time the editor
-    // commits anything for that item — including a drag. This is a deliberate
-    // trade: the slider guides, and hand-authored precision outside the slider's
-    // step is not a use-case the editor supports.
-    chrome_radius: Math.round(c.radius),
-    // opacity and content_ratio are 0-1 in config; the form shows them as
-    // 0-100 percent. Math.round avoids floating-point display drift
-    // (e.g. 0.6 * 100 = 60.00000000000001 without it).
-    chrome_opacity: Math.round(c.opacity * 100),
-    chrome_content_ratio: Math.round(c.content_ratio * 100),
-  };
-};
-
-export const fromFormData = (
-  config: StateIconConfig,
-  data: Record<string, unknown>,
-): StateIconConfig => {
-  // Invariant: `data` must be the complete flat record (all ten chrome and size
-  // fields present, whether or not the active schema shows them). ha-form enforces
-  // this: its value-changed handler merges the changed child onto the `.data` it
-  // was given and re-emits the whole thing —
-  //   this.data = { ...this.data, ...newValue };
-  //   fireEvent(this, "value-changed", { value: this.data });
-  // — so every field we pass to `.data` comes back regardless of which rows the
-  // current mode's schema is showing. Passing `toFormData(element)` (all ten
-  // fields) as `.data` is therefore what keeps the non-visible fields alive.
-  const {
-    size_mode,
-    size_min,
-    size_ratio,
-    size_max,
-    size_value,
-    chrome_enabled,
-    chrome_theme,
-    chrome_radius,
-    chrome_opacity,
-    chrome_content_ratio,
-    ...rest
-  } = data;
-  // Chrome is written when it was present before (numbers must survive unchecking)
-  // or when the user explicitly enables it. When the original had no chrome and
-  // the box is off, the key is omitted entirely so an absent chrome still round-trips.
-  const chromeOut =
-    chrome_enabled || config.chrome !== undefined
-      ? {
-          chrome: normalizeChrome({
-            // The checkbox is the switch; the theme control only ever names a surface
-            // that draws. Unchecking stores "none" and every number survives it.
-            theme: chrome_enabled ? (chrome_theme ?? "auto") : "none",
-            // Math.round on the way back enforces the slider's step:1 contract.
-            // A typed decimal (e.g. 12.5 for radius, 61 for an opacity dragged
-            // to 0.61 by hand) is rounded the first time the editor commits for
-            // that item. Deliberate: hand-authored sub-step precision is not a
-            // use-case the editor supports.
-            radius: typeof chrome_radius === "number" ? Math.round(chrome_radius) : chrome_radius,
-            // The form speaks percent (0-100); config stores 0-1. Divide back;
-            // normalizeChrome validates if the field is missing or non-numeric.
-            opacity:
-              typeof chrome_opacity === "number"
-                ? Math.round(chrome_opacity) / 100
-                : chrome_opacity,
-            content_ratio:
-              typeof chrome_content_ratio === "number"
-                ? Math.round(chrome_content_ratio) / 100
-                : chrome_content_ratio,
-          }),
-        }
-      : {};
-  return {
-    ...(rest as Omit<StateIconConfig, "type" | "size" | "chrome">),
-    // The kind is ours, never the form's: a stray `type` field cannot rename it.
-    type: config.type,
-    size: normalizeIconSize({
-      mode: size_mode,
-      // Math.round on the way back enforces each slider's step:1 contract.
-      // Same deliberate trade as the chrome numbers: a hand-written sub-step
-      // value is rounded the first time the editor commits for that item.
-      min: typeof size_min === "number" ? Math.round(size_min) : size_min,
-      ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
-      max: typeof size_max === "number" ? Math.round(size_max) : size_max,
-      value: typeof size_value === "number" ? Math.round(size_value) : size_value,
-    }),
-    ...chromeOut,
-  };
-};
-
-/** Home Assistant's own mapping, plus the two keys its catalogue has not got. */
 export const elementFormLabel = (
   localize: LocalizeFunc,
   hass: HomeAssistant | undefined,
@@ -180,141 +126,30 @@ export const elementFormLabel = (
   if (name === "color" || name === "show_entity_picture") {
     return localize(`ui.panel.lovelace.editor.badge.entity.${name}`) || name;
   }
+  if (name === "halo_enabled") return localizeOwn(hass, "halo_enabled");
   if (name === "chrome_enabled") return localizeOwn(hass, "chrome_enabled");
   if (name === "chrome_radius") return localizeOwn(hass, "chrome_radius");
   if (name === "chrome_opacity") return localizeOwn(hass, "chrome_opacity");
   if (name === "chrome_content_ratio") return localizeOwn(hass, "chrome_content_ratio");
+  if (name === "chrome_pill") return localizeOwn(hass, "chrome_pill");
+  if (name === "chrome_padding") return localizeOwn(hass, "chrome_padding");
   if (name === "chrome_theme") return themeModeTitle(localize);
   return localize(`ui.panel.lovelace.editor.card.generic.${name}`) || name;
 };
 
-export const stateIconSizeSchema = (
-  mode: "auto" | "adaptive" | "fixed",
+export const elementFormHelper = (
   localize: LocalizeFunc,
   hass: HomeAssistant | undefined,
-  // When true, the caller renders ha-radio-group for mode selection and the
-  // schema omits size_mode. When false (the default), size_mode is included as
-  // a vertical ha-form select — correct but not horizontal — guaranteed to
-  // load because ha-selector pulls its own sub-components.
-  radioGroupAvailable = false,
-): unknown[] => {
-  const modeField = {
-    name: "size_mode",
-    selector: {
-      select: {
-        mode: "list",
-        options: [
-          { value: "auto", label: localize("ui.common.auto") || "Automatic" },
-          { value: "adaptive", label: localizeOwn(hass, "size_mode_adaptive") },
-          { value: "fixed", label: localizeOwn(hass, "size_mode_fixed") },
-        ],
-      },
-    },
-  };
-  // When the radio group handles mode selection, it is not repeated in the
-  // form. In the fallback path the select stays so the user can still change
-  // the mode — ha-form is the guarantee that it renders.
-  const preamble = radioGroupAvailable ? [] : [modeField];
-  if (mode === "adaptive") {
-    return [
-      ...preamble,
-      {
-        name: "size_ratio",
-        selector: {
-          // A percentage of the card's width is a value you feel rather than
-          // type, so size_ratio gets a slider (no mode: "box"). The two adaptive
-          // pixel bounds keep "box" because exact pixel values are typed, not
-          // dragged. The fixed size is also a slider — a value you feel.
-          number: { min: 1, max: 100, step: 1, unit_of_measurement: "%" },
-        },
-      },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "size_min",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-          {
-            name: "size_max",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-        ],
-      },
-    ];
-  }
-  if (mode === "fixed") {
-    return [
-      ...preamble,
-      {
-        name: "size_value",
-        selector: { number: { min: 8, max: 128, step: 1, unit_of_measurement: "px" } },
-      },
-    ];
-  }
-  // auto — no numeric fields
-  return preamble;
-};
-
-/** The checkbox, alone, so the theme control can be rendered between it and the numbers. */
-export const chromeToggleSchema = (): unknown[] => [
-  { name: "chrome_enabled", selector: { boolean: {} } },
-];
-
-export const chromeSchema = (
-  localize: LocalizeFunc,
-  // When true, the caller renders ha-radio-group for the theme and the schema
-  // omits chrome_theme. When false, the select stays so the theme is still
-  // changeable — ha-form is the guarantee that it renders.
-  radioGroupAvailable = false,
-): unknown[] => [
-  ...(radioGroupAvailable
-    ? []
-    : [
-        {
-          name: "chrome_theme",
-          selector: {
-            select: {
-              mode: "dropdown",
-              options: (["auto", "light", "dark"] as const).map((value) => ({
-                value,
-                label: themeModeLabel(localize, value),
-              })),
-            },
-          },
-        },
-      ]),
-  {
-    name: "chrome_radius",
-    selector: { number: { min: 0, max: 50, step: 1, unit_of_measurement: "%" } },
-  },
-  {
-    name: "chrome_opacity",
-    selector: { number: { min: 0, max: 100, step: 1, unit_of_measurement: "%" } },
-  },
-  {
-    name: "chrome_content_ratio",
-    // The model keeps any finite number as written — no clamping. Hand-written
-    // YAML is trusted exactly as written, consistent with how coordinates are
-    // treated. The form starts at 10 because a ratio of zero renders an
-    // invisible icon and nothing in the editor would explain why: the form
-    // guides, the model tolerates.
-    // The form shows 0-100 percent; fromFormData converts back to 0-1.
-    selector: { number: { min: 10, max: 100, step: 1, unit_of_measurement: "%" } },
-  },
-];
-
-export const elementFormHelper = (localize: LocalizeFunc, name: string): string | undefined => {
+  name: string,
+): string | undefined => {
   if (name === "color")
     return (
       localize("ui.panel.lovelace.editor.badge.entity.color_helper") ||
       "Inactive state (for example, off or closed) will not be colored."
     );
+  // ha-form-boolean renders the helper as the checkbox's own hint, permanently
+  // visible — which is what a tooltip icon could not be on a phone.
+  if (name === "halo_enabled") return localizeOwn(hass, "halo_enabled_helper");
   return undefined;
 };
 
@@ -331,44 +166,56 @@ export class PictureStudioElementForm extends LitElement {
   declare anchor?: Anchor;
   declare visibility?: VisibilityCondition[];
 
+  /** Merge `ev.detail.value` onto the complete flat record and dispatch. */
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
-    if (!this.element) return;
-    const data = { ...toFormData(this.element), ...ev.detail.value };
-    this.dispatchEvent(
-      new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, data) },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const element = this.element;
+    if (!element) return;
+    const data = { ...this._toData(element), ...ev.detail.value };
+    this._dispatch(element, data);
   };
 
-  // Handles a change event from ha-radio-group (the horizontal mode control).
-  // Emits element-changed through the same path as _valueChanged so there is
-  // exactly one way a config change leaves this component.
+  /** Mode radio-group fires "change" on the group; we read the new value from it. */
   private _modeChanged = (ev: Event): void => {
-    if (!this.element) return;
+    const element = this.element;
+    if (!element) return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
-    const data = { ...toFormData(this.element), size_mode: value };
-    this.dispatchEvent(
-      new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, data) },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const data = { ...this._toData(element), size_mode: value };
+    this._dispatch(element, data);
   };
 
+  /** Chrome-theme radio-group: selecting a theme also switches the chrome on. */
   private _chromeThemeChanged = (ev: Event): void => {
-    if (!this.element) return;
+    const element = this.element;
+    if (!element) return;
     const value = (ev.currentTarget as { value?: string }).value;
     if (!value) return;
-    const data = { ...toFormData(this.element), chrome_theme: value, chrome_enabled: true };
+    const data = { ...this._toData(element), chrome_theme: value, chrome_enabled: true };
+    this._dispatch(element, data);
+  };
+
+  /** Pill ha-switch: read the checked state and merge onto the full record. */
+  private _pillChanged = (ev: Event): void => {
+    const element = this.element;
+    if (!element) return;
+    const checked = (ev.currentTarget as { checked?: boolean }).checked;
+    if (checked === undefined) return;
+    const data = { ...this._toData(element), chrome_pill: checked };
+    this._dispatch(element, data);
+  };
+
+  private _toData = (element: ElementConfig): Record<string, unknown> =>
+    element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
+
+  private _dispatch = (element: ElementConfig, data: Record<string, unknown>): void => {
+    const updated: ElementConfig =
+      element.type === "state-label"
+        ? labelFromFormData(element, data)
+        : iconFromFormData(element, data);
     this.dispatchEvent(
       new CustomEvent("element-changed", {
-        detail: { element: fromFormData(this.element, data) },
+        detail: { element: updated },
         bubbles: true,
         composed: true,
       }),
@@ -386,6 +233,28 @@ export class PictureStudioElementForm extends LitElement {
     // chunk that registers the element after ours is still found.
     const radioGroupAvailable = !!customElements.get("ha-radio-group");
 
+    // ha-selector-boolean (the path labelPillSchema takes) mounts ha-switch
+    // inside ha-formfield. We render ha-switch directly — our .pill-label span
+    // is already the label, so ha-formfield's slot mechanism is redundant.
+    // The check is lazy for the same reason as above. Falls back to ha-form if
+    // the element is absent.
+    const switchAvailable = !!customElements.get("ha-switch");
+
+    const isLabel = element.type === "state-label";
+    const data =
+      element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
+    // Mirrors the entity-badge editor's Rf check: show time_format only when
+    // the selected state_content carries a time value. The time-based keys are
+    // the same three HA uses ("last_updated", "last_changed", "last_triggered"),
+    // plus domain defaults (e.g. datetime, button) and sensor device classes
+    // "timestamp" / "uptime", and domain-specific attributes (calendar, sun, …).
+    const showTimeFormat =
+      isLabel && stateLabelIsTimeBased(element.type === "state-label" ? element : undefined, hass);
+    const schema = isLabel ? labelSchema(showTimeFormat) : iconSchema();
+    const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
+    const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
+    const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
+
     return html`
       <div class="header">
         <ha-icon-button
@@ -394,64 +263,16 @@ export class PictureStudioElementForm extends LitElement {
             this.dispatchEvent(
               new CustomEvent("go-back", { bubbles: true, composed: true }),
             )}><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
-        <span class="title">${element.type}</span>
+        <span class="title">${elementLabel(hass.localize, element.type)}</span>
       </div>
       <ha-form
         .hass=${hass}
-        .data=${toFormData(element)}
-        .schema=${stateIconSchema()}
-        .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-        .computeHelper=${(s: { name: string }) => elementFormHelper(hass.localize, s.name)}
+        .data=${data}
+        .schema=${schema}
+        .computeLabel=${label}
+        .computeHelper=${helper}
         @value-changed=${this._valueChanged}
       ></ha-form>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${localizeOwn(hass, "chrome")}
-        </div>
-        <div class="content">
-          <ha-form
-            .hass=${hass}
-            .data=${toFormData(element)}
-            .schema=${chromeToggleSchema()}
-            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-          ${
-            toFormData(element).chrome_enabled
-              ? html`
-                  ${
-                    radioGroupAvailable
-                      ? html`
-                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
-                          <ha-radio-group
-                            orientation="horizontal"
-                            .value=${(toFormData(element).chrome_theme as string) ?? "auto"}
-                            @change=${this._chromeThemeChanged}
-                          >
-                            ${(["auto", "light", "dark"] as const).map(
-                              (value) => html`
-                                <ha-radio-option .value=${value}
-                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
-                                >
-                              `,
-                            )}
-                          </ha-radio-group>
-                        `
-                      : nothing
-                  }
-                  <ha-form
-                    .hass=${hass}
-                    .data=${toFormData(element)}
-                    .schema=${chromeSchema(hass.localize, radioGroupAvailable)}
-                    .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
-                    @value-changed=${this._valueChanged}
-                  ></ha-form>
-                `
-              : nothing
-          }
-        </div>
-      </ha-expansion-panel>
       <ha-expansion-panel outlined>
         <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">
@@ -482,9 +303,9 @@ export class PictureStudioElementForm extends LitElement {
           }
           <ha-form
             .hass=${hass}
-            .data=${toFormData(element)}
-            .schema=${stateIconSizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
-            .computeLabel=${(s: { name: string }) => elementFormLabel(hass.localize, hass, s.name)}
+            .data=${data}
+            .schema=${sizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
+            .computeLabel=${label}
             @value-changed=${this._valueChanged}
           ></ha-form>
           <div class="separator"></div>
@@ -493,6 +314,104 @@ export class PictureStudioElementForm extends LitElement {
             .hass=${hass}
             .anchor=${this.anchor}
           ></picture-studio-anchor-picker>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${hass.localize("ui.panel.lovelace.editor.card.map.appearance") || "Appearance"}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${appearanceToggleSchema()}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+          ${
+            data.chrome_enabled
+              ? html`
+                  ${
+                    radioGroupAvailable
+                      ? html`
+                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
+                          <ha-radio-group
+                            orientation="horizontal"
+                            .value=${(data.chrome_theme as string) ?? "auto"}
+                            @change=${this._chromeThemeChanged}
+                          >
+                            ${(["auto", "light", "dark"] as const).map(
+                              (value) => html`
+                                <ha-radio-option .value=${value}
+                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
+                                >
+                              `,
+                            )}
+                          </ha-radio-group>
+                        `
+                      : html`
+                          <ha-form
+                            .hass=${hass}
+                            .data=${data}
+                            .schema=${[themeSelectRow(hass.localize)]}
+                            .computeLabel=${label}
+                            @value-changed=${this._valueChanged}
+                          ></ha-form>
+                        `
+                  }
+                  ${
+                    isLabel
+                      ? html`
+                          <div class="pill-row" ?data-pill=${data.chrome_pill === true}>
+                            ${
+                              switchAvailable
+                                ? html`
+                                    <div class="pill-control">
+                                      <span class="pill-label"
+                                        >${localizeOwn(hass, "chrome_pill")}</span
+                                      >
+                                      <ha-switch
+                                        .checked=${data.chrome_pill === true}
+                                        @change=${this._pillChanged}
+                                      ></ha-switch>
+                                    </div>
+                                  `
+                                : html`
+                                    <ha-form
+                                      .hass=${hass}
+                                      .data=${data}
+                                      .schema=${labelPillSchema()}
+                                      .computeLabel=${label}
+                                      @value-changed=${this._valueChanged}
+                                    ></ha-form>
+                                  `
+                            }
+                            <div class="pill-separator"></div>
+                            <ha-form
+                              .hass=${hass}
+                              .data=${data}
+                              .schema=${labelRadiusSchema()}
+                              .computeLabel=${label}
+                              @value-changed=${this._valueChanged}
+                            ></ha-form>
+                          </div>
+                        `
+                      : nothing
+                  }
+                  <ha-form
+                    .hass=${hass}
+                    .data=${data}
+                    .schema=${
+                      isLabel ? labelChromeSchema(hass.localize) : iconChromeSchema(hass.localize)
+                    }
+                    .computeLabel=${label}
+                    @value-changed=${this._valueChanged}
+                  ></ha-form>
+                `
+              : nothing
+          }
         </div>
       </ha-expansion-panel>
       <picture-studio-visibility-section
@@ -542,7 +461,7 @@ export class PictureStudioElementForm extends LitElement {
       border-top: 1px solid var(--divider-color);
       margin: var(--ha-space-3, 12px) 0;
     }
-    /* Both section headings ("Taille" above the mode control and "Position"
+    /* Both section headings (\"Taille\" above the mode control and \"Position\"
        above the anchor picker) share this class so they are identical by
        construction. The declarations resolve to the same values that Home
        Assistant's own wa-form-control labels use, so the pair follows HA's
@@ -556,6 +475,49 @@ export class PictureStudioElementForm extends LitElement {
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
+    }
+    /* The switch takes its natural width, the separator takes its natural width,
+       and the radius takes the rest — ha-form's own grid can only make equal
+       columns, which is why this row is ours rather than a type:"grid" entry. */
+    /* No gap: the separator carries the whole spacing, exactly as it does above
+       the anchor picker, so the two places are spaced identically by
+       construction rather than by two numbers someone has to keep equal. */
+    .pill-row {
+      display: grid;
+      grid-template-columns: max-content max-content 1fr;
+      align-items: center;
+    }
+    /* Label and switch sit inline; the gap is the space between them that
+       ha-selector-boolean's shadow DOM does not expose as a token. */
+    .pill-control {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-4, 16px);
+    }
+    /* .section-label carries margin-block-end: 0.5em for its stacked role
+       (above a radio group or anchor picker). Used beside a switch in a flex
+       row, that margin shifts the text off the centre line. This class keeps
+       the same typography without the positional margin. */
+    .pill-label {
+      color: var(--wa-form-control-label-color);
+      font-weight: var(--wa-form-control-label-font-weight);
+      line-height: var(--wa-form-control-label-line-height);
+    }
+    /* Vertical counterpart of .separator: same colour and thickness, 12px on
+       each side (the transposition of .separator's 12px top/bottom margin).
+       align-self: stretch gives it height — an empty div with only a side
+       border has no intrinsic height, and align-items: center on the grid would
+       leave it zero-height and invisible. */
+    .pill-separator {
+      border-inline-start: 1px solid var(--divider-color);
+      margin: 0 var(--ha-space-3, 12px);
+      align-self: stretch;
+    }
+    /* Hidden, not removed: ticking the switch must not reflow the row, so both
+       the separator and the radius keep their boxes. visibility also takes them
+       out of the tab order and screen reader, which opacity would not. */
+    .pill-row[data-pill] > :nth-child(n+2) {
+      visibility: hidden;
     }
     picture-studio-visibility-section {
       display: block;
