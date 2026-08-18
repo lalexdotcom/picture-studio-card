@@ -2132,13 +2132,32 @@ shape now that two of them differ:
 
 ```ts
 const BADGE_ICON = "mdi:label";
+/** A third-party badge, whatever it turns out to be: outlined, so it reads as
+    "not one of Home Assistant's own" at a glance. Every custom type shares it,
+    because we have no way to know what any of them draws. */
+const CUSTOM_BADGE_ICON = "mdi:label-outline";
 const BADGE_ICONS: Record<string, string> = {
   shortcut: "mdi:label-variant",
 };
 ```
 
-and the badge branch becomes `BADGE_ICONS[type] ?? BADGE_ICON`. Test the literal
-names, and test that a custom badge still falls back to the family glyph.
+and the badge branch becomes
+
+```ts
+  family === "badge"
+    ? (BADGE_ICONS[type] ?? (type.startsWith("custom:") ? CUSTOM_BADGE_ICON : BADGE_ICON))
+    : (ELEMENT_ICONS[type] ?? ELEMENT_ICON)
+```
+
+A custom badge is recognised by its `custom:` prefix rather than by a table
+entry: its type is whatever a third party registered, so there is nothing to
+enumerate. `CUSTOM_PREFIX` already exists in `src/editor/badge-catalog.ts` —
+import it rather than writing the literal a second time.
+
+Test the three literal names, and test that a core badge with no entry of its
+own still falls back to `mdi:label`. All three glyphs — `label`,
+`label-outline`, `label-variant` — are present in the Material Design set Home
+Assistant ships, verified in the running container.
 
 - [ ] **Step 2: A Shortcut badge shows its text**
 
