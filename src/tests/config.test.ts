@@ -475,8 +475,9 @@ describe("element halo", () => {
         { type: "element", position: { top: "1%", left: "1%" }, config: { type: "state-icon" } },
       ],
     });
-    const [item] = config.items as unknown as [{ config: StateIconConfig }];
-    expect(item.config.halo).toBe(false);
+    const item = config.items[0];
+    if (!item) throw new Error("expected an item");
+    expect((item.config as StateIconConfig).halo).toBe(false);
   });
 
   it("reads `halo: true` and rejects a truthy non-boolean", () => {
