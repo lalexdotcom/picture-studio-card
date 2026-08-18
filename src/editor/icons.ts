@@ -16,20 +16,21 @@
 export const PLACEMENT_ICON = "mdi:crop-free";
 
 const BADGE_ICON = "mdi:label";
+/** Falls back to the family's own glyph for a kind we do not know by name. */
 const ELEMENT_ICON = "mdi:shape-outline";
+const ELEMENT_ICONS: Record<string, string> = {
+  "state-icon": "mdi:brightness-7",
+  "state-label": "mdi:card-text-outline",
+};
 
 /**
  * The glyph that tells one kind of item from another, in the list and in the
  * add menu.
  *
- * One per entry, and deliberately the same one twice where two entries share a
- * family: what it has to carry is "which sort of thing is this", not "which
- * exact type". The add menu keeps its "Badges: …" / "Elements: …" prefixes, and
- * those are what teach the pairing — the icon alone would have to be learned
- * from nothing.
- *
- * `type` is unused today and stays in the signature on purpose: the day one
- * badge kind deserves its own glyph, this function is the only thing to open.
+ * Badges all share one glyph — what counts there is "this is a badge", not
+ * which badge. For elements, each kind carries its own icon so a reader can
+ * tell a state icon from a state label at a glance. `ELEMENT_ICONS` maps the
+ * known kinds; `ELEMENT_ICON` is the fallback for any kind we do not yet name.
  */
-export const itemIcon = (family: "badge" | "element", _type: string): string =>
-  family === "badge" ? BADGE_ICON : ELEMENT_ICON;
+export const itemIcon = (family: "badge" | "element", type: string): string =>
+  family === "badge" ? BADGE_ICON : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);

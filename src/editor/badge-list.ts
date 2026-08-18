@@ -45,15 +45,15 @@ export const addChoices = (localize: LocalizeFunc, custom?: CustomBadgeEntry[]):
   const elements =
     localize("ui.panel.lovelace.editor.card.picture-elements.elements") || "Elements";
   return [
-    ...badgeCatalog(custom).map((c) => ({
-      value: `badge:${c.type}`,
-      label: `${badges}: ${choiceLabel(localize, c)}`,
-      icon: itemIcon("badge", c.type),
-    })),
     ...elementCatalog().map((c) => ({
       value: `element:${c.type}`,
       label: `${elements}: ${elementLabel(localize, c.type)}`,
       icon: itemIcon("element", c.type),
+    })),
+    ...badgeCatalog(custom).map((c) => ({
+      value: `badge:${c.type}`,
+      label: `${badges}: ${choiceLabel(localize, c)}`,
+      icon: itemIcon("badge", c.type),
     })),
   ];
 };

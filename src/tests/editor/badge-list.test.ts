@@ -13,18 +13,25 @@ const localize = ((key: string) =>
   })[key] ?? "") as never;
 
 describe("addChoices", () => {
-  it("prefixes every entry with its family, badges first", () => {
+  it("prefixes every entry with its family", () => {
     const choices = addChoices(localize, undefined);
     expect(choices[0]).toEqual({
-      value: "badge:entity",
-      label: "Badges: Entité",
-      icon: "mdi:label",
+      value: "element:state-icon",
+      label: "Éléments: Icône d'état",
+      icon: "mdi:brightness-7",
     });
     expect(choices.at(-1)).toEqual({
-      value: "element:state-label",
-      label: "Éléments: Libellé d'état",
-      icon: "mdi:shape-outline",
+      value: "badge:shortcut",
+      label: "Badges: shortcut",
+      icon: "mdi:label",
     });
+  });
+
+  it("offers the elements before the badges", () => {
+    const values = addChoices(localize).map((c) => c.value);
+    expect(values[0]).toBe("element:state-icon");
+    expect(values[1]).toBe("element:state-label");
+    expect(values.slice(2).every((v) => v.startsWith("badge:"))).toBe(true);
   });
 });
 
