@@ -1,3 +1,5 @@
+import { CUSTOM_PREFIX } from "./badge-catalog";
+
 /**
  * Icon names shared by more than one editor component.
  *
@@ -16,6 +18,10 @@
 export const PLACEMENT_ICON = "mdi:crop-free";
 
 const BADGE_ICON = "mdi:label";
+/** A third-party badge, whatever it turns out to be: outlined, so it reads as
+    "not one of Home Assistant's own" at a glance. Every custom type shares it,
+    because we have no way to know what any of them draws. */
+const CUSTOM_BADGE_ICON = "mdi:label-outline";
 const BADGE_ICONS: Record<string, string> = {
   shortcut: "mdi:label-variant",
 };
@@ -30,11 +36,13 @@ const ELEMENT_ICONS: Record<string, string> = {
  * The glyph that tells one kind of item from another, in the list and in the
  * add menu.
  *
- * For badges, `BADGE_ICONS` maps the known kinds to their own glyph; `BADGE_ICON`
- * is the fallback for any badge kind we do not yet name. For elements, each kind
- * carries its own icon so a reader can tell a state icon from a state label at a
- * glance. `ELEMENT_ICONS` maps the known kinds; `ELEMENT_ICON` is the fallback
- * for any kind we do not yet name.
+ * For badges, `BADGE_ICONS` maps known core kinds to their own glyph. A
+ * `custom:` type that is not in that map gets `CUSTOM_BADGE_ICON` (outlined),
+ * which reads as "not one of Home Assistant's own" at a glance. Any other core
+ * badge falls back to `BADGE_ICON`. For elements, `ELEMENT_ICONS` maps the known
+ * kinds; `ELEMENT_ICON` is the fallback.
  */
 export const itemIcon = (family: "badge" | "element", type: string): string =>
-  family === "badge" ? (BADGE_ICONS[type] ?? BADGE_ICON) : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);
+  family === "badge"
+    ? (BADGE_ICONS[type] ?? (type.startsWith(CUSTOM_PREFIX) ? CUSTOM_BADGE_ICON : BADGE_ICON))
+    : (ELEMENT_ICONS[type] ?? ELEMENT_ICON);

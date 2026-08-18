@@ -15,8 +15,11 @@ describe("itemIcon", () => {
     expect(itemIcon("badge", "shortcut")).toBe("mdi:label-variant");
   });
 
-  it("falls back to the family glyph for an unknown badge type", () => {
+  it("gives every custom badge the outlined glyph, whatever its type", () => {
+    expect(itemIcon("badge", "custom:mushroom-template-badge")).toBe("mdi:label-outline");
+  });
+
+  it("falls back to the family glyph for a core badge with no entry of its own", () => {
     expect(itemIcon("badge", "entity")).toBe("mdi:label");
-    expect(itemIcon("badge", "custom:mushroom-template-badge")).toBe("mdi:label");
   });
 });
