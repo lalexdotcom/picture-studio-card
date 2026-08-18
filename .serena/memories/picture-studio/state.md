@@ -309,6 +309,12 @@ items:
   `_updateVisibility` returns early without an inner card *and* without `hass`,
   and a config change does not re-evaluate — only `hass` or `preview` do.
 - **`hui-conditional-element` is a trap**: it signals nothing.
+- **`state-display` carries no stylesheet.** The component Home Assistant uses
+  everywhere to render `state_content` declares only properties and a `render()`
+  returning text — no `static styles`. So an inherited property set on the host
+  (`font-weight`, `color`, `font-size`) reaches its text unopposed: a shadow root
+  scopes rules, never inheritance, and only a local declaration would beat an
+  inherited value. Styling it from outside needs no `::part` and no token.
 - **`ha-expansion-panel` header slot order** is `leading-icon → header → event →
   chevron → icons`; `event` is the one before the chevron.
 - **`ha-icon-button` reads `--ha-icon-button-size`**, not `--mdc-icon-button-size`.
