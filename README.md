@@ -326,6 +326,10 @@ dashboard's card or theme.
 | `--psc-label-outline` | `0 0 1px rgba(255,255,255,0.4)` | The white rim in the halo filter |
 | `--psc-label-glow` | `0 0 calc(size × 0.06) rgba(0,0,0,0.2)` | The dark shadow in the halo filter |
 
+The state value inside a label uses the font weight `--ha-font-weight-medium`
+(500), which is Home Assistant's own token for the weight it gives a badge's
+state. A theme that redefines that token carries the label with it.
+
 The glow and outline tokens are `drop-shadow()` values used inside a CSS
 `filter:`. Setting one on the element's host tag or any ancestor overrides the
 default for that element. `--psc-icon-size` and `--psc-label-size` are written
