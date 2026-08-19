@@ -17,34 +17,30 @@ Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
 automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published 2026-08-17),
 1.3.1 (2026-08-17).
 
-## Work in progress — 1.4.0, branch `feat/config-tidy-up`
+## Work in progress — 1.4.0, on `main`, unreleased
 
-**Paused 2026-08-19 at session close. 519 tests green, lint exit 0, `tsc` clean,
-build 178.2 kB / 41.6 kB, tree clean, nothing pushed.**
+**Session closed 2026-08-19. 519 tests green, lint exit 0, `tsc` clean, build
+178.2 kB / 41.6 kB, tree clean, nothing pushed.**
 
-`main` carries the merged `feat/state-label` work (merge `29c58bd`, `--no-ff`):
-the state-label kind, the halo opt-in, the state colour on both kinds, the shared
-hover, the top-down item list, and the per-tick guard. **`feat/config-tidy-up`
-branches from that merge and has NOT been merged** — 16 commits, whole-branch
-review verdict **READY TO MERGE**, browser-validated by the user in a panel view
-and a sections view.
+Both feature branches are merged into `main` and deleted: `feat/state-label`
+(merge `29c58bd`) and `feat/config-tidy-up` (merge `7da4902`, whole-branch review
+READY TO MERGE, browser-validated in a panel view and a sections view).
 
-What the branch holds, beyond the plan's seven tasks: the drag-release defect the
-user found (an element child was created with `editing` false because
-`_syncEditingAndDrag` ran before the async `_syncItems` rebuilt the children —
-fixed by stamping the flag in `_createChild`), the placeholder style settled by
-eye, the CHANGELOG section order and its convention, a label's colour moved to
-second, the owned Content panel with its warning marker, and the live visibility
+**The only thing left before publication is the 1.4.0 bump.** `package.json`
+still says `1.3.1` and the CHANGELOG heading still reads `unreleased`; both move
+together, and **the bump has to precede any push of `main`** — pushing without it
+sends the release workflow after a `v1.3.1` tag that already exists. The bump is
+the user's call, and the push is the user's alone.
+
+What 1.4.0 contains, for the release note: the `state-label` element kind, the
+halo turned opt-in, the state colour on both kinds, one hover treatment shared by
+them, the item list reading top-down, `anchor` moved inside `position`, a label's
+`show` list and what an empty one does, the per-tick guard the elements never had,
+the Content panel we now own with its warning marker, and the live visibility
 verdict in the Visibility header.
 
-**What remains, in order:** the user's integration choice (merge locally / PR /
-leave), then the **1.4.0 bump** — `package.json` still says `1.3.1` and the
-CHANGELOG heading still reads `unreleased`, and both move together — then the
-user's push. **A push of `main` without the bump would send the release workflow
-after a `v1.3.1` tag that already exists.**
-
-Left behind: `.superpowers/sdd/2026-08-18-config-tidy-up/` still exists — the
-deletion was refused by permissions. It is git-ignored scratch and harmless.
+Left behind: `.superpowers/sdd/2026-08-18-config-tidy-up/` still exists — its
+deletion was refused by permissions. Git-ignored scratch, harmless.
 
 ## Where things are
 
