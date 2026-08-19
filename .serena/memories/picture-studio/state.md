@@ -36,10 +36,15 @@ live visibility verdict in the Visibility header — and, from the last branch, 
 unreadable item is ignored rather than fatal**.
 
 **Next release is 1.5.0**, and it carries two things: **badges in the card header**
-(the brainstorm the user opened right after this close — see
-`mem:picture-studio/follow-ups` entry 2, including the `loadCardHelpers` wall that
-decides its shape), and **the redone screenshots** in `docs/images/`, shot last so
-they are not stale on arrival. There is no 1.4.1.
+and **the redone screenshots** in `docs/images/`, shot last so they are not stale
+on arrival. There is no 1.4.1.
+
+The header work was brainstormed on 2026-08-19 and its **draft spec** is
+`docs/superpowers/specs/2026-08-19-card-heading-design.md` — feasibility settled,
+decisions recorded, six questions still open at the end. The `loadCardHelpers`
+wall that this entry once said would decide its shape **does not apply**; see the
+heading-badge facts below. Resume from the spec and
+`mem:picture-studio/follow-ups` entry 2, not from scratch.
 
 ## Where things are
 
@@ -296,6 +301,54 @@ In memory only, never in YAML, a third variant holds what we could not read:
   and element factories. **No colour utility, no `computeCssColor`, nothing
   else** is reachable from a custom card. Check this list before assuming
   anything of HA's is importable.
+  **Amended 2026-08-19:** the nine bound what can be *imported*, not what can be
+  *used*. A custom element that HA's own panel already defines is reachable by
+  tag, and a `static` on such a class is reachable through
+  `customElements.get(tag)`. Ask which chunk group defines it before concluding
+  a reuse is impossible — the heading badges below are the case that proved it.
+- **Heading badges are available to us unconditionally** (read at 20260729.6,
+  identical at our 20260527.4 floor). `app.*.js` requests chunk `79381` in the
+  same `Promise.all` as the Lovelace panel itself, so `hui-heading-badge` is
+  defined before our card runs. The static chain: `custom-card-helpers` →
+  `create-card-element` (`heading` ∈ `ALWAYS_LOADED_TYPES`, top-level `import` of
+  `hui-heading-card`) → `hui-heading-card` (top-level `import` of
+  `../heading-badges/hui-heading-badge`) → `create-heading-badge-element`
+  (top-level `import` of the `entity` and `button` badges, the only two the
+  interface offers; default type `entity`).
+  `hui-heading-badge` is a `ReactiveElement` rendering into the **light DOM**
+  (`createRenderRoot(){return this}`), props `config` / `hass` / `preview`, and it
+  implements `visibility` itself through `ConditionalListenerMixin` — **it
+  re-evaluates on a config change, which `hui-card` does not**.
+- **`hui-heading-badges-editor` is the whole "Badges" box, as one component**
+  (`editor/config-elements/`). In: `.hass`, `.badges`. Out:
+  `heading-badges-changed` `{badges}` and `edit-heading-badge` `{index}`. Sortable
+  list, stub resolution, add dropdown, entity-not-found row — all inside. **Its
+  chunk `11600` is lazy**, requested from exactly one place in the bundle:
+  `HuiHeadingCard.getConfigElement()`. One line forces it —
+  `await customElements.get("hui-heading-card")?.getConfigElement()`, discard the
+  result — and then the guard-and-fallback rule applies, because an undefined
+  custom element renders nothing at all.
+- **`edit-sub-element` works from a custom card's editor.** `hui-element-editor`
+  — the base of `hui-card-element-editor`, which hosts our editor — listens for it
+  on the `<div class="gui-editor">` wrapping `renderConfigElement()`, imports
+  `hui-sub-element-editor` and swaps through Lit's `cache()`, so our DOM survives.
+  Payload `{config, saveConfig, type}`; the supported types include
+  `heading-badge`, `row`, `header`, `footer`, `element`, `feature`. Firing it buys
+  the back arrow, the GUI/YAML toggle and the per-type form for free.
+- **Font scale**: `--ha-font-size-` `xs`10 `s`12 `m`14 `l`16 `xl`20 `2xl`24
+  `3xl`28 `4xl`32 `5xl`40. `ha-card`'s `.card-header` is `2xl` at weight 400;
+  the heading card's *Title* is `l` at 400 with `--mdc-icon-size: 18px`;
+  `ha-heading-badge` is `m` at 400 with `--mdc-icon-size: 16px`. There is exactly
+  one step between the card header and the heading card's title, and it is `xl`.
+- **`DragScrollController`** (`common/controllers/`, internal, ~140 lines) is the
+  heading card's drag-to-scroll for its badge row: mouse only, `scrolled` flips
+  past 1px as the click-versus-drag discriminator, `scrolling` drives
+  `.dragging { cursor: grabbing; pointer-events: none }`, `enabled = !preview`.
+  Its companion — the `ResizeObserver` feeding `.overflowing`, the two-edge
+  gradient mask and the `::before`/`::after` spacers — is a **separate** mechanism
+  and can be taken without it. Trap in the companion: those spacers inflate
+  `scrollWidth`, so the measurement subtracts `--ha-space-4` while the class is
+  already set, or the class flip-flops.
 - **The brightness filter is `brightness((brightness + 245) / 5 %)`**, excluded
   for `plant` (whose `brightness` is light *received*). 255 → 100%, 128 → 74.6%,
   1 → 49.2%. `state-badge` applies it to the glyph itself, so an icon has had it
@@ -447,8 +500,12 @@ In memory only, never in YAML, a third variant holds what we could not read:
   project's own copy with `js/ts.tsdk.path` (the old
   `typescript.native-preview.tsdk` is deprecated). `ms-vscode.vscode-typescript-next`
   is the classic JS tsserver on the TS 6 line and was removed — the two compete.
-- **`pnpm lint` is not silent on a clean tree**: 6 warnings and 1 info, all
-  pre-existing, all in test files plus one `useLiteralKeys` in
-  `element-form.ts`. The bar is **exit code 0**, not an empty output — and an
+- **`pnpm lint` is not silent on a clean tree**: measured at `44ef06f` on
+  2026-08-19, **27 warnings and 1 info** — 25 `noNonNullAssertion` and 2
+  `useOptionalChain` across four test files (`visibility-section` 11,
+  `badge-list` 8, `picture-studio-card` 5, `config` 3), plus one
+  `useLiteralKeys` in `element-form.ts`. Default output truncates at 20, so pass
+  `--max-diagnostics=100` to see them all. The bar is **exit code 0**, not an
+  empty output — and an
   implementer reporting "the lint errors are pre-existing" is to be disbelieved
   and measured (`git show HEAD:<file>` and compare).

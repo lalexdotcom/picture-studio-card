@@ -29,34 +29,31 @@ doing, and it is the last thing done before that release rather than the first.
 Worth deciding while shooting them: whether an error row is worth showing at all,
 or whether the happy path is the whole story a landing page should tell.
 
-## 2. Badges in the card header
+## 2. Badges in the card header — designed, not yet planned
 
-**Asked 2026-08-19, at the close of 1.4.0. Not designed.**
+**Asked 2026-08-19 at the close of 1.4.0; brainstormed the same day.** The
+feasibility spike is done and the draft spec is
+`docs/superpowers/specs/2026-08-19-card-heading-design.md`. This entry stays here
+only until that spec is agreed and turned into a plan.
 
-The idea: the card's header would carry badges of its own, and would appear when
-*either* a `title` is set *or* at least one header badge exists — so the header
-stops being a title-only affordance.
+**The wall this entry was parked on does not exist.** `hui-heading-badge` is
+defined by the Lovelace panel's own chunk group, so it is available to us
+unconditionally — the reasoning and the proof are in the spec and, for the
+durable half, in `mem:picture-studio/state`. There was **never** a fallback plan
+to put *ordinary* badges in the header; an earlier version of this entry said so
+and the user corrected it.
 
-What the user sketched for the editor: take Home Assistant's own **heading card**
-form, drop its title/subtitle choice, and use it in place of our current plain
-`title` input. And render the result inside a frame like the one a defined `title`
-already draws, with smaller text.
+Settled on 2026-08-19: `--ha-font-size-xl` (20px) for the title, behind our own
+variables; no `tap_action` on the header; config moves to
+`heading: { title, icon, badges }` with a silent `title` → `heading.title`
+migration at normalization; `DragScrollController` and the overflow mask both
+skipped at the first pass.
 
-**The one thing to check before anything else.** Home Assistant has a distinct
-**heading-badge** family — `hui-heading-badge` is a real tag, `"heading-badge"` is
-a family string in the same creation machinery as `"badge"`, and it has its own
-`hui-error-heading-badge`. But **no heading-badge factory is among
-`loadCardHelpers`'s nine exports** (see the list in `mem:picture-studio/state`).
-So the reuse this idea assumes may not be reachable at all. Two ways out, and
-which one is viable decides the whole shape:
-
-- create `hui-heading-badge` by tag ourselves, forcing its lazy load the way
-  `resolveBadgeClass` does for a core badge — and inherit that dance's fragility;
-- or put **ordinary** badges in the header, which we already know how to create,
-  and accept that they will not look like Home Assistant's heading badges.
-
-Settle that first: everything about the form, the framing and the text size is
-downstream of it.
+**What is left to settle** — the list at the end of the spec, in short: the title
+weight (400 or 500) and the icon size that follows, the header's own padding now
+that `ha-card`'s no longer applies, whether "Card config" should keep writing to
+two places, the fate of a stored `heading_style`, and whether the header sits
+above or below the image. All of them want an eye, not an argument.
 
 ## 3. The chrome, beyond icons
 
