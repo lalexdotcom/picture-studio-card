@@ -11,6 +11,19 @@ export const labelContentInnerSchema = (
 ): unknown[] => [
   { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
   {
+    name: "color",
+    // Second, right after the name, which is where every other form in this
+    // editor and Home Assistant's own entity badge put it. It used to sit last;
+    // the order is the only thing that changed.
+    // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
+    // own recipe, so a label honours "state" exactly as an icon does. The
+    // default stays "none" — a label is text first, and text that changes
+    // colour on its own is a choice, not a default. See the spec, decision 6.
+    selector: {
+      ui_color: { default_color: "none", include_none: true, include_state: true },
+    },
+  },
+  {
     name: "displayed_elements",
     selector: {
       select: {
@@ -34,16 +47,6 @@ export const labelContentInnerSchema = (
   // state_content carries a time value that ha-state-display renders as a
   // clock — same condition, same selector.
   ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
-  {
-    name: "color",
-    // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
-    // own recipe, so a label honours "state" exactly as an icon does. The
-    // default stays "none" — a label is text first, and text that changes
-    // colour on its own is a choice, not a default. See the spec, decision 6.
-    selector: {
-      ui_color: { default_color: "none", include_none: true, include_state: true },
-    },
-  },
 ];
 
 export const labelInteractionsSchema = (): unknown[] => [

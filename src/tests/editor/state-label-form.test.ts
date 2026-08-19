@@ -29,9 +29,11 @@ describe("labelSchema", () => {
     expect(names(labelSchema(false, (() => "") as never))).toEqual([
       "entity",
       "name",
+      // Colour sits second, as it does in the icon's form and in Home
+      // Assistant's own entity badge.
+      "color",
       "displayed_elements",
       "state_content",
-      "color",
       "tap_action",
       "hold_action",
       "double_tap_action",
@@ -42,10 +44,10 @@ describe("labelSchema", () => {
     expect(names(labelSchema(true, (() => "") as never))).toEqual([
       "entity",
       "name",
+      "color",
       "displayed_elements",
       "state_content",
       "time_format",
-      "color",
       "tap_action",
       "hold_action",
       "double_tap_action",
