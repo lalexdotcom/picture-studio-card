@@ -1,7 +1,9 @@
 import { describe, expect, it } from "@rstest/core";
 import { DEFAULT_LABEL_CHROME, type LabelChrome } from "../chrome";
 import {
+  type BadgeItem,
   CARD_TYPE,
+  type ElementItem,
   hasVisibility,
   imagePath,
   normalizeConfig,
@@ -56,7 +58,7 @@ describe("normalizeConfig", () => {
       type: CARD_TYPE,
       items: [{ type: "badge", config: { type: "entity", entity: "light.a" } }],
     });
-    expect(out.items[0]?.position).toEqual({ top: 50, left: 50 });
+    expect((out.items[0] as BadgeItem | undefined)?.position).toEqual({ top: 50, left: 50 });
   });
 
   it("passes image-element keys through untouched", () => {
@@ -120,7 +122,9 @@ describe("normalizeConfig", () => {
         { type: "badge", config: { type: "entity", entity: "light.b" } },
       ],
     });
-    expect(out.items[0]?.position).not.toBe(out.items[1]?.position);
+    expect((out.items[0] as BadgeItem | undefined)?.position).not.toBe(
+      (out.items[1] as BadgeItem | undefined)?.position,
+    );
   });
 
   it("holds as UnknownItem an element whose config has no type", () => {
@@ -155,7 +159,7 @@ describe("normalizeConfig", () => {
       type: CARD_TYPE,
       items: [{ type: "element", config: { type: "state-icon" } }],
     });
-    expect((out.items[0]!.config as StateIconConfig).entity).toBeUndefined();
+    expect(((out.items[0] as ElementItem).config as StateIconConfig).entity).toBeUndefined();
   });
 
   it("keeps keys it does not know inside an element config", () => {
@@ -163,7 +167,9 @@ describe("normalizeConfig", () => {
       type: CARD_TYPE,
       items: [{ type: "element", config: { type: "state-icon", future_key: 1 } }],
     });
-    expect((out.items[0]!.config as Record<string, unknown>).future_key).toBe(1);
+    expect(
+      ((out.items[0] as ElementItem).config as unknown as Record<string, unknown>).future_key,
+    ).toBe(1);
   });
 
   it("holds as UnknownItem an item with no type", () => {
@@ -373,13 +379,13 @@ describe("item visibility", () => {
   it("carries a condition list through untouched", () => {
     const conditions = [{ condition: "state", entity: "binary_sensor.night", state: "on" }];
     const out = normalizeConfig(withVisibility(conditions));
-    expect(out.items[0]?.visibility).toEqual(conditions);
+    expect((out.items[0] as BadgeItem | undefined)?.visibility).toEqual(conditions);
   });
 
   it("keeps a condition type it does not know", () => {
     const conditions = [{ condition: "future_condition", whatever: 1 }];
     const out = normalizeConfig(withVisibility(conditions));
-    expect(out.items[0]?.visibility).toEqual(conditions);
+    expect((out.items[0] as BadgeItem | undefined)?.visibility).toEqual(conditions);
   });
 
   it("leaves the key absent when the config has none", () => {
@@ -387,12 +393,12 @@ describe("item visibility", () => {
       type: "custom:picture-studio",
       items: [{ type: "badge", config: { type: "entity" } }],
     });
-    expect(out.items[0]?.visibility).toBeUndefined();
+    expect((out.items[0] as BadgeItem | undefined)?.visibility).toBeUndefined();
   });
 
   it("keeps a non-list visibility rather than refusing it", () => {
     const { items } = normalizeConfig(withVisibility({ condition: "state" }));
-    expect(items[0]?.visibility).toEqual({ condition: "state" });
+    expect((items[0] as BadgeItem | undefined)?.visibility).toEqual({ condition: "state" });
   });
 
   it("stores the key when it holds conditions", () => {
@@ -494,7 +500,7 @@ describe("element halo", () => {
         { type: "element", position: { top: "1%", left: "1%" }, config: { type: "state-icon" } },
       ],
     });
-    const item = config.items[0];
+    const item = config.items[0] as ElementItem | undefined;
     if (!item) throw new Error("expected an item");
     expect((item.config as StateIconConfig).halo).toBe(false);
   });
@@ -629,7 +635,7 @@ describe("anchor", () => {
       ...base,
       items: [{ type: "badge", position: { top: "30%", left: "45%" }, config: badge }],
     });
-    expect(config.items[0]?.anchor).toBe("auto");
+    expect((config.items[0] as BadgeItem | undefined)?.anchor).toBe("auto");
   });
 
   it("reads a fixed anchor", () => {
@@ -639,7 +645,7 @@ describe("anchor", () => {
         { type: "badge", position: { top: "30%", left: "45%" }, anchor: "center", config: badge },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("center");
+    expect((config.items[0] as BadgeItem | undefined)?.anchor).toBe("center");
   });
 
   it("falls back rather than trusting an unrecognised value", () => {
@@ -649,7 +655,7 @@ describe("anchor", () => {
         { type: "badge", position: { top: "30%", left: "45%" }, anchor: "middle", config: badge },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("auto");
+    expect((config.items[0] as BadgeItem | undefined)?.anchor).toBe("auto");
   });
 
   it("reads the legacy proportional value as auto (read-compat path for pre-1.2.0 configs)", () => {
@@ -664,7 +670,7 @@ describe("anchor", () => {
         },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("auto");
+    expect((config.items[0] as BadgeItem | undefined)?.anchor).toBe("auto");
     // auto is the default, so storedConfig omits the key rather than writing it back out.
     const stored = storedConfig(config) as { items: Record<string, unknown>[] };
     expect(Object.hasOwn(stored.items[0] ?? {}, "anchor")).toBe(false);
@@ -724,7 +730,7 @@ describe("anchor lives inside position", () => {
         },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("center");
+    expect((config.items[0] as ElementItem | undefined)?.anchor).toBe("center");
   });
 
   it("still reads an anchor left beside position, as 1.2.0 wrote it", () => {
@@ -740,7 +746,7 @@ describe("anchor lives inside position", () => {
         },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("bottom-right");
+    expect((config.items[0] as ElementItem | undefined)?.anchor).toBe("bottom-right");
   });
 
   it("prefers the new place when a config carries both", () => {
@@ -756,7 +762,7 @@ describe("anchor lives inside position", () => {
         },
       ],
     });
-    expect(config.items[0]?.anchor).toBe("center");
+    expect((config.items[0] as ElementItem | undefined)?.anchor).toBe("center");
   });
 
   it("writes the anchor inside position and never beside it", () => {
@@ -797,11 +803,13 @@ describe("anchor lives inside position", () => {
 
 describe("a label's show list", () => {
   const label = (config: Record<string, unknown>) =>
-    normalizeConfig({
-      type: "custom:picture-studio",
-      image: "/local/p.png",
-      items: [{ type: "element", position: { top: "1%", left: "1%" }, config }],
-    }).items[0]?.config as { show: string[] };
+    (
+      normalizeConfig({
+        type: "custom:picture-studio",
+        image: "/local/p.png",
+        items: [{ type: "element", position: { top: "1%", left: "1%" }, config }],
+      }).items[0] as ElementItem | undefined
+    )?.config as { show: string[] };
 
   it("shows the state when the config says nothing", () => {
     expect(label({ type: "state-label", entity: "sensor.a" }).show).toEqual(["state"]);
@@ -953,7 +961,7 @@ describe("a malformed `visibility` is ignored, not fatal", () => {
       items: [item],
     });
     expect(items[0]?.type).toBe("badge");
-    expect(items[0]?.visibility).toEqual(item.visibility);
+    expect((items[0] as BadgeItem | undefined)?.visibility).toEqual(item.visibility);
   });
 
   it("reports no conditions, so nothing hides the item", () => {
