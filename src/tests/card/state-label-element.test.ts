@@ -255,9 +255,13 @@ describe("a label with nothing to show", () => {
     const rule = cssRules(PictureStudioStateLabel.styles).get(".placeholder");
     expect(rule).toContain("border: 1px dashed var(--warning-color)");
     expect(rule).toContain("color: var(--warning-color)");
+    // A veil, not an opaque surface: the picture stays visible under the word.
     expect(rule).toContain("color-mix(in srgb, var(--warning-color) 15%, transparent)");
-    expect(rule).toContain("border-radius: 2px");
+    expect(rule).toContain("border-radius: 5px");
     expect(rule).toContain("padding: 2px 4px");
+    // Cased here rather than in the string catalogue, so every language gets it
+    // without a second string.
+    expect(rule).toContain("text-transform: lowercase");
     // Not the error colour: the config is valid, the outcome is merely invisible.
     expect(rule).not.toContain("--error-color");
   });

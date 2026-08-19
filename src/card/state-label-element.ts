@@ -302,10 +302,20 @@ export class PictureStudioStateLabel extends LitElement {
         line-height: 1.2;
         white-space: nowrap;
         font-weight: var(--ha-font-weight-bold, 700);
+        /* Lower-cased in CSS, not in the catalogue: "Empty" and "Vide" stay
+           ordinary words a translator can read, and every language gets the
+           same treatment without a second string. */
+        text-transform: lowercase;
         color: var(--warning-color);
+        /* One colour at three strengths, so it reads on any photograph: a
+           saturated dashed border and text over a fill that lets the picture
+           through. Settled by eye against an opaque fill, which detached the
+           word too hard from the image it sits on. color-mix rather than a
+           frozen rgba, so a theme redefining --warning-color carries the fill
+           with it. */
         background: color-mix(in srgb, var(--warning-color) 15%, transparent);
         border: 1px dashed var(--warning-color);
-        border-radius: 2px;
+        border-radius: 5px;
         padding: 2px 4px;
       }
     `,
