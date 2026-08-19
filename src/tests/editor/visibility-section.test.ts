@@ -304,3 +304,24 @@ describe("a well-formed visibility is unchanged", () => {
     expect(section.shadowRoot!.querySelector("ha-alert")).toBeNull();
   });
 });
+
+describe("the malformed-visibility alert has no title and a filled warning button", () => {
+  const malformed = { condition: "state", entity: "light.a", state: "on" } as never;
+
+  it("renders ha-alert with no title attribute", async () => {
+    const section = await mountSection({ visibility: malformed });
+    const alert = section.shadowRoot!.querySelector("ha-alert");
+    expect(alert).not.toBeNull();
+    // ha-alert centres its icon only when there is no title; no title also
+    // removes a heading that restated the body.
+    expect(alert?.hasAttribute("title")).toBe(false);
+    expect((alert as { title?: string } | null)?.title).toBeFalsy();
+  });
+
+  it("the action button carries variant=warning and appearance=filled", async () => {
+    const section = await mountSection({ visibility: malformed });
+    const button = section.shadowRoot!.querySelector('[slot="action"]');
+    expect(button?.getAttribute("variant")).toBe("warning");
+    expect(button?.getAttribute("appearance")).toBe("filled");
+  });
+});

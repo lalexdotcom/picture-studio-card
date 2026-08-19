@@ -39,6 +39,7 @@ const STRINGS = {
     unknown_config_missing: "Missing config",
     unknown_element_type: "Unknown element type",
     unknown_badge_type: "Unknown badge type",
+    badge_type_unavailable: "This badge type is not available on this Home Assistant.",
     visibility_unreadable: "Unreadable conditions",
     visibility_unreadable_body:
       "This item's conditions are not a list. They are ignored, and the item always shows.",
@@ -75,6 +76,7 @@ const STRINGS = {
     unknown_config_missing: "Config manquante",
     unknown_element_type: "Type d'élément inconnu",
     unknown_badge_type: "Type de badge inconnu",
+    badge_type_unavailable: "Ce type de badge n'est pas disponible sur ce Home Assistant.",
     visibility_unreadable: "Conditions illisibles",
     visibility_unreadable_body:
       "Les conditions de cet item ne forment pas une liste. Elles sont ignorées, et l'item reste toujours visible.",

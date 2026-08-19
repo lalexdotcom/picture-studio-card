@@ -725,6 +725,9 @@ export class PictureStudioCard extends LitElement {
     .editing .item:hover {
       box-shadow: 0 0 0 4px rgba(var(--rgb-primary-color, 3, 169, 244), 0.35);
     }
+    /* Twin ring lives in badge-list.ts under .item.selected (--error-color, for
+       items that are selected but refused a form). Two lines, not worth a shared
+       module — the comment is the link between them. */
     .editing .item.selected,
     .editing .item.dragging {
       outline: 2px solid var(--primary-color);

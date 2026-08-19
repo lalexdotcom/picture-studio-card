@@ -274,7 +274,6 @@ export class PictureStudioVisibilitySection extends LitElement {
    * editor ready for conditions.
    */
   private _renderMalformed(hass: HomeAssistant) {
-    const title = localizeOwn(hass, "visibility_unreadable");
     const body = localizeOwn(hass, "visibility_unreadable_body");
     const reset = localizeOwn(hass, "visibility_reset");
     const onReset = () => {
@@ -296,9 +295,15 @@ export class PictureStudioVisibilitySection extends LitElement {
         <button type="button" @click=${onReset}>${reset}</button>
       </p>`;
     }
-    return html`<ha-alert alert-type="warning" .title=${title}>
+    // No title: ha-alert centres its icon only when there is no title; without
+    // one the icon stays top-aligned via its own shadow DOM's .icon.no-title rule,
+    // so dropping the title is the only clean route to a centred icon. It also
+    // removes a title that restated the body.
+    return html`<ha-alert alert-type="warning">
       ${body}
-      <ha-button size="s" slot="action" @click=${onReset}>${reset}</ha-button>
+      <ha-button size="s" slot="action" variant="warning" appearance="filled" @click=${onReset}
+        >${reset}</ha-button
+      >
     </ha-alert>`;
   }
 

@@ -2,7 +2,9 @@ import { html, LitElement, nothing } from "lit";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import {
   CARD_TYPE,
+  type BadgeItem,
   type ElementConfig,
+  type ElementItem,
   normalizeConfig,
   type PictureStudioConfig,
   storedConfig,
@@ -17,6 +19,7 @@ import {
   mergeBackground,
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
+import { badgeVerdict } from "./badge-existence";
 import { stubElementConfig } from "./element-catalog";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
@@ -134,6 +137,23 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     notifyEditors();
   }
 
+  /**
+   * The item that should have a form open, or `undefined` when none should.
+   * Two readers share this decision: render() (to choose list vs form) and
+   * updated() (to know whether to scroll the editor to its top). Extracting it
+   * here keeps both in sync automatically.
+   */
+  private _formTarget(): BadgeItem | ElementItem | undefined {
+    if (this._editingIndex === undefined || !this._config) return undefined;
+    const raw = this._config.items[this._editingIndex];
+    if (!raw || raw.type === "unknown") return undefined;
+    if (raw.type === "badge") {
+      const type = String(raw.config.type ?? "");
+      if (type && badgeVerdict(type) === "missing") return undefined;
+    }
+    return raw;
+  }
+
   selectedIndex(): number | undefined {
     return this._editingIndex;
   }
@@ -228,6 +248,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    */
   protected updated(changed: Map<string, unknown>): void {
     if (!changed.has("_editingIndex") || this._editingIndex === undefined) return;
+    // Scroll the editor to its top only when a form actually opens.  When the
+    // form is refused (broken badge) the list scrolls the selected row into
+    // view instead — the two are mutually exclusive branches of one decision.
+    if (!this._formTarget()) return;
     this.scrollIntoView({ block: "start" });
   }
 
@@ -236,12 +260,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const hass = this.hass;
     if (!config || !hass) return nothing;
 
-    const rawEditing =
-      this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
-    // Unreachable through the interface — the row's Edit button is disabled —
-    // but a stale index after a removal must fall back to the list rather than
-    // pick a form at random.
-    const editing = rawEditing?.type === "unknown" ? undefined : rawEditing;
+    const editing = this._formTarget();
 
     if (editing) {
       return editing.type === "badge"
@@ -282,6 +301,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-badge-list
         .hass=${hass}
         .items=${config.items}
+        .selectedIndex=${this._editingIndex}
         @item-add=${this._addItem}
         @item-edit=${this._editBadge}
         @item-moved=${this._moveBadge}

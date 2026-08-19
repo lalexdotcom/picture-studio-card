@@ -90,10 +90,12 @@ export class PictureStudioBadgeList extends LitElement {
   static properties = {
     hass: { attribute: false },
     items: { attribute: false },
+    selectedIndex: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare items: PictureItem[];
+  declare selectedIndex: number | undefined;
 
   constructor() {
     super();
@@ -185,11 +187,21 @@ export class PictureStudioBadgeList extends LitElement {
       probeBadgeType(type, () => this.requestUpdate());
       return badgeVerdict(type) === "missing";
     });
+    // The glyph says which family the problem is in, whenever we know the family.
+    const glyphs = rows.map((item, i) => {
+      if (!broken[i]) return undefined;
+      if (item.type !== "unknown") return "mdi:alert-box"; // probe verdict "missing" = badge family
+      if (item.reason === "config-missing" && item.token === "badge") return "mdi:alert-box";
+      return "mdi:alert-circle";
+    });
     const secondary = rows.map((item, i) =>
       item.type !== "unknown" && broken[i]
-        ? localizeOwn(this.hass, "unknown_badge_type")
+        ? `${localizeOwn(this.hass, "unknown_badge_type")}: ${String(item.config.type ?? "")}`
         : labels[i]?.secondary,
     );
+    // Display position of the selected array index; -1 when nothing is selected
+    // so it can never accidentally match a real row.
+    const selectedDisplay = this.selectedIndex !== undefined ? this._flip(this.selectedIndex) : -1;
 
     return html`
       <div class="header">
@@ -229,13 +241,13 @@ export class PictureStudioBadgeList extends LitElement {
             // node and follows the position, not the item it was on.
             (_item, index) => this._flip(index),
             (item, index) => html`
-              <div class="item">
+              <div class="item ${index === selectedDisplay ? "selected" : ""}">
                 <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
                 <ha-icon
                   class="kind ${broken[index] ? "error" : ""}"
                   .icon=${
                     broken[index]
-                      ? "mdi:alert-circle"
+                      ? glyphs[index]
                       : itemIcon(
                           item.type as "badge" | "element",
                           String((item as { config?: { type?: unknown } }).config?.type ?? ""),
@@ -307,6 +319,16 @@ export class PictureStudioBadgeList extends LitElement {
         </div>
       </ha-sortable>
     `;
+  }
+
+  protected updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has("selectedIndex") || this.selectedIndex === undefined) return;
+    // selectedIndex is an array index; the list renders top-down, so flip it to
+    // a display position before querying the DOM.
+    const displayIndex = this._flip(this.selectedIndex);
+    const itemRows = this.shadowRoot?.querySelectorAll(".item");
+    const row = itemRows?.[displayIndex] as HTMLElement | undefined;
+    row?.scrollIntoView({ block: "nearest" });
   }
 
   static styles = css`
@@ -399,6 +421,14 @@ export class PictureStudioBadgeList extends LitElement {
     }
     .item .label .secondary.error {
       color: var(--error-color);
+    }
+    /* Selection ring for a broken item. --error-color, not --primary-color: this
+       mark is only visible when the form was refused, so a primary ring would
+       say something untrue. Twin lives in picture-studio-card.ts under
+       .editing .item.selected (--primary-color, for items that can open a form). */
+    .item.selected {
+      outline: 2px solid var(--error-color);
+      outline-offset: 1px;
     }
     .label {
       flex: 1;
