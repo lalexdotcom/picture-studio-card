@@ -28,6 +28,7 @@ export const kindLabel = (
   // whole catalogue on every call — once per row, on every hass tick.
   catalog: BadgeChoice[],
 ): string => {
+  if (item.type === "unknown") return item.token ?? "";
   const type = String(item.config.type ?? "");
   if (item.type === "element") return elementLabel(localize, type);
   const choice = catalog.find((c) => c.type === type);
@@ -162,6 +163,7 @@ export class PictureStudioBadgeList extends LitElement {
       return rowLabel(item, this.hass, choice ? choiceLabel(localize, choice) : undefined);
     });
     const kinds = rows.map((item) => kindLabel(item, localize, catalog));
+    const unknown = rows.map((item) => item.type === "unknown");
 
     return html`
       <div class="header">
@@ -204,15 +206,22 @@ export class PictureStudioBadgeList extends LitElement {
               <div class="item">
                 <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
                 <ha-icon
-                  class="kind"
-                  .icon=${itemIcon(item.type, String(item.config.type ?? ""))}
+                  class="kind ${unknown[index] ? "error" : ""}"
+                  icon=${
+                    unknown[index]
+                      ? "mdi:alert-circle"
+                      : itemIcon(
+                          item.type as "badge" | "element",
+                          String((item as { config?: { type?: unknown } }).config?.type ?? ""),
+                        )
+                  }
                   title=${kinds[index]}
                 ></ha-icon>
                 <div class="label">
                   <span class="primary">${labels[index]?.primary}</span>
                   ${
                     labels[index]?.secondary
-                      ? html`<span class="secondary">${labels[index]?.secondary}</span>`
+                      ? html`<span class="secondary ${unknown[index] ? "error" : ""}">${labels[index]?.secondary}</span>`
                       : nothing
                   }
                 </div>
@@ -221,7 +230,7 @@ export class PictureStudioBadgeList extends LitElement {
                   // because it borrows ha-label's geometry, and a warning is not
                   // a label. Before the eye, so the row reads left to right from
                   // the most surprising fact.
-                  showsNothing(item)
+                  !unknown[index] && showsNothing(item)
                     ? html`<ha-icon
                         class="empty"
                         icon="mdi:alert-outline"
@@ -234,7 +243,7 @@ export class PictureStudioBadgeList extends LitElement {
                   // control: no target, no ripple, no hover — and the same eye
                   // the form's own section is headed by, so the two read as one
                   // idea rather than two.
-                  hasVisibility(item)
+                  !unknown[index] && hasVisibility(item)
                     ? html`<span
                         class="conditional"
                         title=${
@@ -246,6 +255,7 @@ export class PictureStudioBadgeList extends LitElement {
                 }
                 <ha-icon-button
                   .label=${localize("ui.common.edit") || "Edit"}
+                  .disabled=${unknown[index]}
                   @click=${() => this._fire("item-edit", { index: this._flip(index) })}
                   ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
@@ -339,6 +349,17 @@ export class PictureStudioBadgeList extends LitElement {
       flex: none;
       color: var(--secondary-text-color);
       margin-inline-end: 12px;
+    }
+    /* The glyph replaces the kind rather than joining it: there is no kind to
+       show. Home Assistant's own error vocabulary — the same "error" state that
+       ha-alert and ha-visibility-status use — so the list and the form's
+       Visibility header read as one language. No row tint: one bad item among
+       twelve, and a full-width band buries the list. */
+    .kind.error {
+      color: var(--error-color);
+    }
+    .item .label .secondary.error {
+      color: var(--error-color);
     }
     .label {
       flex: 1;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import type { PictureItem } from "../../config";
+import type { BadgeItem, PictureItem } from "../../config";
 import {
   addItem,
   moveItem,
@@ -26,9 +26,10 @@ describe("addItem", () => {
       config: { type: "entity", entity: "light.b" },
     });
     expect(out).toHaveLength(2);
-    expect(out[1]?.position).toEqual({ top: 50, left: 50 });
-    expect(out[1]?.anchor).toBe("auto");
-    expect(out[1]?.config).toEqual({ type: "entity", entity: "light.b" });
+    const added = out[1] as BadgeItem;
+    expect(added?.position).toEqual({ top: 50, left: 50 });
+    expect(added?.anchor).toBe("auto");
+    expect(added?.config).toEqual({ type: "entity", entity: "light.b" });
   });
 
   it("gives each added badge its own position object", () => {
@@ -36,12 +37,14 @@ describe("addItem", () => {
       type: "badge",
       config: { type: "entity" },
     });
-    expect(out[0]?.position).not.toBe(out[1]?.position);
+    expect((out[0] as BadgeItem)?.position).not.toBe((out[1] as BadgeItem)?.position);
   });
 
   it("passes a custom badge config through untouched", () => {
     const custom = { type: "custom:mushroom-template-badge", content: "{{ x }}", nested: { a: 1 } };
-    expect(addItem([], { type: "badge", config: custom })[0]?.config).toEqual(custom);
+    expect((addItem([], { type: "badge", config: custom })[0] as BadgeItem)?.config).toEqual(
+      custom,
+    );
   });
 
   it("does not mutate the input", () => {
@@ -68,8 +71,9 @@ describe("replaceConfig", () => {
   it("swaps the badge and keeps the position", () => {
     const items = [item("light.a", 10, 20), item("light.b", 30, 40)];
     const out = replaceConfig(items, 1, { type: "entity", entity: "light.CHANGED" });
-    expect(out[1]?.config).toEqual({ type: "entity", entity: "light.CHANGED" });
-    expect(out[1]?.position).toEqual({ top: 30, left: 40 });
+    const changed = out[1] as BadgeItem;
+    expect(changed?.config).toEqual({ type: "entity", entity: "light.CHANGED" });
+    expect(changed?.position).toEqual({ top: 30, left: 40 });
     expect(out[0]).toEqual(items[0]);
   });
 
@@ -81,7 +85,7 @@ describe("replaceConfig", () => {
   it("does not mutate the input", () => {
     const items = [item("light.a", 10, 20)];
     replaceConfig(items, 0, { type: "entity", entity: "light.z" });
-    expect(items[0]?.config).toEqual({ type: "entity", entity: "light.a" });
+    expect((items[0] as BadgeItem)?.config).toEqual({ type: "entity", entity: "light.a" });
   });
 });
 
@@ -90,14 +94,14 @@ describe("setAnchor", () => {
 
   it("writes the anchor and the coordinates that keep the item still, together", () => {
     const out = setAnchor(items, 1, "center", { top: 33, left: 44 });
-    expect(out[1]?.anchor).toBe("center");
-    expect(out[1]?.position).toEqual({ top: 33, left: 44 });
+    expect((out[1] as BadgeItem)?.anchor).toBe("center");
+    expect((out[1] as BadgeItem)?.position).toEqual({ top: 33, left: 44 });
   });
 
   it("keeps the coordinates when the caller could not work out new ones", () => {
     const out = setAnchor(items, 1, "center");
-    expect(out[1]?.anchor).toBe("center");
-    expect(out[1]?.position).toEqual({ top: 30, left: 40 });
+    expect((out[1] as BadgeItem)?.anchor).toBe("center");
+    expect((out[1] as BadgeItem)?.position).toEqual({ top: 30, left: 40 });
   });
 
   it("leaves every other item untouched", () => {
@@ -107,8 +111,8 @@ describe("setAnchor", () => {
 
   it("does not mutate its input, which Home Assistant freezes", () => {
     setAnchor(items, 1, "center", { top: 33, left: 44 });
-    expect(items[1]?.anchor).toBe("auto");
-    expect(items[1]?.position).toEqual({ top: 30, left: 40 });
+    expect((items[1] as BadgeItem)?.anchor).toBe("auto");
+    expect((items[1] as BadgeItem)?.position).toEqual({ top: 30, left: 40 });
   });
 
   it("returns the list unchanged for an index that is not there", () => {
@@ -121,7 +125,11 @@ describe("moveItem", () => {
   it("moves a pair as a unit, so reordering never disturbs positions", () => {
     const items = [item("light.a", 10, 10), item("light.b", 20, 20), item("light.c", 30, 30)];
     const out = moveItem(items, 0, 2);
-    expect(out.map((i) => i.config.entity)).toEqual(["light.b", "light.c", "light.a"]);
+    expect(out.map((i) => (i as BadgeItem).config.entity)).toEqual([
+      "light.b",
+      "light.c",
+      "light.a",
+    ]);
     expect(out[2]).toEqual(items[0]);
   });
 
@@ -133,7 +141,7 @@ describe("moveItem", () => {
   it("does not mutate the input", () => {
     const items = [item("light.a", 10, 10), item("light.b", 20, 20)];
     moveItem(items, 0, 1);
-    expect(items.map((i) => i.config.entity)).toEqual(["light.a", "light.b"]);
+    expect(items.map((i) => (i as BadgeItem).config.entity)).toEqual(["light.a", "light.b"]);
   });
 });
 
@@ -316,8 +324,8 @@ describe("setVisibility", () => {
   it("sets a list on the addressed item only", () => {
     const conditions = [{ condition: "state" }];
     const out = setVisibility(items, 1, conditions);
-    expect(out[1]?.visibility).toEqual(conditions);
-    expect(out[0]?.visibility).toBeUndefined();
+    expect((out[1] as BadgeItem)?.visibility).toEqual(conditions);
+    expect((out[0] as BadgeItem)?.visibility).toBeUndefined();
   });
 
   it("clears the key rather than storing an empty list", () => {
@@ -338,5 +346,34 @@ describe("setVisibility", () => {
 
   it("returns the list untouched for an index out of range", () => {
     expect(setVisibility(items, 5, [{ condition: "state" }])).toBe(items);
+  });
+});
+
+describe("rowLabel for an unreadable item", () => {
+  const hass = { language: "en" } as never;
+
+  it("shows the raw type over the reason", () => {
+    expect(
+      rowLabel({ type: "unknown", raw: {}, reason: "item-type", token: "badgee" }, hass),
+    ).toEqual({ primary: "badgee", secondary: "Unknown item type" });
+  });
+
+  it("shows the family over the reason when the config is missing", () => {
+    expect(
+      rowLabel({ type: "unknown", raw: {}, reason: "config-missing", token: "badge" }, hass),
+    ).toEqual({ primary: "badge", secondary: "Missing config" });
+  });
+
+  it("shows the raw element kind over the reason", () => {
+    expect(
+      rowLabel({ type: "unknown", raw: {}, reason: "element-type", token: "state-lable" }, hass),
+    ).toEqual({ primary: "state-lable", secondary: "Unknown element type" });
+  });
+
+  it("never renders a blank first line when there is no token", () => {
+    expect(rowLabel({ type: "unknown", raw: {}, reason: "item-type" }, hass)).toEqual({
+      primary: "Unreadable item",
+      secondary: "Unknown item type",
+    });
   });
 });

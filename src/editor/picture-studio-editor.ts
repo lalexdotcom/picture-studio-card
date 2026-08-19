@@ -228,7 +228,12 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const hass = this.hass;
     if (!config || !hass) return nothing;
 
-    const editing = this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
+    const rawEditing =
+      this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
+    // Unreachable through the interface — the row's Edit button is disabled —
+    // but a stale index after a removal must fall back to the list rather than
+    // pick a form at random.
+    const editing = rawEditing?.type === "unknown" ? undefined : rawEditing;
 
     if (editing) {
       return editing.type === "badge"

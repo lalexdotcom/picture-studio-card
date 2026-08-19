@@ -1,5 +1,6 @@
-import type { ElementConfig, PictureItem } from "../config";
+import type { ElementConfig, PictureItem, UnknownReason } from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
+import { localizeOwn, type StringKey } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 
 /**
@@ -42,9 +43,12 @@ export const setAnchor = (
 ): PictureItem[] =>
   index < 0 || index >= items.length
     ? items
-    : items.map((item, i) =>
-        i === index ? { ...item, anchor, position: position ?? item.position } : item,
-      );
+    : items.map((item, i) => {
+        if (i !== index) return item;
+        // An unknown item has no anchor or position; leave it unchanged.
+        if (item.type === "unknown") return item;
+        return { ...item, anchor, position: position ?? item.position };
+      });
 
 /**
  * Set or clear an item's conditions. An empty list is cleared rather than
@@ -60,6 +64,8 @@ export const setVisibility = (
   if (index < 0 || index >= items.length) return items;
   return items.map((item, i) => {
     if (i !== index) return item;
+    // An unknown item has no visibility property; leave it unchanged.
+    if (item.type === "unknown") return item;
     const { visibility: _dropped, ...rest } = item;
     return (visibility?.length ? { ...rest, visibility } : rest) as PictureItem;
   });
@@ -97,7 +103,22 @@ export interface RowLabel {
  * registry, or a Home Assistant too old to compose names all still say
  * something. The id says more than nothing.
  */
+const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
+  "item-type": "unknown_item_type",
+  "config-missing": "unknown_config_missing",
+  "element-type": "unknown_element_type",
+};
+
 export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel => {
+  // First, because everything below reads `item.config`. The token is the raw
+  // string a user will search their YAML for; the reason is why it is here.
+  if (item.type === "unknown") {
+    return {
+      primary: item.token ?? localizeOwn(hass, "unknown_item"),
+      secondary: localizeOwn(hass, UNKNOWN_REASON_KEYS[item.reason]),
+    };
+  }
+
   const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
   const stateObj = entityId ? hass?.states?.[entityId] : undefined;
 

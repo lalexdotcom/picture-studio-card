@@ -180,7 +180,7 @@ describe("the list reads top-down while the array stores bottom-up", () => {
 
   it("keeps the editor's own array untouched: the reversal is a copy", async () => {
     const el = await mount(3);
-    expect(el.items.map((i) => (i.config as { entity: string }).entity)).toEqual([
+    expect(el.items.map((i) => (i as { config: { entity: string } }).config.entity)).toEqual([
       "light.0",
       "light.1",
       "light.2",
@@ -254,5 +254,64 @@ describe("the add menu", () => {
     expect(el.shadowRoot?.querySelector("ha-dropdown.add")?.getAttribute("placement")).toBe(
       "bottom-end",
     );
+  });
+});
+
+describe("the row of an unreadable item", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const items = [
+    {
+      type: "element",
+      position: { top: 5, left: 5 },
+      anchor: "auto",
+      config: { type: "state-icon", entity: "light.a" },
+    },
+    { type: "unknown", raw: {}, reason: "element-type", token: "state-lable" },
+  ] as PictureItem[];
+
+  const mountList = async (its: PictureItem[]) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = its;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("marks it with the error glyph in the kind slot", async () => {
+    const list = await mountList(items);
+    // Top-down: the unknown item is last in the array, so it is the first row.
+    const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = itemRows[0];
+    expect(row?.querySelector(".kind")?.getAttribute("icon")).toBe("mdi:alert-circle");
+    expect(row?.querySelector(".kind")?.classList.contains("error")).toBe(true);
+  });
+
+  it("disables Edit and leaves Delete working", async () => {
+    const list = await mountList(items);
+    const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = itemRows[0];
+    const [edit, remove] = [...(row?.querySelectorAll("ha-icon-button") ?? [])];
+    expect((edit as { disabled?: boolean }).disabled).toBe(true);
+
+    let removed: number | undefined;
+    list.addEventListener("item-removed", (ev) => {
+      removed = (ev as CustomEvent<{ index: number }>).detail.index;
+    });
+    (remove as HTMLElement).click();
+    // The flip: display row 0 is array index 1.
+    expect(removed).toBe(1);
+  });
+
+  it("carries neither the eye nor the empty warning", async () => {
+    const list = await mountList(items);
+    const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = itemRows[0];
+    expect(row?.querySelector(".conditional")).toBeNull();
+    expect(row?.querySelector(".empty")).toBeNull();
   });
 });
