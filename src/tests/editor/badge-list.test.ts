@@ -537,9 +537,7 @@ describe("the secondary line of a probe-missing badge carries the type", () => {
 
   const probeHelpers = {
     createBadgeElement: (c: { type?: string }) =>
-      document.createElement(
-        c.type === "entity" ? "hui-entity-badge" : "hui-error-badge",
-      ),
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
   };
 
   beforeEach(() => {
@@ -598,11 +596,17 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
     // Spy on the row that SHOULD be scrolled (display 2 = array index 0).
     const expected = rows[2];
     let scrolledExpected = 0;
-    if (expected) expected.scrollIntoView = () => { scrolledExpected++; };
+    if (expected)
+      expected.scrollIntoView = () => {
+        scrolledExpected++;
+      };
     // Spy on the row that should NOT be scrolled (display 0 = array index 2).
     const unexpected = rows[0];
     let scrolledUnexpected = 0;
-    if (unexpected) unexpected.scrollIntoView = () => { scrolledUnexpected++; };
+    if (unexpected)
+      unexpected.scrollIntoView = () => {
+        scrolledUnexpected++;
+      };
 
     el.selectedIndex = 0;
     await el.updateComplete;
@@ -621,7 +625,11 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
 
     const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
     let scrollCount = 0;
-    rows.forEach((r) => { r.scrollIntoView = () => { scrollCount++; }; });
+    rows.forEach((r) => {
+      r.scrollIntoView = () => {
+        scrollCount++;
+      };
+    });
 
     el.selectedIndex = undefined;
     await el.updateComplete;
