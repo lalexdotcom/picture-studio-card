@@ -200,3 +200,85 @@ describe("status icon with ha-visibility-status available", () => {
     expect(oracle.conditions).toEqual([]);
   });
 });
+
+// ── ha-alert stub, registered in the malformed describe's beforeAll ──
+class HaAlertStub extends HTMLElement {}
+
+/**
+ * Mounts a visibility section with an arbitrary (possibly malformed) visibility
+ * value. Pass `haAlert: false` to withhold the ha-alert stub registration —
+ * use this to test the p.warning fallback before ha-alert is ever defined.
+ * Default (`haAlert` omitted or true) registers the stub lazily on first call.
+ */
+const mountSection = async (
+  item: { visibility?: unknown },
+  opts: { haAlert?: boolean } = {},
+): Promise<PictureStudioVisibilitySection> => {
+  if ((opts.haAlert ?? true) && !customElements.get("ha-alert")) {
+    customElements.define("ha-alert", HaAlertStub);
+  }
+  if (!customElements.get(VISIBILITY_SECTION_TAG)) {
+    customElements.define(VISIBILITY_SECTION_TAG, PictureStudioVisibilitySection);
+  }
+  const el = document.createElement(VISIBILITY_SECTION_TAG) as PictureStudioVisibilitySection;
+  el.hass = hass;
+  el.visibility = item.visibility;
+  document.body.append(el);
+  await el.updateComplete;
+  return el;
+};
+
+// ── Guard: ha-alert not yet registered at this point in the file ──
+describe("malformed visibility — ha-alert not registered", () => {
+  it("falls back to a paragraph when ha-alert is not defined", async () => {
+    const malformed = { condition: "state", entity: "light.a", state: "on" } as never;
+    const section = await mountSection({ visibility: malformed }, { haAlert: false });
+    expect(section.shadowRoot!.querySelector("p.warning")?.textContent).toContain("not a list");
+  });
+});
+
+describe("a malformed visibility", () => {
+  const malformed = { condition: "state", entity: "light.a", state: "on" } as never;
+
+  // ha-alert stub is registered lazily by mountSection's default on first call.
+
+  it("shows no count pill — `.length` on a mapping is not a count", async () => {
+    const section = await mountSection({ visibility: malformed });
+    expect(section.shadowRoot!.querySelector("ha-label")).toBeNull();
+  });
+
+  it("mounts no oracle", async () => {
+    const section = await mountSection({ visibility: malformed });
+    expect(section.shadowRoot!.querySelector("ha-visibility-status")).toBeNull();
+  });
+
+  it("puts the warning and a visible verdict in the header", async () => {
+    const section = await mountSection({ visibility: malformed });
+    const icons = [...section.shadowRoot!.querySelectorAll('[slot="event"]')];
+    expect(icons.map((i) => i.getAttribute("icon"))).toEqual(["mdi:alert-outline", "mdi:eye"]);
+  });
+
+  it("renders the alert instead of Home Assistant's editor", async () => {
+    const section = await mountSection({ visibility: malformed });
+    expect(section.shadowRoot!.querySelector("ha-alert")).not.toBeNull();
+    expect(section.shadowRoot!.querySelector("hui-card-visibility-editor")).toBeNull();
+  });
+
+  it("clears the raw value when Reset is pressed", async () => {
+    const section = await mountSection({ visibility: malformed });
+    let detail: { visibility?: unknown } | undefined;
+    section.addEventListener("visibility-changed", (ev) => {
+      detail = (ev as CustomEvent).detail;
+    });
+    (section.shadowRoot!.querySelector('[slot="action"]') as HTMLElement).click();
+    expect(detail).toEqual({ visibility: undefined });
+  });
+});
+
+describe("a well-formed visibility is unchanged", () => {
+  it("still shows the count pill and no warning", async () => {
+    const section = await mountSection({ visibility: [{ condition: "user", users: [] }] });
+    expect(section.shadowRoot!.querySelector("ha-label")?.textContent?.trim()).toBe("1");
+    expect(section.shadowRoot!.querySelector("ha-alert")).toBeNull();
+  });
+});
