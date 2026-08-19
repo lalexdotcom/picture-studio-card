@@ -233,6 +233,22 @@ items:
   `rgb_color`, the brightness filter). What a copy duplicates is a **token
   naming convention**, the one every published theme redefines, and it degrades
   rather than breaks: a missing domain falls to `--state-active-color`.
+- **`ha-visibility-status` is the visibility verdict, as a component.** Public
+  surface: `hass`, `conditions`, and a `state` of `"visible" | "hidden" |
+  "invalid"` written in `willUpdate` — so after `await el.updateComplete` it is
+  current. No event, no reflection: `state` is a plain property, which is why one
+  instance is cheap to drive and N instances need a controller. Mounted hidden it
+  is an oracle, and its `ConditionListenersController.hostDisconnected()` calls
+  `clear()`, so removing it releases every subscription. `setup()` clears first
+  and returns early on an empty list, so handing it `conditions = []` genuinely
+  idles it. Its icon/colour mapping is `mdi:eye` / `mdi:eye-off` /
+  `mdi:alert-circle` on `ha-alert`'s `success` / `warning` / `error`, which
+  resolve to `--success-color` / `--warning-color` / `--error-color`. It has **no
+  icon-only mode** — it always draws a full alert with a headline and supporting
+  text. Note the cost: its `willUpdate` re-runs `setup()` whenever `hass`
+  changes, so it clears and re-subscribes its listeners on every tick — HA's own
+  banner does the same, and an oracle beside it doubles that while the section
+  is open.
 - **`window.loadCardHelpers()` exposes exactly nine symbols** — `showEnterCodeDialog`,
   `showAlertDialog`, `showConfirmationDialog`, `showPromptDialog`,
   `importMoreInfoControl`, `createBadgeElement`, `createCardElement`,

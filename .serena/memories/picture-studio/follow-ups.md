@@ -127,3 +127,42 @@ misrouting. Unreachable today for the same reason as follow-up 8, and it becomes
 reachable on the same day — so the two are one piece of work. Push a
 placeholder rather than skipping, or filter the items list once and iterate the
 filtered pairs.
+
+---
+
+## 10. The preview's condition marker could show the verdict, not just "conditional"
+
+**Asked 2026-08-19, deferred with the reason written down.** The marker drawn on
+a conditional item in the edit preview is `.item.conditional` — a CSS mask over
+an inlined `mdi:eye`, in `--psc-marker-glyph`. It says *this item has
+conditions*. The Visibility section's header now says *and right now it is
+hidden*, with Home Assistant's own vocabulary: `mdi:eye` / `mdi:eye-off` /
+`mdi:alert-circle` on `--success-color` / `--warning-color` / `--error-color`.
+The question was whether the preview should speak the same language.
+
+**Swapping the glyph is trivial** — it is already a CSS variable, three states
+means three classes. **The cost is that the preview has no verdict at all**, by
+an explicit decision recorded in `picture-studio-card.ts`: no probe is created
+while editing, because the marker only ever claimed "has conditions" and that is
+where the drag layer is already heaviest.
+
+Two ways to get one, and the second is better:
+
+- **Revive the probes while editing** — a whole `hui-card` plus a phantom card
+  per conditional item. Heavier, and `hui-card` does not re-evaluate on a config
+  change, so a verdict would lag while the user edits the very conditions it
+  reports.
+- **One `ha-visibility-status` oracle per conditional item**, the mechanism the
+  section header now uses. Lighter, and it re-evaluates on a conditions change.
+  But its `state` is a plain property — no event, no reflection — so N instances
+  need a controller: a table keyed by item, a read after each `updateComplete`, a
+  comparison, and the guard against the read→render→read loop. Roughly a hundred
+  lines with its own tests, against twenty for the single-instance header.
+
+**If it is ever built, build it asymmetric.** "Visible" is the normal case and
+deserves no ink on a photograph: a floorplan speckled with green pills is noise
+added to the frequent case. Keep today's eye for "conditional", and change the
+glyph and colour only for `hidden` and `invalid` — the two states worth stopping
+for. The same argument applies to the item list, where the question was asked
+first.
+
