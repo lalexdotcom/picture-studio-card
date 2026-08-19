@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, beforeEach, describe, expect, it, rstest } from "@rstest/core";
 import { LIST_TAG, type PictureItem } from "../../config";
 import { badgeCatalog } from "../../editor/badge-catalog";
+import { resetBadgeVerdicts } from "../../editor/badge-existence";
 import {
   addChoices,
   kindLabel,
@@ -9,6 +10,23 @@ import {
 } from "../../editor/badge-list";
 import { DEFAULT_LABEL_SIZE } from "../../element-size";
 import { cssRules } from "../card/harness";
+
+// Provides a minimal loadCardHelpers stub for tests that render badge rows but
+// do not need probe control. Without it, probeBadgeType throws when it calls
+// window.loadCardHelpers() for badge items now that render() wires the probe.
+const defaultHelpers = {
+  createBadgeElement: (c: { type?: string }) =>
+    document.createElement(
+      c.type === "entity" || c.type === "shortcut" ? `hui-${c.type}-badge` : "hui-error-badge",
+    ),
+};
+beforeEach(() => {
+  (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+    defaultHelpers;
+});
+afterEach(() => {
+  resetBadgeVerdicts();
+});
 
 const localize = ((key: string) =>
   ({
@@ -180,7 +198,7 @@ describe("the list reads top-down while the array stores bottom-up", () => {
 
   it("keeps the editor's own array untouched: the reversal is a copy", async () => {
     const el = await mount(3);
-    expect(el.items.map((i) => (i.config as { entity: string }).entity)).toEqual([
+    expect(el.items.map((i) => (i as { config: { entity: string } }).config.entity)).toEqual([
       "light.0",
       "light.1",
       "light.2",
@@ -254,5 +272,354 @@ describe("the add menu", () => {
     expect(el.shadowRoot?.querySelector("ha-dropdown.add")?.getAttribute("placement")).toBe(
       "bottom-end",
     );
+  });
+});
+
+describe("a badge whose type does not exist", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(
+        c.type === "entity" || c.type === "shortcut" || c.type === "state-label"
+          ? `hui-${c.type}-badge`
+          : "hui-error-badge",
+      ),
+  };
+
+  beforeEach(() => {
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+  });
+
+  // `await Promise.resolve()` lets Lit's render microtask run (first-paint DOM)
+  // but returns before the probe's loadCardHelpers .then() fires — so the first
+  // assertion sees broken = false without needing to suppress the probe.
+  const mountList = async (its: PictureItem[]) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = its;
+    document.body.append(el);
+    await Promise.resolve();
+    return el;
+  };
+
+  // Awaiting loadCardHelpers() drains the probe's async hop (its .then() runs
+  // just before our continuation, since both were registered on the same
+  // already-resolved promise). Then updateComplete waits for the re-render that
+  // requestUpdate() scheduled.
+  const flushProbe = async (list: PictureStudioBadgeList) => {
+    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    await list.updateComplete;
+  };
+
+  afterEach(() => {
+    resetBadgeVerdicts();
+    document.body.replaceChildren();
+  });
+
+  it("renders unmarked on the first paint", async () => {
+    const list = await mountList([
+      { type: "badge", position: { top: 5, left: 5 }, anchor: "auto", config: { type: "entty" } },
+    ] as PictureItem[]);
+    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
+    expect(row.querySelector(".kind")?.classList.contains("error")).toBe(false);
+  });
+
+  it("marks the row once the verdict lands, and disables Edit", async () => {
+    const list = await mountList([
+      { type: "badge", position: { top: 5, left: 5 }, anchor: "auto", config: { type: "entty" } },
+    ] as PictureItem[]);
+    await flushProbe(list);
+    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
+    // Badge family → alert-box, not alert-circle.
+    expect((row.querySelector(".kind") as { icon?: string } | null)?.icon).toBe("mdi:alert-box");
+    expect((row.querySelectorAll("ha-icon-button")[0] as { disabled?: boolean }).disabled).toBe(
+      true,
+    );
+  });
+
+  it("leaves a native type outside our catalogue alone", async () => {
+    // `state-label` is a real badge type — it is in Home Assistant's lazy map
+    // and simply absent from the picker's list, which is what CORE_BADGES
+    // mirrors. It must not be flagged.
+    const list = await mountList([
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "state-label" },
+      },
+    ] as PictureItem[]);
+    await flushProbe(list);
+    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
+    expect(row.querySelector(".kind")?.classList.contains("error")).toBe(false);
+  });
+});
+
+describe("the row of an unreadable item", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const items = [
+    {
+      type: "element",
+      position: { top: 5, left: 5 },
+      anchor: "auto",
+      config: { type: "state-icon", entity: "light.a" },
+    },
+    { type: "unknown", raw: {}, reason: "element-type", token: "state-lable" },
+  ] as PictureItem[];
+
+  const mountList = async (its: PictureItem[]) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = its;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("marks it with the error glyph in the kind slot", async () => {
+    const list = await mountList(items);
+    // Top-down: the unknown item is last in the array, so it is the first row.
+    const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = itemRows[0];
+    expect((row?.querySelector(".kind") as { icon?: string } | null)?.icon).toBe(
+      "mdi:alert-circle",
+    );
+    expect(row?.querySelector(".kind")?.classList.contains("error")).toBe(true);
+  });
+
+  it("disables Edit and leaves Delete working", async () => {
+    const list = await mountList(items);
+    const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = itemRows[0];
+    const [edit, remove] = [...(row?.querySelectorAll("ha-icon-button") ?? [])];
+    expect((edit as { disabled?: boolean }).disabled).toBe(true);
+
+    let removed: number | undefined;
+    list.addEventListener("item-removed", (ev) => {
+      removed = (ev as CustomEvent<{ index: number }>).detail.index;
+    });
+    (remove as HTMLElement).click();
+    // The flip: display row 0 is array index 1.
+    expect(removed).toBe(1);
+  });
+
+  it("carries neither the eye nor the empty warning", async () => {
+    const list = await mountList(items);
+    const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = itemRows[0];
+    expect(row?.querySelector(".conditional")).toBeNull();
+    expect(row?.querySelector(".empty")).toBeNull();
+  });
+});
+
+describe("the row of an item whose visibility is not a list", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const mountWith = async (visibility: unknown) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "element",
+        position: { top: 0, left: 0 },
+        anchor: "auto",
+        visibility,
+        config: { type: "state-icon", entity: "light.a" },
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("renders the orange marker when visibility is a mapping", async () => {
+    const el = await mountWith({ condition: "state" });
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = rows[0];
+    expect(row?.querySelector(".empty")).not.toBeNull();
+    expect(row?.querySelector(".empty")?.getAttribute("icon")).toBe("mdi:alert-outline");
+  });
+
+  it("renders the eye but not the orange marker for a well-formed visibility list", async () => {
+    const el = await mountWith([{ condition: "state", entity: "light.a" }]);
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = rows[0];
+    expect(row?.querySelector(".conditional")).not.toBeNull();
+    expect(row?.querySelector(".empty")).toBeNull();
+  });
+
+  it("an unknown (red) row renders neither the eye nor the orange marker", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "unknown",
+        raw: { visibility: { condition: "state" } },
+        reason: "element-type",
+        token: "bad-type",
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = rows[0];
+    expect(row?.querySelector(".empty")).toBeNull();
+    expect(row?.querySelector(".conditional")).toBeNull();
+  });
+});
+
+describe("error glyph is alert-box for badge family, alert-circle for others", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const mount = async (item: PictureItem) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [item];
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  const glyph = (el: PictureStudioBadgeList) =>
+    (el.shadowRoot!.querySelector(".item .kind") as { icon?: string } | null)?.icon;
+
+  afterEach(() => document.body.replaceChildren());
+
+  it("config-missing with token 'badge' gets alert-box (badge family)", async () => {
+    const el = await mount({
+      type: "unknown",
+      raw: {},
+      reason: "config-missing",
+      token: "badge",
+    } as unknown as PictureItem);
+    expect(glyph(el)).toBe("mdi:alert-box");
+  });
+
+  it("config-missing with token 'element' gets alert-circle (element family)", async () => {
+    const el = await mount({
+      type: "unknown",
+      raw: {},
+      reason: "config-missing",
+      token: "element",
+    } as unknown as PictureItem);
+    expect(glyph(el)).toBe("mdi:alert-circle");
+  });
+
+  it("element-type gets alert-circle (element family)", async () => {
+    const el = await mount({
+      type: "unknown",
+      raw: {},
+      reason: "element-type",
+      token: "bad-el-type",
+    } as unknown as PictureItem);
+    expect(glyph(el)).toBe("mdi:alert-circle");
+  });
+
+  it("item-type gets alert-circle (family unreadable)", async () => {
+    const el = await mount({
+      type: "unknown",
+      raw: {},
+      reason: "item-type",
+    } as unknown as PictureItem);
+    expect(glyph(el)).toBe("mdi:alert-circle");
+  });
+});
+
+describe("the secondary line of a probe-missing badge carries the type", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
+  };
+
+  beforeEach(() => {
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+  });
+
+  afterEach(() => {
+    resetBadgeVerdicts();
+    document.body.replaceChildren();
+  });
+
+  it("appends the type after the translated prefix once the verdict lands", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "entty" },
+      },
+    ] as PictureItem[];
+    document.body.append(el);
+    await Promise.resolve();
+    // Flush probe — same pattern as "a badge whose type does not exist".
+    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    await el.updateComplete;
+    const secondary = el.shadowRoot!.querySelector(".secondary");
+    expect(secondary?.textContent).toBe("Unknown badge type: entty");
+  });
+});
+
+describe("selectedIndex scrolls the row at the flipped display position", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const item = (entity: string): PictureItem =>
+    ({
+      type: "badge",
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+      config: { type: "entity", entity },
+    }) as unknown as PictureItem;
+
+  afterEach(() => document.body.replaceChildren());
+
+  it("scrolls the row at the flipped position, not the raw index position", async () => {
+    // Three items: array [light.0, light.1, light.2], displayed [light.2, light.1, light.0].
+    // selectedIndex = 0 (array) → display position _flip(0) = 2.
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [item("light.0"), item("light.1"), item("light.2")];
+    document.body.append(el);
+    await el.updateComplete;
+
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
+    // Spy on the row that SHOULD be scrolled (display 2 = array index 0).
+    const expected = rows[2] as HTMLElement;
+    const spyExpected = rstest.spyOn(expected, "scrollIntoView");
+    // Spy on the row that should NOT be scrolled (display 0 = array index 2).
+    const unexpected = rows[0] as HTMLElement;
+    const spyUnexpected = rstest.spyOn(unexpected, "scrollIntoView");
+
+    el.selectedIndex = 0;
+    await el.updateComplete;
+    expect(spyExpected).toHaveBeenCalledTimes(1);
+    expect(spyUnexpected).toHaveBeenCalledTimes(0);
+  });
+
+  it("does not scroll on deselection", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [item("light.0"), item("light.1"), item("light.2")];
+    document.body.append(el);
+    await el.updateComplete;
+
+    el.selectedIndex = 1;
+    await el.updateComplete;
+
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
+    const spies = rows.map((r) => rstest.spyOn(r, "scrollIntoView"));
+
+    el.selectedIndex = undefined;
+    await el.updateComplete;
+    for (const spy of spies) expect(spy).toHaveBeenCalledTimes(0);
   });
 });

@@ -21,7 +21,7 @@ import {
   parsePercent,
   storedPosition,
 } from "./position";
-import type { ActionConfig, BadgeConfig, VisibilityCondition } from "./types";
+import type { ActionConfig, BadgeConfig } from "./types";
 
 export const CARD_TAG = "picture-studio";
 export const EDITOR_TAG = "picture-studio-editor";
@@ -50,11 +50,11 @@ interface ItemBase {
   anchor: Anchor;
   /**
    * Home Assistant's condition list, and theirs alone: never read, validated or
-   * rewritten here. Absent means always drawn. Omitted from the stored config
-   * when absent or empty — the rule Home Assistant's own visibility editor
-   * applies — so a config that never used it comes back exactly as it went in.
+   * rewritten here. Typed `unknown` because it genuinely is — only its
+   * array-ness was ever checked, and a malformed value is now kept rather than
+   * refused. `hasVisibility` is the single gate every reader passes through.
    */
-  visibility?: VisibilityCondition[];
+  visibility?: unknown;
 }
 
 export interface BadgeItem extends ItemBase {
@@ -69,9 +69,42 @@ export interface ElementItem extends ItemBase {
   config: ElementConfig;
 }
 
-export type PictureItem = BadgeItem | ElementItem;
+/** Why an item could not be read. Decided once, at normalization. */
+export type UnknownReason = "item-type" | "config-missing" | "element-type";
+
+/**
+ * An item we cannot read. It is ignored everywhere — the card draws nothing, the
+ * editor offers no form — but `raw` is written back to the YAML untouched, so
+ * ignoring costs nothing. That is the whole safety argument: `storedConfig`
+ * rewrites the entire config on every editor commit, so anything dropped here
+ * would vanish from the user's YAML on the first drag.
+ *
+ * It deliberately does not extend `ItemBase` and carries no `config`: the
+ * compiler is then what finds every consumer that has to learn about it.
+ */
+export interface UnknownItem {
+  type: "unknown";
+  /** The original entry, never normalized — not its position, not its anchor. */
+  raw: unknown;
+  reason: UnknownReason;
+  /** The rawest identifying token we hold; the row's first line. */
+  token?: string;
+}
+
+export type PictureItem = BadgeItem | ElementItem | UnknownItem;
 
 export type ElementConfig = StateIconConfig | StateLabelConfig;
+
+/**
+ * The floor under every branch on an element kind. Three sites default to the
+ * icon when they do not recognise a kind, which means a third kind added without
+ * touching all of them is not rejected — it is silently drawn as an icon. Calling
+ * this in the default stops that: the day `ElementConfig` gains a member, each
+ * site fails to compile.
+ */
+export const assertNever = (value: never, what: string): never => {
+  throw new Error(`picture-studio: unhandled ${what}: ${String(value)}`);
+};
 
 export interface StateIconConfig {
   type: "state-icon";
@@ -218,28 +251,18 @@ export const normalizeElementConfig = (
       show: normalizeLabelShow(raw.show),
     } as StateLabelConfig;
   }
-  throw new Error(
-    `picture-studio: items[${index}].config must have a \`type\` — "state-icon" or "state-label"`,
-  );
+  // Unreachable: normalizeConfig checks the kind before calling, because only it
+  // can turn an unknown one into an UnknownItem. Kept as a type-level floor.
+  throw new Error(`picture-studio: items[${index}].config has an unreadable type`);
 };
 
 /**
  * Validate and fill in defaults. Returns a fresh object: the config handed to
  * setConfig is frozen by Home Assistant and must never be mutated.
  */
-const normalizeVisibility = (raw: unknown, index: number): VisibilityCondition[] | undefined => {
-  if (raw === undefined) return undefined;
-  if (!Array.isArray(raw)) {
-    throw new Error(`picture-studio: items[${index}].visibility must be a list`);
-  }
-  // Contents are never inspected: an unknown condition type must survive a round
-  // trip, exactly like an unknown key inside an element's config.
-  return raw as VisibilityCondition[];
-};
-
 /** True when the item carries at least one condition. */
 export const hasVisibility = (item: PictureItem): boolean =>
-  Array.isArray(item.visibility) && item.visibility.length > 0;
+  item.type !== "unknown" && Array.isArray(item.visibility) && item.visibility.length > 0;
 
 export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
   if (!isRecord(raw)) {
@@ -253,18 +276,29 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
 
   const items = rawItems.map((entry, index): PictureItem => {
     if (!isRecord(entry)) {
+      // The one case still fatal: no family, no position, not even a key to name
+      // in a row. Home Assistant's error card, which prints the offending config,
+      // says more than a row that could only read "?".
       throw new Error(`picture-studio: items[${index}] must be an object`);
     }
 
+    const unknown = (reason: UnknownReason, token?: string): UnknownItem => ({
+      type: "unknown",
+      raw: entry,
+      reason,
+      ...(token ? { token } : {}),
+    });
+
     const type = entry.type;
     if (type !== "badge" && type !== "element") {
-      throw new Error(
-        `picture-studio: items[${index}] must have a \`type\` — "badge" or "element"`,
-      );
+      return unknown("item-type", typeof type === "string" ? type : undefined);
     }
-
-    if (!isRecord(entry.config)) {
-      throw new Error(`picture-studio: items[${index}] must have a \`config\` object`);
+    if (!isRecord(entry.config)) return unknown("config-missing", type);
+    if (type === "element") {
+      const kind = entry.config.type;
+      if (kind !== "state-icon" && kind !== "state-label") {
+        return unknown("element-type", typeof kind === "string" ? kind : undefined);
+      }
     }
 
     const position = normalizePosition(entry.position);
@@ -276,8 +310,10 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
     const anchor = parseAnchor(
       (isRecord(entry.position) ? entry.position.anchor : undefined) ?? entry.anchor,
     );
-    const visibility = normalizeVisibility(entry.visibility, index);
-    const base = { position, anchor, ...(visibility ? { visibility } : {}) };
+    // Kept exactly as written, whatever it is. Only its array-ness ever mattered,
+    // and `hasVisibility` is what asks.
+    const visibility = entry.visibility;
+    const base = { position, anchor, ...(visibility !== undefined ? { visibility } : {}) };
 
     return type === "badge"
       ? { ...base, type, config: entry.config as BadgeConfig }
@@ -296,6 +332,9 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
 export const storedConfig = (config: PictureStudioConfig): Record<string, unknown> => ({
   ...config,
   items: config.items.map((item) => {
+    // Verbatim, and nothing else: no spread, no key deletion, no position
+    // rewrite. This is the whole safety argument of the design.
+    if (item.type === "unknown") return item.raw as Record<string, unknown>;
     const stored: Record<string, unknown> = {
       ...item,
       // The anchor qualifies the coordinates, so it is written with them. The
@@ -309,10 +348,16 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
     // Always: `...item` copies the in-memory field, and item level is the one
     // place the anchor must never be written back to.
     delete stored.anchor;
-    // Same rule as the anchor at its default, and the same rule Home Assistant
-    // applies in its own editor: an empty list says nothing while looking like
-    // it says something.
-    if (!hasVisibility(item)) delete stored.visibility;
+    // Delete when absent (no intent) or empty list (explicit "show always", but
+    // indistinguishable from no intent). Keep when it has conditions — or when
+    // it is malformed, because dropping an unreadable value on commit would be
+    // destructive: the next save would silently erase the user's intent.
+    if (
+      item.visibility === undefined ||
+      (Array.isArray(item.visibility) && item.visibility.length === 0)
+    ) {
+      delete stored.visibility;
+    }
     if (item.type === "element") {
       // Only when every field is a default: a mode may be off and still carry
       // numbers the user typed, and dropping the key would lose them. A config
@@ -321,7 +366,13 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
         show?: LabelPart[];
       };
       const config: Record<string, unknown> = { ...rest };
-      const isLabel = item.config.type === "state-label";
+      const kind = item.config.type;
+      const isLabel =
+        kind === "state-label"
+          ? true
+          : kind === "state-icon"
+            ? false
+            : assertNever(kind, "element kind");
       const sizeDefaults = isLabel ? DEFAULT_LABEL_SIZE : DEFAULT_ICON_SIZE;
       if (!isDefaultElementSize(size, sizeDefaults)) config.size = size;
       // The guard is what narrows the optional type, not a redundancy — two

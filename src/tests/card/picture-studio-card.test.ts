@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
-import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TYPE } from "../../config";
+import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TAG, PROBE_TYPE } from "../../config";
 import type { HomeAssistant } from "../../types";
 import {
   background,
@@ -462,5 +462,149 @@ describe("editing flag on element rebuild", () => {
 
     // The rebuilt label element must receive editing=true, not default to false.
     expect(labelEl(card)?.editing).toBe(true);
+  });
+});
+
+describe("an unknown item does not shift the items after it", () => {
+  it("gives the second element its own config, not the first one's", async () => {
+    const card = await mountCard({
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "10%" },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+        { type: "badgee" },
+        {
+          type: "element",
+          position: { top: "20%", left: "20%" },
+          config: { type: "state-icon", entity: "light.b" },
+        },
+      ],
+    });
+    const icons = [...card.shadowRoot!.querySelectorAll(ICON_TAG)] as {
+      _config?: { entity?: string };
+    }[];
+    expect(icons).toHaveLength(2);
+    // The whole point: without the hole, icons[1] receives items[1]'s config —
+    // which is the unknown item — and the third item is never reached.
+    expect(icons[0]?._config?.entity).toBe("light.a");
+    expect(icons[1]?._config?.entity).toBe("light.b");
+  });
+
+  it("builds no wrapper and no probe for it", async () => {
+    const card = await mountCard({
+      items: [
+        { type: "badgee", visibility: [{ condition: "user", users: [] }] },
+        {
+          type: "element",
+          position: { top: "20%", left: "20%" },
+          config: { type: "state-icon", entity: "light.b" },
+        },
+      ],
+    });
+    expect(card.shadowRoot!.querySelectorAll(".item")).toHaveLength(1);
+    expect(card.shadowRoot!.querySelectorAll(PROBE_TAG)).toHaveLength(0);
+  });
+
+  it("propagates a config update to the correct element on the sameShape path", async () => {
+    // The sameShape else branch reads children by index: _elements[index].
+    // A skip would leave _elements = [iconA, iconB] (length 2 against 3 items),
+    // so _elements[2] is undefined and the third item's config update is dropped.
+    // A hole leaves _elements = [iconA, undefined, iconB], so _elements[2]
+    // is the right element and receives the updated config.
+    const baseItems = [
+      {
+        type: "element",
+        position: { top: "10%", left: "10%" },
+        config: { type: "state-icon", entity: "light.a" },
+      },
+      { type: "badgee" },
+      {
+        type: "element",
+        position: { top: "20%", left: "20%" },
+        config: { type: "state-icon", entity: "light.b" },
+      },
+    ];
+    const card = await mountCard({ items: baseItems });
+
+    // Same item types → _renderedTypes matches → sameShape=true → else branch runs.
+    card.setConfig({
+      items: [
+        baseItems[0],
+        baseItems[1],
+        {
+          type: "element",
+          position: { top: "20%", left: "20%" },
+          config: { type: "state-icon", entity: "light.c" },
+        },
+      ],
+    });
+    await flush();
+
+    const icons = [...card.shadowRoot!.querySelectorAll(ICON_TAG)] as {
+      _config?: { entity?: string };
+    }[];
+    expect(icons).toHaveLength(2);
+    expect(icons[0]?._config?.entity).toBe("light.a");
+    // With a skip: _elements[2] is undefined, config update is dropped → still "light.b".
+    // With a hole: _elements[2] is iconB, config update lands → "light.c".
+    expect(icons[1]?._config?.entity).toBe("light.c");
+  });
+});
+
+describe("hui-error-badge display in editing mode", () => {
+  const ERROR_BADGE_CONFIG = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "badge",
+        position: { top: "10%", left: "10%" },
+        config: { type: "entty" },
+      },
+    ],
+  };
+
+  const makeErrorBadge = (): HTMLElement => {
+    // Simulate HA's badge factory: returns hui-error-badge with display hidden.
+    const el = document.createElement("hui-error-badge");
+    el.style.display = "None";
+    return el;
+  };
+
+  const mountWithErrorBadge = async (editing: boolean): Promise<HTMLElement> => {
+    installHelpers(); // ensure CARD_TAG is registered before overriding loadCardHelpers
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({
+      createHuiElement: () => document.createElement(FAKE_TAG),
+      createBadgeElement: makeErrorBadge,
+    });
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig(ERROR_BADGE_CONFIG);
+    if (editing) {
+      card.preview = true;
+      releaseEditor = registerEditor({
+        patchPosition: () => {},
+        patchAnchor: () => {},
+        select: () => {},
+        selectedIndex: () => undefined,
+      });
+    }
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    return root(card).querySelector("hui-error-badge") as HTMLElement;
+  };
+
+  afterEach(() => installHelpers());
+
+  it("clears the inline display of hui-error-badge while editing", async () => {
+    const badge = await mountWithErrorBadge(true);
+    expect(badge.style.display).toBe("");
+  });
+
+  it("leaves the inline display of hui-error-badge untouched outside editing", async () => {
+    const badge = await mountWithErrorBadge(false);
+    expect(badge.style.display).toBe("none");
   });
 });

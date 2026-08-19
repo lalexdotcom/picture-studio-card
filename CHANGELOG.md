@@ -12,6 +12,10 @@
 - **Each item kind now has its own glyph** in the editor's item list and add
   menu: a sun for a state icon, a text card for a state label, and distinct
   label shapes for the core and custom badge families.
+- The item list flags a badge whose type this Home Assistant does not have — a
+  typo, or a custom badge whose resource never loaded.
+- An item the card cannot read now gets a row of its own in the item list,
+  marked with the reason, so it can be deleted without editing the YAML.
 
 ### Changed
 
@@ -50,6 +54,12 @@
   hold the button down. An item with no surface grows slightly instead, as it
   did before, because a shading laid over a photograph cannot be seen. Only
   items you can click react, and nothing reacts while you are editing the card.
+- A single unreadable item no longer replaces the whole card with an error. The
+  card skips it and draws everything else; the entry stays in your YAML exactly
+  as you wrote it.
+- A `visibility:` written as something other than a list is ignored instead of
+  breaking the card. The item always shows, and its Visibility section explains
+  what happened and offers to clear them.
 
 ## 1.3.1 — 2026-08-17
 

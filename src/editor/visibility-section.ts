@@ -41,6 +41,11 @@ const VERDICT_KEYS: Record<OracleState, StringKey> = {
   invalid: "visibility_invalid",
 };
 
+/** The conditions, or undefined when the key holds something that is not a list.
+    `.length` on a string is a character count, not a condition count. */
+const conditionsOf = (value: unknown): VisibilityCondition[] | undefined =>
+  Array.isArray(value) ? (value as VisibilityCondition[]) : undefined;
+
 /**
  * The "Visibility" section both item forms carry.
  *
@@ -61,7 +66,7 @@ export class PictureStudioVisibilitySection extends LitElement {
   };
 
   declare hass?: HomeAssistant;
-  declare visibility?: VisibilityCondition[];
+  declare visibility?: unknown;
   declare _available: boolean;
   declare _oracleState: OracleState | undefined;
 
@@ -73,7 +78,7 @@ export class PictureStudioVisibilitySection extends LitElement {
    * in the editor hub.
    */
   private _configCache?: {
-    visibility?: VisibilityCondition[];
+    visibility?: unknown;
     config: { visibility: VisibilityCondition[] };
   };
 
@@ -106,7 +111,7 @@ export class PictureStudioVisibilitySection extends LitElement {
     if (!this._configCache || this._configCache.visibility !== this.visibility) {
       this._configCache = {
         visibility: this.visibility,
-        config: { visibility: this.visibility ?? [] },
+        config: { visibility: conditionsOf(this.visibility) ?? [] },
       };
     }
     return this._configCache.config;
@@ -144,7 +149,8 @@ export class PictureStudioVisibilitySection extends LitElement {
   protected updated(): void {
     if (!customElements.get(HA_STATUS)) return;
 
-    const count = this.visibility?.length ?? 0;
+    const conditions = conditionsOf(this.visibility);
+    const count = conditions?.length ?? 0;
 
     if (count === 0) {
       // Idle the oracle when conditions are cleared: setup([]) in
@@ -171,7 +177,7 @@ export class PictureStudioVisibilitySection extends LitElement {
 
     const oracle = this._oracle;
     oracle.hass = this.hass;
-    oracle.conditions = this.visibility ?? [];
+    oracle.conditions = conditions ?? [];
 
     void oracle.updateComplete.then(() => {
       const s = oracle.state;
@@ -185,7 +191,9 @@ export class PictureStudioVisibilitySection extends LitElement {
     const hass = this.hass;
     if (!hass) return nothing;
 
-    const count = this.visibility?.length ?? 0;
+    const conditions = conditionsOf(this.visibility);
+    const malformed = this.visibility !== undefined && conditions === undefined;
+    const count = conditions?.length ?? 0;
     const title =
       hass.localize("ui.panel.lovelace.editor.edit_card.tab_visibility") ||
       localizeOwn(hass, "visibility");
@@ -202,39 +210,101 @@ export class PictureStudioVisibilitySection extends LitElement {
           // `icons` lands after the chevron. The count belongs beside the title.
           // The status icon follows the count pill in the same slot so the two
           // read as a unit: "3 conditions, currently hidden".
-          count > 0
+          malformed
             ? html`
-                <ha-label slot="event" dense>${count}</ha-label>
-                ${
-                  statusAvailable && this._oracleState
-                    ? html`<ha-icon
-                      slot="event"
-                      class="status-icon"
-                      .icon=${VERDICT_ICONS[this._oracleState]}
-                      style="color: ${VERDICT_COLORS[this._oracleState]}"
-                      title=${localizeOwn(hass, VERDICT_KEYS[this._oracleState])}
-                    ></ha-icon>`
-                    : nothing
-                }
+                <ha-icon
+                  slot="event"
+                  class="warning-icon"
+                  icon="mdi:alert-outline"
+                  title=${localizeOwn(hass, "visibility_unreadable")}
+                ></ha-icon>
+                <!-- Rendered, not measured: no condition applies, so the item is
+                     visible. The oracle would be the wrong instrument — updated()
+                     treats an empty list as its release path, and setup() returns
+                     early on one. This also renders where ha-visibility-status is
+                     absent, which the oracle route cannot. -->
+                <ha-icon
+                  slot="event"
+                  class="status-icon"
+                  icon=${VERDICT_ICONS.visible}
+                  style="color: ${VERDICT_COLORS.visible}"
+                  title=${localizeOwn(hass, VERDICT_KEYS.visible)}
+                ></ha-icon>
               `
-            : nothing
+            : count > 0
+              ? html`
+                  <ha-label slot="event" dense>${count}</ha-label>
+                  ${
+                    statusAvailable && this._oracleState
+                      ? html`<ha-icon
+                        slot="event"
+                        class="status-icon"
+                        .icon=${VERDICT_ICONS[this._oracleState]}
+                        style="color: ${VERDICT_COLORS[this._oracleState]}"
+                        title=${localizeOwn(hass, VERDICT_KEYS[this._oracleState])}
+                      ></ha-icon>`
+                      : nothing
+                  }
+                `
+              : nothing
         }
         <div class="content">
           ${
-            this._available
-              ? html`<hui-card-visibility-editor
-                  .hass=${hass}
-                  .config=${this.editorConfig()}
-                  @value-changed=${this.handleValueChanged}
-                ></hui-card-visibility-editor>`
-              : html`<p class="fallback">
-                  This Home Assistant version does not expose the visibility editor here.
-                  Edit the item's conditions in the YAML tab.
-                </p>`
+            malformed
+              ? this._renderMalformed(hass)
+              : this._available
+                ? html`<hui-card-visibility-editor
+                    .hass=${hass}
+                    .config=${this.editorConfig()}
+                    @value-changed=${this.handleValueChanged}
+                  ></hui-card-visibility-editor>`
+                : html`<p class="fallback">
+                    This Home Assistant version does not expose the visibility editor here.
+                    Edit the item's conditions in the YAML tab.
+                  </p>`
           }
         </div>
       </ha-expansion-panel>
     `;
+  }
+
+  /**
+   * The alert replaces Home Assistant's editor rather than sitting above it. One
+   * decision, made explicitly, and then the section is ordinary again — an empty
+   * editor ready for conditions.
+   */
+  private _renderMalformed(hass: HomeAssistant) {
+    const body = localizeOwn(hass, "visibility_unreadable_body");
+    const reset = localizeOwn(hass, "visibility_reset");
+    const onReset = () => {
+      // The existing path: an empty list, which storedConfig already turns into
+      // an absent key. No dedicated removal to write.
+      this.dispatchEvent(
+        new CustomEvent("visibility-changed", {
+          detail: { visibility: undefined },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    };
+    // Guarded like every other borrowed component: an undefined custom element
+    // renders nothing at all, silently, and here that is the whole warning.
+    if (!customElements.get("ha-alert")) {
+      return html`<p class="warning">
+        ${body}
+        <button type="button" @click=${onReset}>${reset}</button>
+      </p>`;
+    }
+    // No title: ha-alert centres its icon only when there is no title; without
+    // one the icon stays top-aligned via its own shadow DOM's .icon.no-title rule,
+    // so dropping the title is the only clean route to a centred icon. It also
+    // removes a title that restated the body.
+    return html`<ha-alert alert-type="warning">
+      ${body}
+      <ha-button size="s" slot="action" variant="warning" appearance="filled" @click=${onReset}
+        >${reset}</ha-button
+      >
+    </ha-alert>`;
   }
 
   static styles = css`
@@ -271,6 +341,15 @@ export class PictureStudioVisibilitySection extends LitElement {
       flex: none;
       --mdc-icon-size: 16px;
       margin-inline-start: var(--ha-space-3, 12px);
+    }
+    .warning-icon {
+      color: var(--warning-color);
+      --mdc-icon-size: 16px;
+    }
+    /* The ha-alert fallback, never seen on a frontend that has ha-alert. */
+    p.warning {
+      color: var(--warning-color);
+      margin: 0;
     }
   `;
 }

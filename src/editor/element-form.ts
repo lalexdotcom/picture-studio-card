@@ -1,5 +1,6 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { ElementConfig, StateLabelConfig } from "../config";
+import { assertNever } from "../config";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
@@ -215,8 +216,11 @@ export class PictureStudioElementForm extends LitElement {
     this._dispatch(element, data);
   };
 
-  private _toData = (element: ElementConfig): Record<string, unknown> =>
-    element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
+  private _toData = (element: ElementConfig): Record<string, unknown> => {
+    if (element.type === "state-label") return labelToFormData(element);
+    if (element.type === "state-icon") return iconToFormData(element);
+    return assertNever(element, "element kind");
+  };
 
   private _dispatch = (element: ElementConfig, data: Record<string, unknown>): void => {
     if (element.type === "state-label") {
@@ -260,8 +264,7 @@ export class PictureStudioElementForm extends LitElement {
     const switchAvailable = !!customElements.get("ha-switch");
 
     const isLabel = element.type === "state-label";
-    const data =
-      element.type === "state-label" ? labelToFormData(element) : iconToFormData(element);
+    const data = this._toData(element);
     // Mirrors the entity-badge editor's Rf check: show time_format only when
     // the selected state_content carries a time value. The time-based keys are
     // the same three HA uses ("last_updated", "last_changed", "last_triggered"),

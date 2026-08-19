@@ -1,5 +1,10 @@
 import { describe, expect, it } from "@rstest/core";
-import { badgeCatalog, CORE_BADGES, choiceLabel } from "../../editor/badge-catalog";
+import {
+  badgeCatalog,
+  CORE_BADGES,
+  choiceLabel,
+  resolveBadgeClass,
+} from "../../editor/badge-catalog";
 import type { LocalizeFunc } from "../../types";
 
 const echo: LocalizeFunc = (key) => key;
@@ -76,5 +81,29 @@ describe("badgeCatalog", () => {
     const registry = [{ type: "a-badge" }];
     badgeCatalog(registry);
     expect(registry).toEqual([{ type: "a-badge" }]);
+  });
+});
+
+describe("resolveBadgeClass", () => {
+  it("gives up instead of hanging on a type that does not exist", async () => {
+    // `await customElements.whenDefined(tag)` never resolves for a type nothing
+    // will ever define, so the add flow would hang forever. Unreachable through
+    // the menu, which offers only known types — but the file now has the verdict
+    // to short-circuit on.
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers =
+      async () => ({
+        createBadgeElement: (c: { type?: string }) =>
+          document.createElement(
+            c.type === "entity" || c.type === "shortcut"
+              ? `hui-${c.type}-badge`
+              : "hui-error-badge",
+          ),
+      });
+    await expect(
+      Promise.race([
+        resolveBadgeClass("entty"),
+        new Promise((r) => setTimeout(() => r("HUNG"), 50)),
+      ]),
+    ).resolves.toBeUndefined();
   });
 });

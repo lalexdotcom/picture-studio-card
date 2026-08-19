@@ -3,6 +3,7 @@ import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { badgeCatalog, CUSTOM_PREFIX, choiceLabel, resolveBadgeClass } from "./badge-catalog";
+import { badgeVerdict } from "./badge-existence";
 import { PLACEMENT_ICON } from "./icons";
 import "./visibility-section";
 
@@ -120,9 +121,11 @@ export class PictureStudioBadgeForm extends LitElement {
       <div class="form"></div>
       ${
         this._editorType && !this._editor
-          ? html`<p class="fallback">
-            This badge does not provide a visual editor. Edit it in the YAML tab.
-          </p>`
+          ? badgeVerdict(_type) === "missing"
+            ? html`<p class="fallback">${localizeOwn(this.hass, "badge_type_unavailable")}</p>`
+            : html`<p class="fallback">
+                This badge does not provide a visual editor. Edit it in the YAML tab.
+              </p>`
           : nothing
       }
       <ha-expansion-panel outlined>

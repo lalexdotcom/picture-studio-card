@@ -4,6 +4,7 @@ import { hasVisibility, type PictureItem } from "../config";
 import { localizeOwn } from "../strings";
 import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
 import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
+import { badgeVerdict, probeBadgeType } from "./badge-existence";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { itemIcon } from "./icons";
 import { rowLabel } from "./items";
@@ -28,6 +29,7 @@ export const kindLabel = (
   // whole catalogue on every call — once per row, on every hass tick.
   catalog: BadgeChoice[],
 ): string => {
+  if (item.type === "unknown") return item.token ?? "";
   const type = String(item.config.type ?? "");
   if (item.type === "element") return elementLabel(localize, type);
   const choice = catalog.find((c) => c.type === type);
@@ -76,14 +78,24 @@ const showsNothing = (item: PictureItem): boolean =>
   Array.isArray((item.config as { show?: unknown[] }).show) &&
   (item.config as { show: unknown[] }).show.length === 0;
 
+/** An item whose `visibility` key is present but not a list — renders, but
+    always shows, because the card cannot parse the conditions. Orange, not
+    red: unlike an unreadable item it is still drawn and editable. Aligns
+    with `hasVisibility` in config.ts, which is the "usable" gate: if
+    `hasVisibility` is false but visibility is defined, this is true. */
+const hasUnreadableVisibility = (item: PictureItem): boolean =>
+  item.type !== "unknown" && item.visibility !== undefined && !Array.isArray(item.visibility);
+
 export class PictureStudioBadgeList extends LitElement {
   static properties = {
     hass: { attribute: false },
     items: { attribute: false },
+    selectedIndex: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare items: PictureItem[];
+  declare selectedIndex: number | undefined;
 
   constructor() {
     super();
@@ -162,6 +174,34 @@ export class PictureStudioBadgeList extends LitElement {
       return rowLabel(item, this.hass, choice ? choiceLabel(localize, choice) : undefined);
     });
     const kinds = rows.map((item) => kindLabel(item, localize, catalog));
+    // Two independent sources put a row into the error state, and they render
+    // identically: the model, for an item we could not read, and the probe, for
+    // a badge type this Home Assistant does not have.
+    const broken = rows.map((item) => {
+      if (item.type === "unknown") return true;
+      if (item.type !== "badge") return false;
+      const type = String(item.config.type ?? "");
+      // A badge with no type at all is legal and means `entity` — the factory's
+      // last argument is the default type. Nothing to probe.
+      if (!type) return false;
+      probeBadgeType(type, () => this.requestUpdate());
+      return badgeVerdict(type) === "missing";
+    });
+    // The glyph says which family the problem is in, whenever we know the family.
+    const glyphs = rows.map((item, i) => {
+      if (!broken[i]) return undefined;
+      if (item.type !== "unknown") return "mdi:alert-box"; // probe verdict "missing" = badge family
+      if (item.reason === "config-missing" && item.token === "badge") return "mdi:alert-box";
+      return "mdi:alert-circle";
+    });
+    const secondary = rows.map((item, i) =>
+      item.type !== "unknown" && broken[i]
+        ? `${localizeOwn(this.hass, "unknown_badge_type")}: ${String(item.config.type ?? "")}`
+        : labels[i]?.secondary,
+    );
+    // Display position of the selected array index; -1 when nothing is selected
+    // so it can never accidentally match a real row.
+    const selectedDisplay = this.selectedIndex !== undefined ? this._flip(this.selectedIndex) : -1;
 
     return html`
       <div class="header">
@@ -201,18 +241,25 @@ export class PictureStudioBadgeList extends LitElement {
             // node and follows the position, not the item it was on.
             (_item, index) => this._flip(index),
             (item, index) => html`
-              <div class="item">
+              <div class="item ${index === selectedDisplay ? "selected" : ""}">
                 <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
                 <ha-icon
-                  class="kind"
-                  .icon=${itemIcon(item.type, String(item.config.type ?? ""))}
+                  class="kind ${broken[index] ? "error" : ""}"
+                  .icon=${
+                    broken[index]
+                      ? glyphs[index]
+                      : itemIcon(
+                          item.type as "badge" | "element",
+                          String((item as { config?: { type?: unknown } }).config?.type ?? ""),
+                        )
+                  }
                   title=${kinds[index]}
                 ></ha-icon>
                 <div class="label">
                   <span class="primary">${labels[index]?.primary}</span>
                   ${
-                    labels[index]?.secondary
-                      ? html`<span class="secondary">${labels[index]?.secondary}</span>`
+                    secondary[index]
+                      ? html`<span class="secondary ${broken[index] ? "error" : ""}">${secondary[index]}</span>`
                       : nothing
                   }
                 </div>
@@ -221,7 +268,7 @@ export class PictureStudioBadgeList extends LitElement {
                   // because it borrows ha-label's geometry, and a warning is not
                   // a label. Before the eye, so the row reads left to right from
                   // the most surprising fact.
-                  showsNothing(item)
+                  !broken[index] && showsNothing(item)
                     ? html`<ha-icon
                         class="empty"
                         icon="mdi:alert-outline"
@@ -230,11 +277,24 @@ export class PictureStudioBadgeList extends LitElement {
                     : nothing
                 }
                 ${
+                  // An item whose visibility key is present but not a list
+                  // renders fine, but its conditions are ignored. Show an
+                  // orange marker so the problem is visible without opening
+                  // Edit — the same shortcut showsNothing provides.
+                  !broken[index] && hasUnreadableVisibility(item)
+                    ? html`<ha-icon
+                        class="empty"
+                        icon="mdi:alert-outline"
+                        title=${localizeOwn(this.hass, "visibility_unreadable")}
+                      ></ha-icon>`
+                    : nothing
+                }
+                ${
                   // States that the row carries visibility conditions. Not a
                   // control: no target, no ripple, no hover — and the same eye
                   // the form's own section is headed by, so the two read as one
                   // idea rather than two.
-                  hasVisibility(item)
+                  !broken[index] && hasVisibility(item)
                     ? html`<span
                         class="conditional"
                         title=${
@@ -246,6 +306,7 @@ export class PictureStudioBadgeList extends LitElement {
                 }
                 <ha-icon-button
                   .label=${localize("ui.common.edit") || "Edit"}
+                  .disabled=${broken[index]}
                   @click=${() => this._fire("item-edit", { index: this._flip(index) })}
                   ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
@@ -258,6 +319,16 @@ export class PictureStudioBadgeList extends LitElement {
         </div>
       </ha-sortable>
     `;
+  }
+
+  protected updated(changedProperties: Map<string, unknown>): void {
+    if (!changedProperties.has("selectedIndex") || this.selectedIndex === undefined) return;
+    // selectedIndex is an array index; the list renders top-down, so flip it to
+    // a display position before querying the DOM.
+    const displayIndex = this._flip(this.selectedIndex);
+    const itemRows = this.shadowRoot?.querySelectorAll(".item");
+    const row = itemRows?.[displayIndex] as HTMLElement | undefined;
+    row?.scrollIntoView({ block: "nearest" });
   }
 
   static styles = css`
@@ -339,6 +410,27 @@ export class PictureStudioBadgeList extends LitElement {
       flex: none;
       color: var(--secondary-text-color);
       margin-inline-end: 12px;
+    }
+    /* The glyph replaces the kind rather than joining it: there is no kind to
+       show. Home Assistant's own error vocabulary — the same "error" state that
+       ha-alert and ha-visibility-status use — so the list and the form's
+       Visibility header read as one language. No row tint: one bad item among
+       twelve, and a full-width band buries the list. */
+    .kind.error {
+      color: var(--error-color);
+    }
+    .item .label .secondary.error {
+      color: var(--error-color);
+    }
+    /* Selection ring for a broken item. --error-color, not --primary-color: this
+       mark is only visible when the form was refused, so a primary ring would
+       say something untrue. Drawn inside the border edge (outline-offset: -2px)
+       so the left side is not clipped by the list's zero left padding.
+       Twin lives in picture-studio-card.ts under .editing .item.selected
+       (--primary-color, for items that can open a form). */
+    .item.selected {
+      outline: 2px solid var(--error-color);
+      outline-offset: -2px;
     }
     .label {
       flex: 1;

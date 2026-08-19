@@ -1,8 +1,10 @@
 import { html, LitElement, nothing } from "lit";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import {
+  type BadgeItem,
   CARD_TYPE,
   type ElementConfig,
+  type ElementItem,
   normalizeConfig,
   type PictureStudioConfig,
   storedConfig,
@@ -17,6 +19,7 @@ import {
   mergeBackground,
 } from "./background-schema";
 import { stubBadgeConfig } from "./badge-catalog";
+import { badgeVerdict } from "./badge-existence";
 import { stubElementConfig } from "./element-catalog";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
@@ -77,7 +80,15 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   patchPosition(index: number, position: Position): void {
     const config = this._config;
     if (!config) return;
-    const items = config.items.map((item, i) => (i === index ? { ...item, position } : item));
+    const items = config.items.map((item, i) => {
+      if (i !== index) return item;
+      // Unreachable today: an unknown item has no layer in the card, so a drag
+      // can never produce its index. Guard for consistency with setAnchor and
+      // setVisibility, and to keep storedConfig's raw-passthrough the only path
+      // for unknown items regardless of future callers.
+      if (item.type === "unknown") return item;
+      return { ...item, position };
+    });
     this._commit({ ...config, items });
   }
 
@@ -124,6 +135,23 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (this._editingIndex === index) return;
     this._editingIndex = index;
     notifyEditors();
+  }
+
+  /**
+   * The item that should have a form open, or `undefined` when none should.
+   * Two readers share this decision: render() (to choose list vs form) and
+   * updated() (to know whether to scroll the editor to its top). Extracting it
+   * here keeps both in sync automatically.
+   */
+  private _formTarget(): BadgeItem | ElementItem | undefined {
+    if (this._editingIndex === undefined || !this._config) return undefined;
+    const raw = this._config.items[this._editingIndex];
+    if (!raw || raw.type === "unknown") return undefined;
+    if (raw.type === "badge") {
+      const type = String(raw.config.type ?? "");
+      if (type && badgeVerdict(type) === "missing") return undefined;
+    }
+    return raw;
   }
 
   selectedIndex(): number | undefined {
@@ -194,10 +222,24 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _moveBadge = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void => {
     const config = this._config;
     if (!config) return;
+    const { oldIndex: from, newIndex: to } = ev.detail;
     this._commit({
       ...config,
-      items: moveItem(config.items, ev.detail.oldIndex, ev.detail.newIndex),
+      items: moveItem(config.items, from, to),
     });
+    // Remap the selection through the same move so the mark follows the item.
+    // Clearing it on a drag would remove the one visual that helps the user
+    // find a broken item they just moved.
+    const sel = this._editingIndex;
+    if (sel === undefined) return;
+    if (sel === from) {
+      this.select(to);
+    } else if (from < sel && sel <= to) {
+      this.select(sel - 1); // the moved item shifted everything between down
+    } else if (to <= sel && sel < from) {
+      this.select(sel + 1); // the moved item shifted everything between up
+    }
+    // Otherwise the selected item is outside the moved range — unchanged.
   };
 
   private _removeBadge = (ev: CustomEvent<{ index: number }>): void => {
@@ -220,6 +262,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    */
   protected updated(changed: Map<string, unknown>): void {
     if (!changed.has("_editingIndex") || this._editingIndex === undefined) return;
+    // Scroll the editor to its top only when a form actually opens.  When the
+    // form is refused (broken badge) the list scrolls the selected row into
+    // view instead — the two are mutually exclusive branches of one decision.
+    if (!this._formTarget()) return;
     this.scrollIntoView({ block: "start" });
   }
 
@@ -228,7 +274,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const hass = this.hass;
     if (!config || !hass) return nothing;
 
-    const editing = this._editingIndex !== undefined ? config.items[this._editingIndex] : undefined;
+    const editing = this._formTarget();
 
     if (editing) {
       return editing.type === "badge"
@@ -269,6 +315,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-badge-list
         .hass=${hass}
         .items=${config.items}
+        .selectedIndex=${this._editingIndex}
         @item-add=${this._addItem}
         @item-edit=${this._editBadge}
         @item-moved=${this._moveBadge}

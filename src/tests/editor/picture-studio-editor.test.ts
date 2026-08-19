@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import { EDITOR_TAG, type PictureStudioConfig } from "../../config";
+import { probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence";
 import { PictureStudioEditor } from "../../editor/picture-studio-editor";
 
 if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, PictureStudioEditor);
@@ -66,5 +67,186 @@ describe("a form opens at its own top", () => {
     el.select(undefined);
     await el.updateComplete;
     expect(calls()).toBe(1);
+  });
+});
+
+describe("a missing badge refuses the form and does not scroll the editor", () => {
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
+  };
+
+  // Config: item 0 has a missing type, item 1 is valid.
+  const CONFIG_WITH_MISSING = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+    ],
+  } as unknown as import("../../config").PictureStudioConfig;
+
+  const mountMissing = async () => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_WITH_MISSING);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    // Settle the verdict directly so the routing guard sees "missing" before any
+    // select() call, without relying on the badge-list child's render tick.
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+
+    let scrolls = 0;
+    el.scrollIntoView = () => {
+      scrolls++;
+    };
+    return { el, calls: () => scrolls };
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  it("renders the list, not a badge-form, for a badge whose verdict is missing", async () => {
+    const { el } = await mountMissing();
+    el.select(0); // select the missing badge
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("picture-studio-badge-form")).toBeNull();
+    expect(el.shadowRoot?.querySelector("picture-studio-badge-list")).not.toBeNull();
+  });
+
+  it("does not scroll the editor when the form is refused", async () => {
+    const { el, calls } = await mountMissing();
+    el.select(0); // missing badge — form refused
+    await el.updateComplete;
+    expect(calls()).toBe(0);
+  });
+
+  it("still scrolls when a valid item's form opens", async () => {
+    const { el, calls } = await mountMissing();
+    el.select(1); // valid badge — form opens
+    await el.updateComplete;
+    expect(calls()).toBe(1);
+  });
+});
+
+describe("_moveBadge remaps the selection through the move", () => {
+  // Four items: array [missing, B, C, D].
+  // Display order (top-down): [D, C, B, missing] — display index 3 = array index 0.
+  // Using four items so display and array indices never coincide for the
+  // selected item, which would mask a missing or inverted remap.
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
+  };
+
+  const CONFIG_4 = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "30%", left: "30%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "40%", left: "40%" }, config: { type: "entity" } },
+    ],
+  } as unknown as PictureStudioConfig;
+
+  // Missing at index 2 so a selection at 2 keeps the list visible, while
+  // array index 2 maps to display index _flip(2) = 1 — never coincident.
+  const CONFIG_4B = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "30%", left: "30%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "40%", left: "40%" }, config: { type: "entity" } },
+    ],
+  } as unknown as PictureStudioConfig;
+
+  /** Mount with CONFIG_4, settle the verdict, select item 0, return the editor. */
+  const mountSelected = async (): Promise<PictureStudioEditor> => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_4);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+    el.select(0); // broken item — form refused, list stays in DOM
+    await el.updateComplete;
+    return el;
+  };
+
+  /** Mount with CONFIG_4B (missing at index 2), select item 2. */
+  const mountSelected2 = async (): Promise<PictureStudioEditor> => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_4B);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+    el.select(2); // broken item at index 2 — form refused, list stays in DOM
+    await el.updateComplete;
+    return el;
+  };
+
+  /** Fire item-moved from the badge-list so _moveBadge is invoked. */
+  const move = (el: PictureStudioEditor, from: number, to: number): void => {
+    const list = el.shadowRoot?.querySelector("picture-studio-badge-list");
+    list?.dispatchEvent(
+      new CustomEvent("item-moved", {
+        detail: { oldIndex: from, newIndex: to },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  it("the selected item follows when it is the moved one", async () => {
+    // sel=0, move 0→2: selected item travels with it.
+    const el = await mountSelected();
+    move(el, 0, 2);
+    expect(el.selectedIndex()).toBe(2);
+  });
+
+  it("shifts the selection down when the moved item passes over it from below", async () => {
+    // sel=0, move 3→0: from < to does not apply here; to <= sel < from → sel+1.
+    // Array [missing,B,C,D] → [D,missing,B,C]. missing shifts from index 0 to 1.
+    const el = await mountSelected();
+    move(el, 3, 0);
+    expect(el.selectedIndex()).toBe(1);
+  });
+
+  it("leaves the selection unchanged when the moved item is outside its range", async () => {
+    // sel=0, move 2→3: the moved item is entirely above the selected item.
+    // Array [missing,B,C,D] → [missing,B,D,C]. missing stays at 0.
+    const el = await mountSelected();
+    move(el, 2, 3);
+    expect(el.selectedIndex()).toBe(0);
+  });
+
+  it("shifts the selection up when the moved item passes over it from above", async () => {
+    // Uses CONFIG_4B: array [A,B,missing,D], sel=2 (missing, display index 1).
+    // Move from=0 to=3: from < sel && sel <= to → 0 < 2 && 2 <= 3 → sel-1=1.
+    // Array becomes [B,missing,D,A]; missing lands at index 1 ✓.
+    // Display index: sel=1 maps to _flip(1)=2, not equal to array index 1 —
+    // fixture is discriminating even with sel at a middle position.
+    const el = await mountSelected2();
+    move(el, 0, 3);
+    expect(el.selectedIndex()).toBe(1);
   });
 });
