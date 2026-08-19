@@ -143,6 +143,16 @@ export class PictureStudioCard extends LitElement {
   /** Must be idempotent: Home Assistant reuses the preview instance. */
   setConfig(config: unknown): void {
     this._config = normalizeConfig(config);
+    // The editor's item list is now the only place an unreadable item is
+    // reported. Someone who configures in YAML and never opens the dialog would
+    // otherwise never learn — a console line returns part of the diagnostic
+    // being given up, without putting anything in front of a viewer.
+    this._config.items.forEach((item, index) => {
+      if (item.type !== "unknown") return;
+      console.warn(
+        `picture-studio: items[${index}] ignored (${item.reason}${item.token ? `: ${item.token}` : ""})`,
+      );
+    });
   }
 
   getCardSize(): number {
@@ -284,24 +294,6 @@ export class PictureStudioCard extends LitElement {
     // exists once _config does.
     if (configChanged || changed.has("preview") || changed.has("editing")) {
       this._syncEditingAndDrag();
-    }
-
-    // Emit diagnostics for unreadable items only while the card is being
-    // edited — once when editing turns on (the user first opens a broken config)
-    // and once per config commit. Never on a hass tick or a plain re-render:
-    // hass changes on every state update, so a warning on that path would
-    // recreate the very console flood this gate is meant to prevent.
-    // The editor's item list is now the only place an unreadable item is
-    // reported. Someone who configures in YAML and never opens the dialog would
-    // otherwise never learn — a console line returns part of the diagnostic
-    // being given up, without putting anything in front of a viewer.
-    if (this.editing && (configChanged || changed.has("editing"))) {
-      this._config?.items.forEach((item, index) => {
-        if (item.type !== "unknown") return;
-        console.warn(
-          `picture-studio: items[${index}] ignored (${item.reason}${item.token ? `: ${item.token}` : ""})`,
-        );
-      });
     }
 
     if (changed.has("preview")) {
