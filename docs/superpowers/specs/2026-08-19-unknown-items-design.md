@@ -31,7 +31,8 @@ nothing, so the objection dissolves.
 - The list also flags a **badge whose type does not exist** on this Home
   Assistant — a typo, or a custom badge whose resource never loaded.
 - A malformed `visibility` no longer breaks anything: the item renders, always
-  visible, with an orange warning in the list.
+  visible, with an orange warning in the list and, in its Visibility section, an
+  explanation and a Reset button.
 
 ## The five failure cases, and their fates
 
@@ -174,23 +175,64 @@ Almost entirely a deletion:
 - `storedConfig` already copies `...item`, so the raw value round-trips into the
   YAML untouched. **No change.**
 
-Two contact points remain. `visibility-section.ts` must hand
-`hui-card-visibility-editor` an empty list rather than the raw value, and the
-list gains the **orange** marker — `mdi:alert-outline`, the one `showsNothing`
-already uses — because the item renders and is editable. Red is for what is
-ignored; orange is for "this renders, but not what you meant". The same sentence
-appears in the form's Visibility section, which is where a user goes to fix it.
-
-**The raw value survives in the YAML** until the user sets conditions of their
-own, which replace it on commit. It costs nothing — `storedConfig` copies it
-without a line being written — and dropping it would silently discard a readable
-intention. `visibility:` written as a mapping instead of a list is the likely
-mistake, and the whole intent is right there.
+**The raw value survives in the YAML.** It costs nothing — `storedConfig` copies
+it without a line being written — and dropping it would silently discard a
+readable intention. `visibility:` written as a mapping instead of a list is the
+likely mistake, and the whole intent is right there.
 
 The declared type of `visibility` becomes `unknown`, with `hasVisibility` as the
 single gate every reader passes through. The old declaration promised a
 validation that never existed: contents were never inspected, only the
 array-ness.
+
+The **item list** gains the orange marker — `mdi:alert-outline`, the one
+`showsNothing` already uses — because the item renders and is editable. Red is
+for what is ignored, orange for "this renders, but not what you meant".
+
+#### The Visibility section
+
+The trail has to be followable from the collapsed header, exactly as the Content
+panel's warning is.
+
+**In the header**, the warning glyph goes in the `event` slot — `mdi:alert-outline`
+on `--warning-color`, same glyph and same slot as the Content marker — and it
+**replaces the count pill and the verdict icon** rather than joining them. There
+are no readable conditions to count and no verdict to report, so the slot carries
+exactly one thing and the layout does not move.
+
+**A defect to fix on the way.** `render()` computes
+`count = this.visibility?.length ?? 0`. With `visibility: "hidden"` that is
+**5** — the section would show a "5" pill and mount the oracle on a string. The
+count must go through `Array.isArray` first.
+
+**In the panel**, `ha-alert` — Home Assistant's own component, so the tinted
+ground, the glyph and the title/body layout cost us no CSS. Verified in the
+shipped frontend: attribute `alert-type`, property `alertType`, and
+`<ha-button size="s" slot="action">` is Home Assistant's own idiom for the
+action.
+
+```
+⚠  Unreadable conditions                        [ Reset ]
+   This item's conditions are not a list. They are ignored,
+   and the item always shows.
+```
+
+**The alert replaces `hui-card-visibility-editor`; it does not sit above it.**
+One decision, made explicitly, and then the section is ordinary again — an empty
+editor ready for conditions. Two clicks instead of one for someone who only
+wanted to write conditions, and in exchange nothing is ambiguous about what the
+section currently holds.
+
+**Reset adds no plumbing.** It emits `[]` through the existing
+`handleValueChanged`, and `storedConfig` already deletes the key when
+`hasVisibility` is false. The raw value goes with it; there is no dedicated
+removal path to write.
+
+**Guarded like every other borrowed component** — `customElements.get("ha-alert")`,
+as `hui-card-visibility-editor` and `ha-switch` already are. An undefined custom
+element renders nothing at all, silently, and here that would evaporate the whole
+warning. The fallback is a `<p class="warning">` carrying the sentence and a plain
+button: ugly, never seen, present.
 
 ## A badge whose type does not exist
 
@@ -350,8 +392,9 @@ part of the work; the catalog is the last resort, not the first.
 
 - the three reasons: unknown item type, missing config, unknown element type
 - the badge verdict: unknown badge type
-- the malformed visibility warning, used both in the row's tooltip and in the
-  form's Visibility section
+- the malformed visibility warning: one short string for the list row's tooltip
+  and the section header's tooltip, plus the alert's title and body
+- the reset action's label — look for a Home Assistant common key first
 
 ## Testing
 
@@ -386,6 +429,17 @@ colour resolution or compositing is observable — those go to the browser walk.
   with the flipped index
 - an unknown row carries neither the eye nor the orange warning
 - a (d) item renders a normal row plus the orange warning
+
+**The Visibility section**
+
+- a malformed `visibility` puts the warning glyph in the `event` slot and
+  renders **neither** the count pill nor the verdict icon
+- `visibility: "hidden"` shows no "5" pill and mounts no oracle — the regression
+  test for the `.length` defect, measured failing before being kept
+- the panel renders the alert and **not** `hui-card-visibility-editor`
+- the reset action emits `[]`, after which the section renders normally and
+  `storedConfig` no longer carries the key
+- with `ha-alert` undefined, the fallback paragraph and its button render
 - the badge probe: a known type stays unmarked; an unknown native type marks the
   row after the verdict; a custom type with no `-` marks it immediately; a custom
   type that resolves later clears the marker and the timer
@@ -406,6 +460,9 @@ colour resolution or compositing is observable — those go to the browser walk.
   the red row in the list
 - a custom badge from Mushroom with the resource temporarily removed, to see the
   2s window and the recovery
+- an item with `visibility:` written as a mapping: the header glyph while the
+  panel is collapsed, the alert's ground and spacing against the panel it sits
+  in, and the section returning to normal after Reset
 
 ## Versioning
 
