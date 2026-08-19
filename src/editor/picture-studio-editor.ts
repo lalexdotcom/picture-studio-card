@@ -1,8 +1,8 @@
 import { html, LitElement, nothing } from "lit";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import {
-  CARD_TYPE,
   type BadgeItem,
+  CARD_TYPE,
   type ElementConfig,
   type ElementItem,
   normalizeConfig,
@@ -222,10 +222,24 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _moveBadge = (ev: CustomEvent<{ oldIndex: number; newIndex: number }>): void => {
     const config = this._config;
     if (!config) return;
+    const { oldIndex: from, newIndex: to } = ev.detail;
     this._commit({
       ...config,
-      items: moveItem(config.items, ev.detail.oldIndex, ev.detail.newIndex),
+      items: moveItem(config.items, from, to),
     });
+    // Remap the selection through the same move so the mark follows the item.
+    // Clearing it on a drag would remove the one visual that helps the user
+    // find a broken item they just moved.
+    const sel = this._editingIndex;
+    if (sel === undefined) return;
+    if (sel === from) {
+      this.select(to);
+    } else if (from < sel && sel <= to) {
+      this.select(sel - 1); // the moved item shifted everything between down
+    } else if (to <= sel && sel < from) {
+      this.select(sel + 1); // the moved item shifted everything between up
+    }
+    // Otherwise the selected item is outside the moved range — unchanged.
   };
 
   private _removeBadge = (ev: CustomEvent<{ index: number }>): void => {

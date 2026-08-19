@@ -455,7 +455,21 @@ export class PictureStudioCard extends LitElement {
     helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
   ): LovelaceBadgeElement | undefined {
     if (item.type === "unknown") return undefined;
-    if (item.type === "badge") return helpers.createBadgeElement(item.config);
+    if (item.type === "badge") {
+      const el = helpers.createBadgeElement(item.config) as HTMLElement & LovelaceBadgeElement;
+      // HA's badge factory returns a hui-error-badge with style.display="None"
+      // and a 2000 ms timer that restores it — matching its own grace period so
+      // the card and the probe agree on when to complain.  In the editor,
+      // stability across a drag is worth more than flash-avoidance: every config
+      // change rebuilds the whole card element, restarting the timer and hiding
+      // the badge for two seconds on every drag.  Clearing the inline display
+      // here makes error badges visible immediately while editing.  On a real
+      // dashboard the hide stays — this guard is never reached.
+      if (this.editing && el.tagName.toLowerCase() === "hui-error-badge") {
+        el.style.display = "";
+      }
+      return el;
+    }
     let tag: string | undefined;
     if (item.config.type === "state-label") tag = LABEL_TAG;
     else if (item.config.type === "state-icon") tag = ICON_TAG;

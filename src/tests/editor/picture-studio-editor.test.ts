@@ -133,3 +133,81 @@ describe("a missing badge refuses the form and does not scroll the editor", () =
     expect(calls()).toBe(1);
   });
 });
+
+describe("_moveBadge remaps the selection through the move", () => {
+  // Four items: array [missing, B, C, D].
+  // Display order (top-down): [D, C, B, missing] — display index 3 = array index 0.
+  // Using four items so display and array indices never coincide for the
+  // selected item, which would mask a missing or inverted remap.
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
+  };
+
+  const CONFIG_4 = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "30%", left: "30%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "40%", left: "40%" }, config: { type: "entity" } },
+    ],
+  } as unknown as PictureStudioConfig;
+
+  /** Mount, settle the missing verdict, select item 0, return the editor. */
+  const mountSelected = async (): Promise<PictureStudioEditor> => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_4);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+    el.select(0); // broken item — form refused, list stays in DOM
+    await el.updateComplete;
+    return el;
+  };
+
+  /** Fire item-moved from the badge-list so _moveBadge is invoked. */
+  const move = (el: PictureStudioEditor, from: number, to: number): void => {
+    const list = el.shadowRoot?.querySelector("picture-studio-badge-list");
+    list?.dispatchEvent(
+      new CustomEvent("item-moved", {
+        detail: { oldIndex: from, newIndex: to },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  it("the selected item follows when it is the moved one", async () => {
+    // sel=0, move 0→2: selected item travels with it.
+    const el = await mountSelected();
+    move(el, 0, 2);
+    expect(el.selectedIndex()).toBe(2);
+  });
+
+  it("shifts the selection down when the moved item passes over it from below", async () => {
+    // sel=0, move 3→0: from < to does not apply here; to <= sel < from → sel+1.
+    // Array [missing,B,C,D] → [D,missing,B,C]. missing shifts from index 0 to 1.
+    const el = await mountSelected();
+    move(el, 3, 0);
+    expect(el.selectedIndex()).toBe(1);
+  });
+
+  it("leaves the selection unchanged when the moved item is outside its range", async () => {
+    // sel=0, move 2→3: the moved item is entirely above the selected item.
+    // Array [missing,B,C,D] → [missing,B,D,C]. missing stays at 0.
+    const el = await mountSelected();
+    move(el, 2, 3);
+    expect(el.selectedIndex()).toBe(0);
+  });
+});

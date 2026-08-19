@@ -552,3 +552,59 @@ describe("an unknown item does not shift the items after it", () => {
     expect(icons[1]?._config?.entity).toBe("light.c");
   });
 });
+
+describe("hui-error-badge display in editing mode", () => {
+  const ERROR_BADGE_CONFIG = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "badge",
+        position: { top: "10%", left: "10%" },
+        config: { type: "entty" },
+      },
+    ],
+  };
+
+  const makeErrorBadge = (): HTMLElement => {
+    // Simulate HA's badge factory: returns hui-error-badge with display hidden.
+    const el = document.createElement("hui-error-badge");
+    el.style.display = "None";
+    return el;
+  };
+
+  const mountWithErrorBadge = async (editing: boolean): Promise<HTMLElement> => {
+    installHelpers(); // ensure CARD_TAG is registered before overriding loadCardHelpers
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({
+      createHuiElement: () => document.createElement(FAKE_TAG),
+      createBadgeElement: makeErrorBadge,
+    });
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig(ERROR_BADGE_CONFIG);
+    if (editing) {
+      card.preview = true;
+      releaseEditor = registerEditor({
+        patchPosition: () => {},
+        patchAnchor: () => {},
+        select: () => {},
+        selectedIndex: () => undefined,
+      });
+    }
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    return root(card).querySelector("hui-error-badge") as HTMLElement;
+  };
+
+  afterEach(() => installHelpers());
+
+  it("clears the inline display of hui-error-badge while editing", async () => {
+    const badge = await mountWithErrorBadge(true);
+    expect(badge.style.display).toBe("");
+  });
+
+  it("leaves the inline display of hui-error-badge untouched outside editing", async () => {
+    const badge = await mountWithErrorBadge(false);
+    expect(badge.style.display).toBe("none");
+  });
+});

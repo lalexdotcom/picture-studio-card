@@ -424,11 +424,13 @@ export class PictureStudioBadgeList extends LitElement {
     }
     /* Selection ring for a broken item. --error-color, not --primary-color: this
        mark is only visible when the form was refused, so a primary ring would
-       say something untrue. Twin lives in picture-studio-card.ts under
-       .editing .item.selected (--primary-color, for items that can open a form). */
+       say something untrue. Drawn inside the border edge (outline-offset: -2px)
+       so the left side is not clipped by the list's zero left padding.
+       Twin lives in picture-studio-card.ts under .editing .item.selected
+       (--primary-color, for items that can open a form). */
     .item.selected {
       outline: 2px solid var(--error-color);
-      outline-offset: 1px;
+      outline-offset: -2px;
     }
     .label {
       flex: 1;
