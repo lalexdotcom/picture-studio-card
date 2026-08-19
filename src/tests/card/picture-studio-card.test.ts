@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
-import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TYPE } from "../../config";
+import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TAG, PROBE_TYPE } from "../../config";
 import type { HomeAssistant } from "../../types";
 import {
   background,
@@ -462,5 +462,48 @@ describe("editing flag on element rebuild", () => {
 
     // The rebuilt label element must receive editing=true, not default to false.
     expect(labelEl(card)?.editing).toBe(true);
+  });
+});
+
+describe("an unknown item does not shift the items after it", () => {
+  it("gives the second element its own config, not the first one's", async () => {
+    const card = await mountCard({
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "10%" },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+        { type: "badgee" },
+        {
+          type: "element",
+          position: { top: "20%", left: "20%" },
+          config: { type: "state-icon", entity: "light.b" },
+        },
+      ],
+    });
+    const icons = [...card.shadowRoot!.querySelectorAll(ICON_TAG)] as {
+      _config?: { entity?: string };
+    }[];
+    expect(icons).toHaveLength(2);
+    // The whole point: without the hole, icons[1] receives items[1]'s config —
+    // which is the unknown item — and the third item is never reached.
+    expect(icons[0]?._config?.entity).toBe("light.a");
+    expect(icons[1]?._config?.entity).toBe("light.b");
+  });
+
+  it("builds no wrapper and no probe for it", async () => {
+    const card = await mountCard({
+      items: [
+        { type: "badgee", visibility: [{ condition: "user", users: [] }] },
+        {
+          type: "element",
+          position: { top: "20%", left: "20%" },
+          config: { type: "state-icon", entity: "light.b" },
+        },
+      ],
+    });
+    expect(card.shadowRoot!.querySelectorAll(".item")).toHaveLength(1);
+    expect(card.shadowRoot!.querySelectorAll(PROBE_TAG)).toHaveLength(0);
   });
 });

@@ -68,8 +68,10 @@ export class PictureStudioCard extends LitElement {
 
   private _hass?: HomeAssistant;
   private _bgElement?: LovelaceElementElement;
-  private _elements: LovelaceBadgeElement[] = [];
-  private _wrappers: HTMLElement[] = [];
+  /** Indexed like `items`; a hole where the item is unreadable. */
+  private _elements: (LovelaceBadgeElement | undefined)[] = [];
+  /** Indexed like `items`; a hole where the item is unreadable. */
+  private _wrappers: (HTMLElement | undefined)[] = [];
   /** Indexed like _wrappers; a hole where the item carries no conditions. */
   private _probes: (ProbeElement | undefined)[] = [];
   private _renderedTypes: string[] = [];
@@ -86,7 +88,11 @@ export class PictureStudioCard extends LitElement {
         : undefined;
     },
     getSurface: () => this.renderRoot.querySelector(".layer"),
-    getAnchor: (index) => this._config?.items[index]?.anchor ?? "auto",
+    getAnchor: (index) => {
+      const item = this._config?.items[index];
+      if (!item || item.type === "unknown") return "auto";
+      return item.anchor ?? "auto";
+    },
     onCommit: (index, position) => activeEditor()?.patchPosition(index, position),
     // The marker has to keep pointing inward for the whole gesture: it hangs
     // off the wrapper, and ha-card scrolls vertically, so a corner left on the
@@ -110,7 +116,7 @@ export class PictureStudioCard extends LitElement {
     this._hass = hass;
     if (this._bgElement) this._bgElement.hass = hass;
     for (const el of this._elements) {
-      el.hass = hass;
+      if (el) el.hass = hass;
     }
     for (const probe of this._probes) {
       if (probe) probe.hass = hass;
@@ -137,6 +143,16 @@ export class PictureStudioCard extends LitElement {
   /** Must be idempotent: Home Assistant reuses the preview instance. */
   setConfig(config: unknown): void {
     this._config = normalizeConfig(config);
+    // The editor's item list is now the only place an unreadable item is
+    // reported. Someone who configures in YAML and never opens the dialog would
+    // otherwise never learn — a console line returns part of the diagnostic
+    // being given up, without putting anything in front of a viewer.
+    this._config.items.forEach((item, index) => {
+      if (item.type !== "unknown") return;
+      console.warn(
+        `picture-studio: items[${index}] ignored (${item.reason}${item.token ? `: ${item.token}` : ""})`,
+      );
+    });
   }
 
   getCardSize(): number {
@@ -370,8 +386,10 @@ export class PictureStudioCard extends LitElement {
     // The family, the kind, and whether the item carries conditions. The last
     // one belongs here because a probe is a sibling in the layer: it appearing
     // or disappearing changes the DOM we build, not just the config we push.
-    const types = items.map(
-      (item) => `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
+    const types = items.map((item) =>
+      item.type === "unknown"
+        ? `unknown::`
+        : `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
     );
     const sameShape =
       types.length === this._renderedTypes.length &&
@@ -385,14 +403,23 @@ export class PictureStudioCard extends LitElement {
       this._probes = [];
 
       items.forEach((item, index) => {
+        // The only branch the second family costs: our element answers setConfig
+        // and hass exactly like a badge element, so every other path is shared.
+        const child = this._createChild(item, helpers);
+        if (!child) {
+          // A hole, not a skip. `_elements`, `_wrappers` and `_probes` are read
+          // by index against `items`; dropping an entry would hand every later
+          // item the previous one's config.
+          this._elements.push(undefined);
+          this._wrappers.push(undefined);
+          this._probes.push(undefined);
+          return;
+        }
+
         const wrapper = document.createElement("div");
         wrapper.className = `item ${item.type}`;
         wrapper.dataset.index = String(index);
 
-        // The only branch the second family costs: our element answers setConfig
-        // and hass exactly like a badge element, so every other path is shared.
-        const child = this._createChild(item, helpers);
-        if (!child) return;
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
 
@@ -407,6 +434,7 @@ export class PictureStudioCard extends LitElement {
       this._renderedTypes = types;
     } else {
       items.forEach((item, index) => {
+        if (item.type === "unknown") return;
         const child = this._elements[index];
         if (!child) return;
         child.setConfig(item.config as unknown as BadgeConfig);
@@ -426,6 +454,7 @@ export class PictureStudioCard extends LitElement {
     item: PictureItem,
     helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
   ): LovelaceBadgeElement | undefined {
+    if (item.type === "unknown") return undefined;
     if (item.type === "badge") return helpers.createBadgeElement(item.config);
     let tag: string | undefined;
     if (item.config.type === "state-label") tag = LABEL_TAG;
@@ -460,7 +489,7 @@ export class PictureStudioCard extends LitElement {
    * layer is already the heaviest.
    */
   private _createProbe(item: PictureItem): ProbeElement | undefined {
-    if (this.editing || !hasVisibility(item)) return undefined;
+    if (item.type === "unknown" || this.editing || !hasVisibility(item)) return undefined;
     const probe = document.createElement("hui-card") as ProbeElement;
     probe.className = "probe";
     probe.config = { type: PROBE_TYPE, visibility: item.visibility };
@@ -478,6 +507,7 @@ export class PictureStudioCard extends LitElement {
     items.forEach((item, index) => {
       const wrapper = this._wrappers[index];
       if (!wrapper) return;
+      if (item.type === "unknown") return;
       // The selection mark is a class rather than a Lit binding because the
       // wrappers are built imperatively, and it is set outside the drag guard
       // below: the badge being dragged is precisely the selected one.
@@ -548,7 +578,8 @@ export class PictureStudioCard extends LitElement {
     const item = this._config?.items[index];
     const wrapper = this._wrappers[index];
     const layer = this._layer;
-    if (!item || !wrapper || !layer || item.anchor === anchor) return undefined;
+    if (!item || !wrapper || !layer || item.type === "unknown" || item.anchor === anchor)
+      return undefined;
 
     return reanchor(
       item.position,
