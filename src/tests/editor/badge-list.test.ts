@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "@rstest/core";
+import { afterEach, beforeEach, describe, expect, it, rstest } from "@rstest/core";
 import { LIST_TAG, type PictureItem } from "../../config";
 import { badgeCatalog } from "../../editor/badge-catalog";
 import { resetBadgeVerdicts } from "../../editor/badge-existence";
@@ -594,24 +594,16 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
 
     const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
     // Spy on the row that SHOULD be scrolled (display 2 = array index 0).
-    const expected = rows[2];
-    let scrolledExpected = 0;
-    if (expected)
-      expected.scrollIntoView = () => {
-        scrolledExpected++;
-      };
+    const expected = rows[2] as HTMLElement;
+    const spyExpected = rstest.spyOn(expected, "scrollIntoView");
     // Spy on the row that should NOT be scrolled (display 0 = array index 2).
-    const unexpected = rows[0];
-    let scrolledUnexpected = 0;
-    if (unexpected)
-      unexpected.scrollIntoView = () => {
-        scrolledUnexpected++;
-      };
+    const unexpected = rows[0] as HTMLElement;
+    const spyUnexpected = rstest.spyOn(unexpected, "scrollIntoView");
 
     el.selectedIndex = 0;
     await el.updateComplete;
-    expect(scrolledExpected).toBe(1);
-    expect(scrolledUnexpected).toBe(0);
+    expect(spyExpected).toHaveBeenCalledTimes(1);
+    expect(spyUnexpected).toHaveBeenCalledTimes(0);
   });
 
   it("does not scroll on deselection", async () => {
@@ -624,15 +616,10 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
     await el.updateComplete;
 
     const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
-    let scrollCount = 0;
-    rows.forEach((r) => {
-      r.scrollIntoView = () => {
-        scrollCount++;
-      };
-    });
+    const spies = rows.map((r) => rstest.spyOn(r, "scrollIntoView"));
 
     el.selectedIndex = undefined;
     await el.updateComplete;
-    expect(scrollCount).toBe(0);
+    for (const spy of spies) expect(spy).toHaveBeenCalledTimes(0);
   });
 });

@@ -155,7 +155,20 @@ describe("_moveBadge remaps the selection through the move", () => {
     ],
   } as unknown as PictureStudioConfig;
 
-  /** Mount, settle the missing verdict, select item 0, return the editor. */
+  // Missing at index 2 so a selection at 2 keeps the list visible, while
+  // array index 2 maps to display index _flip(2) = 1 — never coincident.
+  const CONFIG_4B = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+      { type: "badge", position: { top: "30%", left: "30%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "40%", left: "40%" }, config: { type: "entity" } },
+    ],
+  } as unknown as PictureStudioConfig;
+
+  /** Mount with CONFIG_4, settle the verdict, select item 0, return the editor. */
   const mountSelected = async (): Promise<PictureStudioEditor> => {
     (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
       probeHelpers;
@@ -166,6 +179,21 @@ describe("_moveBadge remaps the selection through the move", () => {
     await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
     await el.updateComplete;
     el.select(0); // broken item — form refused, list stays in DOM
+    await el.updateComplete;
+    return el;
+  };
+
+  /** Mount with CONFIG_4B (missing at index 2), select item 2. */
+  const mountSelected2 = async (): Promise<PictureStudioEditor> => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_4B);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+    el.select(2); // broken item at index 2 — form refused, list stays in DOM
     await el.updateComplete;
     return el;
   };
@@ -209,5 +237,16 @@ describe("_moveBadge remaps the selection through the move", () => {
     const el = await mountSelected();
     move(el, 2, 3);
     expect(el.selectedIndex()).toBe(0);
+  });
+
+  it("shifts the selection up when the moved item passes over it from above", async () => {
+    // Uses CONFIG_4B: array [A,B,missing,D], sel=2 (missing, display index 1).
+    // Move from=0 to=3: from < sel && sel <= to → 0 < 2 && 2 <= 3 → sel-1=1.
+    // Array becomes [B,missing,D,A]; missing lands at index 1 ✓.
+    // Display index: sel=1 maps to _flip(1)=2, not equal to array index 1 —
+    // fixture is discriminating even with sel at a middle position.
+    const el = await mountSelected2();
+    move(el, 0, 3);
+    expect(el.selectedIndex()).toBe(1);
   });
 });
