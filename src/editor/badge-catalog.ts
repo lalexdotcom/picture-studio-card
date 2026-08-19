@@ -80,7 +80,11 @@ export const resolveBadgeClass = async (type: string): Promise<BadgeClass | unde
     return customElements.get(type.slice(CUSTOM_PREFIX.length)) as BadgeClass | undefined;
   }
   const helpers = await window.loadCardHelpers();
-  helpers.createBadgeElement({ type }); // forces the lazy import of the badge module
+  const probe = helpers.createBadgeElement({ type } as never) as HTMLElement;
+  // The wrapper catches and returns hui-error-badge rather than throwing, so
+  // this is the only synchronous signal that the type does not exist. Without
+  // it, the whenDefined below never resolves.
+  if (probe.tagName.toLowerCase() === "hui-error-badge") return undefined;
   const tag = `hui-${type}-badge`;
   await customElements.whenDefined(tag);
   return customElements.get(tag) as BadgeClass | undefined;

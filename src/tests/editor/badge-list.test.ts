@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, beforeEach, describe, expect, it } from "@rstest/core";
 import { LIST_TAG, type PictureItem } from "../../config";
 import { badgeCatalog } from "../../editor/badge-catalog";
+import { resetBadgeVerdicts } from "../../editor/badge-existence";
 import {
   addChoices,
   kindLabel,
@@ -9,6 +10,23 @@ import {
 } from "../../editor/badge-list";
 import { DEFAULT_LABEL_SIZE } from "../../element-size";
 import { cssRules } from "../card/harness";
+
+// Provides a minimal loadCardHelpers stub for tests that render badge rows but
+// do not need probe control. Without it, probeBadgeType throws when it calls
+// window.loadCardHelpers() for badge items now that render() wires the probe.
+const defaultHelpers = {
+  createBadgeElement: (c: { type?: string }) =>
+    document.createElement(
+      c.type === "entity" || c.type === "shortcut" ? `hui-${c.type}-badge` : "hui-error-badge",
+    ),
+};
+beforeEach(() => {
+  (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+    defaultHelpers;
+});
+afterEach(() => {
+  resetBadgeVerdicts();
+});
 
 const localize = ((key: string) =>
   ({
@@ -254,6 +272,87 @@ describe("the add menu", () => {
     expect(el.shadowRoot?.querySelector("ha-dropdown.add")?.getAttribute("placement")).toBe(
       "bottom-end",
     );
+  });
+});
+
+describe("a badge whose type does not exist", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(
+        c.type === "entity" || c.type === "shortcut" || c.type === "state-label"
+          ? `hui-${c.type}-badge`
+          : "hui-error-badge",
+      ),
+  };
+
+  beforeEach(() => {
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+  });
+
+  // `await Promise.resolve()` lets Lit's render microtask run (first-paint DOM)
+  // but returns before the probe's loadCardHelpers .then() fires — so the first
+  // assertion sees broken = false without needing to suppress the probe.
+  const mountList = async (its: PictureItem[]) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = its;
+    document.body.append(el);
+    await Promise.resolve();
+    return el;
+  };
+
+  // Awaiting loadCardHelpers() drains the probe's async hop (its .then() runs
+  // just before our continuation, since both were registered on the same
+  // already-resolved promise). Then updateComplete waits for the re-render that
+  // requestUpdate() scheduled.
+  const flushProbe = async (list: PictureStudioBadgeList) => {
+    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    await list.updateComplete;
+  };
+
+  afterEach(() => {
+    resetBadgeVerdicts();
+    document.body.replaceChildren();
+  });
+
+  it("renders unmarked on the first paint", async () => {
+    const list = await mountList([
+      { type: "badge", position: { top: 5, left: 5 }, anchor: "auto", config: { type: "entty" } },
+    ] as PictureItem[]);
+    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
+    expect(row.querySelector(".kind")?.classList.contains("error")).toBe(false);
+  });
+
+  it("marks the row once the verdict lands, and disables Edit", async () => {
+    const list = await mountList([
+      { type: "badge", position: { top: 5, left: 5 }, anchor: "auto", config: { type: "entty" } },
+    ] as PictureItem[]);
+    await flushProbe(list);
+    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
+    expect((row.querySelector(".kind") as { icon?: string } | null)?.icon).toBe("mdi:alert-circle");
+    expect((row.querySelectorAll("ha-icon-button")[0] as { disabled?: boolean }).disabled).toBe(
+      true,
+    );
+  });
+
+  it("leaves a native type outside our catalogue alone", async () => {
+    // `state-label` is a real badge type — it is in Home Assistant's lazy map
+    // and simply absent from the picker's list, which is what CORE_BADGES
+    // mirrors. It must not be flagged.
+    const list = await mountList([
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "state-label" },
+      },
+    ] as PictureItem[]);
+    await flushProbe(list);
+    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
+    expect(row.querySelector(".kind")?.classList.contains("error")).toBe(false);
   });
 });
 

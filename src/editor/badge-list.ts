@@ -4,6 +4,7 @@ import { hasVisibility, type PictureItem } from "../config";
 import { localizeOwn } from "../strings";
 import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
 import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
+import { badgeVerdict, probeBadgeType } from "./badge-existence";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { itemIcon } from "./icons";
 import { rowLabel } from "./items";
@@ -163,7 +164,24 @@ export class PictureStudioBadgeList extends LitElement {
       return rowLabel(item, this.hass, choice ? choiceLabel(localize, choice) : undefined);
     });
     const kinds = rows.map((item) => kindLabel(item, localize, catalog));
-    const unknown = rows.map((item) => item.type === "unknown");
+    // Two independent sources put a row into the error state, and they render
+    // identically: the model, for an item we could not read, and the probe, for
+    // a badge type this Home Assistant does not have.
+    const broken = rows.map((item) => {
+      if (item.type === "unknown") return true;
+      if (item.type !== "badge") return false;
+      const type = String(item.config.type ?? "");
+      // A badge with no type at all is legal and means `entity` — the factory's
+      // last argument is the default type. Nothing to probe.
+      if (!type) return false;
+      probeBadgeType(type, () => this.requestUpdate());
+      return badgeVerdict(type) === "missing";
+    });
+    const secondary = rows.map((item, i) =>
+      item.type !== "unknown" && broken[i]
+        ? localizeOwn(this.hass, "unknown_badge_type")
+        : labels[i]?.secondary,
+    );
 
     return html`
       <div class="header">
@@ -206,9 +224,9 @@ export class PictureStudioBadgeList extends LitElement {
               <div class="item">
                 <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
                 <ha-icon
-                  class="kind ${unknown[index] ? "error" : ""}"
+                  class="kind ${broken[index] ? "error" : ""}"
                   .icon=${
-                    unknown[index]
+                    broken[index]
                       ? "mdi:alert-circle"
                       : itemIcon(
                           item.type as "badge" | "element",
@@ -220,8 +238,8 @@ export class PictureStudioBadgeList extends LitElement {
                 <div class="label">
                   <span class="primary">${labels[index]?.primary}</span>
                   ${
-                    labels[index]?.secondary
-                      ? html`<span class="secondary ${unknown[index] ? "error" : ""}">${labels[index]?.secondary}</span>`
+                    secondary[index]
+                      ? html`<span class="secondary ${broken[index] ? "error" : ""}">${secondary[index]}</span>`
                       : nothing
                   }
                 </div>
@@ -230,7 +248,7 @@ export class PictureStudioBadgeList extends LitElement {
                   // because it borrows ha-label's geometry, and a warning is not
                   // a label. Before the eye, so the row reads left to right from
                   // the most surprising fact.
-                  !unknown[index] && showsNothing(item)
+                  !broken[index] && showsNothing(item)
                     ? html`<ha-icon
                         class="empty"
                         icon="mdi:alert-outline"
@@ -243,7 +261,7 @@ export class PictureStudioBadgeList extends LitElement {
                   // control: no target, no ripple, no hover — and the same eye
                   // the form's own section is headed by, so the two read as one
                   // idea rather than two.
-                  !unknown[index] && hasVisibility(item)
+                  !broken[index] && hasVisibility(item)
                     ? html`<span
                         class="conditional"
                         title=${
@@ -255,7 +273,7 @@ export class PictureStudioBadgeList extends LitElement {
                 }
                 <ha-icon-button
                   .label=${localize("ui.common.edit") || "Edit"}
-                  .disabled=${unknown[index]}
+                  .disabled=${broken[index]}
                   @click=${() => this._fire("item-edit", { index: this._flip(index) })}
                   ><ha-icon icon="mdi:pencil"></ha-icon></ha-icon-button>
                 <ha-icon-button
