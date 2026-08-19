@@ -17,44 +17,34 @@ Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
 automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published 2026-08-17),
 1.3.1 (2026-08-17).
 
-## Work in progress — 1.4.0, branch `feat/state-label`
+## Work in progress — 1.4.0, branch `feat/config-tidy-up`
 
-**Paused 2026-08-18 at session close. 468 tests green, lint exit 0, `tsc`
-clean, bundle 169.4 kB / 39.5 kB. The tree is DIRTY: ~20 files, nothing from
-2026-08-18 is committed.** That is the first thing to settle on resume.
+**Paused 2026-08-19 at session close. 519 tests green, lint exit 0, `tsc` clean,
+build 178.2 kB / 41.6 kB, tree clean, nothing pushed.**
 
-Adding `state-label`, turning the icon's halo into an opt-in, and — decided
-late in the branch — the state colour, the hover and the list order. Spec
-`docs/superpowers/specs/2026-08-17-state-label-design.md`, plan
-`docs/superpowers/plans/2026-08-17-state-label.md`, ledger
-`.superpowers/sdd/2026-08-17-state-label/progress.md`.
+`main` carries the merged `feat/state-label` work (merge `29c58bd`, `--no-ff`):
+the state-label kind, the halo opt-in, the state colour on both kinds, the shared
+hover, the top-down item list, and the per-tick guard. **`feat/config-tidy-up`
+branches from that merge and has NOT been merged** — 16 commits, whole-branch
+review verdict **READY TO MERGE**, browser-validated by the user in a panel view
+and a sections view.
 
-**Validated in the user's browser**, panel and sections both: the halo opt-in,
-the chromeless square corners, `state-display`, a composed `state_content`, the
-pill, anchoring, adaptive sizing, the Appearance section, and (2026-08-18) the
-state colour on a label, the hover veil, the chromeless grow and the reversed
-list.
+What the branch holds, beyond the plan's seven tasks: the drag-release defect the
+user found (an element child was created with `editing` false because
+`_syncEditingAndDrag` ran before the async `_syncItems` rebuilt the children —
+fixed by stamping the flag in `_createChild`), the placeholder style settled by
+eye, the CHANGELOG section order and its convention, a label's colour moved to
+second, the owned Content panel with its warning marker, and the live visibility
+verdict in the Visibility header.
 
-**What remains before publishing:** the whole-branch review on a capable model
-(the ledger's five deferred minors), `superpowers:finishing-a-development-branch`,
-the 1.4.0 bump — `package.json` still says `1.3.1` and the CHANGELOG heading
-still says `unreleased`, and both move together at delivery, the user's call —
-then the user's push.
+**What remains, in order:** the user's integration choice (merge locally / PR /
+leave), then the **1.4.0 bump** — `package.json` still says `1.3.1` and the
+CHANGELOG heading still reads `unreleased`, and both move together — then the
+user's push. **A push of `main` without the bump would send the release workflow
+after a `v1.3.1` tag that already exists.**
 
-### What 1.4.0 settled beyond the spec
-
-- Glyphs `mdi:brightness-7` (icon) and `mdi:card-text-outline` (label); a
-  label's adaptive default `clamp(11px, 3cqw, 20px)`; its state at
-  `var(--ha-font-weight-medium, 500)`; `pill` hides the radius control.
-- **Decision 6 of the spec is REVERSED** — a label honours `color: state`. The
-  spec carries the reversal beside the original text; see the decisions below.
-- **The hover**: a veil with a chrome, a grow without. See the decisions below.
-- **The item list reads top-down**, the array is untouched.
-- The renames are the naming convention from here on: `Chrome` → `IconChrome`
-  beside `LabelChrome`; `IconSize` → `ElementSize`, with
-  `normalizeElementSize` / `isDefaultElementSize` / `elementSizeCss` each taking
-  their defaults as a **parameter**. `ChromeTheme`, `THEMES`, `chromeFill` and
-  `finiteOrDefault` stay shared and unrenamed.
+Left behind: `.superpowers/sdd/2026-08-18-config-tidy-up/` still exists — the
+deletion was refused by permissions. It is git-ignored scratch and harmless.
 
 ## Where things are
 
