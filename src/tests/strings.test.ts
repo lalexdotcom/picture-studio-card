@@ -110,3 +110,32 @@ describe("appearance strings", () => {
     ]);
   });
 });
+
+describe("the unknown-item catalog", () => {
+  const KEYS = [
+    "unknown_item_type",
+    "unknown_config_missing",
+    "unknown_element_type",
+    "unknown_badge_type",
+    "unknown_item",
+    "visibility_unreadable",
+    "visibility_unreadable_body",
+    "visibility_reset",
+  ] as const;
+
+  it("resolves every key in English and in French", () => {
+    for (const key of KEYS) {
+      expect(localizeOwn({ language: "en" } as never, key)).not.toBe("");
+      expect(localizeOwn({ language: "fr" } as never, key)).not.toBe("");
+    }
+  });
+
+  it("translates rather than echoing English", () => {
+    // Spelled out rather than compared as a set: a French table that silently
+    // copied the English one would pass a "both are non-empty" check.
+    expect(localizeOwn({ language: "fr" } as never, "visibility_reset")).toBe("Réinitialiser");
+    expect(localizeOwn({ language: "fr" } as never, "unknown_element_type")).toBe(
+      "Type d'élément inconnu",
+    );
+  });
+});

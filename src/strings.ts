@@ -34,6 +34,15 @@ const STRINGS = {
     visibility_visible: "Visible",
     visibility_hidden: "Hidden",
     visibility_invalid: "Invalid conditions",
+    unknown_item: "Unreadable item",
+    unknown_item_type: "Unknown item type",
+    unknown_config_missing: "Missing config",
+    unknown_element_type: "Unknown element type",
+    unknown_badge_type: "Unknown badge type",
+    visibility_unreadable: "Unreadable conditions",
+    visibility_unreadable_body:
+      "This item's conditions are not a list. They are ignored, and the item always shows.",
+    visibility_reset: "Reset",
   },
   fr: {
     items: "Items",
@@ -61,6 +70,15 @@ const STRINGS = {
     visibility_visible: "Visible",
     visibility_hidden: "Caché",
     visibility_invalid: "Conditions invalides",
+    unknown_item: "Item illisible",
+    unknown_item_type: "Type d'item inconnu",
+    unknown_config_missing: "Config manquante",
+    unknown_element_type: "Type d'élément inconnu",
+    unknown_badge_type: "Type de badge inconnu",
+    visibility_unreadable: "Conditions illisibles",
+    visibility_unreadable_body:
+      "Les conditions de cet item ne forment pas une liste. Elles sont ignorées, et l'item reste toujours visible.",
+    visibility_reset: "Réinitialiser",
   },
 } as const;
 
