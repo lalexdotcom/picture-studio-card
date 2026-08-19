@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it, rstest } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
@@ -606,5 +606,61 @@ describe("hui-error-badge display in editing mode", () => {
   it("leaves the inline display of hui-error-badge untouched outside editing", async () => {
     const badge = await mountWithErrorBadge(false);
     expect(badge.style.display).toBe("none");
+  });
+});
+
+describe("console.warn for unknown items", () => {
+  const CONFIG_WITH_UNKNOWN = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [{ type: "badgee" }],
+  };
+
+  const enterEditing = async (card: PictureStudioCard): Promise<void> => {
+    card.preview = true;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+    });
+    await flush();
+  };
+
+  it("emits nothing on a dashboard mount", async () => {
+    const spy = rstest.spyOn(console, "warn");
+    await mountCard(CONFIG_WITH_UNKNOWN);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("emits nothing on a hass tick, even while editing", async () => {
+    const card = await mountCard(CONFIG_WITH_UNKNOWN);
+    await enterEditing(card);
+    const spy = rstest.spyOn(console, "warn");
+    card.hass = { states: {} } as never;
+    await flush();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("emits once when editing turns on", async () => {
+    const card = await mountCard(CONFIG_WITH_UNKNOWN);
+    const spy = rstest.spyOn(console, "warn");
+    await enterEditing(card);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it("emits once per config commit while editing, not in setConfig", async () => {
+    const card = await mountCard(CONFIG_WITH_UNKNOWN);
+    await enterEditing(card);
+    // Spy installed after setConfig returns — the warning must come from updated(),
+    // not from the synchronous setConfig body (which is the old behaviour).
+    card.setConfig(CONFIG_WITH_UNKNOWN);
+    const spy = rstest.spyOn(console, "warn");
+    await flush();
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });
