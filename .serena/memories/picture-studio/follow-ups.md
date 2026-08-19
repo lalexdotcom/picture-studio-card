@@ -26,7 +26,36 @@ brainstorm, only doing. Worth deciding while shooting them: whether an error row
 is worth showing at all, or whether the happy path is the whole story a landing
 page should tell.
 
-## 2. The chrome, beyond icons
+## 2. Badges in the card header
+
+**Asked 2026-08-19, at the close of 1.4.0. Not designed.**
+
+The idea: the card's header would carry badges of its own, and would appear when
+*either* a `title` is set *or* at least one header badge exists — so the header
+stops being a title-only affordance.
+
+What the user sketched for the editor: take Home Assistant's own **heading card**
+form, drop its title/subtitle choice, and use it in place of our current plain
+`title` input. And render the result inside a frame like the one a defined `title`
+already draws, with smaller text.
+
+**The one thing to check before anything else.** Home Assistant has a distinct
+**heading-badge** family — `hui-heading-badge` is a real tag, `"heading-badge"` is
+a family string in the same creation machinery as `"badge"`, and it has its own
+`hui-error-heading-badge`. But **no heading-badge factory is among
+`loadCardHelpers`'s nine exports** (see the list in `mem:picture-studio/state`).
+So the reuse this idea assumes may not be reachable at all. Two ways out, and
+which one is viable decides the whole shape:
+
+- create `hui-heading-badge` by tag ourselves, forcing its lazy load the way
+  `resolveBadgeClass` does for a core badge — and inherit that dance's fragility;
+- or put **ordinary** badges in the header, which we already know how to create,
+  and accept that they will not look like Home Assistant's heading badges.
+
+Settle that first: everything about the form, the framing and the text size is
+downstream of it.
+
+## 3. The chrome, beyond icons
 
 **Settled in 1.4.0: it does NOT move to item level.** Each element kind reads
 `chrome` out of its own `config`, and `state-label` took up the idea rather than
@@ -34,7 +63,7 @@ inventing its own surface — `IconChrome` and `LabelChrome` are different recor
 over one shared CSS module. Kept here only until the next reader needs it; the
 decision itself lives in the state file.
 
-## 3. The `auto` fill has never been seen under a custom theme
+## 4. The `auto` fill has never been seen under a custom theme
 
 **Shipped unverified in 1.3.0, still unverified.** Only the default theme was
 walked, so `var(--ha-card-background, …)` has never been seen resolving to
@@ -44,7 +73,7 @@ intent, but nobody has looked. It is public now, so if it misbehaves it
 misbehaves for users — cheap to settle the next time the card is open under a
 theme.
 
-## 4. Parked from the visibility session (2026-08-14)
+## 5. Parked from the visibility session (2026-08-14)
 
 Neither blocks anything; both are worth a minute if the area is reopened.
 
@@ -57,7 +86,7 @@ Neither blocks anything; both are worth a minute if the area is reopened.
   seen, and cannot be until a frontend that does not load its chunk is tried.
   Every frontend walked so far loads it.
 
-## 5. The preview's condition marker could show the verdict, not just "conditional"
+## 6. The preview's condition marker could show the verdict, not just "conditional"
 
 **Asked 2026-08-19, deferred with the reason written down.** The marker drawn on
 a conditional item in the edit preview is `.item.conditional` — a CSS mask over
@@ -93,7 +122,7 @@ glyph and colour only for `hidden` and `invalid` — the two states worth stoppi
 for. The same argument applies to the item list, where the question was asked
 first.
 
-## 6. Two things left open by the unknown-item work (1.4.0)
+## 7. Two things left open by the unknown-item work (1.4.0)
 
 Both are recorded rather than owed; neither blocks anything.
 
