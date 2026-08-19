@@ -104,13 +104,12 @@ describe("normalizeConfig", () => {
     expect(() => normalizeConfig({ type: CARD_TYPE, items: {} })).toThrow();
   });
 
-  it("rejects an item whose config is missing", () => {
-    expect(() =>
-      normalizeConfig({
-        type: CARD_TYPE,
-        items: [{ type: "badge", position: { top: 1, left: 2 } }],
-      }),
-    ).toThrow();
+  it("holds as UnknownItem an item whose config is missing", () => {
+    const { items } = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "badge", position: { top: 1, left: 2 } }],
+    });
+    expect(items[0]).toMatchObject({ type: "unknown", reason: "config-missing", token: "badge" });
   });
 
   it("two items with no position get distinct position objects", () => {
@@ -124,10 +123,12 @@ describe("normalizeConfig", () => {
     expect(out.items[0]?.position).not.toBe(out.items[1]?.position);
   });
 
-  it("rejects an element whose config has no type", () => {
-    expect(() =>
-      normalizeConfig({ type: CARD_TYPE, items: [{ type: "element", config: {} }] }),
-    ).toThrow(/items\[0\]\.config.*"state-icon"/s);
+  it("holds as UnknownItem an element whose config has no type", () => {
+    const { items } = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "element", config: {} }],
+    });
+    expect(items[0]).toMatchObject({ type: "unknown", reason: "element-type" });
   });
 
   it("normalizes a state-icon element, defaulting anchor and size", () => {
@@ -165,50 +166,51 @@ describe("normalizeConfig", () => {
     expect((out.items[0]!.config as Record<string, unknown>).future_key).toBe(1);
   });
 
-  it("rejects an item with no type, naming the index and the accepted values", () => {
-    expect(() =>
-      normalizeConfig({
-        type: CARD_TYPE,
-        items: [{ config: { type: "entity" }, position: { top: 10, left: 20 } }],
-      }),
-    ).toThrow(/items\[0\].*"badge".*"element"/s);
+  it("holds as UnknownItem an item with no type", () => {
+    const { items } = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ config: { type: "entity" }, position: { top: 10, left: 20 } }],
+    });
+    expect(items[0]).toMatchObject({ type: "unknown", reason: "item-type" });
+    expect((items[0] as { token?: string }).token).toBeUndefined();
   });
 
-  it("rejects an unsupported item type, naming the index", () => {
-    expect(() =>
-      normalizeConfig({
-        type: CARD_TYPE,
-        items: [
-          { type: "badge", config: { type: "entity" } },
-          { type: "widget", config: {} },
-        ],
-      }),
-    ).toThrow(/items\[1\]/);
+  it("holds as UnknownItem an unsupported item type, carrying the type as its token", () => {
+    const { items } = normalizeConfig({
+      type: CARD_TYPE,
+      items: [
+        { type: "badge", config: { type: "entity" } },
+        { type: "widget", config: {} },
+      ],
+    });
+    expect(items[1]).toMatchObject({ type: "unknown", reason: "item-type", token: "widget" });
   });
 
-  it("rejects an item whose config is missing", () => {
-    expect(() =>
-      normalizeConfig({
-        type: CARD_TYPE,
-        items: [{ type: "badge", position: { top: 1, left: 2 } }],
-      }),
-    ).toThrow(/items\[0\]/);
+  it("holds as UnknownItem an item whose config is missing", () => {
+    const { items } = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "badge", position: { top: 1, left: 2 } }],
+    });
+    expect(items[0]).toMatchObject({ type: "unknown", reason: "config-missing", token: "badge" });
   });
 
-  it("raises on an unknown element kind rather than treating it as an icon", () => {
-    expect(() =>
-      normalizeConfig({
-        type: "custom:picture-studio",
-        image: "/local/p.png",
-        items: [
-          {
-            type: "element",
-            position: { top: "1%", left: "1%" },
-            config: { type: "state-gauge", entity: "sensor.a" },
-          },
-        ],
-      }),
-    ).toThrow(/state-icon.*state-label/);
+  it("holds as UnknownItem an unknown element kind rather than treating it as an icon", () => {
+    const { items } = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/local/p.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "1%", left: "1%" },
+          config: { type: "state-gauge", entity: "sensor.a" },
+        },
+      ],
+    });
+    expect(items[0]).toMatchObject({
+      type: "unknown",
+      reason: "element-type",
+      token: "state-gauge",
+    });
   });
 });
 
@@ -388,10 +390,9 @@ describe("item visibility", () => {
     expect(out.items[0]?.visibility).toBeUndefined();
   });
 
-  it("raises when visibility is not a list", () => {
-    expect(() => normalizeConfig(withVisibility({ condition: "state" }))).toThrow(
-      /items\[0\]\.visibility must be a list/,
-    );
+  it("keeps a non-list visibility rather than refusing it", () => {
+    const { items } = normalizeConfig(withVisibility({ condition: "state" }));
+    expect(items[0]?.visibility).toEqual({ condition: "state" });
   });
 
   it("stores the key when it holds conditions", () => {
@@ -837,5 +838,142 @@ describe("a label's show list", () => {
     expect(stored({ type: "state-label", entity: "sensor.a", show: ["name"] }).show).toEqual([
       "name",
     ]);
+  });
+});
+
+describe("an unreadable item is kept, not fatal", () => {
+  const wrap = (item: unknown) => ({
+    type: "custom:picture-studio",
+    image: "/x.png",
+    items: [item],
+  });
+
+  it("holds an unknown item `type` with the raw type as its token", () => {
+    const { items } = normalizeConfig(wrap({ type: "badgee", position: { top: 30, left: 10 } }));
+    expect(items[0]).toEqual({
+      type: "unknown",
+      reason: "item-type",
+      token: "badgee",
+      raw: { type: "badgee", position: { top: 30, left: 10 } },
+    });
+  });
+
+  it("holds an absent `type` with no token", () => {
+    const { items } = normalizeConfig(wrap({ config: { type: "entity" } }));
+    expect(items[0]).toMatchObject({ type: "unknown", reason: "item-type" });
+    expect((items[0] as { token?: string }).token).toBeUndefined();
+  });
+
+  it("holds a missing `config` with the family as its token", () => {
+    const { items } = normalizeConfig(wrap({ type: "badge", position: { top: "1%", left: "2%" } }));
+    expect(items[0]).toMatchObject({ type: "unknown", reason: "config-missing", token: "badge" });
+  });
+
+  it("holds an unknown element kind with the raw kind as its token", () => {
+    const { items } = normalizeConfig(
+      wrap({ type: "element", config: { type: "state-lable", entity: "light.a" } }),
+    );
+    expect(items[0]).toMatchObject({
+      type: "unknown",
+      reason: "element-type",
+      token: "state-lable",
+    });
+  });
+
+  it("still throws when the entry is not an object at all", () => {
+    expect(() => normalizeConfig(wrap("not an object"))).toThrow(/items\[0\] must be an object/);
+  });
+
+  it("does not disturb the readable items beside it", () => {
+    const { items } = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/x.png",
+      items: [
+        { type: "badgee" },
+        {
+          type: "element",
+          position: { top: "5%", left: "6%" },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    expect(items[0]?.type).toBe("unknown");
+    expect(items[1]).toMatchObject({ type: "element", position: { top: 5, left: 6 } });
+  });
+});
+
+describe("an unreadable item round-trips byte for byte", () => {
+  it("re-emits the raw entry untouched, position included", () => {
+    // `top: 30` is the point: a normalized position would come back "30%" on an
+    // item we claim not to understand, and the anchor would move inside it.
+    const raw = { type: "badgee", position: { top: 30, left: 10 }, anchor: "center", extra: 7 };
+    const stored = storedConfig(
+      normalizeConfig({ type: "custom:picture-studio", image: "/x.png", items: [raw] }),
+    );
+    expect((stored.items as unknown[])[0]).toEqual(raw);
+  });
+
+  it("leaves it alone when another item is committed", () => {
+    const raw = {
+      type: "element",
+      config: { type: "state-lable", size: { mode: "fixed", value: 40 } },
+    };
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/x.png",
+      items: [
+        raw,
+        {
+          type: "element",
+          position: { top: "5%", left: "5%" },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    const moved = {
+      ...config,
+      items: config.items.map((it, i) => (i === 1 ? { ...it, position: { top: 9, left: 9 } } : it)),
+    };
+    expect((storedConfig(moved).items as unknown[])[0]).toEqual(raw);
+  });
+});
+
+describe("a malformed `visibility` is ignored, not fatal", () => {
+  const item = {
+    type: "badge",
+    position: { top: "5%", left: "5%" },
+    visibility: { condition: "state", entity: "light.a", state: "on" },
+    config: { type: "entity", entity: "light.a" },
+  };
+
+  it("does not throw and keeps the raw value", () => {
+    const { items } = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/x.png",
+      items: [item],
+    });
+    expect(items[0]?.type).toBe("badge");
+    expect(items[0]?.visibility).toEqual(item.visibility);
+  });
+
+  it("reports no conditions, so nothing hides the item", () => {
+    const { items } = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/x.png",
+      items: [item],
+    });
+    expect(hasVisibility(items[0] as never)).toBe(false);
+  });
+
+  it("writes the raw value back rather than dropping it", () => {
+    const config = normalizeConfig({
+      type: "custom:picture-studio",
+      image: "/x.png",
+      items: [item],
+    });
+    expect(
+      ((storedConfig(config).items as Record<string, unknown>[])[0] as { visibility: unknown })
+        .visibility,
+    ).toEqual(item.visibility);
   });
 });
