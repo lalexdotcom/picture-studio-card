@@ -158,7 +158,13 @@ What the user sketched:
     of the spec: the section no longer writes to two places, because it no
     longer exists.
   - **Image** or **Background** — the image selectors and the camera entity.
-  - **Filter** — `state_filter` and `dark_mode_filter`.
+  - **Filter** — `state_filter` and `dark_mode_filter`. **Least settled of the
+    three.** The user, told what these keys actually do (below): *"il faudra
+    qu'on fasse un tri là-dessus ; en l'état, mettre les filter en YAML only ne
+    me choque pas plus que ça."* So **dropping the section entirely and moving
+    `state_filter` / `dark_mode_filter` out of the form is on the table**, and
+    is the cheaper answer to everything in this list. Sort it before designing
+    a section that may not exist.
 
 **What the filters actually do**, established while the question was asked (read
 in `components/hui-image.ts` at 20260729.6). All three are **CSS `filter`
@@ -170,8 +176,12 @@ filter = (filter || "")
        + (state_filter[state of `entity`] ?? "")
 ```
 
-- `filter` is unconditional and is **YAML-only in our form** — if a Filter
-  section exists, it is odd for it not to be there.
+- `filter` is unconditional and is **YAML-only in our form**. It is **not ours
+  and not picture-elements' either**: `PictureElementsCardConfig` does not
+  declare it and the card never passes `.filter` to `hui-image`, so at *their*
+  card level the key is inert. It belongs to the **image element**
+  (`ImageElementConfig`), and we inherit it because our background *is* a
+  `hui-image-element`. What is ours is having lifted it to card level.
 - `dark_mode_filter` is appended only when `hass.themes.darkMode`. Typical use:
   `brightness(0.6)` to dim a floorplan at night.
 - `state_filter` is a *state → filter* map keyed on the state of **`entity`**,
@@ -187,6 +197,15 @@ filter = (filter || "")
 
 All three are in `BACKGROUND_KEYS` and forwarded verbatim to
 `hui-image-element`, so they do work today.
+
+**If the fields are kept, their shapes are already decided upstream.**
+`hui-image-element-editor` — the editor of the very element we build our
+background from — exposes both of the fields we lack:
+`{ name: "entity", selector: { entity: {} } }` and
+`{ name: "filter", selector: { text: {} } }`. For `state_filter` the `object`
+selector we already use stays right: `hui-image` reads it as a state → filter
+table whatever the upstream typing claims (`string` on the element, `string[]`
+on the card, `StateSpecificConfig` where it is actually consumed).
 
 **A happy side effect of `heading.title`**, noticed here: `title` is explicitly
 *excluded* from `BACKGROUND_KEYS` because `hui-image-element` would feed it to
