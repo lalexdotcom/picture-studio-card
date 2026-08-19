@@ -95,6 +95,17 @@ export type PictureItem = BadgeItem | ElementItem | UnknownItem;
 
 export type ElementConfig = StateIconConfig | StateLabelConfig;
 
+/**
+ * The floor under every branch on an element kind. Three sites default to the
+ * icon when they do not recognise a kind, which means a third kind added without
+ * touching all of them is not rejected — it is silently drawn as an icon. Calling
+ * this in the default stops that: the day `ElementConfig` gains a member, each
+ * site fails to compile.
+ */
+export const assertNever = (value: never, what: string): never => {
+  throw new Error(`picture-studio: unhandled ${what}: ${String(value)}`);
+};
+
 export interface StateIconConfig {
   type: "state-icon";
   /** Optional: a freshly added icon has no entity until one is picked. */
@@ -355,7 +366,13 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
         show?: LabelPart[];
       };
       const config: Record<string, unknown> = { ...rest };
-      const isLabel = item.config.type === "state-label";
+      const kind = item.config.type;
+      const isLabel =
+        kind === "state-label"
+          ? true
+          : kind === "state-icon"
+            ? false
+            : assertNever(kind, "element kind");
       const sizeDefaults = isLabel ? DEFAULT_LABEL_SIZE : DEFAULT_ICON_SIZE;
       if (!isDefaultElementSize(size, sizeDefaults)) config.size = size;
       // The guard is what narrows the optional type, not a redundancy — two
