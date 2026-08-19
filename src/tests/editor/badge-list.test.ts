@@ -416,3 +416,61 @@ describe("the row of an unreadable item", () => {
     expect(row?.querySelector(".empty")).toBeNull();
   });
 });
+
+describe("the row of an item whose visibility is not a list", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const mountWith = async (visibility: unknown) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "element",
+        position: { top: 0, left: 0 },
+        anchor: "auto",
+        visibility,
+        config: { type: "state-icon", entity: "light.a" },
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("renders the orange marker when visibility is a mapping", async () => {
+    const el = await mountWith({ condition: "state" });
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = rows[0];
+    expect(row?.querySelector(".empty")).not.toBeNull();
+    expect(row?.querySelector(".empty")?.getAttribute("icon")).toBe("mdi:alert-outline");
+  });
+
+  it("renders the eye but not the orange marker for a well-formed visibility list", async () => {
+    const el = await mountWith([{ condition: "state", entity: "light.a" }]);
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = rows[0];
+    expect(row?.querySelector(".conditional")).not.toBeNull();
+    expect(row?.querySelector(".empty")).toBeNull();
+  });
+
+  it("an unknown (red) row renders neither the eye nor the orange marker", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "unknown",
+        raw: { visibility: { condition: "state" } },
+        reason: "element-type",
+        token: "bad-type",
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])];
+    const row = rows[0];
+    expect(row?.querySelector(".empty")).toBeNull();
+    expect(row?.querySelector(".conditional")).toBeNull();
+  });
+});

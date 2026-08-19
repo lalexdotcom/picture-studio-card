@@ -78,6 +78,14 @@ const showsNothing = (item: PictureItem): boolean =>
   Array.isArray((item.config as { show?: unknown[] }).show) &&
   (item.config as { show: unknown[] }).show.length === 0;
 
+/** An item whose `visibility` key is present but not a list — renders, but
+    always shows, because the card cannot parse the conditions. Orange, not
+    red: unlike an unreadable item it is still drawn and editable. Aligns
+    with `hasVisibility` in config.ts, which is the "usable" gate: if
+    `hasVisibility` is false but visibility is defined, this is true. */
+const hasUnreadableVisibility = (item: PictureItem): boolean =>
+  item.type !== "unknown" && item.visibility !== undefined && !Array.isArray(item.visibility);
+
 export class PictureStudioBadgeList extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -253,6 +261,19 @@ export class PictureStudioBadgeList extends LitElement {
                         class="empty"
                         icon="mdi:alert-outline"
                         title=${localizeOwn(this.hass, "label_empty_hint")}
+                      ></ha-icon>`
+                    : nothing
+                }
+                ${
+                  // An item whose visibility key is present but not a list
+                  // renders fine, but its conditions are ignored. Show an
+                  // orange marker so the problem is visible without opening
+                  // Edit — the same shortcut showsNothing provides.
+                  !broken[index] && hasUnreadableVisibility(item)
+                    ? html`<ha-icon
+                        class="empty"
+                        icon="mdi:alert-outline"
+                        title=${localizeOwn(this.hass, "visibility_unreadable")}
                       ></ha-icon>`
                     : nothing
                 }

@@ -23,6 +23,8 @@ export type BadgeVerdict = "unknown" | "ok" | "missing";
  */
 const VERDICTS = new Map<string, BadgeVerdict>();
 const TIMERS = new Map<string, ReturnType<typeof setTimeout>>();
+/** Callbacks queued while a probe is in flight. Cleared when the type settles. */
+const WAITERS = new Map<string, (() => void)[]>();
 
 /** Home Assistant's own figure: it hides its error badge for exactly this long,
     so the list and the card beside it complain at the same moment. */
@@ -30,26 +32,40 @@ const GRACE_MS = 2000;
 
 export const badgeVerdict = (type: string): BadgeVerdict => VERDICTS.get(type) ?? "unknown";
 
-const settle = (type: string, verdict: BadgeVerdict, onSettled: () => void): void => {
-  if (VERDICTS.get(type) === verdict) return;
+const settle = (type: string, verdict: BadgeVerdict): void => {
   VERDICTS.set(type, verdict);
-  onSettled();
+  const waiters = WAITERS.get(type);
+  WAITERS.delete(type);
+  if (waiters) for (const w of waiters) w();
 };
 
 export const probeBadgeType = (type: string, onSettled: () => void): void => {
-  if (VERDICTS.has(type) || TIMERS.has(type)) return;
+  // Already settled: caller reads the verdict from `badgeVerdict` synchronously.
+  // No callback needed — the value is there right now.
+  if (VERDICTS.has(type)) return;
+
+  // Accumulate the waiter whether or not a probe is already running.
+  // This is the fix for a second list instance (editor closed and reopened
+  // while a probe is in flight): its `requestUpdate` is registered here
+  // rather than dropped by the early return that the old code had.
+  WAITERS.set(type, [...(WAITERS.get(type) ?? []), onSettled]);
+
+  // Probe already in flight — waiter registered above, nothing else to do.
+  // Still exactly one probe per type: no second createBadgeElement call,
+  // no second grace timer.
+  if (TIMERS.has(type)) return;
 
   if (type.startsWith(CUSTOM_PREFIX)) {
     const tag = type.slice(CUSTOM_PREFIX.length);
     if (customElements.get(tag)) {
-      settle(type, "ok", onSettled);
+      settle(type, "ok");
       return;
     }
     // A tag with no dash can never be a custom element, which is why Home
     // Assistant returns its error immediately there. It catches the commonest
     // typo with no wait at all.
     if (!tag.includes("-")) {
-      settle(type, "missing", onSettled);
+      settle(type, "missing");
       return;
     }
     // Optimistic until the grace elapses: an error shown on a valid config while
@@ -58,7 +74,7 @@ export const probeBadgeType = (type: string, onSettled: () => void): void => {
       type,
       setTimeout(() => {
         TIMERS.delete(type);
-        settle(type, "missing", onSettled);
+        settle(type, "missing");
       }, GRACE_MS),
     );
     // No polling and no retry count: this resolves exactly when the element
@@ -69,7 +85,7 @@ export const probeBadgeType = (type: string, onSettled: () => void): void => {
         clearTimeout(timer);
         TIMERS.delete(type);
       }
-      settle(type, "ok", onSettled);
+      settle(type, "ok");
     });
     return;
   }
@@ -83,7 +99,7 @@ export const probeBadgeType = (type: string, onSettled: () => void): void => {
   void window.loadCardHelpers().then((helpers) => {
     TIMERS.delete(type);
     const el = helpers.createBadgeElement({ type } as never) as HTMLElement;
-    settle(type, el.tagName.toLowerCase() === "hui-error-badge" ? "missing" : "ok", onSettled);
+    settle(type, el.tagName.toLowerCase() === "hui-error-badge" ? "missing" : "ok");
   });
 };
 
@@ -92,4 +108,5 @@ export const resetBadgeVerdicts = (): void => {
   for (const timer of TIMERS.values()) clearTimeout(timer);
   TIMERS.clear();
   VERDICTS.clear();
+  WAITERS.clear();
 };

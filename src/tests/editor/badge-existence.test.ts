@@ -75,3 +75,25 @@ describe("custom types", () => {
     expect(settled).toBe(1);
   });
 });
+
+describe("two callers for the same in-flight type", () => {
+  it("both callbacks fire exactly once and the probe runs only once", async () => {
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    spy.mockClear(); // spyOn reuses the same wrapper across tests — reset counts
+    let count1 = 0;
+    let count2 = 0;
+    const settled = new Promise<void>((r) =>
+      probeBadgeType("entity", () => {
+        count1++;
+        r();
+      }),
+    );
+    probeBadgeType("entity", () => {
+      count2++;
+    });
+    await settled;
+    expect(count1).toBe(1);
+    expect(count2).toBe(1);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+});

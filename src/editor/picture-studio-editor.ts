@@ -77,7 +77,15 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   patchPosition(index: number, position: Position): void {
     const config = this._config;
     if (!config) return;
-    const items = config.items.map((item, i) => (i === index ? { ...item, position } : item));
+    const items = config.items.map((item, i) => {
+      if (i !== index) return item;
+      // Unreachable today: an unknown item has no layer in the card, so a drag
+      // can never produce its index. Guard for consistency with setAnchor and
+      // setVisibility, and to keep storedConfig's raw-passthrough the only path
+      // for unknown items regardless of future callers.
+      if (item.type === "unknown") return item;
+      return { ...item, position };
+    });
     this._commit({ ...config, items });
   }
 

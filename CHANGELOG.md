@@ -57,7 +57,7 @@
 - A single unreadable item no longer replaces the whole card with an error. The
   card skips it and draws everything else; the entry stays in your YAML exactly
   as you wrote it.
-- Conditions written as something other than a list are ignored instead of
+- A `visibility:` written as something other than a list is ignored instead of
   breaking the card. The item always shows, and its Visibility section explains
   what happened and offers to clear them.
 
