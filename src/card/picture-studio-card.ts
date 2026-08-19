@@ -436,6 +436,10 @@ export class PictureStudioCard extends LitElement {
     if (!tag) return undefined;
     const el = document.createElement(tag) as unknown as LovelaceBadgeElement;
     el.setConfig(item.config as unknown as BadgeConfig);
+    // Stamp the editing flag at birth so the element is never created into the
+    // wrong state. The loop in _syncEditingAndDrag keeps it correct on
+    // editing transitions that do not rebuild the children.
+    (el as HTMLElement & { editing?: boolean }).editing = this.editing;
     return el;
   }
 

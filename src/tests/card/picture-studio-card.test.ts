@@ -418,3 +418,49 @@ describe("a panel view's card tokens", () => {
     expect(cssRules(PictureStudioCard.styles).get(":host([ispanel])")).toBeUndefined();
   });
 });
+
+describe("editing flag on element rebuild", () => {
+  const LABEL_CONFIG = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [{ type: "element", config: { type: "state-label", entity: "sensor.a" } }],
+  };
+
+  const labelEl = (card: PictureStudioCard): HTMLElement & { editing?: boolean } =>
+    root(card).querySelector(LABEL_TAG) as HTMLElement & { editing?: boolean };
+
+  it("carries editing=true onto a rebuilt label element after a config change", async () => {
+    const card = await mountCard(LABEL_CONFIG);
+
+    // Enter editing mode: preview=true plus a registered editor, matching the
+    // pattern used elsewhere in this suite.
+    card.preview = true;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+    });
+    await flush();
+
+    expect((card as unknown as { editing: boolean }).editing).toBe(true);
+    expect(labelEl(card)?.editing).toBe(true);
+
+    // Force a DOM rebuild by changing the item's shape (adding visibility).
+    card.setConfig({
+      ...LABEL_CONFIG,
+      items: [
+        {
+          type: "element",
+          config: { type: "state-label", entity: "sensor.a" },
+          visibility: [{ condition: "screen" }],
+        },
+      ],
+    });
+    await card.updateComplete;
+    await flush();
+
+    // The rebuilt label element must receive editing=true, not default to false.
+    expect(labelEl(card)?.editing).toBe(true);
+  });
+});
