@@ -138,3 +138,57 @@ Both are recorded rather than owed; neither blocks anything.
   boundary-tested** — `sel` is never equal to `to`, nor to `from + 1`. The
   arithmetic was checked by hand against `moveItem`'s two splices by two
   reviewers. A future off-by-one at an inclusive endpoint would not be caught.
+
+## 8. The config form's layout is being redrawn
+
+**Asked 2026-08-19, at the very end of the header brainstorm. Not designed.**
+It changes where entry 2's two touch points land, so the two are brainstormed
+together, and `docs/superpowers/specs/2026-08-19-card-heading-design.md` is
+annotated to say so.
+
+What the user sketched:
+
+- **"Items" becomes a collapsible section**, with a **count badge** and a
+  **max-height** so a long list stops pushing everything else off the screen.
+  That is `badge-list.ts`, which is not collapsible today.
+- **"Card options" is split.** Its label comes from HA
+  (`picture-elements.card_options`) and it currently holds everything:
+  - **Heading** — title, icon, **and the badge list directly inside**, rather
+    than a separate "Badges" section after it. This supersedes open question 4
+    of the spec: the section no longer writes to two places, because it no
+    longer exists.
+  - **Image** or **Background** — the image selectors and the camera entity.
+  - **Filter** — `state_filter` and `dark_mode_filter`.
+
+**What the filters actually do**, established while the question was asked (read
+in `components/hui-image.ts` at 20260729.6). All three are **CSS `filter`
+strings applied to the background image**, concatenated in this order:
+
+```
+filter = (filter || "")
+       + (darkMode && dark_mode_filter ? dark_mode_filter : "")
+       + (state_filter[state of `entity`] ?? "")
+```
+
+- `filter` is unconditional and is **YAML-only in our form** — if a Filter
+  section exists, it is odd for it not to be there.
+- `dark_mode_filter` is appended only when `hass.themes.darkMode`. Typical use:
+  `brightness(0.6)` to dim a floorplan at night.
+- `state_filter` is a *state → filter* map keyed on the state of **`entity`**,
+  and **there is no `entity` field in our form** — only `camera_image`, bounded
+  to the camera domain. So `state_filter` is configurable through the interface
+  while the key that makes it work is not. That is trap n°1 in a section we are
+  about to build on purpose; decide it rather than inherit it.
+- **The sting**: when the computed filter is empty *and* `entity` is set,
+  `hui-image` applies `DEFAULT_FILTER = grayscale(100%)` as soon as the entity
+  is off or unavailable **and** the displayed image is a fallback (no
+  `state_image` matched). Setting `entity` alone is enough to grey the plan,
+  with nothing in the config saying so.
+
+All three are in `BACKGROUND_KEYS` and forwarded verbatim to
+`hui-image-element`, so they do work today.
+
+**A happy side effect of `heading.title`**, noticed here: `title` is explicitly
+*excluded* from `BACKGROUND_KEYS` because `hui-image-element` would feed it to
+`computeTooltip` and turn it into a hover tooltip over the image. Under
+`heading.title` that hazard cannot recur by construction.

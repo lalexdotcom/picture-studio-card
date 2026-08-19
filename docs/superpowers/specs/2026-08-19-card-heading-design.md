@@ -73,6 +73,15 @@ first time they open the editor; a config never opened keeps rendering.
 
 ## 2. The editor
 
+**Amended 2026-08-19, later the same day: where these two touch points land is
+reopened.** The user has since asked for the whole config form to be redrawn —
+"Card config" split into *Heading* (with the badge list **directly inside**,
+not as a section after it), *Image* / *Background* and *Filter*, and "Items"
+made collapsible with a count badge and a max-height. That is
+`mem:picture-studio/follow-ups` entry 8, and it is brainstormed together with
+this. What follows describes the *fields* and the *plumbing*, which the
+reorganisation does not change; only their placement is in question.
+
 Two touch points, both where the user asked for them.
 
 **In "Card config"**, an icon field right after the title:
@@ -303,8 +312,11 @@ text recorded — trap n°5.
 2. **The icon's size** once the weight is settled — 18px sits under 16px text
    for them; ~22px is the proportional guess, unverified.
 3. **The header's own padding**, now that `ha-card`'s no longer applies.
-4. **"Card config" writing to two places.** It works; it is the section title
-   that would start to mislead. Leave it, or split a "Heading" section out.
+4. ~~**"Card config" writing to two places.**~~ **Superseded 2026-08-19** by
+   `mem:picture-studio/follow-ups` entry 8: the section is being split, and a
+   *Heading* section carrying title, icon and the badge list answers this by
+   removing the section that had the problem. Nothing to decide here any more —
+   it is decided in that brainstorm.
 5. **A tolerated `heading_style`** in stored config, or an unknown key we drop.
 6. **Whether the header sits above or below the image** — assumed above
    throughout, never actually asked.
