@@ -35,8 +35,11 @@ per-tick guard the elements never had, the Content panel with its warning marker
 live visibility verdict in the Visibility header — and, from the last branch, **an
 unreadable item is ignored rather than fatal**.
 
-**Next up, agreed for 1.4.1: redo the screenshots** in `docs/images/` — they predate
-the state-label kind, the error rows and the new hover treatment.
+**Next release is 1.5.0**, and it carries two things: **badges in the card header**
+(the brainstorm the user opened right after this close — see
+`mem:picture-studio/follow-ups` entry 2, including the `loadCardHelpers` wall that
+decides its shape), and **the redone screenshots** in `docs/images/`, shot last so
+they are not stale on arrival. There is no 1.4.1.
 
 ## Where things are
 

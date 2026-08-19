@@ -14,17 +14,20 @@ card changes, this one grows and empties.
 
 ---
 
-## 1. The screenshots — agreed for 1.4.1
+## 1. The screenshots — they ship with 1.5.0
 
 `docs/images/` still shows the card as it was before `state-label` existed. The
 GIFs predate the second element kind, the new hover treatment, the item list
 reading top-down, and every error row. The README leans on them heavily —
 they are the first thing a visitor sees.
 
-The user named this as the next step at the close of 1.4.0, so it needs no
-brainstorm, only doing. Worth deciding while shooting them: whether an error row
-is worth showing at all, or whether the happy path is the whole story a landing
-page should tell.
+**Retargeted 2026-08-19: they ride with 1.5.0, not a 1.4.1.** So they are shot
+*after* the header badges land (entry 2), not before — otherwise they would be
+stale on arrival for the second time running. It needs no brainstorm, only
+doing, and it is the last thing done before that release rather than the first.
+
+Worth deciding while shooting them: whether an error row is worth showing at all,
+or whether the happy path is the whole story a landing page should tell.
 
 ## 2. Badges in the card header
 
