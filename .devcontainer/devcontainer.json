@@ -39,6 +39,12 @@
 			],
 			"settings": {
 				"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
+				// Use the project's own TypeScript rather than the one bundled with
+				// the extension. `typescript` is the native compiler since 7.0:
+				// lib/getExePath.js resolves @typescript/typescript-<platform>-<arch>
+				// and picks `tsc` or `tsgo` from the package name, and the extension
+				// applies the same resolution to this path.
+				"js/ts.tsdk.path": "node_modules/typescript/lib",
 				// Machine-scoped (the Claude Code extension declares both as `scope: machine`), so they
 				// cannot live in .vscode/settings.json. They belong here rather than in post-create.sh:
 				// VS Code writes these into ~/.vscode-server/data/Machine/settings.json BEFORE attaching,
