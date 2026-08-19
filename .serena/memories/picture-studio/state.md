@@ -17,30 +17,26 @@ Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
 automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published 2026-08-17),
 1.3.1 (2026-08-17).
 
-## Work in progress — 1.4.0, on `main`, unreleased
+## 1.4.0 is bumped, merged and waiting on the push
 
-**Session closed 2026-08-19. 519 tests green, lint exit 0, `tsc` clean, build
-178.2 kB / 41.6 kB, tree clean, nothing pushed.**
+**Session closed 2026-08-19. 584 tests green, lint 0, `tsc` clean, build 189.6 kB /
+44.5 kB, tree clean, nothing pushed.**
 
-Both feature branches are merged into `main` and deleted: `feat/state-label`
-(merge `29c58bd`) and `feat/config-tidy-up` (merge `7da4902`, whole-branch review
-READY TO MERGE, browser-validated in a panel view and a sections view).
+`package.json` says **1.4.0** and the CHANGELOG heading reads `## 1.4.0 — 2026-08-19`.
+Three feature branches merged into `main` and deleted: `feat/state-label` (`29c58bd`),
+`feat/config-tidy-up` (`7da4902`), `feat/unknown-items` (`5cafe9e`). The bump is
+`a0f8dcc`. **Only the push is left, and it is the user's.** Pushing publishes: CI, then
+`release.yml` reads `version` and creates the `v1.4.0` tag and the release.
 
-**The only thing left before publication is the 1.4.0 bump.** `package.json`
-still says `1.3.1` and the CHANGELOG heading still reads `unreleased`; both move
-together, and **the bump has to precede any push of `main`** — pushing without it
-sends the release workflow after a `v1.3.1` tag that already exists. The bump is
-the user's call, and the push is the user's alone.
+What 1.4.0 contains, for the release note: the `state-label` element kind, the halo
+turned opt-in, the state colour on both kinds, one hover treatment shared by them, the
+item list reading top-down, `anchor` moved inside `position`, a label's `show` list, the
+per-tick guard the elements never had, the Content panel with its warning marker, the
+live visibility verdict in the Visibility header — and, from the last branch, **an
+unreadable item is ignored rather than fatal**.
 
-What 1.4.0 contains, for the release note: the `state-label` element kind, the
-halo turned opt-in, the state colour on both kinds, one hover treatment shared by
-them, the item list reading top-down, `anchor` moved inside `position`, a label's
-`show` list and what an empty one does, the per-tick guard the elements never had,
-the Content panel we now own with its warning marker, and the live visibility
-verdict in the Visibility header.
-
-Left behind: `.superpowers/sdd/2026-08-18-config-tidy-up/` still exists — its
-deletion was refused by permissions. Git-ignored scratch, harmless.
+**Next up, agreed for 1.4.1: redo the screenshots** in `docs/images/` — they predate
+the state-label kind, the error rows and the new hover treatment.
 
 ## Where things are
 
@@ -94,6 +90,7 @@ src/editor/state-label-form.ts    the label's schema halves
 src/editor/state-icon-form.ts     the icon's schema halves
 src/editor/anchor-picker.ts       switch + hand-built 3x3 grid
 src/editor/badge-catalog.ts       core + custom badge choices
+src/editor/badge-existence.ts     does this HA know this badge type? cache + grace
 src/editor/element-catalog.ts     element kinds, labels, stubs
 src/editor/items.ts               add / replace / move / remove / rowLabel (pure)
 src/editor/icons.ts               only the icon NAMES two components share
@@ -127,6 +124,17 @@ items:
       # a label's chrome instead: { theme, radius(px), pill, opacity, padding }
 ```
 
+In memory only, never in YAML, a third variant holds what we could not read:
+
+```ts
+{ type: "unknown", raw: <the entry, untouched>,
+  reason: "item-type" | "config-missing" | "element-type", token?: string }
+```
+
+`reason` and `token` are decided at normalization and never re-derived. `raw` is what
+`storedConfig` emits back — no spread, no key deletion, no position rewrite, so a
+`top: 30` returns as `30` and not `"30%"`.
+
 ## Decisions that must not be re-litigated
 
 - **Two families, closed set; the open set is `config.type`.** `type` is
@@ -138,9 +146,27 @@ items:
   `picture-studio-card.ts`, and `storedConfig`'s `isLabel` in `config.ts`. A
   third kind added without touching all four is not rejected — it is silently
   treated as an icon. Nothing is broken today (`normalizeElementConfig` raises on
-  an unknown type first), but the checklist is four files, not one. Never ignore or purge an unreadable
-  item: `storedConfig` rewrites the whole config on every editor commit, so a
-  drop becomes permanent on the first drag.
+  an unknown type first), but the checklist is four files, not one — and since 1.4.0
+  the two form sites carry an `assertNever` guard, so a third kind is a compile
+  error at each rather than a wrong render. **Measured**: widening `ElementConfig`
+  yields exactly two `tsc` errors.
+- **An unreadable item is ignored, not fatal** (1.4.0). This **reverses** the old
+  "never ignore or purge an unreadable item" rule, and legitimately: that rule
+  refused ignoring *because it led to losing* — `storedConfig` rewrites the whole
+  config on every editor commit. An item held as an `UnknownItem` and re-emitted
+  **verbatim**, position unnormalized, loses nothing, so the objection dissolves.
+  Spec: `docs/superpowers/specs/2026-08-19-unknown-items-design.md`.
+  - Exactly one item-level failure is still fatal: an `items[i]` that is not an
+    object. No family, no position, not even a key to name in a row — HA's error
+    card, which prints the offending config, says more than we could.
+  - **Two independent sources** put an editor row into the error state and render
+    alike: the model's `UnknownItem`, and the runtime verdict of
+    `src/editor/badge-existence.ts` for a badge type this HA does not have. The
+    glyph says which **family** broke — `mdi:alert-box` for a badge,
+    `mdi:alert-circle` otherwise.
+  - A malformed `visibility` is **not** an unknown item: the value is kept raw,
+    `hasVisibility` reports nothing, the item always shows, and its Visibility
+    section carries an `ha-alert` with the only path to clearing it.
 - **`config` is opaque per family.** A badge's payload belongs to a third party:
   never read, validate or rewrite it. An element's is ours — but keep unknown
   keys. `size` and `chrome` are *our* closed records inside it, so an unknown key
@@ -198,6 +224,31 @@ items:
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
 
 ## Hard-won facts about Home Assistant (all verified in their source)
+
+- **The badge registry, read out of `frontend_latest/14887.*.js` (build 20260729.6):**
+  `KNOWN = {error, entity}` eager, `LAZY = {entity-filter, shortcut, state-label,
+  power-total, gas-total, water-total}`. **Eight native types; our `CORE_BADGES` lists
+  two** — and that is correct, it mirrors `coreBadges`, which is the *picker's* list.
+  So "renders but is not in our catalogue" is a real, testable state.
+  The factory's last argument is `"entity"`, the **default type**: a badge with no
+  `type` at all is legal and means `entity`.
+- **`createBadgeElement` never throws.** It is the catching wrapper: for a type it
+  cannot build it returns a `hui-error-badge` carrying the message. That returned tag
+  is the only synchronous existence signal available to a custom card, and it is what
+  `src/editor/badge-existence.ts` reads.
+- **A `custom:` badge that is not defined gets its error badge hidden for 2000 ms**
+  (`display: None` + a timer) while `customElements.whenDefined(tag)` is awaited, so an
+  error is not flashed at a resource about to load. A tag with **no dash** can never be
+  a custom element, so HA returns the error at once there. And since HA rebuilds the
+  card element on *every* config change, that timer restarts on every drag — which is
+  why the card un-hides it while `editing`.
+- **`ha-alert`** takes `alert-type` (property `alertType`), and `<ha-button size="s"
+  slot="action">` is HA's own idiom for its action. Its internal
+  `.icon.no-title { align-self: center }` means **the icon centres itself when no title
+  is passed** — the only clean route to a centred icon, since the layout is in its
+  shadow DOM.
+- **`ha-button` takes `variant` (`neutral|danger|warning|brand|success`) and
+  `appearance` (`plain|filled|outlined`).**
 
 - **HA rebuilds the card element on every config change** — no card-side state
   survives a commit.
@@ -337,7 +388,16 @@ items:
    and the user saw in seconds. **Plan for the walk; do not hope to skip it.**
 4. **A test that restates a constant stops guarding it.** Assert literals — which
    is why every `state-color` expectation spells the whole `var()` chain out.
-5. **A pair of tests that check different sets is a hole.** The two localization
+5. **A test that exercises the path but cannot distinguish the defect.** The most
+   expensive trap of the 2026-08-19 session: **five** tests written that round passed
+   without guarding anything, each for a different reason — a crash that masked the
+   real defect, a first build that never reads the array being tested, an assertion on
+   an HTML attribute where the code binds a JS property, a fixture whose `.length` was
+   `undefined` where the bug needed a string, and a fixture whose display and array
+   indices coincided. **The rule: run every new test against the defect before keeping
+   it, and record the failure text.** A green suite proves nothing about a test that
+   has never been red.
+6. **A pair of tests that check different sets is a hole.** The two localization
    tests once asserted different keys; they now share one `KEYS` list. Same
    reasoning put the shared hover block's assertions in one file, with both
    element tests asserting the *same* three selectors.
@@ -368,6 +428,22 @@ items:
   not read stdin the way `git commit -F -` does.
 - Review findings have repeatedly been right in conclusion and wrong in
   mechanism. Verify a claim in HA's source before dispatching a fix for it.
+- **`vi` is NOT exported by `@rstest/core` 0.11.6.** Spies and fake timers go through
+  the `rstest` object — `rstest.spyOn`, `rstest.useFakeTimers`,
+  `rstest.advanceTimersByTime`, `rstest.useRealTimers`. It works on DOM element
+  instance methods under happy-dom. `src/tests/editor/badge-existence.test.ts` set the
+  idiom; it is the first file in the repo to need either.
+- **A Lit property binding (`.icon=${…}`) is a JS property, not an HTML attribute**, and
+  happy-dom does not reflect one onto an undefined custom element. Assert
+  `(el as { icon?: string } | null)?.icon`, never `getAttribute("icon")`. A *static*
+  `icon="mdi:…"` in the template is a real attribute and `getAttribute` is right for it.
+  Match the accessor to the binding — do **not** change the binding to suit the test.
+- **`typescript` is the native (Go) compiler since 7.0**: `lib/getExePath.js` resolves
+  `@typescript/typescript-<platform>-<arch>` and picks `tsc` or `tsgo` from the package
+  name. The VS Code extension is `TypeScriptTeam.native-preview`, pointed at the
+  project's own copy with `js/ts.tsdk.path` (the old
+  `typescript.native-preview.tsdk` is deprecated). `ms-vscode.vscode-typescript-next`
+  is the classic JS tsserver on the TS 6 line and was removed — the two compete.
 - **`pnpm lint` is not silent on a clean tree**: 6 warnings and 1 info, all
   pre-existing, all in test files plus one `useLiteralKeys` in
   `element-form.ts`. The bar is **exit code 0**, not an empty output — and an
