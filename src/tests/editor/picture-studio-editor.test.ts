@@ -73,9 +73,7 @@ describe("a form opens at its own top", () => {
 describe("a missing badge refuses the form and does not scroll the editor", () => {
   const probeHelpers = {
     createBadgeElement: (c: { type?: string }) =>
-      document.createElement(
-        c.type === "entity" ? "hui-entity-badge" : "hui-error-badge",
-      ),
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
   };
 
   // Config: item 0 has a missing type, item 1 is valid.
@@ -89,20 +87,21 @@ describe("a missing badge refuses the form and does not scroll the editor", () =
   } as unknown as import("../../config").PictureStudioConfig;
 
   const mountMissing = async () => {
-    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers =
-      async () => probeHelpers;
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
     const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
     el.setConfig(CONFIG_WITH_MISSING);
     el.hass = { localize: () => "", states: {} } as never;
     document.body.append(el);
-    // First microtask tick — Lit renders but probe hasn't resolved yet.
-    await Promise.resolve();
-    // Drain the probe — same pattern as badge-list.test.ts "a badge whose type does not exist".
-    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    // Settle the verdict directly so the routing guard sees "missing" before any
+    // select() call, without relying on the badge-list child's render tick.
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
     await el.updateComplete;
 
     let scrolls = 0;
-    el.scrollIntoView = () => { scrolls++; };
+    el.scrollIntoView = () => {
+      scrolls++;
+    };
     return { el, calls: () => scrolls };
   };
 
