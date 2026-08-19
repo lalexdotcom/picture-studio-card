@@ -272,7 +272,9 @@ Every item takes an optional `visibility` list. The conditions are Home
 Assistant's own — entity state, numeric state, screen size, time, user, zone,
 and the `and` / `or` / `not` combinators — the same ones a card or a badge
 accepts. The item is drawn when every entry in the list is met; an absent or
-empty list means always drawn.
+empty list means always drawn. A `visibility` that is not a list at all is
+ignored rather than rejected: the item is drawn, your YAML is left as you wrote
+it, and the editor's Visibility section says so and offers to clear it.
 
 In the editor, items carrying conditions are marked in the preview, and each
 item's form has a "Visibility" section with Home Assistant's condition editor
@@ -399,7 +401,8 @@ What makes a report actionable here, roughly in order of usefulness:
 - **A screenshot**, when the problem is something you can see. Placement,
   sizing and colour issues are far quicker to fix from an image than from a
   description.
-- **The browser console**, if the card shows an error card or nothing at all.
+- **The browser console**, if the card shows an error card or nothing at all. It
+  now names any item the card could not read, with its index and why.
 
 ## Development
 

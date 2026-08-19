@@ -29,13 +29,13 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"ms-vscode.vscode-typescript-next",
 				"Anthropic.claude-code",
 				"mhutchie.git-graph",
 				"biomejs.biome",
 				"github.vscode-github-actions",
 				"bierner.github-markdown-preview",
-				"bierner.markdown-preview-github-styles"
+				"bierner.markdown-preview-github-styles",
+				"TypeScriptTeam.native-preview"
 			],
 			"settings": {
 				"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
