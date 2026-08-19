@@ -31,6 +31,9 @@ const STRINGS = {
     chrome_padding: "Padding",
     label_empty: "Empty",
     label_empty_hint: "This item shows nothing",
+    visibility_visible: "Visible",
+    visibility_hidden: "Hidden",
+    visibility_invalid: "Invalid conditions",
   },
   fr: {
     items: "Items",
@@ -55,6 +58,9 @@ const STRINGS = {
     chrome_padding: "Marge",
     label_empty: "Vide",
     label_empty_hint: "Cet item n'affiche rien",
+    visibility_visible: "Visible",
+    visibility_hidden: "Caché",
+    visibility_invalid: "Conditions invalides",
   },
 } as const;
 

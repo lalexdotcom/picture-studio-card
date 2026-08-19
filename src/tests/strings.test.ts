@@ -68,6 +68,9 @@ describe("appearance strings", () => {
     "chrome_padding",
     "label_empty",
     "label_empty_hint",
+    "visibility_visible",
+    "visibility_hidden",
+    "visibility_invalid",
   ] as const;
 
   it("serves the section's own fields in English", () => {
@@ -82,10 +85,13 @@ describe("appearance strings", () => {
       "Padding",
       "Empty",
       "This item shows nothing",
+      "Visible",
+      "Hidden",
+      "Invalid conditions",
     ]);
   });
 
-  it("serves the same ten in French", () => {
+  it("serves the same thirteen in French", () => {
     const fr = hass({ language: "fr" });
     expect(KEYS.map((key) => localizeOwn(fr, key))).toEqual([
       "Détacher",
@@ -98,6 +104,9 @@ describe("appearance strings", () => {
       "Marge",
       "Vide",
       "Cet item n'affiche rien",
+      "Visible",
+      "Caché",
+      "Conditions invalides",
     ]);
   });
 });

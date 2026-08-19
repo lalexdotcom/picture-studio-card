@@ -1,11 +1,45 @@
 import { css, html, LitElement, nothing } from "lit";
+import type { StringKey } from "../strings";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, VisibilityCondition } from "../types";
 
 /** Home Assistant's whole visibility tab: the status banner and the list. */
 const HA_EDITOR = "hui-card-visibility-editor";
+/** The oracle element that evaluates conditions and exposes the verdict. */
+const HA_STATUS = "ha-visibility-status";
 
 const VISIBILITY_ICON = "mdi:eye";
+
+type OracleState = "visible" | "hidden" | "invalid";
+
+/** Wraps the elements we create from HA_STATUS with its known public surface. */
+interface OracleEl extends HTMLElement {
+  hass: HomeAssistant;
+  conditions: VisibilityCondition[];
+  readonly state: OracleState;
+  readonly updateComplete: Promise<boolean>;
+}
+
+/** Mirrors ha-visibility-status' state → icon mapping exactly. */
+const VERDICT_ICONS: Record<OracleState, string> = {
+  visible: "mdi:eye",
+  hidden: "mdi:eye-off",
+  invalid: "mdi:alert-circle",
+};
+
+/** Same three states mapped to HA's semantic colour tokens. */
+const VERDICT_COLORS: Record<OracleState, string> = {
+  visible: "var(--success-color)",
+  hidden: "var(--warning-color)",
+  invalid: "var(--error-color)",
+};
+
+/** Localisation keys for the hover title on the status icon. */
+const VERDICT_KEYS: Record<OracleState, StringKey> = {
+  visible: "visibility_visible",
+  hidden: "visibility_hidden",
+  invalid: "visibility_invalid",
+};
 
 /**
  * The "Visibility" section both item forms carry.
@@ -23,11 +57,13 @@ export class PictureStudioVisibilitySection extends LitElement {
     hass: { attribute: false },
     visibility: { attribute: false },
     _available: { state: true },
+    _oracleState: { state: true },
   };
 
   declare hass?: HomeAssistant;
   declare visibility?: VisibilityCondition[];
   declare _available: boolean;
+  declare _oracleState: OracleState | undefined;
 
   /**
    * `hass` is reassigned on every state change, so this component re-renders on
@@ -41,9 +77,14 @@ export class PictureStudioVisibilitySection extends LitElement {
     config: { visibility: VisibilityCondition[] };
   };
 
+  /** The hidden oracle element, kept alive so its ConditionListenersController
+   *  re-evaluates when referenced entities change. */
+  private _oracle?: OracleEl;
+
   constructor() {
     super();
     this._available = false;
+    this._oracleState = undefined;
   }
 
   connectedCallback(): void {
@@ -93,6 +134,37 @@ export class PictureStudioVisibilitySection extends LitElement {
     );
   };
 
+  /**
+   * Manages the hidden oracle element that evaluates visibility conditions.
+   * The oracle is created lazily — only when there are conditions and the
+   * ha-visibility-status element is available. It stays mounted so its
+   * ConditionListenersController re-evaluates when referenced entities change;
+   * we re-read its state on every update and re-render if it changed.
+   */
+  protected updated(): void {
+    const count = this.visibility?.length ?? 0;
+    if (count === 0 || !this.hass || !customElements.get(HA_STATUS)) return;
+
+    if (!this._oracle) {
+      const el = document.createElement(HA_STATUS) as OracleEl;
+      // Hidden: purely an oracle — never shown to the user.
+      el.style.display = "none";
+      this.renderRoot.append(el);
+      this._oracle = el;
+    }
+
+    const oracle = this._oracle;
+    oracle.hass = this.hass;
+    oracle.conditions = this.visibility ?? [];
+
+    void oracle.updateComplete.then(() => {
+      const s = oracle.state;
+      if (s !== this._oracleState) {
+        this._oracleState = s;
+      }
+    });
+  }
+
   protected render() {
     const hass = this.hass;
     if (!hass) return nothing;
@@ -102,6 +174,8 @@ export class PictureStudioVisibilitySection extends LitElement {
       hass.localize("ui.panel.lovelace.editor.edit_card.tab_visibility") ||
       localizeOwn(hass, "visibility");
 
+    const statusAvailable = !!customElements.get(HA_STATUS);
+
     return html`
       <ha-expansion-panel outlined>
         <ha-icon slot="leading-icon" .icon=${VISIBILITY_ICON}></ha-icon>
@@ -110,7 +184,24 @@ export class PictureStudioVisibilitySection extends LitElement {
           // The `event` slot, not `icons`: ha-expansion-panel renders its header
           // as leading-icon → header → event → chevron → icons, so anything in
           // `icons` lands after the chevron. The count belongs beside the title.
-          count > 0 ? html`<ha-label slot="event" dense>${count}</ha-label>` : nothing
+          // The status icon follows the count pill in the same slot so the two
+          // read as a unit: "3 conditions, currently hidden".
+          count > 0
+            ? html`
+                <ha-label slot="event" dense>${count}</ha-label>
+                ${
+                  statusAvailable && this._oracleState
+                    ? html`<ha-icon
+                      slot="event"
+                      class="status-icon"
+                      .icon=${VERDICT_ICONS[this._oracleState]}
+                      style="color: ${VERDICT_COLORS[this._oracleState]}"
+                      title=${localizeOwn(hass, VERDICT_KEYS[this._oracleState])}
+                    ></ha-icon>`
+                    : nothing
+                }
+              `
+            : nothing
         }
         <div class="content">
           ${
@@ -154,6 +245,16 @@ export class PictureStudioVisibilitySection extends LitElement {
        leaves the chevron its own space. */
     ha-label[slot="event"] {
       margin-inline-start: var(--ha-space-2, 8px);
+    }
+    /* Bare icon — no background, no border-radius, no padding — matching the
+       .empty marker in the item list. 16px rather than the list's 14px: the
+       pill gives the eye its body; a bare glyph has only its stroke. Color is
+       set inline per verdict so the theme's own tokens carry through. */
+    .status-icon {
+      display: flex;
+      flex: none;
+      --mdc-icon-size: 16px;
+      margin-inline-start: var(--ha-space-3, 12px);
     }
   `;
 }
