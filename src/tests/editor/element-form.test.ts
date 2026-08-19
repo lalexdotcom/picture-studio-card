@@ -15,6 +15,7 @@ import {
   themeModeTitle,
   iconToFormData as toFormData,
 } from "../../editor/state-icon-form";
+import { labelToFormData } from "../../editor/state-label-form";
 import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE } from "../../element-size";
 import { cssRules } from "../card/harness";
 
@@ -203,8 +204,8 @@ describe("PictureStudioElementForm — radio group change", () => {
 
   it("emits element-changed with the chosen mode and all other keys intact", async () => {
     const form = await mountForm("auto");
-    // Size and position is the first ha-expansion-panel; Appearance follows it.
-    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[0];
+    // Content is [0]; Size and position is [1]; Appearance is [2].
+    const sizePanel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
     const group = sizePanel?.querySelector("ha-radio-group");
     expect(group).not.toBeNull();
     if (!group) return; // TypeScript guard; the assertion above already fails the test
@@ -244,6 +245,7 @@ describe("PictureStudioElementForm — radio group change", () => {
     // localize is stubbed as `L:${key}`, so the Appearance title arrives as the
     // borrowed Home Assistant key rather than as a translated word.
     expect(headers).toEqual([
+      "L:ui.panel.lovelace.editor.card.generic.content",
       "Size and position",
       "L:ui.panel.lovelace.editor.card.map.appearance",
     ]);
@@ -361,6 +363,16 @@ describe("elementFormLabel", () => {
     expect(elementFormLabel((() => "") as never, undefined, "size_ratio")).toBe("Ratio");
     expect(elementFormLabel((() => "") as never, undefined, "size_mode")).toBe("Size");
     expect(elementFormLabel((() => "") as never, undefined, "size_value")).toBe("Value");
+  });
+
+  it("labels the two fields whose generic key does not exist", () => {
+    const localize = ((key: string) =>
+      ({
+        "ui.panel.lovelace.editor.badge.entity.displayed_elements": "Éléments affichés",
+        "ui.panel.lovelace.editor.badge.entity.state_content": "Contenu de l'état",
+      })[key] ?? "") as never;
+    expect(elementFormLabel(localize, undefined, "displayed_elements")).toBe("Éléments affichés");
+    expect(elementFormLabel(localize, undefined, "state_content")).toBe("Contenu de l'état");
   });
 });
 
@@ -584,6 +596,7 @@ describe("PictureStudioElementForm — pill switch — fallback", () => {
     el.element = {
       type: "state-label",
       size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
       chrome: { theme: "auto", radius: 50, pill: false, opacity: 1, padding: 6 },
     } as StateLabelConfig;
     document.body.append(el);
@@ -604,8 +617,8 @@ describe("PictureStudioElementForm — pill switch — fallback", () => {
 
   it("renders ha-form for the pill when ha-switch is absent", async () => {
     const form = await mountLabelWithChrome();
-    // The Appearance panel is the second ha-expansion-panel in the form.
-    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    // Content is [0], Size and position is [1], Appearance is [2].
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[2];
     const pillRow = panel?.querySelector(".pill-row");
     expect(pillRow).not.toBeNull();
     // Fallback: both children are ha-form (pill + radius).  In the hand-rendered
@@ -637,6 +650,7 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     el.element = {
       type: "state-label",
       size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
       chrome: { theme: "auto", radius: 50, pill, opacity: 1, padding: 6 },
     } as StateLabelConfig;
     document.body.append(el);
@@ -650,7 +664,8 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
 
   it("renders .pill-control with ha-switch when ha-switch is registered", async () => {
     const form = await mountLabelWithChrome();
-    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    // Content is [0], Size and position is [1], Appearance is [2].
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[2];
     const pillControl = panel?.querySelector(".pill-control");
     expect(pillControl).not.toBeNull();
     expect(pillControl?.querySelector("ha-switch")).not.toBeNull();
@@ -663,7 +678,7 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     type CheckableEl = HTMLElement & { checked?: boolean };
 
     const formOff = await mountLabelWithChrome(false);
-    const panelOff = formOff.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const panelOff = formOff.shadowRoot?.querySelectorAll("ha-expansion-panel")[2];
     const cbOff = panelOff?.querySelector(".pill-control ha-switch") as CheckableEl | null;
     expect(cbOff).not.toBeNull();
     if (!cbOff) return;
@@ -671,7 +686,7 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     document.body.replaceChildren();
 
     const formOn = await mountLabelWithChrome(true);
-    const panelOn = formOn.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    const panelOn = formOn.shadowRoot?.querySelectorAll("ha-expansion-panel")[2];
     const cbOn = panelOn?.querySelector(".pill-control ha-switch") as CheckableEl | null;
     expect(cbOn).not.toBeNull();
     if (!cbOn) return;
@@ -684,7 +699,8 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     const events: CustomEvent[] = [];
     form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
 
-    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[1];
+    // Content is [0], Size and position is [1], Appearance is [2].
+    const panel = form.shadowRoot?.querySelectorAll("ha-expansion-panel")[2];
     const cb = panel?.querySelector(".pill-control ha-switch") as CheckableEl | null;
     expect(cb).not.toBeNull();
     if (!cb) return;
@@ -702,5 +718,187 @@ describe("PictureStudioElementForm — pill switch — hand-rendered", () => {
     // The chrome theme must survive the toggle — _pillChanged merges onto the
     // full record, it does not invent new keys.
     expect(changed.detail.element.chrome?.theme).toBe("auto");
+  });
+});
+
+// ── Content panel and warning marker ─────────────────────────────────────────
+//
+// The Content section is now our own ha-expansion-panel (index 0 in the shadow
+// root). These tests assert its structure and the marker that appears when a
+// state-label's show list is empty — the same signal badge-list.ts shows on
+// the item row, so a user can follow it from the list into the form.
+
+describe("PictureStudioElementForm — content panel", () => {
+  // ELEMENT_FORM_TAG and ha-radio-group/ha-radio-option are already registered
+  // by the earlier describe blocks in this file (module-level ifs).
+
+  const hass = {
+    localize: ((key: string) => `L:${key}`) as never,
+    states: {},
+  } as never;
+
+  const mountForm = async (
+    element: StateLabelConfig | StateIconConfig,
+  ): Promise<PictureStudioElementForm> => {
+    const el = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    el.hass = hass;
+    el.element = element;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  // --- Panel structure (both kinds) ---
+
+  it("content panel has the right title for a state-icon", async () => {
+    const form = await mountForm({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    const header = panel?.querySelector('[slot="header"]');
+    expect(header?.textContent?.trim()).toBe("L:ui.panel.lovelace.editor.card.generic.content");
+  });
+
+  it("content panel has mdi:text-short as its leading icon for a state-icon", async () => {
+    const form = await mountForm({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    const leadingIcon = panel?.querySelector('[slot="leading-icon"]');
+    expect(leadingIcon?.getAttribute("icon")).toBe("mdi:text-short");
+  });
+
+  it("content panel has the right title for a state-label", async () => {
+    const config: StateLabelConfig = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
+    };
+    const form = await mountForm(config);
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    const header = panel?.querySelector('[slot="header"]');
+    expect(header?.textContent?.trim()).toBe("L:ui.panel.lovelace.editor.card.generic.content");
+  });
+
+  it("content panel has mdi:text-short as its leading icon for a state-label", async () => {
+    const config: StateLabelConfig = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
+    };
+    const form = await mountForm(config);
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    const leadingIcon = panel?.querySelector('[slot="leading-icon"]');
+    expect(leadingIcon?.getAttribute("icon")).toBe("mdi:text-short");
+  });
+
+  // --- Warning marker ---
+
+  it("marker is present for a state-label with show: []", async () => {
+    const config: StateLabelConfig = { type: "state-label", size: DEFAULT_LABEL_SIZE, show: [] };
+    const form = await mountForm(config);
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    const marker = panel?.querySelector('[slot="event"]');
+    expect(marker).not.toBeNull();
+    expect(marker?.getAttribute("icon")).toBe("mdi:alert-outline");
+  });
+
+  it("marker is absent for a state-label with show: ['state']", async () => {
+    const config: StateLabelConfig = {
+      type: "state-label",
+      size: DEFAULT_LABEL_SIZE,
+      show: ["state"],
+    };
+    const form = await mountForm(config);
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    expect(panel?.querySelector('[slot="event"]')).toBeNull();
+  });
+
+  it("marker is absent for a state-icon, which has no show list", async () => {
+    const form = await mountForm({ type: "state-icon", size: DEFAULT_ICON_SIZE });
+    const panel = form.shadowRoot?.querySelector("ha-expansion-panel");
+    expect(panel?.querySelector('[slot="event"]')).toBeNull();
+  });
+
+  // --- Warning marker CSS ---
+
+  it("marker CSS carries warning colour and 16px icon size", () => {
+    const rule = cssRules(PictureStudioElementForm.styles).get('ha-icon[slot="event"]');
+    expect(rule).toContain("color: var(--warning-color)");
+    expect(rule).toContain("--mdc-icon-size: 16px");
+  });
+
+  // --- Field preservation (the load-bearing invariant) ---
+  //
+  // Every ha-form gets the SAME complete .data. ha-form merges the changed
+  // field onto .data and re-emits the whole thing, so each form emits a
+  // complete record and _valueChanged can merge without losing anything. The
+  // tests below simulate that protocol and verify the output is complete.
+
+  it("editing the entity form emits a complete config — show list is not lost", async () => {
+    const labelConfig: StateLabelConfig = {
+      type: "state-label",
+      entity: "sensor.temperature",
+      show: ["state"],
+      size: DEFAULT_LABEL_SIZE,
+    };
+    const form = await mountForm(labelConfig);
+    const events: CustomEvent[] = [];
+    form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
+
+    // Simulate ha-form: it emits the full .data it was given, with one field
+    // changed. Entity is the only schema field, but .data holds everything.
+    const data = labelToFormData(labelConfig);
+    const entityForm = form.shadowRoot?.querySelectorAll("ha-form")[0];
+    entityForm?.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: { ...data, entity: "light.kitchen" } },
+        bubbles: true,
+      }),
+    );
+
+    expect(events).toHaveLength(1);
+    const result = (events[0] as CustomEvent<{ element: StateLabelConfig }>).detail.element;
+    expect(result.type).toBe("state-label");
+    expect(result.entity).toBe("light.kitchen");
+    // The show list must survive — it lives in the content form's schema but
+    // the entity form emits the full .data so nothing is dropped.
+    expect(result.show).toEqual(["state"]);
+    expect(result.size.mode).toBe(DEFAULT_LABEL_SIZE.mode);
+  });
+
+  it("editing the interactions form emits a complete config — entity and show survive", async () => {
+    const labelConfig: StateLabelConfig = {
+      type: "state-label",
+      entity: "sensor.temperature",
+      show: ["state"],
+      size: DEFAULT_LABEL_SIZE,
+    };
+    const form = await mountForm(labelConfig);
+    const events: CustomEvent[] = [];
+    form.addEventListener("element-changed", (e) => events.push(e as CustomEvent));
+
+    // Interactions form is the third ha-form in DOM order:
+    // [0] entity, [1] content-inner, [2] interactions.
+    const data = labelToFormData(labelConfig);
+    const interactionsForm = form.shadowRoot?.querySelectorAll("ha-form")[2];
+    interactionsForm?.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: {
+          value: {
+            ...data,
+            tap_action: { action: "navigate", navigation_path: "/lovelace" },
+          },
+        },
+        bubbles: true,
+      }),
+    );
+
+    expect(events).toHaveLength(1);
+    const result = (events[0] as CustomEvent<{ element: StateLabelConfig }>).detail.element;
+    expect(result.type).toBe("state-label");
+    expect(result.entity).toBe("sensor.temperature");
+    expect(result.show).toEqual(["state"]);
+    expect(result.tap_action).toEqual({ action: "navigate", navigation_path: "/lovelace" });
   });
 });

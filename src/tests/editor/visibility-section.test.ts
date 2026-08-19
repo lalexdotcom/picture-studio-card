@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, beforeAll, describe, expect, it } from "@rstest/core";
 import { VISIBILITY_SECTION_TAG } from "../../config";
 import { PictureStudioVisibilitySection } from "../../editor/visibility-section";
 import type { HomeAssistant } from "../../types";
+import { cssRules } from "../card/harness";
 
 const hass = {
   states: {},
@@ -78,5 +79,124 @@ describe("the visibility section", () => {
   it("builds a config on cold start with no conditions", async () => {
     const el = await mount(); // visibility = undefined
     expect(el.editorConfig()).toEqual({ visibility: [] });
+  });
+});
+
+// ── Guard: ha-visibility-status is not yet registered at this point in the
+//    file. The stub class below is only registered in the next describe's
+//    beforeAll, which runs after these tests. ──
+describe("status-icon guard (ha-visibility-status not registered)", () => {
+  it("renders no icon even when conditions are present", async () => {
+    const el = await mount([{ condition: "state" }]);
+    expect(el.renderRoot.querySelector(".status-icon")).toBeNull();
+  });
+});
+
+// ── Stub registered in the oracle describe's beforeAll ──
+class HaVisibilityStatusStub extends HTMLElement {
+  /** Tests set this before mounting to control what state the oracle reports. */
+  static _state: "visible" | "hidden" | "invalid" = "visible";
+
+  hass: unknown;
+  conditions: unknown;
+
+  get state(): "visible" | "hidden" | "invalid" {
+    return HaVisibilityStatusStub._state;
+  }
+
+  /** Resolves immediately — the stub does no async evaluation. */
+  get updateComplete(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+}
+
+describe("status icon with ha-visibility-status available", () => {
+  beforeAll(() => {
+    if (!customElements.get("ha-visibility-status")) {
+      customElements.define("ha-visibility-status", HaVisibilityStatusStub);
+    }
+  });
+
+  /**
+   * Mounts with a given oracle state and waits for the two-render cycle:
+   *   render 1 → updated() creates oracle + schedules .then()
+   *   microtask → _oracleState set → re-render queued
+   *   render 2 → icon visible
+   */
+  const mountWithStatus = async (
+    state: "visible" | "hidden" | "invalid",
+    conditions: Record<string, unknown>[],
+  ): Promise<PictureStudioVisibilitySection> => {
+    HaVisibilityStatusStub._state = state;
+    const el = await mount(conditions);
+    await Promise.resolve(); // oracle .then() microtask fires → _oracleState set
+    await el.updateComplete; // second render with the icon
+    return el;
+  };
+
+  it("shows neither pill nor icon when there are no conditions", async () => {
+    const el = await mount();
+    expect(el.renderRoot.querySelector("ha-label")).toBeNull();
+    expect(el.renderRoot.querySelector(".status-icon")).toBeNull();
+  });
+
+  it("renders pill then status icon in DOM order when conditions are hidden", async () => {
+    const el = await mountWithStatus("hidden", [{ condition: "state" }]);
+    const slotted = Array.from(el.renderRoot.querySelectorAll("[slot='event']"));
+    expect(slotted).toHaveLength(2);
+    expect(slotted[0]?.tagName.toLowerCase()).toBe("ha-label");
+    expect(slotted[1]?.tagName.toLowerCase()).toBe("ha-icon");
+  });
+
+  it("colours the hidden icon with the warning token", async () => {
+    const el = await mountWithStatus("hidden", [{ condition: "state" }]);
+    const icon = el.renderRoot.querySelector(".status-icon") as HTMLElement;
+    expect(icon.getAttribute("style")).toContain("var(--warning-color)");
+  });
+
+  it("renders the eye glyph and success token when visible", async () => {
+    const el = await mountWithStatus("visible", [{ condition: "state" }]);
+    const icon = el.renderRoot.querySelector(".status-icon") as HTMLElement & { icon?: string };
+    expect(icon.icon).toBe("mdi:eye");
+    expect(icon.getAttribute("style")).toContain("var(--success-color)");
+  });
+
+  it("renders the alert-circle glyph and error token when invalid", async () => {
+    const el = await mountWithStatus("invalid", [{ condition: "state" }]);
+    const icon = el.renderRoot.querySelector(".status-icon") as HTMLElement & { icon?: string };
+    expect(icon.icon).toBe("mdi:alert-circle");
+    expect(icon.getAttribute("style")).toContain("var(--error-color)");
+  });
+
+  it("is a bare icon — has --mdc-icon-size and a start gap but no background, border-radius, or padding", () => {
+    const rule = cssRules(PictureStudioVisibilitySection.styles).get(".status-icon");
+    expect(rule).toContain("--mdc-icon-size: 16px");
+    expect(rule).toContain("margin-inline-start");
+    expect(rule).not.toContain("background");
+    expect(rule).not.toContain("border-radius");
+    expect(rule).not.toContain("padding");
+  });
+
+  it("idles the oracle when conditions are cleared — resets verdict and empties the condition list", async () => {
+    // Start: conditions present, oracle created, icon shown.
+    const el = await mountWithStatus("hidden", [{ condition: "state" }]);
+    expect(el.renderRoot.querySelector(".status-icon")).not.toBeNull();
+
+    // Clear conditions — visibility goes to undefined.
+    el.visibility = undefined;
+    // First updateComplete: count=0 → updated() idles the oracle (_oracleState
+    // → undefined) which schedules a second render.
+    await el.updateComplete;
+    // Second updateComplete: settles with _oracleState still undefined.
+    await el.updateComplete;
+
+    // Neither pill nor icon in the header.
+    expect(el.renderRoot.querySelector("ha-label")).toBeNull();
+    expect(el.renderRoot.querySelector(".status-icon")).toBeNull();
+
+    // Oracle handed an empty list — ConditionListenersController released all
+    // subscriptions when setup([]) was called.
+    const oracle = el.renderRoot.querySelector("ha-visibility-status") as HaVisibilityStatusStub;
+    expect(oracle.conditions).toEqual([]);
   });
 });

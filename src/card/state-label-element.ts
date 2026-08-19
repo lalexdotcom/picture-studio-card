@@ -4,6 +4,7 @@ import type { StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, elementSizeCss } from "../element-size";
 import { hassRenderChanged } from "../has-changed";
 import { itemColorCss, stateColorBrightness } from "../state-color";
+import { localizeOwn } from "../strings";
 import type { HassEntity, HomeAssistant } from "../types";
 import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
 import { hasAction } from "./state-icon-element";
@@ -28,6 +29,7 @@ export class PictureStudioStateLabel extends LitElement {
   static properties = {
     _config: { state: true },
     _hass: { state: true },
+    editing: { type: Boolean },
   };
 
   // No accessibility modifier — just declare, matching the rest of the codebase.
@@ -35,10 +37,12 @@ export class PictureStudioStateLabel extends LitElement {
   // Reactive, not a plain field: shouldUpdate below reads the previous value out
   // of changedProperties, which only a declared property records.
   declare _hass?: HomeAssistant;
+  declare editing: boolean;
   private _clickFallback = false;
 
   constructor() {
     super();
+    this.editing = false;
     this.addEventListener("action", (ev: Event) => {
       const action = (ev as CustomEvent<{ action?: string }>).detail?.action;
       if (!action || !this._config) return;
@@ -84,19 +88,33 @@ export class PictureStudioStateLabel extends LitElement {
   protected render() {
     const config = this._config;
     if (!config) return nothing;
+
+    // Nothing to show. On a dashboard that means nothing at all — not even the
+    // chrome: under `anchor: auto` the translate is a percentage of the item's
+    // own box, so drawing a box here and none there would place the item in one
+    // spot and render it in another. With no box there is no offset, and the
+    // stored position simply waits for something to be ticked.
+    if (config.show.length === 0) {
+      if (!this.editing) return nothing;
+      // In the editor it still has to be selectable and draggable, so it gets a
+      // marker instead. A warning, not an error: the config is valid, its result
+      // is merely invisible.
+      return html`<div class="placeholder">${localizeOwn(this._hass, "label_empty")}</div>`;
+    }
+
     const stateObj = config.entity ? this._hass?.states?.[config.entity] : undefined;
 
     return html`
       <div class="chrome">
         <div class="content">
           ${
-            config.show_name && stateObj
+            config.show.includes("name") && stateObj
               ? html`<span class="name"
-                >${this._hass?.formatEntityName?.(stateObj, config.name) ?? ""}</span
-              >`
+                  >${this._hass?.formatEntityName?.(stateObj, config.name) ?? ""}</span
+                >`
               : nothing
           }
-          ${config.show_state ? this._renderState(stateObj) : nothing}
+          ${config.show.includes("state") ? this._renderState(stateObj) : nothing}
         </div>
       </div>
     `;
@@ -272,6 +290,33 @@ export class PictureStudioStateLabel extends LitElement {
            counterpart of the glyph state-badge dims. A name is not a state and
            keeps its own. */
         filter: var(--psc-label-brightness, none);
+      }
+      /* One colour at three strengths, so it reads on any photograph: a
+         saturated dashed border and text, over a fill that lets the picture
+         through. color-mix rather than a frozen rgba, so a theme that redefines
+         --warning-color carries the fill with it. */
+      .placeholder {
+        display: inline-block;
+        box-sizing: border-box;
+        font-size: var(--psc-label-size);
+        line-height: 1.2;
+        white-space: nowrap;
+        font-weight: var(--ha-font-weight-bold, 700);
+        /* Lower-cased in CSS, not in the catalogue: "Empty" and "Vide" stay
+           ordinary words a translator can read, and every language gets the
+           same treatment without a second string. */
+        text-transform: lowercase;
+        color: var(--warning-color);
+        /* One colour at three strengths, so it reads on any photograph: a
+           saturated dashed border and text over a fill that lets the picture
+           through. Settled by eye against an opaque fill, which detached the
+           word too hard from the image it sits on. color-mix rather than a
+           frozen rgba, so a theme redefining --warning-color carries the fill
+           with it. */
+        background: color-mix(in srgb, var(--warning-color) 15%, transparent);
+        border: 1px dashed var(--warning-color);
+        border-radius: 5px;
+        padding: 2px 4px;
       }
     `,
   ];

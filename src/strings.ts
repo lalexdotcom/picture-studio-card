@@ -29,6 +29,11 @@ const STRINGS = {
       "Adds a shadow and a light rim so the element stays readable on any picture.",
     chrome_pill: "Pill",
     chrome_padding: "Padding",
+    label_empty: "Empty",
+    label_empty_hint: "This item shows nothing",
+    visibility_visible: "Visible",
+    visibility_hidden: "Hidden",
+    visibility_invalid: "Invalid conditions",
   },
   fr: {
     items: "Items",
@@ -51,6 +56,11 @@ const STRINGS = {
       "Ajoute une ombre et un liseré clair pour rester lisible sur n'importe quelle image.",
     chrome_pill: "Pilule",
     chrome_padding: "Marge",
+    label_empty: "Vide",
+    label_empty_hint: "Cet item n'affiche rien",
+    visibility_visible: "Visible",
+    visibility_hidden: "Caché",
+    visibility_invalid: "Conditions invalides",
   },
 } as const;
 

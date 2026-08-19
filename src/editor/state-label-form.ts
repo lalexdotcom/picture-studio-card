@@ -1,48 +1,55 @@
 import { DEFAULT_LABEL_CHROME, normalizeLabelChrome } from "../chrome";
-import type { StateLabelConfig } from "../config";
+import { normalizeLabelShow, type StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
-export const labelSchema = (showTimeFormat: boolean): unknown[] => [
-  { name: "entity", selector: { entity: {} } },
+export const labelEntitySchema = (): unknown[] => [{ name: "entity", selector: { entity: {} } }];
+
+export const labelContentInnerSchema = (
+  showTimeFormat: boolean,
+  localize: LocalizeFunc,
+): unknown[] => [
+  { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
   {
-    name: "content",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:text-short",
-    schema: [
-      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
-      {
-        name: "displayed_elements",
-        selector: {
-          select: {
-            mode: "list",
-            multiple: true,
-            options: ["name", "state"].map((value) => ({ value, label: value })),
-          },
-        },
-      },
-      {
-        name: "state_content",
-        selector: { ui_state_content: { allow_name: true } },
-        context: { filter_entity: "entity" },
-      },
-      // Mirrors the entity-badge editor: shown only when the selected
-      // state_content carries a time value that ha-state-display renders as a
-      // clock — same condition, same selector.
-      ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
-      {
-        name: "color",
-        // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
-        // own recipe, so a label honours "state" exactly as an icon does. The
-        // default stays "none" — a label is text first, and text that changes
-        // colour on its own is a choice, not a default. See the spec, decision 6.
-        selector: {
-          ui_color: { default_color: "none", include_none: true, include_state: true },
-        },
-      },
-    ],
+    name: "color",
+    // Second, right after the name, which is where every other form in this
+    // editor and Home Assistant's own entity badge put it. It used to sit last;
+    // the order is the only thing that changed.
+    // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
+    // own recipe, so a label honours "state" exactly as an icon does. The
+    // default stays "none" — a label is text first, and text that changes
+    // colour on its own is a choice, not a default. See the spec, decision 6.
+    selector: {
+      ui_color: { default_color: "none", include_none: true, include_state: true },
+    },
   },
+  {
+    name: "displayed_elements",
+    selector: {
+      select: {
+        mode: "list",
+        multiple: true,
+        options: ["name", "state"].map((value) => ({
+          value,
+          label:
+            localize(`ui.panel.lovelace.editor.badge.entity.displayed_elements_options.${value}`) ||
+            value,
+        })),
+      },
+    },
+  },
+  {
+    name: "state_content",
+    selector: { ui_state_content: { allow_name: true } },
+    context: { filter_entity: "entity" },
+  },
+  // Mirrors the entity-badge editor: shown only when the selected
+  // state_content carries a time value that ha-state-display renders as a
+  // clock — same condition, same selector.
+  ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
+];
+
+export const labelInteractionsSchema = (): unknown[] => [
   {
     name: "interactions",
     type: "expandable",
@@ -61,6 +68,18 @@ export const labelSchema = (showTimeFormat: boolean): unknown[] => [
       },
     ],
   },
+];
+
+export const labelSchema = (showTimeFormat: boolean, localize: LocalizeFunc): unknown[] => [
+  ...labelEntitySchema(),
+  {
+    name: "content",
+    type: "expandable",
+    flatten: true,
+    icon: "mdi:text-short",
+    schema: labelContentInnerSchema(showTimeFormat, localize),
+  },
+  ...labelInteractionsSchema(),
 ];
 
 export const labelSizeSchema = (
@@ -150,14 +169,11 @@ export const labelChromeSchema = (_localize: LocalizeFunc): unknown[] => [
 ];
 
 export const labelToFormData = (config: StateLabelConfig): Record<string, unknown> => {
-  const { size, chrome, halo, show_name, show_state, ...rest } = config;
+  const { size, chrome, halo, show, ...rest } = config;
   const c = chrome ?? DEFAULT_LABEL_CHROME;
-  const displayed: string[] = [];
-  if (show_name) displayed.push("name");
-  if (show_state) displayed.push("state");
   return {
     ...rest,
-    displayed_elements: displayed,
+    displayed_elements: [...show],
     size_mode: size.mode,
     size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
     size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
@@ -227,8 +243,9 @@ export const labelFromFormData = (
     ...(rest as Omit<StateLabelConfig, "type" | "size" | "chrome" | "halo">),
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
-    show_name: shown.includes("name"),
-    show_state: shown.includes("state"),
+    // The control's own value, normalized rather than trusted: ha-form hands
+    // back whatever was in `.data`, and the model owns the shape.
+    show: normalizeLabelShow(shown),
     halo: halo_enabled === true,
     size: normalizeElementSize(
       {

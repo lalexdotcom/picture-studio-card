@@ -66,6 +66,11 @@ describe("appearance strings", () => {
     "chrome_content_ratio",
     "chrome_pill",
     "chrome_padding",
+    "label_empty",
+    "label_empty_hint",
+    "visibility_visible",
+    "visibility_hidden",
+    "visibility_invalid",
   ] as const;
 
   it("serves the section's own fields in English", () => {
@@ -78,10 +83,15 @@ describe("appearance strings", () => {
       "Content",
       "Pill",
       "Padding",
+      "Empty",
+      "This item shows nothing",
+      "Visible",
+      "Hidden",
+      "Invalid conditions",
     ]);
   });
 
-  it("serves the same eight in French", () => {
+  it("serves the same thirteen in French", () => {
     const fr = hass({ language: "fr" });
     expect(KEYS.map((key) => localizeOwn(fr, key))).toEqual([
       "Détacher",
@@ -92,6 +102,11 @@ describe("appearance strings", () => {
       "Contenu",
       "Pilule",
       "Marge",
+      "Vide",
+      "Cet item n'affiche rien",
+      "Visible",
+      "Caché",
+      "Conditions invalides",
     ]);
   });
 });

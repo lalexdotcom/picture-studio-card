@@ -157,7 +157,7 @@ items:
     position:
       top: 30%
       left: 60%
-    anchor: center               # optional; defaults to "auto"
+      anchor: center             # optional; defaults to "auto"
     visibility:                  # optional; absent or empty means always drawn
       - condition: state
         entity: input_boolean.show_badge
@@ -192,8 +192,7 @@ items:
     config:
       type: state-label
       entity: sensor.temperature
-      show_name: false           # optional; default false
-      show_state: true           # optional; default false
+      show: [state, name]        # absent => [state]
       name: ___device_name___    # optional; composed sentinels or plain text
       color: none                # state | none | a theme colour name
       state_content: state       # optional; string or list of strings
@@ -247,6 +246,15 @@ nine fixed points: `top-left`, `top-center`, `top-right`, `center-left`,
 `center`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right`. An
 absent `anchor` means `auto`. The value `proportional` is still read, for
 configs written before 1.2.0, and normalises to `auto`.
+
+`anchor` lives inside `position` — it says which point of the item the
+coordinates refer to. A config written before this release, with `anchor` beside
+`position`, is still read; the editor writes the new form back the first time you
+move anything.
+
+`show` lists what the label draws: `state`, `name`, or both. Absent means
+`[state]`. An empty list is allowed and means the label draws nothing at all —
+the editor marks it so you can still find and move it.
 
 Coordinates outside `0-100` are allowed and kept as written: under a fixed anchor
 they are how you place an item deliberately over the edge. Dragging never creates
@@ -373,6 +381,25 @@ The card sizes itself to the image by default. If you resize it to a height the 
 ## Roadmap
 
 Icons arrived in 1.2.0 and text labels in 1.4.0. Later versions will place more kinds of content on the image — buttons — drawn to sit alongside today's Home Assistant cards rather than to reproduce anything older.
+
+## Bug report
+
+Found something wrong? [Open an issue](https://github.com/lalexdotcom/picture-studio-card/issues/new).
+
+What makes a report actionable here, roughly in order of usefulness:
+
+- **The card's YAML.** Use the editor's three-dot menu → *Edit in YAML* and paste
+  the whole card. Most defects in this card are defects of one particular
+  configuration.
+- **Which view type** the dashboard uses — sections, panel or masonry. A view
+  redefines styling for everything underneath it, and this card has already
+  shipped bugs that only appeared in one of the three.
+- **Your Home Assistant version**, and the card's — the version is in the
+  release you installed through HACS.
+- **A screenshot**, when the problem is something you can see. Placement,
+  sizing and colour issues are far quicker to fix from an image than from a
+  description.
+- **The browser console**, if the card shows an error card or nothing at all.
 
 ## Development
 

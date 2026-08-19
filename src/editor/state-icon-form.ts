@@ -29,29 +29,25 @@ export const themeSelectRow = (localize: LocalizeFunc): unknown => ({
   },
 });
 
-export const iconSchema = (): unknown[] => [
-  { name: "entity", selector: { entity: {} } },
+export const iconEntitySchema = (): unknown[] => [{ name: "entity", selector: { entity: {} } }];
+
+export const iconContentInnerSchema = (): unknown[] => [
+  { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
   {
-    name: "content",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:text-short",
+    name: "",
+    type: "grid",
     schema: [
-      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
       {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "color",
-            selector: { ui_color: { default_color: "state", include_state: true } },
-          },
-          { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
-          { name: "show_entity_picture", selector: { boolean: {} } },
-        ],
+        name: "color",
+        selector: { ui_color: { default_color: "state", include_state: true } },
       },
+      { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
+      { name: "show_entity_picture", selector: { boolean: {} } },
     ],
   },
+];
+
+export const iconInteractionsSchema = (): unknown[] => [
   {
     name: "interactions",
     type: "expandable",
@@ -70,6 +66,18 @@ export const iconSchema = (): unknown[] => [
       },
     ],
   },
+];
+
+export const iconSchema = (): unknown[] => [
+  ...iconEntitySchema(),
+  {
+    name: "content",
+    type: "expandable",
+    flatten: true,
+    icon: "mdi:text-short",
+    schema: iconContentInnerSchema(),
+  },
+  ...iconInteractionsSchema(),
 ];
 
 export const iconSizeSchema = (

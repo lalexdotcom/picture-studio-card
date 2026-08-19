@@ -69,6 +69,13 @@ export const splitChoiceValue = (
   return { family, type: value.slice(at + 1) };
 };
 
+/** A label with an empty `show` draws nothing on the dashboard — say so here. */
+const showsNothing = (item: PictureItem): boolean =>
+  item.type === "element" &&
+  item.config.type === "state-label" &&
+  Array.isArray((item.config as { show?: unknown[] }).show) &&
+  (item.config as { show: unknown[] }).show.length === 0;
+
 export class PictureStudioBadgeList extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -209,6 +216,19 @@ export class PictureStudioBadgeList extends LitElement {
                       : nothing
                   }
                 </div>
+                ${
+                  // A bare icon rather than a pill: .conditional wears one
+                  // because it borrows ha-label's geometry, and a warning is not
+                  // a label. Before the eye, so the row reads left to right from
+                  // the most surprising fact.
+                  showsNothing(item)
+                    ? html`<ha-icon
+                        class="empty"
+                        icon="mdi:alert-outline"
+                        title=${localizeOwn(this.hass, "label_empty_hint")}
+                      ></ha-icon>`
+                    : nothing
+                }
                 ${
                   // States that the row carries visibility conditions. Not a
                   // control: no target, no ripple, no hover — and the same eye
@@ -353,6 +373,17 @@ export class PictureStudioBadgeList extends LitElement {
     .conditional ha-icon {
       display: flex;
       --mdc-icon-size: 14px;
+    }
+    /* 16px, not the eye's 14: the eye can afford 14 because its pill gives it
+       body, and a bare glyph has only its stroke. mdi:alert-outline rather than
+       an eye-off, because two eyes side by side — one "has conditions", one
+       "shows nothing" — would contradict each other half a centimetre apart. */
+    .empty {
+      display: flex;
+      flex: none;
+      color: var(--warning-color);
+      --mdc-icon-size: 16px;
+      margin-inline-end: var(--ha-space-2, 8px);
     }
     /* ha-icon-button pads itself out to a 48px touch target, which leaves a
        wide band of nothing between the two actions and before them. 36px is

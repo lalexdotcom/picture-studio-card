@@ -17,6 +17,20 @@
    dispatch, no commit without explicit validation.
 
 
+## Closing a session
+
+"On clôture" is an instruction, not a summary. It means, in order:
+
+1. **Merge onto `main`**, locally, if the whole-branch review came back
+   READY TO MERGE. If it did not, say so and stop — the merge is what the
+   review gates.
+2. **Update the project memory** so the next session resumes without
+   re-deriving anything: where the work stands, what remains, and what would
+   bite someone who picked it up cold.
+3. **Commit what is left.** Judge it: if the remaining diff is trivial —
+   memory files, docs, a settled style — commit it without asking. If it is
+   not, ask. Pushing is still never yours.
+
 ## Language
 
 ALWAYS use **French** language for chat. Everything else: **English**.
@@ -32,12 +46,18 @@ Run the project's linter/formatter after every modification if one is configured
    code got there belongs in the git history, not here.
 2. A change that alters existing behaviour goes under `Changed`, and says so
    plainly — that is the section people read before upgrading.
-3. At each delivery, **ask whether this is a version bump**, and which one.
+3. **`Added` comes before `Changed`, in every version.** What is new is what a
+   reader came for; what changed is what they check afterwards. The rest follow:
+   `Fixed`, `Removed`, `Deprecated`, `Security`. The release workflow only ever
+   anchors on the `## <version>` headings and copies everything until the next
+   one, so the order of the `###` sections inside is ours to choose and cannot
+   break a release.
+4. At each delivery, **ask whether this is a version bump**, and which one.
    Never decide it alone.
-4. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
+5. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
    `package.json`, and the git tag of the release must agree. HACS installs
    from the GitHub release, so the tag is what users actually get.
-5. The bump lands with the release, not before: while work is in progress the
+6. The bump lands with the release, not before: while work is in progress the
    heading reads `unreleased` and `package.json` still names the last shipped
    version.
 

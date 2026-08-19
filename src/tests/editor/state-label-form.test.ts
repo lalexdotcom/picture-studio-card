@@ -15,6 +15,7 @@ const base: StateLabelConfig = {
   type: "state-label",
   entity: "sensor.a",
   size: DEFAULT_LABEL_SIZE,
+  show: [],
 };
 
 const names = (schema: unknown[]): string[] =>
@@ -25,12 +26,14 @@ const names = (schema: unknown[]): string[] =>
 
 describe("labelSchema", () => {
   it("keeps the half of the badge form the icon left behind", () => {
-    expect(names(labelSchema(false))).toEqual([
+    expect(names(labelSchema(false, (() => "") as never))).toEqual([
       "entity",
       "name",
+      // Colour sits second, as it does in the icon's form and in Home
+      // Assistant's own entity badge.
+      "color",
       "displayed_elements",
       "state_content",
-      "color",
       "tap_action",
       "hold_action",
       "double_tap_action",
@@ -38,13 +41,13 @@ describe("labelSchema", () => {
   });
 
   it("inserts time_format after state_content when showTimeFormat is true", () => {
-    expect(names(labelSchema(true))).toEqual([
+    expect(names(labelSchema(true, (() => "") as never))).toEqual([
       "entity",
       "name",
+      "color",
       "displayed_elements",
       "state_content",
       "time_format",
-      "color",
       "tap_action",
       "hold_action",
       "double_tap_action",
@@ -52,19 +55,34 @@ describe("labelSchema", () => {
   });
 
   it("offers the state colour, and defaults to naming none", () => {
-    const color = JSON.stringify(labelSchema(false));
+    const color = JSON.stringify(labelSchema(false, (() => "") as never));
     expect(color).toContain('"default_color":"none"');
     expect(color).toContain('"include_none":true');
     expect(color).toContain('"include_state":true');
   });
+
+  it("localizes the displayed-elements options through Home Assistant's own keys", () => {
+    const localize = ((key: string) =>
+      ({
+        "ui.panel.lovelace.editor.badge.entity.displayed_elements_options.name": "Nom",
+        "ui.panel.lovelace.editor.badge.entity.displayed_elements_options.state": "État",
+      })[key] ?? "") as never;
+    const schema = JSON.stringify(labelSchema(false, localize));
+    expect(schema).toContain('"label":"Nom"');
+    expect(schema).toContain('"label":"État"');
+    // The raw values must never reach the screen.
+    expect(schema).not.toContain('"label":"name"');
+    expect(schema).not.toContain('"label":"state"');
+  });
 });
 
 describe("labelToFormData", () => {
-  it("flattens the two displayed parts into one multi-select", () => {
-    expect(
-      labelToFormData({ ...base, show_name: true, show_state: true }).displayed_elements,
-    ).toEqual(["name", "state"]);
-    expect(labelToFormData(base).displayed_elements).toEqual([]);
+  it("flattens the show list into one multi-select", () => {
+    expect(labelToFormData({ ...base, show: ["name", "state"] }).displayed_elements).toEqual([
+      "name",
+      "state",
+    ]);
+    expect(labelToFormData({ ...base, show: [] }).displayed_elements).toEqual([]);
   });
 
   it("shows the chrome numbers even when the chrome is off, so unchecking loses nothing", () => {
@@ -103,14 +121,12 @@ describe("labelFromFormData", () => {
   const round = (data: Record<string, unknown>) =>
     labelFromFormData(base, { ...labelToFormData(base), ...data });
 
-  it("splits the multi-select back into two booleans", () => {
+  it("maps the multi-select back to the show list", () => {
     expect(round({ displayed_elements: ["state"] })).toMatchObject({
-      show_name: false,
-      show_state: true,
+      show: ["state"],
     });
     expect(round({ displayed_elements: [] })).toMatchObject({
-      show_name: false,
-      show_state: false,
+      show: [],
     });
   });
 

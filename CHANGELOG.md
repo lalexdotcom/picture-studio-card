@@ -2,8 +2,26 @@
 
 ## unreleased
 
+### Added
+
+- **A new element kind, State label**: an entity's text placed on the picture.
+  Show its name, its state, or both, compose what the state says the same way a
+  badge does, pick a colour, and size it from the card's width like every other
+  item. It can stand on the same surface an icon can, with a pill or rounded
+  corners and a padding of your own.
+- **Each item kind now has its own glyph** in the editor's item list and add
+  menu: a sun for a state icon, a text card for a state label, and distinct
+  label shapes for the core and custom badge families.
+
 ### Changed
 
+- **A label now says what it shows in one place.** `show: [state, name]` replaces
+  the two separate switches, and a label that says nothing shows its state. An
+  empty list draws nothing at all — the editor marks those so you can still find
+  them.
+- **`anchor` moved inside `position`**, where the coordinates it qualifies live.
+  Dashboards written before this release keep working, and are rewritten the
+  first time you move an item.
 - **The halo around an icon** — the light rim and soft shadow that keep it
   readable on a photograph — is no longer drawn automatically. It is now a
   **Stand out** checkbox at the top of the new **Appearance** section, off by
@@ -32,17 +50,6 @@
   hold the button down. An item with no surface grows slightly instead, as it
   did before, because a shading laid over a photograph cannot be seen. Only
   items you can click react, and nothing reacts while you are editing the card.
-
-### Added
-
-- **A new element kind, State label**: an entity's text placed on the picture.
-  Show its name, its state, or both, compose what the state says the same way a
-  badge does, pick a colour, and size it from the card's width like every other
-  item. It can stand on the same surface an icon can, with a pill or rounded
-  corners and a padding of your own.
-- **Each item kind now has its own glyph** in the editor's item list and add
-  menu: a sun for a state icon, a text card for a state label, and distinct
-  label shapes for the core and custom badge families.
 
 ## 1.3.1 — 2026-08-17
 

@@ -285,6 +285,16 @@ describe("rowLabel for an element", () => {
       "light.a",
     );
   });
+
+  it("labels a row from the entity, so an item that draws nothing is still named", () => {
+    const item = {
+      type: "element",
+      position: { top: 1, left: 1 },
+      anchor: "auto",
+      config: { type: "state-label", entity: "sensor.a", show: [] },
+    } as unknown as PictureItem;
+    expect(rowLabel(item).primary).toBe("sensor.a");
+  });
 });
 
 describe("setVisibility", () => {

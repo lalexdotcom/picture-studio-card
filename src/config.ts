@@ -91,6 +91,29 @@ export interface StateIconConfig {
   halo?: boolean;
 }
 
+/** What a label draws. One idea, not two switches — see the 1.4.0 spec. */
+export type LabelPart = "state" | "name";
+
+/** A label that says nothing shows its state: that is what a label is for. */
+export const DEFAULT_LABEL_SHOW: LabelPart[] = ["state"];
+
+const LABEL_PARTS: readonly string[] = ["state", "name"];
+
+/**
+ * An absent list is the default; a present one is taken as written, including
+ * empty. Unknown entries are dropped, like every other key inside one of our own
+ * closed records, and a repeat is dropped with them — the list is a set with an
+ * order, not a bag.
+ */
+export const normalizeLabelShow = (raw: unknown): LabelPart[] => {
+  if (!Array.isArray(raw)) return [...DEFAULT_LABEL_SHOW];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (typeof entry === "string" && LABEL_PARTS.includes(entry)) seen.add(entry);
+  }
+  return [...seen] as LabelPart[];
+};
+
 /**
  * An entity's text on the picture. The mirror image of the state-icon: it keeps
  * the half of Home Assistant's entity-badge form the icon left behind — the
@@ -105,8 +128,7 @@ export interface StateLabelConfig {
   name?: string;
   /** "none" or a theme colour. Never "state" — see the spec, decision 6. */
   color?: string;
-  show_name?: boolean;
-  show_state?: boolean;
+  show: LabelPart[];
   /** What `state-display` composes; a list joins its parts. */
   state_content?: string | string[];
   time_format?: string;
@@ -193,6 +215,7 @@ export const normalizeElementConfig = (
       size: normalizeElementSize(raw.size, DEFAULT_LABEL_SIZE),
       chrome: normalizeLabelChrome(raw.chrome),
       halo: raw.halo === true,
+      show: normalizeLabelShow(raw.show),
     } as StateLabelConfig;
   }
   throw new Error(
@@ -245,7 +268,14 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
     }
 
     const position = normalizePosition(entry.position);
-    const anchor = parseAnchor(entry.anchor);
+    // Since 1.4.0 the anchor lives inside `position`: it says which point of the
+    // item the coordinates refer to, so it belongs with them. Read from beside
+    // `position` too — that is where 1.2.0 through 1.3.x wrote it, and a config
+    // is never rewritten in the old place. The new place wins when a config
+    // somehow carries both, so there is one answer rather than a merge.
+    const anchor = parseAnchor(
+      (isRecord(entry.position) ? entry.position.anchor : undefined) ?? entry.anchor,
+    );
     const visibility = normalizeVisibility(entry.visibility, index);
     const base = { position, anchor, ...(visibility ? { visibility } : {}) };
 
@@ -268,11 +298,17 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
   items: config.items.map((item) => {
     const stored: Record<string, unknown> = {
       ...item,
-      position: storedPosition(item.position),
+      // The anchor qualifies the coordinates, so it is written with them. The
+      // default is the absence of the key, so a config that never used an anchor
+      // comes back exactly as it went in.
+      position: {
+        ...storedPosition(item.position),
+        ...(item.anchor === "auto" ? {} : { anchor: item.anchor }),
+      },
     };
-    // The default is the absence of the key, so a config that never used an
-    // anchor comes back exactly as it went in.
-    if (item.anchor === "auto") delete stored.anchor;
+    // Always: `...item` copies the in-memory field, and item level is the one
+    // place the anchor must never be written back to.
+    delete stored.anchor;
     // Same rule as the anchor at its default, and the same rule Home Assistant
     // applies in its own editor: an empty list says nothing while looking like
     // it says something.
@@ -281,7 +317,9 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       // Only when every field is a default: a mode may be off and still carry
       // numbers the user typed, and dropping the key would lose them. A config
       // that never touched either key does not grow one.
-      const { size, chrome, halo, ...rest } = item.config;
+      const { size, chrome, halo, show, ...rest } = item.config as ElementConfig & {
+        show?: LabelPart[];
+      };
       const config: Record<string, unknown> = { ...rest };
       const isLabel = item.config.type === "state-label";
       const sizeDefaults = isLabel ? DEFAULT_LABEL_SIZE : DEFAULT_ICON_SIZE;
@@ -295,6 +333,11 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
         if (!isDefault) config.chrome = chrome;
       }
       if (halo) config.halo = true;
+      // The default is the absence of the key. An empty list is not the default:
+      // it is a deliberate "show nothing", and it has to survive the round trip.
+      if (!(isLabel && show?.length === 1 && show[0] === "state")) {
+        if (show) config.show = show;
+      }
       stored.config = config;
     }
     return stored;
