@@ -142,8 +142,24 @@ export class PictureStudioVisibilitySection extends LitElement {
    * we re-read its state on every update and re-render if it changed.
    */
   protected updated(): void {
+    if (!customElements.get(HA_STATUS)) return;
+
     const count = this.visibility?.length ?? 0;
-    if (count === 0 || !this.hass || !customElements.get(HA_STATUS)) return;
+
+    if (count === 0) {
+      // Idle the oracle when conditions are cleared: setup([]) in
+      // ConditionListenersController clears every subscription and returns
+      // early, so handing the oracle an empty list is the designed release
+      // path — not a workaround. Reset _oracleState so no stale verdict
+      // leaks into the next set of conditions.
+      if (this._oracle) {
+        this._oracle.conditions = [];
+        if (this._oracleState !== undefined) this._oracleState = undefined;
+      }
+      return;
+    }
+
+    if (!this.hass) return;
 
     if (!this._oracle) {
       const el = document.createElement(HA_STATUS) as OracleEl;

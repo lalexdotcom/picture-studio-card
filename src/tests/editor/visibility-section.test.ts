@@ -168,11 +168,35 @@ describe("status icon with ha-visibility-status available", () => {
     expect(icon.getAttribute("style")).toContain("var(--error-color)");
   });
 
-  it("is a bare icon — has --mdc-icon-size but no background, border-radius, or padding", () => {
+  it("is a bare icon — has --mdc-icon-size and a start gap but no background, border-radius, or padding", () => {
     const rule = cssRules(PictureStudioVisibilitySection.styles).get(".status-icon");
     expect(rule).toContain("--mdc-icon-size: 16px");
+    expect(rule).toContain("margin-inline-start");
     expect(rule).not.toContain("background");
     expect(rule).not.toContain("border-radius");
     expect(rule).not.toContain("padding");
+  });
+
+  it("idles the oracle when conditions are cleared — resets verdict and empties the condition list", async () => {
+    // Start: conditions present, oracle created, icon shown.
+    const el = await mountWithStatus("hidden", [{ condition: "state" }]);
+    expect(el.renderRoot.querySelector(".status-icon")).not.toBeNull();
+
+    // Clear conditions — visibility goes to undefined.
+    el.visibility = undefined;
+    // First updateComplete: count=0 → updated() idles the oracle (_oracleState
+    // → undefined) which schedules a second render.
+    await el.updateComplete;
+    // Second updateComplete: settles with _oracleState still undefined.
+    await el.updateComplete;
+
+    // Neither pill nor icon in the header.
+    expect(el.renderRoot.querySelector("ha-label")).toBeNull();
+    expect(el.renderRoot.querySelector(".status-icon")).toBeNull();
+
+    // Oracle handed an empty list — ConditionListenersController released all
+    // subscriptions when setup([]) was called.
+    const oracle = el.renderRoot.querySelector("ha-visibility-status") as HaVisibilityStatusStub;
+    expect(oracle.conditions).toEqual([]);
   });
 });
