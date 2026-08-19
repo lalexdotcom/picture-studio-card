@@ -207,7 +207,7 @@ export class PictureStudioBadgeList extends LitElement {
                 <ha-icon class="handle" icon="mdi:drag-horizontal-variant"></ha-icon>
                 <ha-icon
                   class="kind ${unknown[index] ? "error" : ""}"
-                  icon=${
+                  .icon=${
                     unknown[index]
                       ? "mdi:alert-circle"
                       : itemIcon(

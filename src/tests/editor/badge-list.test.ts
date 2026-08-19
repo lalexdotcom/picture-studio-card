@@ -287,7 +287,9 @@ describe("the row of an unreadable item", () => {
     // Top-down: the unknown item is last in the array, so it is the first row.
     const itemRows = [...(list.shadowRoot?.querySelectorAll(".item") ?? [])];
     const row = itemRows[0];
-    expect(row?.querySelector(".kind")?.getAttribute("icon")).toBe("mdi:alert-circle");
+    expect((row?.querySelector(".kind") as { icon?: string } | null)?.icon).toBe(
+      "mdi:alert-circle",
+    );
     expect(row?.querySelector(".kind")?.classList.contains("error")).toBe(true);
   });
 
