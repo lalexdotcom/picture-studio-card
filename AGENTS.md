@@ -17,6 +17,20 @@
    dispatch, no commit without explicit validation.
 
 
+## Closing a session
+
+"On clôture" is an instruction, not a summary. It means, in order:
+
+1. **Merge onto `main`**, locally, if the whole-branch review came back
+   READY TO MERGE. If it did not, say so and stop — the merge is what the
+   review gates.
+2. **Update the project memory** so the next session resumes without
+   re-deriving anything: where the work stands, what remains, and what would
+   bite someone who picked it up cold.
+3. **Commit what is left.** Judge it: if the remaining diff is trivial —
+   memory files, docs, a settled style — commit it without asking. If it is
+   not, ask. Pushing is still never yours.
+
 ## Language
 
 ALWAYS use **French** language for chat. Everything else: **English**.
