@@ -196,9 +196,24 @@ panel's warning is.
 
 **In the header**, the warning glyph goes in the `event` slot — `mdi:alert-outline`
 on `--warning-color`, same glyph and same slot as the Content marker — and it
-**replaces the count pill and the verdict icon** rather than joining them. There
-are no readable conditions to count and no verdict to report, so the slot carries
-exactly one thing and the layout does not move.
+**replaces the count pill, not the verdict**. There are no readable conditions to
+count, but there is very much a consequence to report, and the header says both
+in one line: something is wrong, and the item shows anyway. Warning first, verdict
+second — the same left-to-right ordering the list row uses, most surprising fact
+first. The layout does not move.
+
+**The verdict is rendered statically, without the oracle.** No condition applies,
+so the item is visible; the answer is known, not measured. `VERDICT_ICONS.visible`,
+`VERDICT_COLORS.visible` and `VERDICT_KEYS.visible` already exist in the file and
+already mirror `ha-visibility-status`' own table, so this duplicates no logic — it
+is a lookup with a known key.
+
+Asking the oracle instead would fight the existing design: `updated()` treats
+`count === 0` as the oracle's **release path**, handing it `[]`, resetting
+`_oracleState` to `undefined` and returning. And `ha-visibility-status`' `setup()`
+returns early on an empty list, so nothing guarantees it writes `state` at all.
+The static route also renders on a frontend where `ha-visibility-status` is
+missing, which the oracle route cannot.
 
 **A defect to fix on the way.** `render()` computes
 `count = this.visibility?.length ?? 0`. With `visibility: "hidden"` that is
@@ -432,8 +447,9 @@ colour resolution or compositing is observable — those go to the browser walk.
 
 **The Visibility section**
 
-- a malformed `visibility` puts the warning glyph in the `event` slot and
-  renders **neither** the count pill nor the verdict icon
+- a malformed `visibility` puts the warning glyph and a green `mdi:eye` in the
+  `event` slot, and **no** count pill
+- the verdict renders with `ha-visibility-status` undefined, since it is static
 - `visibility: "hidden"` shows no "5" pill and mounts no oracle — the regression
   test for the `.length` defect, measured failing before being kept
 - the panel renders the alert and **not** `hui-card-visibility-editor`
