@@ -506,4 +506,49 @@ describe("an unknown item does not shift the items after it", () => {
     expect(card.shadowRoot!.querySelectorAll(".item")).toHaveLength(1);
     expect(card.shadowRoot!.querySelectorAll(PROBE_TAG)).toHaveLength(0);
   });
+
+  it("propagates a config update to the correct element on the sameShape path", async () => {
+    // The sameShape else branch reads children by index: _elements[index].
+    // A skip would leave _elements = [iconA, iconB] (length 2 against 3 items),
+    // so _elements[2] is undefined and the third item's config update is dropped.
+    // A hole leaves _elements = [iconA, undefined, iconB], so _elements[2]
+    // is the right element and receives the updated config.
+    const baseItems = [
+      {
+        type: "element",
+        position: { top: "10%", left: "10%" },
+        config: { type: "state-icon", entity: "light.a" },
+      },
+      { type: "badgee" },
+      {
+        type: "element",
+        position: { top: "20%", left: "20%" },
+        config: { type: "state-icon", entity: "light.b" },
+      },
+    ];
+    const card = await mountCard({ items: baseItems });
+
+    // Same item types → _renderedTypes matches → sameShape=true → else branch runs.
+    card.setConfig({
+      items: [
+        baseItems[0],
+        baseItems[1],
+        {
+          type: "element",
+          position: { top: "20%", left: "20%" },
+          config: { type: "state-icon", entity: "light.c" },
+        },
+      ],
+    });
+    await flush();
+
+    const icons = [...card.shadowRoot!.querySelectorAll(ICON_TAG)] as {
+      _config?: { entity?: string };
+    }[];
+    expect(icons).toHaveLength(2);
+    expect(icons[0]?._config?.entity).toBe("light.a");
+    // With a skip: _elements[2] is undefined, config update is dropped → still "light.b".
+    // With a hole: _elements[2] is iconB, config update lands → "light.c".
+    expect(icons[1]?._config?.entity).toBe("light.c");
+  });
 });
