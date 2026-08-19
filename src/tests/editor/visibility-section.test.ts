@@ -92,6 +92,24 @@ describe("status-icon guard (ha-visibility-status not registered)", () => {
   });
 });
 
+// ── Guard: ha-visibility-status not yet registered — the static verdict path ──
+// A malformed visibility must render the warning + visible-verdict icons without
+// consulting the oracle component (which is absent and would silently render nothing).
+describe("malformed visibility — ha-visibility-status not registered", () => {
+  it("renders warning icon and static visible-verdict without the oracle component", async () => {
+    if (!customElements.get(VISIBILITY_SECTION_TAG)) {
+      customElements.define(VISIBILITY_SECTION_TAG, PictureStudioVisibilitySection);
+    }
+    const el = document.createElement(VISIBILITY_SECTION_TAG) as PictureStudioVisibilitySection;
+    el.hass = hass;
+    el.visibility = "on" as never; // YAML scalar stored as visibility: malformed, not a list
+    document.body.append(el);
+    await el.updateComplete;
+    const icons = [...el.renderRoot.querySelectorAll('[slot="event"]')];
+    expect(icons.map((i) => i.getAttribute("icon"))).toEqual(["mdi:alert-outline", "mdi:eye"]);
+  });
+});
+
 // ── Stub registered in the oracle describe's beforeAll ──
 class HaVisibilityStatusStub extends HTMLElement {
   /** Tests set this before mounting to control what state the oracle reports. */
@@ -242,13 +260,17 @@ describe("a malformed visibility", () => {
 
   // ha-alert stub is registered lazily by mountSection's default on first call.
 
-  it("shows no count pill — `.length` on a mapping is not a count", async () => {
-    const section = await mountSection({ visibility: malformed });
+  it("shows no count pill — a string's `.length` is a character count, not a condition count", async () => {
+    // "on" is a YAML boolean that becomes a string; "on".length === 2 on
+    // the unpatched path, making the section render a pill reading "2".
+    const section = await mountSection({ visibility: "on" as never });
     expect(section.shadowRoot!.querySelector("ha-label")).toBeNull();
   });
 
-  it("mounts no oracle", async () => {
-    const section = await mountSection({ visibility: malformed });
+  it("mounts no oracle — a string is not a condition list", async () => {
+    // ha-visibility-status is registered at this point. On the unpatched path
+    // count = "on".length = 2, so updated() creates and appends the oracle.
+    const section = await mountSection({ visibility: "on" as never });
     expect(section.shadowRoot!.querySelector("ha-visibility-status")).toBeNull();
   });
 
