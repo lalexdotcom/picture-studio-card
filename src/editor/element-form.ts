@@ -8,8 +8,10 @@ import { elementLabel } from "./element-catalog";
 import { PLACEMENT_ICON } from "./icons";
 import {
   iconChromeSchema,
+  iconContentInnerSchema,
+  iconEntitySchema,
   iconFromFormData,
-  iconSchema,
+  iconInteractionsSchema,
   iconSizeSchema,
   iconToFormData,
   themeModeLabel,
@@ -18,10 +20,12 @@ import {
 } from "./state-icon-form";
 import {
   labelChromeSchema,
+  labelContentInnerSchema,
+  labelEntitySchema,
   labelFromFormData,
+  labelInteractionsSchema,
   labelPillSchema,
   labelRadiusSchema,
-  labelSchema,
   labelSizeSchema,
   labelToFormData,
 } from "./state-label-form";
@@ -265,10 +269,13 @@ export class PictureStudioElementForm extends LitElement {
     // "timestamp" / "uptime", and domain-specific attributes (calendar, sun, …).
     const showTimeFormat =
       isLabel && stateLabelIsTimeBased(element.type === "state-label" ? element : undefined, hass);
-    const schema = isLabel ? labelSchema(showTimeFormat, hass.localize) : iconSchema();
     const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
     const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
+
+    // The warning marker: a state-label whose show list is empty displays nothing
+    // at all — same condition that badge-list.ts uses for its row marker.
+    const showEmptyWarning = isLabel && (element as StateLabelConfig).show.length === 0;
 
     return html`
       <div class="header">
@@ -283,7 +290,49 @@ export class PictureStudioElementForm extends LitElement {
       <ha-form
         .hass=${hass}
         .data=${data}
-        .schema=${schema}
+        .schema=${isLabel ? labelEntitySchema() : iconEntitySchema()}
+        .computeLabel=${label}
+        .computeHelper=${helper}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:text-short"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${label({ name: "content" })}
+        </div>
+        ${
+          // The `event` slot, not `icons`: ha-expansion-panel renders its header
+          // as leading-icon → header → event → chevron → icons, so anything in
+          // `icons` lands after the chevron. The marker belongs beside the title.
+          // Same glyph, colour and size as the item list's row marker in
+          // badge-list.ts (.empty rule) so the two read as the same signal.
+          showEmptyWarning
+            ? html`<ha-icon
+                slot="event"
+                icon="mdi:alert-outline"
+                title=${localizeOwn(hass, "label_empty_hint")}
+              ></ha-icon>`
+            : nothing
+        }
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${
+              isLabel
+                ? labelContentInnerSchema(showTimeFormat, hass.localize)
+                : iconContentInnerSchema()
+            }
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${this._valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+      <ha-form
+        .hass=${hass}
+        .data=${data}
+        .schema=${isLabel ? labelInteractionsSchema() : iconInteractionsSchema()}
         .computeLabel=${label}
         .computeHelper=${helper}
         @value-changed=${this._valueChanged}
@@ -490,6 +539,16 @@ export class PictureStudioElementForm extends LitElement {
     }
     ha-icon[slot="leading-icon"] {
       color: var(--secondary-text-color);
+    }
+    /* Same glyph, colour and size as the item list's row marker (.empty in
+       badge-list.ts). The event slot sits immediately before the chevron —
+       confirmed by visibility-section.ts which uses the same slot for its
+       count pill and explains the slot order in a comment there. */
+    ha-icon[slot="event"] {
+      display: flex;
+      color: var(--warning-color);
+      --mdc-icon-size: 16px;
+      margin-inline-start: var(--ha-space-2, 8px);
     }
     /* The switch takes its natural width, the separator takes its natural width,
        and the radius takes the rest — ha-form's own grid can only make equal

@@ -3,52 +3,50 @@ import { normalizeLabelShow, type StateLabelConfig } from "../config";
 import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
-export const labelSchema = (showTimeFormat: boolean, localize: LocalizeFunc): unknown[] => [
-  { name: "entity", selector: { entity: {} } },
+export const labelEntitySchema = (): unknown[] => [{ name: "entity", selector: { entity: {} } }];
+
+export const labelContentInnerSchema = (
+  showTimeFormat: boolean,
+  localize: LocalizeFunc,
+): unknown[] => [
+  { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
   {
-    name: "content",
-    type: "expandable",
-    flatten: true,
-    icon: "mdi:text-short",
-    schema: [
-      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
-      {
-        name: "displayed_elements",
-        selector: {
-          select: {
-            mode: "list",
-            multiple: true,
-            options: ["name", "state"].map((value) => ({
-              value,
-              label:
-                localize(
-                  `ui.panel.lovelace.editor.badge.entity.displayed_elements_options.${value}`,
-                ) || value,
-            })),
-          },
-        },
+    name: "displayed_elements",
+    selector: {
+      select: {
+        mode: "list",
+        multiple: true,
+        options: ["name", "state"].map((value) => ({
+          value,
+          label:
+            localize(`ui.panel.lovelace.editor.badge.entity.displayed_elements_options.${value}`) ||
+            value,
+        })),
       },
-      {
-        name: "state_content",
-        selector: { ui_state_content: { allow_name: true } },
-        context: { filter_entity: "entity" },
-      },
-      // Mirrors the entity-badge editor: shown only when the selected
-      // state_content carries a time value that ha-state-display renders as a
-      // clock — same condition, same selector.
-      ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
-      {
-        name: "color",
-        // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
-        // own recipe, so a label honours "state" exactly as an icon does. The
-        // default stays "none" — a label is text first, and text that changes
-        // colour on its own is a choice, not a default. See the spec, decision 6.
-        selector: {
-          ui_color: { default_color: "none", include_none: true, include_state: true },
-        },
-      },
-    ],
+    },
   },
+  {
+    name: "state_content",
+    selector: { ui_state_content: { allow_name: true } },
+    context: { filter_entity: "entity" },
+  },
+  // Mirrors the entity-badge editor: shown only when the selected
+  // state_content carries a time value that ha-state-display renders as a
+  // clock — same condition, same selector.
+  ...(showTimeFormat ? [{ name: "time_format", selector: { ui_time_format: {} } }] : []),
+  {
+    name: "color",
+    // include_state since 1.4.0: src/state-color.ts rebuilds Home Assistant's
+    // own recipe, so a label honours "state" exactly as an icon does. The
+    // default stays "none" — a label is text first, and text that changes
+    // colour on its own is a choice, not a default. See the spec, decision 6.
+    selector: {
+      ui_color: { default_color: "none", include_none: true, include_state: true },
+    },
+  },
+];
+
+export const labelInteractionsSchema = (): unknown[] => [
   {
     name: "interactions",
     type: "expandable",
@@ -67,6 +65,18 @@ export const labelSchema = (showTimeFormat: boolean, localize: LocalizeFunc): un
       },
     ],
   },
+];
+
+export const labelSchema = (showTimeFormat: boolean, localize: LocalizeFunc): unknown[] => [
+  ...labelEntitySchema(),
+  {
+    name: "content",
+    type: "expandable",
+    flatten: true,
+    icon: "mdi:text-short",
+    schema: labelContentInnerSchema(showTimeFormat, localize),
+  },
+  ...labelInteractionsSchema(),
 ];
 
 export const labelSizeSchema = (
