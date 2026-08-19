@@ -2,6 +2,17 @@
 
 ## unreleased
 
+### Added
+
+- **A new element kind, State label**: an entity's text placed on the picture.
+  Show its name, its state, or both, compose what the state says the same way a
+  badge does, pick a colour, and size it from the card's width like every other
+  item. It can stand on the same surface an icon can, with a pill or rounded
+  corners and a padding of your own.
+- **Each item kind now has its own glyph** in the editor's item list and add
+  menu: a sun for a state icon, a text card for a state label, and distinct
+  label shapes for the core and custom badge families.
+
 ### Changed
 
 - **A label now says what it shows in one place.** `show: [state, name]` replaces
@@ -39,17 +50,6 @@
   hold the button down. An item with no surface grows slightly instead, as it
   did before, because a shading laid over a photograph cannot be seen. Only
   items you can click react, and nothing reacts while you are editing the card.
-
-### Added
-
-- **A new element kind, State label**: an entity's text placed on the picture.
-  Show its name, its state, or both, compose what the state says the same way a
-  badge does, pick a colour, and size it from the card's width like every other
-  item. It can stand on the same surface an icon can, with a pill or rounded
-  corners and a padding of your own.
-- **Each item kind now has its own glyph** in the editor's item list and add
-  menu: a sun for a state icon, a text card for a state label, and distinct
-  label shapes for the core and custom badge families.
 
 ## 1.3.1 — 2026-08-17
 

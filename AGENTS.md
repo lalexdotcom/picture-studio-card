@@ -32,12 +32,18 @@ Run the project's linter/formatter after every modification if one is configured
    code got there belongs in the git history, not here.
 2. A change that alters existing behaviour goes under `Changed`, and says so
    plainly — that is the section people read before upgrading.
-3. At each delivery, **ask whether this is a version bump**, and which one.
+3. **`Added` comes before `Changed`, in every version.** What is new is what a
+   reader came for; what changed is what they check afterwards. The rest follow:
+   `Fixed`, `Removed`, `Deprecated`, `Security`. The release workflow only ever
+   anchors on the `## <version>` headings and copies everything until the next
+   one, so the order of the `###` sections inside is ours to choose and cannot
+   break a release.
+4. At each delivery, **ask whether this is a version bump**, and which one.
    Never decide it alone.
-4. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
+5. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
    `package.json`, and the git tag of the release must agree. HACS installs
    from the GitHub release, so the tag is what users actually get.
-5. The bump lands with the release, not before: while work is in progress the
+6. The bump lands with the release, not before: while work is in progress the
    heading reads `unreleased` and `package.json` still names the last shipped
    version.
 
