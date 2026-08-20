@@ -44,6 +44,11 @@ const STRINGS = {
     visibility_unreadable_body:
       "This item's conditions are not a list. They are ignored, and the item always shows.",
     visibility_reset: "Reset",
+    section_background: "Background",
+    section_filters: "Filters",
+    section_entity: "Entity",
+    picture_entity: "Image or camera entity",
+    aspect_ratio_hint: "16:9, 16x9, 1.78 or 56.25% — decimals use a point.",
   },
   fr: {
     items: "Items",
@@ -81,6 +86,11 @@ const STRINGS = {
     visibility_unreadable_body:
       "Les conditions de cet item ne forment pas une liste. Elles sont ignorées, et l'item reste toujours visible.",
     visibility_reset: "Réinitialiser",
+    section_background: "Fond",
+    section_filters: "Filtres",
+    section_entity: "Entité",
+    picture_entity: "Entité image ou caméra",
+    aspect_ratio_hint: "16:9, 16x9, 1.78 ou 56.25% — les décimales s'écrivent avec un point.",
   },
 } as const;
 

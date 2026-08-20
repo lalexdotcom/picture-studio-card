@@ -10,17 +10,12 @@ import {
   storedConfig,
 } from "../config";
 import type { Anchor, Position } from "../position";
-import type { BadgeConfig, HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
-import {
-  type BackgroundData,
-  backgroundData,
-  backgroundLabel,
-  backgroundSchema,
-  mergeBackground,
-} from "./background-schema";
+import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { stubBadgeConfig } from "./badge-catalog";
 import { badgeVerdict } from "./badge-existence";
 import { stubElementConfig } from "./element-catalog";
+import { backgroundData, backgroundSchema, mergeBackground } from "./form-schemas";
+import { formLabel } from "./form-section";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
 import "./badge-list";
@@ -42,20 +37,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _unregister?: () => void;
   /** Guards against a native child's config-changed echoing our own push. */
   private _applying = false;
-  /**
-   * The schema now depends on `localize`, so it can no longer be a module constant.
-   * Rebuilding it on every render would hand ha-form a new object each time; cache it
-   * against the localize function, which HA replaces when the language changes.
-   */
-  private _schemaCache?: { localize: LocalizeFunc; schema: ReturnType<typeof backgroundSchema> };
-
-  private _schema(localize: LocalizeFunc): ReturnType<typeof backgroundSchema> {
-    if (this._schemaCache?.localize !== localize) {
-      this._schemaCache = { localize, schema: backgroundSchema(localize) };
-    }
-    return this._schemaCache.schema;
-  }
-
   constructor() {
     super();
     this._editingIndex = undefined;
@@ -158,7 +139,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     return this._editingIndex;
   }
 
-  private _backgroundChanged = (ev: CustomEvent<{ value: BackgroundData }>): void => {
+  private _backgroundChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
     if (!this._config || this._applying) return;
     this._commit(mergeBackground(this._config, ev.detail.value));
@@ -308,8 +289,8 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <ha-form
         .hass=${hass}
         .data=${backgroundData(config)}
-        .schema=${this._schema(hass.localize)}
-        .computeLabel=${(s: { name: string }) => backgroundLabel(hass.localize, s.name)}
+        .schema=${backgroundSchema(hass.localize, config)}
+        .computeLabel=${(s: { name: string }) => formLabel(hass.localize, s.name)}
         @value-changed=${this._backgroundChanged}
       ></ha-form>
       <picture-studio-badge-list
