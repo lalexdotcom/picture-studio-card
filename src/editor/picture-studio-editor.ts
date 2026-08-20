@@ -44,6 +44,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   };
 
   static styles = css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-4);
+    }
     .count {
       font-size: var(--ha-font-size-s);
       color: var(--secondary-text-color);

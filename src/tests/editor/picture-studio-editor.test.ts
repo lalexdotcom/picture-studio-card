@@ -10,6 +10,7 @@ import { probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence
 import { PictureStudioHeadingSection } from "../../editor/heading-section";
 import { PictureStudioEditor } from "../../editor/picture-studio-editor";
 import { PictureStudioSection } from "../../editor/section-panel";
+import { cssRules } from "../card/harness";
 
 if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, PictureStudioEditor);
 if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
@@ -351,5 +352,17 @@ describe("the five sections", () => {
       }),
     );
     expect("heading" in (emitted.at(-1) ?? {})).toBe(false);
+  });
+});
+
+describe("CSS rules", () => {
+  it(":host is a flex column", () => {
+    const rules = cssRules(PictureStudioEditor.styles);
+    expect(rules.get(":host")).toContain("flex-direction: column");
+  });
+
+  it(":host has a gap between sections", () => {
+    const rules = cssRules(PictureStudioEditor.styles);
+    expect(rules.get(":host")).toContain("gap: var(--ha-space-4)");
   });
 });

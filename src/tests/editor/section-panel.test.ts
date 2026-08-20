@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import { SECTION_TAG } from "../../config";
 import { PictureStudioSection } from "../../editor/section-panel";
+import { cssRules } from "../card/harness";
 
 const mount = async (props: Partial<PictureStudioSection> = {}): Promise<PictureStudioSection> => {
   if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
@@ -52,5 +53,17 @@ describe("picture-studio-section", () => {
         ?.querySelector("ha-expansion-panel")
         ?.hasAttribute("expanded"),
     ).toBe(true);
+  });
+});
+
+describe("CSS rules", () => {
+  it("gives .content vertical padding", () => {
+    const rules = cssRules(PictureStudioSection.styles);
+    expect(rules.get(".content")).toContain("padding: var(--ha-space-3)");
+  });
+
+  it("neutralises ha-expansion-panel's default 0 8px content padding", () => {
+    const rules = cssRules(PictureStudioSection.styles);
+    expect(rules.get("ha-expansion-panel")).toContain("--expansion-panel-content-padding: 0");
   });
 });

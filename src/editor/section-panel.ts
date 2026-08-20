@@ -47,12 +47,20 @@ export class PictureStudioSection extends LitElement {
     :host {
       display: block;
     }
+    /* ha-expansion-panel's default content padding is "var(--expansion-panel-content-padding, 0 8px)"
+       — 8px horizontal, zero vertical. HA's own ha-form-expandable does the same two things we do
+       here: it sets the variable to 0 and pads its own .content instead. Do not remove either. */
+    ha-expansion-panel {
+      --expansion-panel-content-padding: 0;
+      border-radius: var(--ha-border-radius-md);
+    }
     /* ha-form spaces its own root children by 24px; a section's body carries the
        same rhythm so a panel of fields and a panel of components read alike. */
     .content {
       display: flex;
       flex-direction: column;
       gap: var(--ha-space-6);
+      padding: var(--ha-space-3);
     }
   `;
 }
