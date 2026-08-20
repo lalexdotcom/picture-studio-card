@@ -298,6 +298,19 @@ same box — `16:9` and `16x9` give a 56.25 % padding, `1.78` gives 56.18 %, and
 `56.25%` gives 56.25 %. The hint therefore reads as four spellings of one shape,
 which is what it is trying to teach, rather than four unrelated values.
 
+**The decimal separator is a point, in every language, and the examples must show
+it.** Nothing here is localised: `{ text: {} }` renders a plain text `ha-input`,
+the string reaches the config verbatim, and `parseAspectRatio` reads it with
+`parseFloat`, which knows only `.`. And `parseFloat` does not reject a comma, it
+**stops before it** — so `1,78` becomes `1`, and the card renders a **square**
+instead of a 16:9. A plausible entry produces a valid, wrong result, with nothing
+said. (`56,25%` is luckier: it degrades to 56 %, indistinguishable by eye.)
+
+Normalising the comma on our side is refused: we forward the background verbatim
+and never interpret it, and rewriting what the user typed would be the first
+exception. The hint carries the separator instead — which is half of what it is
+for.
+
 The hint wraps: `::part(hint)` is a `display: flex` with
 `min-height: var(--ha-space-5)` and `align-items: center`, spanning the field's
 width at `--ha-font-size-s`. Nothing is truncated, so length is not the
