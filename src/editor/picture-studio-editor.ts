@@ -37,6 +37,16 @@ import "./element-form";
 import "./heading-section";
 import "./section-panel";
 
+/**
+ * Home Assistant's own expansion transition, in milliseconds. It is not read
+ * from anywhere — `ha-expansion-panel` hardcodes 300 in its CSS *and* a second
+ * time in a `setTimeout` inside `willUpdate`, for the same reason we do: the
+ * `transitionend` it would otherwise wait on is not available to it either.
+ * Verified at frontend build 20260729.6. If upstream changes it, the scroll
+ * lands early or late — visibly, never silently.
+ */
+const EXPAND_MS = 300;
+
 export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
     hass: { attribute: false },
@@ -334,9 +344,21 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   private async _showListAt(index: number): Promise<void> {
     const section = this.shadowRoot?.querySelector("#items-section") as
-      | (HTMLElement & { expand(): Promise<void> })
+      | (HTMLElement & { expand(): Promise<boolean> })
       | null;
-    await section?.expand();
+    const opened = (await section?.expand()) ?? false;
+    // Wait out the transition only when expand() actually started one and the
+    // browser understands interpolate-size — otherwise there is nothing to wait
+    // for. transitionend is refused on purpose: the container lives in the
+    // panel's shadow root, and happy-dom never fires transition events, so a
+    // scroll gated on it would never run in the suite and could not be tested.
+    const supportsInterpolateSize =
+      typeof CSS !== "undefined" &&
+      typeof CSS.supports === "function" &&
+      CSS.supports("interpolate-size", "allow-keywords");
+    if (opened && supportsInterpolateSize) {
+      await new Promise<void>((resolve) => setTimeout(resolve, EXPAND_MS));
+    }
     const list = this.shadowRoot?.querySelector("picture-studio-badge-list") as
       | (HTMLElement & { scrollToItem(i: number): void })
       | null;

@@ -398,6 +398,110 @@ describe("CSS rules", () => {
   });
 });
 
+describe("_showListAt scroll timing", () => {
+  // EXPAND_MS = 300 — mirrors the module constant; kept in sync by the comment
+  // on the constant itself (the scroll landing early or late would be visible).
+  const EXPAND_MS = 300;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    rstest.useRealTimers();
+  });
+
+  it("scrolls immediately when expand() returns false (section already open)", async () => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    rstest.spyOn(section, "expand").mockResolvedValue(false); // already open: nothing will animate
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(1);
+    await el.updateComplete;
+    el.select(undefined); // return from form → _showListAt(1), opened=false
+    await el.updateComplete;
+
+    // No timer advance needed — scroll must have happened immediately.
+    expect(scrollSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("waits EXPAND_MS before scrolling when a transition started and interpolate-size is supported", async () => {
+    // CSS.supports("interpolate-size", "allow-keywords") returns true natively
+    // in happy-dom — no mocking needed for the supported branch.
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    rstest.spyOn(section, "expand").mockResolvedValue(true); // transition started
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(1);
+    await el.updateComplete;
+    el.select(undefined); // return from form → _showListAt(1), opened=true
+    await el.updateComplete;
+
+    // Scroll must not have happened yet — the timer is still pending.
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    rstest.advanceTimersByTime(EXPAND_MS);
+    await Promise.resolve(); // flush the microtask that resumes _showListAt after the timer
+
+    expect(scrollSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("scrolls immediately when interpolate-size is not supported, even though a transition started", async () => {
+    // Replace CSS globally so the defensive feature test sees a browser without
+    // the property. rstest.spyOn(CSS, "supports") does not intercept calls in
+    // this environment — the spy's mockReturnValue is ignored and the native
+    // implementation runs regardless. Replacing globalThis.CSS is the only
+    // reliable way to drive this branch here.
+    const cssGlobal = globalThis as Record<string, unknown>;
+    const savedCSS = cssGlobal.CSS;
+    cssGlobal.CSS = { supports: () => false };
+
+    try {
+      const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+      el.setConfig(CONFIG);
+      el.hass = { localize: () => "", states: {} } as never;
+      document.body.append(el);
+      await el.updateComplete;
+
+      const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+      const list = el.shadowRoot?.querySelector(
+        "picture-studio-badge-list",
+      ) as PictureStudioBadgeList;
+      rstest.spyOn(section, "expand").mockResolvedValue(true); // transition started
+      const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+      rstest.useFakeTimers();
+      el.select(1);
+      await el.updateComplete;
+      el.select(undefined); // return from form → _showListAt(1), opened=true but no CSS support
+      await el.updateComplete;
+
+      // No timer advance needed — without interpolate-size support there is no
+      // animation and the scroll must happen immediately.
+      expect(scrollSpy).toHaveBeenCalledWith(1);
+    } finally {
+      cssGlobal.CSS = savedCSS;
+    }
+  });
+});
+
 describe("Items section follows the work", () => {
   // loadCardHelpers stub needed for badge probe machinery.
   const probeHelpers = {
@@ -418,6 +522,7 @@ describe("Items section follows the work", () => {
   afterEach(() => {
     document.body.replaceChildren();
     resetBadgeVerdicts();
+    rstest.useRealTimers();
     (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
   });
 
@@ -439,10 +544,16 @@ describe("Items section follows the work", () => {
     const expandSpy = rstest.spyOn(section, "expand");
     const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
+    rstest.useFakeTimers();
     el.select(0); // missing badge — no form opens
     await el.updateComplete;
 
     expect(expandSpy).toHaveBeenCalledTimes(1);
+    // expand() opened the section (returned true) and CSS.supports("interpolate-size",
+    // "allow-keywords") is true in happy-dom, so _showListAt is waiting out the
+    // 300 ms transition. Advance the fake clock and flush the microtask.
+    rstest.advanceTimersByTime(300);
+    await Promise.resolve();
     expect(scrollSpy).toHaveBeenCalledWith(0);
   });
 
@@ -463,10 +574,14 @@ describe("Items section follows the work", () => {
     el.select(1); // valid badge — form opens, sections cached
     await el.updateComplete;
 
-    el.select(undefined); // go back — sections restored
+    rstest.useFakeTimers();
+    el.select(undefined); // go back — sections restored, _showListAt(1) fires
     await el.updateComplete;
 
     expect(expandSpy).toHaveBeenCalledTimes(1);
+    // expand() opened the section (returned true) — advance the fake clock and flush.
+    rstest.advanceTimersByTime(300);
+    await Promise.resolve();
     expect(scrollSpy).toHaveBeenCalledWith(1); // previous index was 1
   });
 });

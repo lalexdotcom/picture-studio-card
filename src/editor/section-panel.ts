@@ -47,13 +47,19 @@ export class PictureStudioSection extends LitElement {
    * snaps open — accepted, and it means a scroll that follows is not aiming at a
    * growing target.
    */
-  public async expand(): Promise<void> {
+  public async expand(): Promise<boolean> {
     const panel = this.shadowRoot?.querySelector("ha-expansion-panel") as
       | (HTMLElement & { expanded?: boolean; updateComplete?: Promise<unknown> })
       | null;
-    if (!panel) return;
+    // Reading whether the panel is already open rather than mirroring the
+    // section's open state in the editor: a mirror can be wrong the moment the
+    // user folds a panel by hand, and the failure only shows up later.
+    // Lit's ?expanded binding sets the attribute; HA's own click handler folds
+    // by setting the property. Both must be checked.
+    if (!panel || panel.hasAttribute("expanded") || panel.expanded) return false;
     panel.expanded = true;
     if (panel.updateComplete instanceof Promise) await panel.updateComplete;
+    return true;
   }
 
   protected render() {
@@ -77,6 +83,15 @@ export class PictureStudioSection extends LitElement {
     ha-expansion-panel {
       --expansion-panel-content-padding: 0;
       border-radius: var(--ha-border-radius-md);
+      /* Their .container transitions height, but a programmatic open goes from 0px
+         to auto and auto cannot be interpolated — which is why their own click
+         handler measures scrollHeight and sets an explicit pixel height instead.
+         interpolate-size is an INHERITED property, so setting it on the panel
+         reaches the container inside its shadow tree and makes their transition work
+         for us too, without touching their internals. Where a browser does not know
+         the property the declaration is dropped and the section snaps, exactly as it
+         did before. */
+      interpolate-size: allow-keywords;
     }
     /* ha-form spaces its own root children by 24px; a section's body carries the
        same rhythm so a panel of fields and a panel of components read alike. */

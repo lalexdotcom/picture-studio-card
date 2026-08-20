@@ -57,20 +57,27 @@ describe("picture-studio-section", () => {
 });
 
 describe("expand()", () => {
-  it("opens a closed panel", async () => {
+  it("opens a closed panel and returns true", async () => {
     const el = await mount(); // closed by default (open = false)
-    await el.expand();
+    const result = await el.expand();
     const panel = el.shadowRoot?.querySelector("ha-expansion-panel") as {
       expanded?: boolean;
     } | null;
     expect(panel?.expanded).toBe(true);
+    expect(result).toBe(true);
   });
 
-  it("does not throw when the panel is absent", async () => {
+  it("returns false when the panel is already open", async () => {
+    const el = await mount({ open: true });
+    const result = await el.expand();
+    expect(result).toBe(false);
+  });
+
+  it("returns false when the panel is absent, without throwing", async () => {
     if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
     const el = document.createElement(SECTION_TAG) as PictureStudioSection;
     // Not appended — no render, so shadow root has no panel yet.
-    await expect(el.expand()).resolves.toBeUndefined();
+    await expect(el.expand()).resolves.toBe(false);
   });
 
   it("remains open after a manual fold and a second expand() call", async () => {
@@ -99,5 +106,10 @@ describe("CSS rules", () => {
   it("neutralises ha-expansion-panel's default 0 8px content padding", () => {
     const rules = cssRules(PictureStudioSection.styles);
     expect(rules.get("ha-expansion-panel")).toContain("--expansion-panel-content-padding: 0");
+  });
+
+  it("sets interpolate-size on ha-expansion-panel so the height transition works on a programmatic open", () => {
+    const rules = cssRules(PictureStudioSection.styles);
+    expect(rules.get("ha-expansion-panel")).toContain("interpolate-size: allow-keywords");
   });
 });
