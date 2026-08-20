@@ -18,7 +18,7 @@ YAML-only keys into the interface.
   were the last five.
 - The camera entity and the image entity become **one field**. They were always
   mutually exclusive at render; now they are mutually exclusive to configure.
-- The item list carries its count, and stops growing without limit.
+- The item list carries its count and warns when one of its items is in trouble.
 - `title` moves to `heading.title`. Existing configs keep working — the migration
   is in the other spec.
 
@@ -27,10 +27,10 @@ YAML-only keys into the interface.
 | | section | contents |
 |---|---|---|
 | 1 | **Background** — *open by default* | `image`, `dark_mode_image`, the **image-or-camera entity** field, `camera_view` (only when the chosen entity is a camera), `aspect_ratio` |
-| 2 | **Items** | count as a badge in the header; caption and Add button on the first line; the list in a max-height wrapper |
-| 3 | **Heading** | `title`, `icon`, then an `<hr>`, a "Badges" caption with the heading card's own section icon, and the badge list |
+| 2 | **Items** | count and severity glyph in the header; the caption on the first line, the list, then the Add button below it |
+| 3 | **Heading** | `title`, `icon`, then an `<hr>`, a plain "Badges" caption — no glyph — and the badge list |
 | 4 | **Filters** | `filter`, `dark_mode_filter` |
-| 5 | **Entity** | `entity`, `state_image`, `state_filter` |
+| 5 | **Entity** | `entity`, `state_image`, `state_filter`. Icon `mdi:image-auto-adjust` — the section is "the picture reacts to an entity's state", which a lightbulb does not say. |
 
 Section 5 groups exactly what depends on `entity`, which is what names it.
 Putting `state_image` anywhere but under the field it depends on is the thing
@@ -70,13 +70,26 @@ own grouping in picture-entity and picture-glance (`camera_view`, `fit_mode`,
     that already computes the same four states per row. Two places deciding
     "is this item broken" would drift, and the row is the one that must stay
     right.
-- The list sits in a **max-height wrapper** so a long list stops pushing the
-  sections below it off the screen.
-- **Scroll behaviour.** Restore the list's own scroll when an item's form opens.
-  Open the section and scroll the row into view when the selected item changes
-  while the list is visible. When the selection is cleared by a click on the
-  preview's background, leave the section expanded and restore the *form's* own
-  scroll so the section stays in view.
+- **No height cap.** A max-height wrapper was built and then removed after seeing
+  it (2026-08-20): a list that scrolls inside a panel that scrolls inside a
+  dialog is three nested scrolls, and the middle one is the one nobody expects.
+  The list is as long as it is; the section folds when it is in the way.
+- **The Add button sits below the rows**, not beside the caption — matching Home
+  Assistant's own `hui-heading-badges-editor`, which the Heading section puts a
+  few centimetres away. Two lists in one form should not disagree about where
+  their add button lives.
+- **Scroll and fold behaviour.** The rule is: *while the user is dealing with
+  items, the list is visible.* Concretely — when the selection lands on an item
+  that opens **no** form (an unreadable item, or a badge whose type is missing),
+  and when the user comes **back** from an item's form, the Items section is
+  opened and the row is scrolled into view. The scroll is the **form's own**,
+  since the list no longer has one of its own.
+  - **The other sections are not folded.** Considered and refused: folding
+    Background because someone selected an item undoes a deliberate gesture —
+    they may have opened it to compare the picture while placing things on it.
+    Opening Items says *this is what you are working on*; folding the rest says
+    *and I have decided the rest does not interest you*.
+
 - **`ha-sortable` inside a scrolling wrapper is the supported case**, not a
   workaround: it creates SortableJS with `scroll: true`,
   `forceAutoScrollFallback: true`, `scrollSpeed: 20`, noting that the fallback
@@ -85,6 +98,40 @@ own grouping in picture-entity and picture-glance (`camera_view`, `fit_mode`,
   `this.children[0]` as its container, so the scrolling wrapper must sit
   **above** `<ha-sortable>`, never between it and the list — and none of this is
   observable in happy-dom.
+
+### Opening a section: imperatively, and it snaps
+
+Forcing a section open does **not** make the five panels controlled components,
+and the state table this spec briefly called for is not needed.
+
+`ha-expansion-panel` owns its own `expanded`, which a header click sets
+internally. If the editor drove `open` through the Lit binding, forcing it open
+would stop being idempotent: with our state already `true` and the panel folded
+by hand, writing `true` again writes nothing, the section stays shut and the
+scroll lands on an unrendered row — a failure appearing only after a manual fold.
+
+The way out is to not use the binding at all. `picture-studio-section` exposes an
+imperative `expand()` that sets `expanded` on its own panel directly. The
+`?expanded=${this.open}` binding stays static — only Background carries it, it
+never changes, Lit never rewrites it — so our calls and the user's clicks both
+mutate the property and never contend. Nothing to mirror, nothing to listen to.
+
+**And that path does not animate.** The transition lives entirely in the click
+handler, which measures `scrollHeight` and sets an explicit pixel height —
+because the CSS alone cannot animate `height: 0px` to `height: auto`, which is
+not interpolable. A programmatic `expanded = true` only runs `willUpdate`, so the
+content appears at once.
+
+That suits us: the open is followed by a `scrollIntoView`, and a target still
+growing while we aim at it is exactly what we wanted to avoid. It also removes
+any dependence on `transitionend`, which **happy-dom never fires** — so the
+sequence is `expand()`, `await updateComplete`, scroll, and all three are
+observable in the suite.
+
+Accepted 2026-08-20 with its consequence stated: the section will **snap** open
+rather than slide. If that reads as violent at the walk, the fix is to reproduce
+Home Assistant's pixel-height dance ourselves — and to take the moving target
+back with it.
 
 ## 2. One kind of panel, ours
 
