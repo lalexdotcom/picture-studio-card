@@ -289,12 +289,14 @@ error, no message, the image simply resumes its natural height. That was
 acceptable while the key belonged to someone writing YAML with the docs open.
 Exposed as a free text field, it gets a **hint line listing the accepted forms**.
 
-**Four examples cover the five parse branches**: `16:9` and `16x9` for the two
-separators, `1.78` for the bare number, and a percentage. Listing `1.78:1` and
-`1.78x1` as well would teach a synonym rather than a form. Note when phrasing it
-that `16:9` resolves to a 56.25 % padding and `56%` to 56 %, so those two examples
-describe nearly the same picture — either a useful equivalence or a confusing
-redundancy; `75%` is the visibly different alternative.
+**The four examples are `16:9`, `16x9`, `1.78` and `56.25%`** — the two
+separators, the bare number, the percentage. That covers the five parse branches;
+listing `1.78:1` and `1.78x1` as well would teach a synonym rather than a form.
+
+The percentage is `56.25%` **on purpose, not 56 %**: all four then resolve to the
+same box — `16:9` and `16x9` give a 56.25 % padding, `1.78` gives 56.18 %, and
+`56.25%` gives 56.25 %. The hint therefore reads as four spellings of one shape,
+which is what it is trying to teach, rather than four unrelated values.
 
 The hint wraps: `::part(hint)` is a `display: flex` with
 `min-height: var(--ha-space-5)` and `align-items: center`, spanning the field's
