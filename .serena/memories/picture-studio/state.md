@@ -46,12 +46,14 @@ wall that this entry once said would decide its shape **does not apply**; see th
 heading-badge facts below. Resume from the spec and
 `mem:picture-studio/follow-ups` entry 2, not from scratch.
 
-## 1.5.0 is in flight — read `mem:picture-studio/1.5.0-handoff` first
+## 1.5.0 is merged on `main` and unpushed — read `mem:picture-studio/1.5.0-handoff` first
 
-Branch `feat/card-heading`, ~39 commits, nothing pushed or merged. The card's
-header and the redrawn five-section editor are built and reviewed; **the browser
-walk is done**. What remains is a delta review over `3a79cd7..HEAD`, the doc pass
-and screenshots, and the version bump. That memory carries the state,
+`feat/card-heading` was reviewed READY TO MERGE and merged (`608ced7`, `--no-ff`)
+on 2026-08-20, then deleted. The card's header, the redrawn five-section editor
+and the browser walk are all behind us. `main` sits ~57 commits ahead of
+`origin/main`; **do not push** — the version is still 1.4.0 and pushing publishes.
+What remains: the doc pass (README, CHANGELOG), the screenshots, then the bump,
+then the push. In that order, settled with the user. That memory carries the state,
 what was in flight, and the lesson of a five-fix series that only the walk caught.
 
 ## Where things are
