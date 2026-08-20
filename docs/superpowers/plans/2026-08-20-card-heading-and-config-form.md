@@ -1696,8 +1696,8 @@ heading-badge type."
 - Test: `src/tests/editor/badge-list.test.ts`
 
 **Interfaces:**
-- Consumes: `SECTION_TAG` and `PictureStudioSection` from Tasks 1 and 3.
-- Produces: no new exports; `picture-studio-badge-list` now renders inside a `picture-studio-section` and exposes its count.
+- Consumes: `PictureItem` from `src/config.ts`; `badgeVerdict` from `./badge-existence`.
+- Produces: `itemsSeverity(items: readonly PictureItem[]): "error" | "warning" | undefined`, exported from `src/editor/badge-list.ts`. Task 8 renders its result in the Items panel's header.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1729,6 +1729,48 @@ describe("the Items section", () => {
     const rules = cssRules(PictureStudioBadgeList.styles);
     expect(rules[".scroll"]?.["max-height"]).toBe("var(--psc-items-max-height, 320px)");
     expect(rules[".scroll"]?.["overflow-y"]).toBe("auto");
+  });
+});
+
+describe("itemsSeverity", () => {
+  const badge = (config: Record<string, unknown>) =>
+    ({ type: "badge", config, position: { top: 0, left: 0 }, anchor: "auto" }) as never;
+  const label = (show: string[]) =>
+    ({
+      type: "element",
+      config: { type: "state-label", entity: "sensor.a", show },
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+    }) as never;
+
+  it("is undefined when every item is fine", () => {
+    expect(itemsSeverity([badge({ type: "entity", entity: "sensor.a" })])).toBeUndefined();
+  });
+
+  it("is undefined for an empty list", () => {
+    expect(itemsSeverity([])).toBeUndefined();
+  });
+
+  it("reports an error for an unreadable item", () => {
+    expect(itemsSeverity([{ type: "unknown", raw: {}, reason: "item-type" } as never])).toBe(
+      "error",
+    );
+  });
+
+  it("reports a warning for unreadable visibility", () => {
+    const item = { ...badge({ type: "entity" }), visibility: "nope" } as never;
+    expect(itemsSeverity([item])).toBe("warning");
+  });
+
+  it("reports a warning for a label that shows nothing", () => {
+    expect(itemsSeverity([label([])])).toBe("warning");
+  });
+
+  it("lets the error win over the warning, whatever the order", () => {
+    const broken = { type: "unknown", raw: {}, reason: "item-type" } as never;
+    const warned = label([]);
+    expect(itemsSeverity([warned, broken])).toBe("error");
+    expect(itemsSeverity([broken, warned])).toBe("error");
   });
 });
 ```
@@ -1789,20 +1831,58 @@ In `badge-list.ts`'s `static styles`, delete the `h3` and `.titles` rules and ad
     }
 ```
 
-- [ ] **Step 5: Run the tests**
+- [ ] **Step 5: Export the severity classifier**
+
+The panel's header must say that something inside needs attention while it is
+folded. The four states are already decided per row in this file; the classifier
+reuses those same predicates so the header and the rows can never disagree.
+
+Add to `src/editor/badge-list.ts`, beside `hasUnreadableVisibility` and
+`showsNothing`:
+
+```ts
+/**
+ * The worst state among the items, for the section header's glyph — error beats
+ * warning, and neither draws anything.
+ *
+ * Deliberately built from the very predicates the rows use. Two places deciding
+ * "is this item broken" would drift, and the row is the one that has to stay
+ * right.
+ */
+export const itemsSeverity = (
+  items: readonly PictureItem[],
+): "error" | "warning" | undefined => {
+  let warning = false;
+  for (const item of items) {
+    if (item.type === "unknown") return "error";
+    if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
+      if (type && badgeVerdict(type) === "missing") return "error";
+    }
+    if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
+  }
+  return warning ? "warning" : undefined;
+};
+```
+
+Add `itemsSeverity` to the test file's import from `../../editor/badge-list`, and
+make sure `PictureItem` and `badgeVerdict` are imported in `badge-list.ts` (both
+already are, for the row rendering).
+
+- [ ] **Step 6: Run the tests**
 
 Run: `pnpm test src/tests/editor/badge-list.test.ts && pnpm test`
 Expected: PASS. The pre-existing tests that queried `h3` need retargeting to the panel's `label` property — change the assertion, not the markup.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/editor/badge-list.ts src/tests/editor/badge-list.test.ts
-git commit -m "feat(editor): the item list becomes a section with a count
+git commit -m "feat(editor): cap the item list and classify its worst state
 
 The list is capped in height so a long one stops pushing the sections
-below it off the screen, and its count sits beside the panel's title —
-in the event slot, since icons lands after the chevron."
+below it off the screen, and itemsSeverity reuses the rows' own
+predicates so the section header and the rows cannot disagree."
 ```
 
 ---
@@ -1865,6 +1945,25 @@ describe("the five sections", () => {
     expect(emitted.at(-1)?.heading).toEqual({ title: "Office" });
   });
 
+  it("shows the strongest severity in the Items header, and nothing when all is well", async () => {
+    const ok = await mountEditor({
+      type: CARD_TYPE,
+      items: [{ type: "badge", config: { type: "entity", entity: "sensor.a" }, position: {} }],
+    });
+    expect(ok.shadowRoot?.querySelector(".severity")).toBeNull();
+
+    const bad = await mountEditor({
+      type: CARD_TYPE,
+      items: [
+        { type: "element", config: { type: "state-label", entity: "sensor.a", show: [] }, position: {} },
+        { type: "nope" },
+      ],
+    });
+    const glyph = bad.shadowRoot?.querySelector(".severity");
+    expect(glyph?.classList.contains("error")).toBe(true);
+    expect(glyph?.getAttribute("slot")).toBe("event");
+  });
+
   it("does not write an empty heading back", async () => {
     const el = await mountEditor({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
     const emitted: Record<string, unknown>[] = [];
@@ -1921,6 +2020,21 @@ Replace the non-form branch of `render()` in `picture-studio-editor.ts`:
           config.items.length
             ? html`<span class="count" slot="event">${config.items.length}</span>`
             : nothing
+        }
+        ${
+          // The strongest state wins: one glyph, never two. Same vocabulary as
+          // visibility-section.ts, and the same asymmetry — the normal case gets
+          // no ink at all.
+          (() => {
+            const severity = itemsSeverity(config.items);
+            if (!severity) return nothing;
+            return html`<ha-icon
+              slot="event"
+              class="severity ${severity}"
+              icon=${severity === "error" ? "mdi:alert-circle" : "mdi:alert-outline"}
+              title=${localizeOwn(hass, severity === "error" ? "items_error" : "items_warning")}
+            ></ha-icon>`;
+          })()
         }
         <picture-studio-badge-list
           .hass=${hass}
@@ -2018,6 +2132,15 @@ panel lives here, beside the other four, so the pill does too:
       padding: 0 var(--ha-space-2);
       line-height: var(--ha-space-5);
     }
+    .severity {
+      --mdc-icon-size: 20px;
+    }
+    .severity.error {
+      color: var(--error-color);
+    }
+    .severity.warning {
+      color: var(--warning-color);
+    }
   `;
 ```
 
@@ -2026,7 +2149,9 @@ rather than replacing it.
 
 Delete `_schemaCache` and `_schema`: the schema now depends on the config as well as on `localize`, and `ha-form` is handed a fresh array per render. If a profiler ever shows that this matters, memoize on the pair — not on `localize` alone, which would return a stale schema when the chosen entity's domain changes.
 
-Update the imports: `formLabel`, `sectionData`, `sectionMerge`, `type FormSchema` from `./form-section`; `backgroundData`, `backgroundSchema`, `entitySchema`, `filtersSchema`, `formHelper`, `mergeBackground`, `PICTURE_ENTITY` from `./form-schemas`; `hasHeading`, `type HeadingConfig` from `../config`; `localizeOwn` from `../strings`; and `import "./section-panel"; import "./heading-section";`.
+Add two strings to `src/strings.ts` for the glyph's hover title — `items_error` (en: "Some items are unreadable", fr: "Des items sont illisibles") and `items_warning` (en: "Some items need attention", fr: "Des items demandent attention").
+
+Update the imports: `itemsSeverity` from `./badge-list`; `formLabel`, `sectionData`, `sectionMerge`, `type FormSchema` from `./form-section`; `backgroundData`, `backgroundSchema`, `entitySchema`, `filtersSchema`, `formHelper`, `mergeBackground`, `PICTURE_ENTITY` from `./form-schemas`; `hasHeading`, `type HeadingConfig` from `../config`; `localizeOwn` from `../strings`; and `import "./section-panel"; import "./heading-section";`.
 
 - [ ] **Step 5: Run everything**
 

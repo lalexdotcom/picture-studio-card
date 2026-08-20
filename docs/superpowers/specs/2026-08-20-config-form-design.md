@@ -54,6 +54,22 @@ own grouping in picture-entity and picture-glance (`camera_view`, `fit_mode`,
   `visibility-section.ts` already established why: `ha-expansion-panel`'s `icons`
   slot lands *after* the chevron, so anything belonging beside the title goes in
   the header div instead.
+- **A severity glyph joins the count** when any item is in trouble, so a folded
+  section still says that something inside needs attention. **The strongest
+  wins**: one glyph, never two.
+  - **error** — any item is unreadable (`type: "unknown"`), or a badge names a
+    type this Home Assistant does not have. `mdi:alert-circle` on
+    `--error-color`.
+  - **warning** — any item has unreadable `visibility` conditions, or a label
+    whose `show` list is empty so it draws nothing. `mdi:alert-outline` on
+    `--warning-color`.
+  - Neither: no glyph. The vocabulary is `visibility-section.ts`'s, and the
+    asymmetry is the one already settled for the preview's markers — the normal
+    case gets no ink.
+  - The classification is **one function**, exported beside the row rendering
+    that already computes the same four states per row. Two places deciding
+    "is this item broken" would drift, and the row is the one that must stay
+    right.
 - The list sits in a **max-height wrapper** so a long list stops pushing the
   sections below it off the screen.
 - **Scroll behaviour.** Restore the list's own scroll when an item's form opens.
