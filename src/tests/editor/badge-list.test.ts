@@ -627,6 +627,39 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
   });
 });
 
+describe("scrollToItem", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const item = (entity: string): PictureItem =>
+    ({
+      type: "badge",
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+      config: { type: "entity", entity },
+    }) as unknown as PictureItem;
+
+  afterEach(() => document.body.replaceChildren());
+
+  it("scrolls the row at the flipped display position, not the raw index", async () => {
+    // Three items: array [light.0, light.1, light.2], displayed [light.2, light.1, light.0].
+    // scrollToItem(0) → _flip(0) = 2, so display row 2 (light.0) scrolls into view.
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [item("light.0"), item("light.1"), item("light.2")];
+    document.body.append(el);
+    await el.updateComplete;
+
+    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
+    const expected = rows[2] as HTMLElement; // display 2 = array 0
+    const spyExpected = rstest.spyOn(expected, "scrollIntoView");
+    const unexpected = rows[0] as HTMLElement; // display 0 = array 2
+    const spyUnexpected = rstest.spyOn(unexpected, "scrollIntoView");
+
+    el.scrollToItem(0);
+    expect(spyExpected).toHaveBeenCalledTimes(1);
+    expect(spyUnexpected).toHaveBeenCalledTimes(0);
+  });
+});
+
 describe("the Items section", () => {
   if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 

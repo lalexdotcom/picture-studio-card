@@ -32,6 +32,30 @@ export class PictureStudioSection extends LitElement {
     this.open = false;
   }
 
+  /**
+   * Open this section from code.
+   *
+   * Deliberately NOT done by driving the `open` property: `ha-expansion-panel`
+   * owns its own `expanded`, and a header click sets it internally. Going through
+   * the Lit binding, a force-open stops being idempotent — with `open` already
+   * true and the panel folded by hand, Lit writes nothing and the section stays
+   * shut. Setting `expanded` on the panel directly always lands.
+   *
+   * This path does not animate: the transition lives in Home Assistant's click
+   * handler, which measures `scrollHeight` and sets an explicit pixel height,
+   * because CSS cannot interpolate `height: 0px` to `height: auto`. The section
+   * snaps open — accepted, and it means a scroll that follows is not aiming at a
+   * growing target.
+   */
+  public async expand(): Promise<void> {
+    const panel = this.shadowRoot?.querySelector("ha-expansion-panel") as
+      | (HTMLElement & { expanded?: boolean; updateComplete?: Promise<unknown> })
+      | null;
+    if (!panel) return;
+    panel.expanded = true;
+    if (panel.updateComplete instanceof Promise) await panel.updateComplete;
+  }
+
   protected render() {
     return html`
       <ha-expansion-panel outlined ?expanded=${this.open}>

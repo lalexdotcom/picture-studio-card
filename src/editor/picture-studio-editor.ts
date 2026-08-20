@@ -1,4 +1,5 @@
 import { css, html, LitElement, nothing } from "lit";
+import { cache } from "lit/directives/cache.js";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import {
   type BadgeItem,
@@ -314,12 +315,35 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * fight the user's own scrolling.
    */
   protected updated(changed: Map<string, unknown>): void {
-    if (!changed.has("_editingIndex") || this._editingIndex === undefined) return;
-    // Scroll the editor to its top only when a form actually opens.  When the
-    // form is refused (broken badge) the list scrolls the selected row into
-    // view instead — the two are mutually exclusive branches of one decision.
-    if (!this._formTarget()) return;
-    this.scrollIntoView({ block: "start" });
+    if (!changed.has("_editingIndex")) return;
+    const prev = changed.get("_editingIndex") as number | undefined;
+    const curr = this._editingIndex;
+
+    // Three mutually exclusive branches of one decision — scroll the editor to
+    // its top only when a form actually opens; show the Items section and bring
+    // the row into view in the other two cases.
+    if (curr !== undefined && this._formTarget()) {
+      this.scrollIntoView({ block: "start" });
+    } else if (curr !== undefined) {
+      // An item was selected but no form opened (unreadable item, or a badge
+      // whose type is missing): expand the Items section and scroll to the row.
+      void this._showListAt(curr);
+    } else if (prev !== undefined) {
+      // The user came back from a form: expand the Items section and bring the
+      // row that was just edited into view.
+      void this._showListAt(prev);
+    }
+  }
+
+  private async _showListAt(index: number): Promise<void> {
+    const section = this.shadowRoot?.querySelector("#items-section") as
+      | (HTMLElement & { expand(): Promise<void> })
+      | null;
+    await section?.expand();
+    const list = this.shadowRoot?.querySelector("picture-studio-badge-list") as
+      | (HTMLElement & { scrollToItem(i: number): void })
+      | null;
+    list?.scrollToItem(index);
   }
 
   protected render() {
@@ -330,31 +354,33 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const editing = this._formTarget();
 
     if (editing) {
-      return editing.type === "badge"
-        ? html`
-            <picture-studio-badge-form
-              .hass=${hass}
-              .badge=${editing.config}
-              .anchor=${editing.anchor}
-              .visibility=${editing.visibility}
-              @badge-changed=${this._badgeChanged}
-              @anchor-changed=${this._anchorChanged}
-              @visibility-changed=${this._visibilityChanged}
-              @go-back=${() => this.select(undefined)}
-            ></picture-studio-badge-form>
-          `
-        : html`
-            <picture-studio-element-form
-              .hass=${hass}
-              .element=${editing.config}
-              .anchor=${editing.anchor}
-              .visibility=${editing.visibility}
-              @element-changed=${this._elementChanged}
-              @anchor-changed=${this._anchorChanged}
-              @visibility-changed=${this._visibilityChanged}
-              @go-back=${() => this.select(undefined)}
-            ></picture-studio-element-form>
-          `;
+      return cache(
+        editing.type === "badge"
+          ? html`
+              <picture-studio-badge-form
+                .hass=${hass}
+                .badge=${editing.config}
+                .anchor=${editing.anchor}
+                .visibility=${editing.visibility}
+                @badge-changed=${this._badgeChanged}
+                @anchor-changed=${this._anchorChanged}
+                @visibility-changed=${this._visibilityChanged}
+                @go-back=${() => this.select(undefined)}
+              ></picture-studio-badge-form>
+            `
+          : html`
+              <picture-studio-element-form
+                .hass=${hass}
+                .element=${editing.config}
+                .anchor=${editing.anchor}
+                .visibility=${editing.visibility}
+                @element-changed=${this._elementChanged}
+                @anchor-changed=${this._anchorChanged}
+                @visibility-changed=${this._visibilityChanged}
+                @go-back=${() => this.select(undefined)}
+              ></picture-studio-element-form>
+            `,
+      );
     }
 
     const localize = hass.localize;
@@ -366,7 +392,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const helper = (s: { name: string }) => formHelper(hass, s.name);
     const flat = config as unknown as Record<string, unknown>;
 
-    return html`
+    return cache(html`
       <picture-studio-section open .label=${localizeOwn(hass, "section_background")} icon="mdi:image">
         <ha-form
           .hass=${hass}
@@ -378,7 +404,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
         ></ha-form>
       </picture-studio-section>
 
-      <picture-studio-section .label=${localizeOwn(hass, "items")} icon="mdi:format-list-bulleted">
+      <picture-studio-section
+        id="items-section"
+        .label=${localizeOwn(hass, "items")}
+        icon="mdi:format-list-bulleted"
+      >
         ${
           config.items.length
             ? html`<span class="count" slot="event">${config.items.length}</span>`
@@ -440,6 +470,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
           @value-changed=${this._sectionChanged(entity)}
         ></ha-form>
       </picture-studio-section>
-    `;
+    `);
   }
 }

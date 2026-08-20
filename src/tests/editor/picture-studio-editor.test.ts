@@ -1,12 +1,14 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it, rstest } from "@rstest/core";
 import {
   CARD_TYPE,
   EDITOR_TAG,
   HEADING_SECTION_TAG,
+  LIST_TAG,
   type PictureStudioConfig,
   SECTION_TAG,
 } from "../../config";
 import { probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence";
+import { PictureStudioBadgeList } from "../../editor/badge-list";
 import { PictureStudioHeadingSection } from "../../editor/heading-section";
 import { PictureStudioEditor } from "../../editor/picture-studio-editor";
 import { PictureStudioSection } from "../../editor/section-panel";
@@ -16,6 +18,7 @@ if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, PictureSt
 if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
 if (!customElements.get(HEADING_SECTION_TAG))
   customElements.define(HEADING_SECTION_TAG, PictureStudioHeadingSection);
+if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 
 const CONFIG = {
   type: "custom:picture-studio",
@@ -364,5 +367,78 @@ describe("CSS rules", () => {
   it(":host has a gap between sections", () => {
     const rules = cssRules(PictureStudioEditor.styles);
     expect(rules.get(":host")).toContain("gap: var(--ha-space-4)");
+  });
+});
+
+describe("Items section follows the work", () => {
+  // loadCardHelpers stub needed for badge probe machinery.
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
+  };
+
+  // Config with item 0 missing (bad type) so selecting it opens no form.
+  const CONFIG_MISSING = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+    ],
+  } as unknown as PictureStudioConfig;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  it("expands the Items section and scrolls to the row when selecting an item that opens no form", async () => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_MISSING);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    // Settle the verdict before selecting so _formTarget() sees "missing".
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    const expandSpy = rstest.spyOn(section, "expand");
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    el.select(0); // missing badge — no form opens
+    await el.updateComplete;
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
+    expect(scrollSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("expands the Items section and scrolls to the previously-edited row when returning from a form", async () => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG); // two valid badges at indices 0 and 1
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    const expandSpy = rstest.spyOn(section, "expand");
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    el.select(1); // valid badge — form opens, sections cached
+    await el.updateComplete;
+
+    el.select(undefined); // go back — sections restored
+    await el.updateComplete;
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
+    expect(scrollSpy).toHaveBeenCalledWith(1); // previous index was 1
   });
 });

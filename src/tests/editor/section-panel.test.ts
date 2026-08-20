@@ -56,6 +56,40 @@ describe("picture-studio-section", () => {
   });
 });
 
+describe("expand()", () => {
+  it("opens a closed panel", async () => {
+    const el = await mount(); // closed by default (open = false)
+    await el.expand();
+    const panel = el.shadowRoot?.querySelector("ha-expansion-panel") as {
+      expanded?: boolean;
+    } | null;
+    expect(panel?.expanded).toBe(true);
+  });
+
+  it("does not throw when the panel is absent", async () => {
+    if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
+    const el = document.createElement(SECTION_TAG) as PictureStudioSection;
+    // Not appended — no render, so shadow root has no panel yet.
+    await expect(el.expand()).resolves.toBeUndefined();
+  });
+
+  it("remains open after a manual fold and a second expand() call", async () => {
+    // This test guards the imperative approach: a binding-driven implementation
+    // (this.open = true) passes the first expand() but fails the second because
+    // Lit does not re-render when the bound value has not changed — the panel
+    // stays shut after the manual fold.
+    const el = await mount();
+    await el.expand();
+    // Fold the panel the way Home Assistant's click handler does.
+    const panel = el.shadowRoot?.querySelector("ha-expansion-panel") as HTMLElement & {
+      expanded?: boolean;
+    };
+    panel.expanded = false;
+    await el.expand();
+    expect(panel?.expanded).toBe(true);
+  });
+});
+
 describe("CSS rules", () => {
   it("gives .content vertical padding", () => {
     const rules = cssRules(PictureStudioSection.styles);

@@ -340,7 +340,11 @@ export class PictureStudioBadgeList extends LitElement {
     if (!changedProperties.has("selectedIndex") || this.selectedIndex === undefined) return;
     // selectedIndex is an array index; the list renders top-down, so flip it to
     // a display position before querying the DOM.
-    const displayIndex = this._flip(this.selectedIndex);
+    this.scrollToItem(this.selectedIndex);
+  }
+
+  public scrollToItem(index: number): void {
+    const displayIndex = this._flip(index);
     const itemRows = this.shadowRoot?.querySelectorAll(".item");
     const row = itemRows?.[displayIndex] as HTMLElement | undefined;
     row?.scrollIntoView({ block: "nearest" });
