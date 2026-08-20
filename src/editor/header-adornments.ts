@@ -17,8 +17,10 @@ import { type CSSResult, css } from "lit";
 export const headerAdornments: CSSResult = css`
   .count {
     font-size: var(--ha-font-size-s);
-    color: var(--secondary-text-color);
-    background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
+    /* Loud neutral separates from --input-fill-color on focused headers;
+       --ha-color-on-neutral-loud is HA's paired text token — never hardcode white. */
+    background: var(--ha-color-fill-neutral-loud-resting);
+    color: var(--ha-color-on-neutral-loud);
     border-radius: var(--ha-border-radius-pill, 9999px);
     padding: 0 var(--ha-space-2);
     line-height: var(--ha-space-5);

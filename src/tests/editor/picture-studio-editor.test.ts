@@ -395,6 +395,10 @@ describe("CSS rules", () => {
     const rule = cssRules(PictureStudioEditor.styles).get(".count");
     expect(rule).toBeDefined();
     expect(rule).toContain("var(--ha-border-radius-pill");
+    // Loud neutral so the pill reads on a focused header (--input-fill-color background).
+    // --ha-color-on-neutral-loud is HA's paired text token for that fill — never hardcode white.
+    expect(rule).toContain("var(--ha-color-fill-neutral-loud-resting)");
+    expect(rule).toContain("var(--ha-color-on-neutral-loud)");
   });
 });
 
