@@ -5,7 +5,7 @@ import type { HomeAssistant } from "./types";
  * `localize` only serves the frontend's own keys, `loadBackendTranslation` needs an
  * integration behind it, and `loadFragmentTranslation` is reserved for HA's panels.
  * So anything HA has no key for ships here. Everything HA does have a key for goes
- * through `hass.localize` instead — see background-schema and badge-list.
+ * through `hass.localize` instead — see form-schemas and badge-list.
  */
 const STRINGS = {
   en: {

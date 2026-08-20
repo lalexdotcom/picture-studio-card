@@ -89,6 +89,22 @@ describe("backgroundData", () => {
       media_content_id: "/local/p.png",
     });
   });
+
+  it("passes an already-object-valued image through unchanged, metadata included", () => {
+    const picked = {
+      media_content_id: "media-source://media_source/local/p.png",
+      metadata: { title: "p.png" },
+    };
+    expect(backgroundData(config({ image: picked })).image).toBe(picked);
+  });
+
+  it("passes an already-object-valued dark_mode_image through unchanged", () => {
+    const picked = {
+      media_content_id: "media-source://media_source/local/night.png",
+      metadata: { title: "night.png" },
+    };
+    expect(backgroundData(config({ dark_mode_image: picked })).dark_mode_image).toBe(picked);
+  });
 });
 
 describe("mergeBackground", () => {
@@ -103,6 +119,19 @@ describe("mergeBackground", () => {
   it("writes an image entity and clears the camera AND its view", () => {
     const next = mergeBackground(config({ camera_image: "camera.door", camera_view: "live" }), {
       picture_entity: "image.plan",
+    });
+    expect(next.image_entity).toBe("image.plan");
+    expect("camera_image" in next).toBe(false);
+    expect("camera_view" in next).toBe(false);
+  });
+
+  it("clears camera_view even when ha-form submits it alongside the new entity", () => {
+    // The camera_view dropdown is visible while a camera is selected; ha-form
+    // includes it in the value-changed payload. sectionMerge writes it back into
+    // next, so the dispatch's own delete is the only thing that removes it.
+    const next = mergeBackground(config({ camera_image: "camera.door", camera_view: "live" }), {
+      picture_entity: "image.plan",
+      camera_view: "live",
     });
     expect(next.image_entity).toBe("image.plan");
     expect("camera_image" in next).toBe(false);
