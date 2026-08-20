@@ -608,3 +608,30 @@ describe("hui-error-badge display in editing mode", () => {
     expect(badge.style.display).toBe("none");
   });
 });
+
+describe("the header", () => {
+  it("is absent when the heading holds nothing", async () => {
+    const card = await mountCard({ type: CARD_TYPE, items: [] });
+    expect(card.shadowRoot?.querySelector("picture-studio-heading")).toBeNull();
+  });
+
+  it("appears for an icon alone, with no title", async () => {
+    const card = await mountCard({ type: CARD_TYPE, heading: { icon: "mdi:desk" }, items: [] });
+    expect(card.shadowRoot?.querySelector("picture-studio-heading")).not.toBeNull();
+  });
+
+  it("appears for a badge alone", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      heading: { badges: [{ type: "entity", entity: "sensor.a" }] },
+      items: [],
+    });
+    expect(card.shadowRoot?.querySelector("picture-studio-heading")).not.toBeNull();
+  });
+
+  it("no longer uses ha-card's own header", async () => {
+    const card = await mountCard({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
+    const haCard = card.shadowRoot?.querySelector("ha-card") as { header?: string } | null;
+    expect(haCard?.header).toBeUndefined();
+  });
+});

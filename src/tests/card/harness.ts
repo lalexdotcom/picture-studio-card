@@ -92,7 +92,10 @@ export const wrappers = (card: PictureStudioCard): HTMLElement[] =>
  */
 export const cssRules = (
   styles: unknown,
-): { selector: string; text: string }[] & { get(selector: string): string | undefined } => {
+): { selector: string; text: string }[] & { get(selector: string): string | undefined } & Record<
+    string,
+    Record<string, string>
+  > => {
   const sheets = Array.isArray(styles) ? styles : [styles];
   const text = sheets
     .map((sheet) => (sheet as { cssText?: string }).cssText ?? "")
@@ -105,7 +108,17 @@ export const cssRules = (
     bySelector.set(selector, body);
   }
   const rules = [...bySelector.entries()].map(([selector, text]) => ({ selector, text }));
-  return Object.assign(rules, { get: (sel: string) => bySelector.get(sel) });
+  const out = Object.assign(rules, { get: (sel: string) => bySelector.get(sel) });
+  // Expose each selector as a keyed property returning parsed declarations, so
+  // tests can assert individual properties: rules[selector]["flex"].
+  for (const [selector, body] of bySelector) {
+    const decls: Record<string, string> = {};
+    for (const match of body.matchAll(/([a-z-]+)\s*:\s*([^;]+)/g)) {
+      decls[(match[1] ?? "").trim()] = (match[2] ?? "").trim();
+    }
+    (out as unknown as Record<string, unknown>)[selector] = decls;
+  }
+  return out as ReturnType<typeof cssRules>;
 };
 
 export const CONFIG_3 = {

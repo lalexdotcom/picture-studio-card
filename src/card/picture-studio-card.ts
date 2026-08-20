@@ -3,6 +3,7 @@ import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
+  hasHeading,
   hasVisibility,
   ICON_TAG,
   imagePath,
@@ -13,6 +14,7 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
+import "./card-heading";
 import {
   type Anchor,
   type MarkerCorner,
@@ -608,7 +610,18 @@ export class PictureStudioCard extends LitElement {
     if (!this._config) return nothing;
 
     return html`
-      <ha-card .header=${this._config.heading?.title}>
+      <ha-card>
+        ${
+          hasHeading(this._config.heading)
+            ? html`
+                <picture-studio-heading
+                  .hass=${this.hass}
+                  .heading=${this._config.heading}
+                  .preview=${this.preview}
+                ></picture-studio-heading>
+              `
+            : nothing
+        }
         <div class="root ${this.editing ? "editing" : ""} ${this.preview ? "previewing" : ""}">
           <div class="layer"></div>
         </div>
