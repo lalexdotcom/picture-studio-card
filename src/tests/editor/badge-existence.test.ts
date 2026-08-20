@@ -6,25 +6,11 @@ import {
   probeBadgeType,
   resetBadgeVerdicts,
 } from "../../editor/badge-existence";
+import { makeNativeBadgeHelpers } from "./harness";
 
-// All types HA's badge registry knows how to build. Used by tests that need the
-// probe to settle correctly for both existing and non-existing types.
-const HA_NATIVE_BADGE_TYPES = new Set([
-  "error",
-  "entity",
-  "entity-filter",
-  "shortcut",
-  "state-label",
-  "power-total",
-  "gas-total",
-  "water-total",
-]);
-const helpers = {
-  createBadgeElement: (c: { type?: string }) =>
-    document.createElement(
-      HA_NATIVE_BADGE_TYPES.has(c.type ?? "") ? `hui-${c.type}-badge` : "hui-error-badge",
-    ),
-};
+// Answers like HA's badge registry, so the probe settles correctly for both
+// existing and non-existing types.
+const helpers = makeNativeBadgeHelpers();
 
 beforeEach(() => {
   resetBadgeVerdicts();

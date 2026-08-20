@@ -11,30 +11,12 @@ import {
 } from "../../editor/badge-list";
 import { DEFAULT_LABEL_SIZE } from "../../element-size";
 import { cssRules } from "../card/harness";
+import { makeNativeBadgeHelpers } from "./harness";
 
-// Provides a minimal loadCardHelpers stub for tests that render badge rows but
-// do not need probe control. Without it, probeBadgeType throws when it calls
-// window.loadCardHelpers() for badge items now that render() wires the probe.
-//
-// Native HA badge types that HA can actually build (i.e. createBadgeElement
-// returns a real badge, not hui-error-badge). Includes all types HA's badge
-// registry knows about: CORE_BADGES plus the non-offered native types.
-const HA_NATIVE_BADGE_TYPES = new Set([
-  "error",
-  "entity",
-  "entity-filter",
-  "shortcut",
-  "state-label",
-  "power-total",
-  "gas-total",
-  "water-total",
-]);
-const defaultHelpers = {
-  createBadgeElement: (c: { type?: string }) =>
-    document.createElement(
-      HA_NATIVE_BADGE_TYPES.has(c.type ?? "") ? `hui-${c.type}-badge` : "hui-error-badge",
-    ),
-};
+// A minimal loadCardHelpers stub for tests that render badge rows but do not need
+// probe control. Without it, probeBadgeType throws when it calls
+// window.loadCardHelpers() for badge items, now that render() wires the probe.
+const defaultHelpers = makeNativeBadgeHelpers();
 beforeEach(() => {
   (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
     defaultHelpers;
