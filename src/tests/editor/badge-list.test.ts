@@ -260,13 +260,14 @@ describe("the add menu", () => {
     document.body.replaceChildren();
   });
 
-  it("sits on the title's line rather than under the rows", async () => {
+  it("sits below the rows, not on the header's line", async () => {
     const el = await mount();
     const header = el.shadowRoot?.querySelector(".header");
-    // h3 is gone — the panel (Task 8) carries the title now. The header keeps
-    // the hint and the add button; that is what "on one line" means here.
+    // The add menu moved below the rows to match hui-heading-badges-editor's
+    // layout. The header keeps only the hint.
     expect(header?.querySelector(".hint")).not.toBeNull();
-    expect(header?.querySelector("ha-dropdown.add")).not.toBeNull();
+    expect(header?.querySelector("ha-dropdown.add")).toBeNull();
+    expect(el.shadowRoot?.querySelector("ha-dropdown.add")).not.toBeNull();
   });
 
   it("opens under its trigger and aligned on its right edge", async () => {
@@ -629,14 +630,6 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
 describe("the Items section", () => {
   if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 
-  const badgeItem = (): PictureItem =>
-    ({
-      type: "badge",
-      config: { type: "entity", entity: "sensor.a" },
-      position: { top: 0, left: 0 },
-      anchor: "auto",
-    }) as unknown as PictureItem;
-
   const mountList = async (its: PictureItem[]) => {
     const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
     el.items = its;
@@ -657,22 +650,9 @@ describe("the Items section", () => {
   it("keeps the caption and the add button on one line", async () => {
     const el = await mountList([]);
     const header = el.shadowRoot?.querySelector(".header");
+    // The add menu moved below the rows; the header now holds only the hint.
     expect(header?.querySelector(".hint")).not.toBeNull();
-    expect(header?.querySelector("ha-button, ha-dropdown")).not.toBeNull();
-  });
-
-  it("keeps the sortable's container inside the scrolling wrapper", async () => {
-    const el = await mountList([badgeItem()]);
-    const wrapper = el.shadowRoot?.querySelector(".scroll");
-    // ha-sortable takes children[0] as its container, so the scrolling wrapper
-    // must sit ABOVE it, never between it and the rows.
-    expect(wrapper?.firstElementChild?.tagName.toLowerCase()).toBe("ha-sortable");
-  });
-
-  it("caps the list's height", async () => {
-    const rules = cssRules(PictureStudioBadgeList.styles);
-    expect(rules[".scroll"]?.["max-height"]).toBe("var(--psc-items-max-height, 320px)");
-    expect(rules[".scroll"]?.["overflow-y"]).toBe("auto");
+    expect(header?.querySelector("ha-dropdown.add")).toBeNull();
   });
 });
 

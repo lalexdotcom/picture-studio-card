@@ -227,10 +227,8 @@ export class PictureStudioBadgeList extends LitElement {
     return html`
       <div class="header">
         <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
-        ${this._addMenu(localize)}
       </div>
-      <div class="scroll">
-        <ha-sortable
+      <ha-sortable
           handle-selector=".handle"
           draggable-selector=".item"
           @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
@@ -334,7 +332,7 @@ export class PictureStudioBadgeList extends LitElement {
           )}
         </div>
       </ha-sortable>
-      </div>
+      ${this._addMenu(localize)}
     `;
   }
 
@@ -349,33 +347,12 @@ export class PictureStudioBadgeList extends LitElement {
   }
 
   static styles = css`
-    /* The caption and the add button on one line. The button is aligned on the
-       block's last baseline rather than centred: beside a taller trigger,
-       centring floats it off the text and reads as belonging to neither. */
+    /* The stacking hint, sitting off the first row by the same gap the rows keep
+       between themselves. */
     .header {
       display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
       gap: var(--ha-space-2, 8px);
-      /* The gap the rows keep between themselves, so the header reads as the
-         first thing in the same rhythm rather than as a block glued to the list.
-         It sits on the row rather than on the caption: the button is taller than
-         the text beside it, and a margin under the text alone would leave the
-         button nearly touching the first item. */
       margin-bottom: var(--ha-space-2, 8px);
-    }
-    .add {
-      flex: none;
-    }
-    /* The list is capped so a long one stops pushing the sections below it off
-       the screen. The wrapper sits ABOVE ha-sortable, never between it and the
-       rows: ha-sortable takes children[0] as its container, and SortableJS's
-       autoscroll — forced to its fallback by HA, with scroll: true and
-       scrollSpeed: 20 — walks up to the nearest scrollable ancestor. */
-    .scroll {
-      max-height: var(--psc-items-max-height, 320px);
-      overflow-y: auto;
-      overflow-x: hidden;
     }
     .hint {
       color: var(--secondary-text-color);
@@ -507,7 +484,7 @@ export class PictureStudioBadgeList extends LitElement {
     /* The trigger sizes itself; only the spacing is ours. */
     .add {
       display: block;
-      margin-top: 12px;
+      margin-top: var(--ha-space-2, 8px);
     }
   `;
 }

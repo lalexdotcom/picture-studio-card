@@ -431,7 +431,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
         ></ha-form>
       </picture-studio-section>
 
-      <picture-studio-section .label=${localizeOwn(hass, "section_entity")} icon="mdi:lightbulb">
+      <picture-studio-section .label=${localizeOwn(hass, "section_entity")} icon="mdi:image-auto-adjust">
         <ha-form
           .hass=${hass}
           .data=${sectionData(entity, flat)}

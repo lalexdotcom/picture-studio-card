@@ -54,6 +54,8 @@ describe("picture-studio-heading-section", () => {
     const el = await mount();
     expect(el.shadowRoot?.querySelector("hr")).not.toBeNull();
     expect(el.shadowRoot?.querySelector(".badges-title")?.textContent?.trim()).toBe("Badges");
+    // The icon beside the caption was removed; only the text caption remains.
+    expect(el.shadowRoot?.querySelector(".badges-header ha-icon")).toBeNull();
   });
 
   it("passes the badge list to HA's own editor", async () => {

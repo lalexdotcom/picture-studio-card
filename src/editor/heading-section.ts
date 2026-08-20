@@ -8,9 +8,6 @@ import { formLabel, sectionData, sectionMerge } from "./form-section";
 const HA_BADGES_EDITOR = "hui-heading-badges-editor";
 /** The class whose static getConfigElement pulls that editor's chunk in. */
 const HA_HEADING_CARD = "hui-heading-card";
-/** The heading card's own section icon, so ours reads as the same thing. */
-const BADGES_ICON = "mdi:format-list-bulleted-type";
-
 interface HeadingCardClass {
   getConfigElement?: () => Promise<HTMLElement>;
 }
@@ -127,7 +124,6 @@ export class PictureStudioHeadingSection extends LitElement {
       ></ha-form>
       <hr />
       <div class="badges-header">
-        <ha-icon .icon=${BADGES_ICON}></ha-icon>
         <span class="badges-title"
           >${hass.localize("ui.panel.lovelace.editor.card.heading.badges")}</span
         >
@@ -161,7 +157,6 @@ export class PictureStudioHeadingSection extends LitElement {
       align-items: center;
       gap: var(--ha-space-2);
       margin-bottom: var(--ha-space-2);
-      --mdc-icon-size: 20px;
     }
     .badges-title {
       font-size: var(--ha-font-size-m);
