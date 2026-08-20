@@ -20,8 +20,13 @@ interface BadgeClass {
  * Mirrors `coreBadges` in home-assistant/frontend,
  * src/panels/lovelace/editor/lovelace-badges.ts — two entries as of 2026-08.
  * It is a module export we cannot reach from our bundle, so it is duplicated
- * here. If Home Assistant adds a native badge type, add it here too; until then
- * that type stays usable from YAML, since rendering does not filter on this list.
+ * here.
+ *
+ * **This list is the acceptance list for native badge types.** A native type
+ * absent from it is an error — both the editor row and the card's render gate
+ * on `isSupportedBadgeType`. If Home Assistant introduces a new native badge
+ * type, add it here and release: that is the price of knowing the list, and a
+ * reader must not discover it by surprise.
  */
 export const CUSTOM_PREFIX = "custom:";
 
@@ -29,6 +34,16 @@ export const CORE_BADGES: BadgeChoice[] = [
   { type: "entity", isCustom: false },
   { type: "shortcut", isCustom: false },
 ];
+
+/**
+ * Whether a badge type is accepted by this card.
+ *
+ * For `custom:` types we cannot know the list, so the runtime probe decides.
+ * For native types `CORE_BADGES` decides, and one outside it is an error —
+ * the same rule the card's render and the editor row both enforce.
+ */
+export const isSupportedBadgeType = (type: string): boolean =>
+  type.startsWith(CUSTOM_PREFIX) || CORE_BADGES.some((b) => b.type === type);
 
 /**
  * What the native picker shows, minus fuzzy search and entity suggestions.

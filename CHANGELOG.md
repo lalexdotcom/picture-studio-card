@@ -12,6 +12,12 @@
 
 ### Changed
 
+- A badge whose type is one Home Assistant knows but does not offer in its
+  picker — `state-label`, `entity-filter`, `power-total`, `gas-total`,
+  `water-total` — is now reported as an unsupported type instead of being drawn.
+  `state-label` in particular is also an *element* kind, and writing it as a
+  badge was a silent way of getting the wrong thing. Custom badges are
+  unaffected.
 - The editor is now five collapsible sections — Background, Items, Heading,
   Filters and Entity — instead of one panel and a list. The item list carries
   its count and no longer grows without limit.

@@ -321,17 +321,36 @@ describe("a badge whose type does not exist", () => {
     document.body.replaceChildren();
   });
 
-  it("renders unmarked on the first paint", async () => {
+  // Failure text recorded before retargeting (F02):
+  // "expected true to be false // Object.is equality"
+  // entty is now immediately unsupported (no probe needed), so the first paint
+  // IS red. The optimistic-first-paint guarantee is for probe-based paths —
+  // custom types with a dash, which use a 2 s grace timer.
+  it("renders a probe-based custom type unmarked on the first paint", async () => {
+    // entty-probe has a dash, so probeBadgeType arms the grace timer and the
+    // row stays optimistic until the timer fires — never, in this test.
     const list = await mountList([
-      { type: "badge", position: { top: 5, left: 5 }, anchor: "auto", config: { type: "entty" } },
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "custom:entty-probe" },
+      },
     ] as PictureItem[]);
-    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
-    expect(row.querySelector(".kind")?.classList.contains("error")).toBe(false);
+    const row = list.shadowRoot?.querySelectorAll(".item")[0];
+    expect(row?.querySelector(".kind")?.classList.contains("error")).toBe(false);
   });
 
   it("marks the row once the verdict lands, and disables Edit", async () => {
+    // custom:entty has no dash, so probeBadgeType settles it immediately as
+    // missing (same branch Home Assistant uses) — no timer to advance.
     const list = await mountList([
-      { type: "badge", position: { top: 5, left: 5 }, anchor: "auto", config: { type: "entty" } },
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "custom:entty" },
+      },
     ] as PictureItem[]);
     await flushProbe(list);
     const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
@@ -342,10 +361,15 @@ describe("a badge whose type does not exist", () => {
     );
   });
 
-  it("leaves a native type outside our catalogue alone", async () => {
-    // `state-label` is a real badge type — it is in Home Assistant's lazy map
-    // and simply absent from the picker's list, which is what CORE_BADGES
-    // mirrors. It must not be flagged.
+  // Failure text recorded before retargeting (F03):
+  // "expected true to be false // Object.is equality"
+  // The rule changed: tolerance is for custom: types only. A native type outside
+  // CORE_BADGES is now an error, decided statically, no probe needed.
+  it("marks a native type outside CORE_BADGES immediately, without waiting for a probe", async () => {
+    // state-label is the triggering case: it is also an element kind, so writing
+    // type: badge was a silent way to get the wrong thing. The static check
+    // (isSupportedBadgeType) catches it before probeBadgeType is ever called.
+    // Assert without flushProbe — that is the point: no async hop, no timer.
     const list = await mountList([
       {
         type: "badge",
@@ -354,9 +378,11 @@ describe("a badge whose type does not exist", () => {
         config: { type: "state-label" },
       },
     ] as PictureItem[]);
-    await flushProbe(list);
-    const row = list.shadowRoot!.querySelectorAll(".item")[0]!;
-    expect(row.querySelector(".kind")?.classList.contains("error")).toBe(false);
+    const row = list.shadowRoot?.querySelectorAll(".item")[0];
+    expect(row?.querySelector(".kind")?.classList.contains("error")).toBe(true);
+    expect(
+      (row?.querySelectorAll("ha-icon-button")[0] as { disabled?: boolean } | undefined)?.disabled,
+    ).toBe(true);
   });
 });
 
@@ -538,15 +564,8 @@ describe("error glyph is alert-box for badge family, alert-circle for others", (
 describe("the secondary line of a probe-missing badge carries the type", () => {
   if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 
-  const probeHelpers = {
-    createBadgeElement: (c: { type?: string }) =>
-      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
-  };
-
   beforeEach(() => {
     resetBadgeVerdicts();
-    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
-      probeHelpers;
   });
 
   afterEach(() => {
@@ -554,23 +573,44 @@ describe("the secondary line of a probe-missing badge carries the type", () => {
     document.body.replaceChildren();
   });
 
-  it("appends the type after the translated prefix once the verdict lands", async () => {
+  // Failure text recorded before retargeting (F04):
+  // "expected 'Unsupported badge type: entty' to be 'Unknown badge type: entty'"
+  // entty is now caught by isSupportedBadgeType (native, not in CORE_BADGES)
+  // and gets the "unsupported" label immediately, without a probe. The
+  // "unknown" label is for probe-missing types — custom badges that fail.
+  // custom:entty has no dash, so probeBadgeType settles it synchronously as
+  // missing, no timer needed.
+  it("uses 'Unknown badge type' for a probe-missing custom badge", async () => {
     const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
     el.items = [
       {
         type: "badge",
         position: { top: 5, left: 5 },
         anchor: "auto",
-        config: { type: "entty" },
+        config: { type: "custom:entty" },
       },
     ] as PictureItem[];
     document.body.append(el);
     await Promise.resolve();
-    // Flush probe — same pattern as "a badge whose type does not exist".
-    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
-    await el.updateComplete;
+    await el.updateComplete; // settle fires synchronously; wait for re-render
     const secondary = el.shadowRoot!.querySelector(".secondary");
-    expect(secondary?.textContent).toBe("Unknown badge type: entty");
+    expect(secondary?.textContent).toBe("Unknown badge type: custom:entty");
+  });
+
+  it("uses 'Unsupported badge type' for a native type outside CORE_BADGES", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "state-label" },
+      },
+    ] as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete; // static check, no probe — already broken on first render
+    const secondary = el.shadowRoot!.querySelector(".secondary");
+    expect(secondary?.textContent).toBe("Unsupported badge type: state-label");
   });
 });
 
@@ -743,5 +783,12 @@ describe("itemsSeverity", () => {
     await el.updateComplete; // re-render after verdict lands
     expect(itemsSeverity([missing])).toBe("error");
     document.body.replaceChildren(); // outer afterEach resets verdicts
+  });
+
+  it("reports an error for a native badge type outside CORE_BADGES, without a probe", () => {
+    // state-label is statically known to be unsupported — no component, no
+    // probe, no timer. isSupportedBadgeType decides synchronously, and
+    // itemsSeverity mirrors the same check so the two stay in sync.
+    expect(itemsSeverity([badge({ type: "state-label" })])).toBe("error");
   });
 });

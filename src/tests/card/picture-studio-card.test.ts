@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it, rstest } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
@@ -554,6 +554,12 @@ describe("an unknown item does not shift the items after it", () => {
 });
 
 describe("hui-error-badge display in editing mode", () => {
+  // Failure text recorded before retargeting (F01):
+  // "expected 'none' to be '' // Object.is equality"
+  // entty is now caught by isSupportedBadgeType before createBadgeElement is
+  // called, so the display-clearing code (for HA's grace-period timer) was
+  // never reached. The test now uses a custom: type which goes through the
+  // existing path: createBadgeElement(item.config) → hui-error-badge → clear.
   const ERROR_BADGE_CONFIG = {
     type: CARD_TYPE,
     image: "/local/plan.png",
@@ -561,7 +567,7 @@ describe("hui-error-badge display in editing mode", () => {
       {
         type: "badge",
         position: { top: "10%", left: "10%" },
-        config: { type: "entty" },
+        config: { type: "custom:entty" },
       },
     ],
   };
@@ -606,6 +612,85 @@ describe("hui-error-badge display in editing mode", () => {
   it("leaves the inline display of hui-error-badge untouched outside editing", async () => {
     const badge = await mountWithErrorBadge(false);
     expect(badge.style.display).toBe("none");
+  });
+});
+
+describe("a native badge type outside CORE_BADGES", () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    installHelpers(); // restore the default loadCardHelpers stub
+  });
+
+  // The spy must target the exact helpers object the card will receive — not a
+  // separate call, since the default stub returns a new object each time.
+  // Set up a stable reference and point loadCardHelpers at it, then spy.
+  const makeTrackedHelpers = () => {
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+    return helpers;
+  };
+
+  it("passes an error config to createBadgeElement instead of the item's config", async () => {
+    // state-label is the triggering case: also an element kind, so writing
+    // type: badge was a silent way to get the wrong thing on the picture.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeTrackedHelpers();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card called createBadgeElement with the error shape, not the item config.
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
+    );
+    // origConfig carries the original config so the error badge's detail dialog
+    // can show it — the same affordance Lovelace gives everywhere else.
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ origConfig: { type: "state-label" } }),
+    );
+  });
+
+  it("does not intercept a supported badge type", async () => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeTrackedHelpers();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "badge",
+          position: { top: "10%", left: "10%" },
+          config: { type: "entity", entity: "light.a" },
+        },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card passed the item's own config through, unmodified.
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "entity" }));
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 });
 

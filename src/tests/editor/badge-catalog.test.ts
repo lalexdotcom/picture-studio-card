@@ -3,6 +3,7 @@ import {
   badgeCatalog,
   CORE_BADGES,
   choiceLabel,
+  isSupportedBadgeType,
   resolveBadgeClass,
 } from "../../editor/badge-catalog";
 import type { LocalizeFunc } from "../../types";
@@ -81,6 +82,35 @@ describe("badgeCatalog", () => {
     const registry = [{ type: "a-badge" }];
     badgeCatalog(registry);
     expect(registry).toEqual([{ type: "a-badge" }]);
+  });
+});
+
+describe("isSupportedBadgeType", () => {
+  it("accepts the two core badges", () => {
+    expect(isSupportedBadgeType("entity")).toBe(true);
+    expect(isSupportedBadgeType("shortcut")).toBe(true);
+  });
+
+  it("accepts any custom: type, known or not, because the runtime probe decides", () => {
+    expect(isSupportedBadgeType("custom:mushroom-template-badge")).toBe(true);
+    expect(isSupportedBadgeType("custom:does-not-exist")).toBe(true);
+    expect(isSupportedBadgeType("custom:")).toBe(true);
+  });
+
+  it("rejects a native type outside CORE_BADGES, including state-label", () => {
+    // state-label is the one that matters: it is also a picture-elements
+    // element kind, so writing type: badge was a silent way to get the wrong
+    // thing. The other five are rejected for the same structural reason.
+    expect(isSupportedBadgeType("state-label")).toBe(false);
+    expect(isSupportedBadgeType("entity-filter")).toBe(false);
+    expect(isSupportedBadgeType("power-total")).toBe(false);
+    expect(isSupportedBadgeType("gas-total")).toBe(false);
+    expect(isSupportedBadgeType("water-total")).toBe(false);
+  });
+
+  it("rejects a nonsense native type", () => {
+    expect(isSupportedBadgeType("entty")).toBe(false);
+    expect(isSupportedBadgeType("")).toBe(false);
   });
 });
 

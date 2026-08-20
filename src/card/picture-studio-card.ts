@@ -15,6 +15,7 @@ import {
   stubConfig,
 } from "../config";
 import "./card-heading";
+import { isSupportedBadgeType } from "../editor/badge-catalog";
 import {
   type Anchor,
   type MarkerCorner,
@@ -458,6 +459,26 @@ export class PictureStudioCard extends LitElement {
   ): LovelaceBadgeElement | undefined {
     if (item.type === "unknown") return undefined;
     if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
+      // An unsupported native type cannot be built into the right element. Build
+      // an error badge instead, using the same `error` shape the factory already
+      // knows:
+      // - `error` is an eagerly known type in HA's badge registry, so
+      //   createBadgeElement builds hui-error-badge directly — nothing private
+      //   is imported and nothing is created by tag.
+      // - `origConfig` is not decoration: hui-error-badge dumps it as YAML in
+      //   the detail dialog its click opens, the same "show me what is wrong"
+      //   affordance Lovelace gives everywhere else.
+      // - The message is deliberately not localised: HA hardcodes its own error
+      //   badge text in English and every language shows it. "Unsupported" is
+      //   also not "Unknown" — the type exists, it is just not handled here.
+      if (type && !isSupportedBadgeType(type)) {
+        return helpers.createBadgeElement({
+          type: "error",
+          error: `Unsupported badge type: ${type}`,
+          origConfig: item.config,
+        } as never) as LovelaceBadgeElement;
+      }
       const el = helpers.createBadgeElement(item.config) as HTMLElement & LovelaceBadgeElement;
       // HA's badge factory returns a hui-error-badge with style.display="None"
       // and a 2000 ms timer that restores it — matching its own grace period so

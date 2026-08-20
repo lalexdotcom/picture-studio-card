@@ -3,7 +3,7 @@ import { repeat } from "lit/directives/repeat.js";
 import { hasVisibility, type PictureItem } from "../config";
 import { localizeOwn } from "../strings";
 import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
-import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
+import { type BadgeChoice, badgeCatalog, choiceLabel, isSupportedBadgeType } from "./badge-catalog";
 import { badgeVerdict, probeBadgeType } from "./badge-existence";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { itemIcon } from "./icons";
@@ -92,6 +92,8 @@ export const itemsSeverity = (items: readonly PictureItem[]): "error" | "warning
     if (item.type === "unknown") return "error";
     if (item.type === "badge") {
       const type = String((item.config as Record<string, unknown>).type ?? "");
+      // Static check first — same order as the row, so the two stay in sync.
+      if (type && !isSupportedBadgeType(type)) return "error";
       if (type && badgeVerdict(type) === "missing") return "error";
     }
     if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
@@ -205,6 +207,10 @@ export class PictureStudioBadgeList extends LitElement {
       // A badge with no type at all is legal and means `entity` — the factory's
       // last argument is the default type. Nothing to probe.
       if (!type) return false;
+      // An unsupported native type needs no probe: membership of a known list is
+      // decided at once. The check is ahead of the probe so the row turns red
+      // immediately without touching the verdict cache or the grace timer.
+      if (!isSupportedBadgeType(type)) return true;
       probeBadgeType(type, () => this.requestUpdate());
       return badgeVerdict(type) === "missing";
     });
@@ -215,11 +221,15 @@ export class PictureStudioBadgeList extends LitElement {
       if (item.reason === "config-missing" && item.token === "badge") return "mdi:alert-box";
       return "mdi:alert-circle";
     });
-    const secondary = rows.map((item, i) =>
-      item.type !== "unknown" && broken[i]
-        ? `${localizeOwn(this.hass, "unknown_badge_type")}: ${String(item.config.type ?? "")}`
-        : labels[i]?.secondary,
-    );
+    const secondary = rows.map((item, i) => {
+      if (item.type === "unknown" || !broken[i]) return labels[i]?.secondary;
+      // Two conditions, two words: a type nothing can build is "unknown"; a
+      // native type we do not support is "unsupported". A reader must be able to
+      // tell them apart at a glance.
+      const type = String(item.config.type ?? "");
+      const key = isSupportedBadgeType(type) ? "unknown_badge_type" : "unsupported_badge_type";
+      return `${localizeOwn(this.hass, key)}: ${type}`;
+    });
     // Display position of the selected array index; -1 when nothing is selected
     // so it can never accidentally match a real row.
     const selectedDisplay = this.selectedIndex !== undefined ? this._flip(this.selectedIndex) : -1;
