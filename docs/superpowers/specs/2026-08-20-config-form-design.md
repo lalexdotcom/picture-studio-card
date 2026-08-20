@@ -287,8 +287,23 @@ card level.
 `{w: 100, h: 56.25}`. Anything it cannot read returns `null` **in silence**: no
 error, no message, the image simply resumes its natural height. That was
 acceptable while the key belonged to someone writing YAML with the docs open.
-Exposed as a free text field, it wants a helper line giving the accepted forms —
-Home Assistant provides none.
+Exposed as a free text field, it gets a **hint line listing the accepted forms**.
+
+The mechanism exists and we already use it: `ha-form` takes a `computeHelper`
+callback, twin of `computeLabel` and keyed on the field name — `element-form.ts`
+drives `halo_enabled_helper` through it today. For `{ text: {} }`,
+`ha-selector-text` passes it as `.hint` to `<ha-input>`, which wraps Web
+Awesome's `wa-input`, where a hint is a **permanent caption under the field**,
+not a focus-only helper. Home Assistant has no string for it, so this one is
+ours.
+
+**Not a `pattern`.** The text selector also accepts `pattern` and
+`validation_message`, and turns on `autoValidate` as soon as a pattern is given.
+It is refused: a regex would be a second copy of `parseAspectRatio`'s tolerance,
+free to drift from it, and a regex one notch stricter than their parser makes the
+form reject a value the card renders perfectly — trading a silence for a lie. A
+hint cannot be wrong; it lists the forms, and anything else behaves exactly as it
+does today.
 
 ### The four failure shapes, all accepted as-is
 
@@ -355,10 +370,10 @@ Ours, in `src/strings.ts` — `items` and `stacking_hint` already exist:
   field and thin for a section.
 - the merged field's label — "Image or camera entity"; neither
   `generic.image_entity` nor `generic.camera_image` fits a field that is both.
-- optionally, the `aspect_ratio` helper line from §7.
+- the `aspect_ratio` hint line from §7.
 
-That is the whole list: four strings, one of them optional. Every field label
-comes from Home Assistant.
+That is the whole list: four strings. Every field label comes from Home
+Assistant.
 
 ## 9. Testing
 
@@ -378,7 +393,7 @@ recorded — trap n°5.
 ## 10. Open
 
 1. **Wording** for the three section titles, the merged field, and the
-   `aspect_ratio` helper. Content decided, phrasing not. Section 5 is called
+   `aspect_ratio` hint. Content decided, phrasing not. Section 5 is called
    *Entity* here because that is the word used in the brainstorm; *State* was
    floated as a better fit for a section holding `state_image` and
    `state_filter` beside it.
