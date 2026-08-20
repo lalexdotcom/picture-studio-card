@@ -700,7 +700,7 @@ describe("itemsSeverity", () => {
       anchor: "auto",
     }) as never;
 
-  it("is undefined when every item is fine", () => {
+  it("is undefined when no badge type has been probed", () => {
     expect(itemsSeverity([badge({ type: "entity", entity: "sensor.a" })])).toBeUndefined();
   });
 
