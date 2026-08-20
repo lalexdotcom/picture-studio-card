@@ -699,17 +699,26 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
 
   // Run last in this block: customElements.define is permanent, so subsequent
   // describe blocks (which test the "class available" path) inherit the definition.
-  it("requests a re-render once hui-error-badge becomes available", async () => {
+  //
+  // Failure text recorded before fix (runner F14):
+  // "expected [] to have a length of 1 but got +0" — the item stayed a hole forever.
+  // The test this replaced asserted requestUpdate had been called, which it had:
+  // green, and guarding nothing, because neither `updated`'s config gate nor
+  // `_syncItems`'s shape check lets a bare re-render reach the hole.
+  it("draws the refused badge once hui-error-badge becomes available", async () => {
     const { card } = await mountWithUnsupportedBadge();
     expect(wrappers(card)).toHaveLength(0);
 
-    const spy = rstest.spyOn(card, "requestUpdate");
-    // Simulate the class landing — e.g., another badge on the same dashboard
-    // caused the module to load. This resolves the whenDefined promise registered
-    // by the guard, which calls requestUpdate so the item draws on the next pass.
+    // Simulate the class landing — the dynamic import the priming call triggered,
+    // or another badge on the same dashboard having loaded the module.
     customElements.define("hui-error-badge", class extends HTMLElement {});
     await flush();
-    expect(spy).toHaveBeenCalled();
+
+    expect(wrappers(card)).toHaveLength(1);
+    const drawn = wrappers(card)[0]?.firstElementChild as { config?: unknown } | null;
+    expect(drawn?.config).toEqual(
+      expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
+    );
   });
 });
 

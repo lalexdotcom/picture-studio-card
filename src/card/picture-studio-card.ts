@@ -78,6 +78,8 @@ export class PictureStudioCard extends LitElement {
   /** Indexed like _wrappers; a hole where the item carries no conditions. */
   private _probes: (ProbeElement | undefined)[] = [];
   private _renderedTypes: string[] = [];
+  /** One subscription is enough, however many items are waiting on the class. */
+  private _awaitingErrorBadge = false;
   /** Released when the card stops editing; see the broker's card registry. */
   private _unregisterCard?: () => void;
   private _unsubscribe?: () => void;
@@ -488,10 +490,22 @@ export class PictureStudioCard extends LitElement {
           // Prime the module through the guarded path HA uses itself: routing an
           // impossible type through createBadgeElement fails inside HA, is caught,
           // and reaches createErrorBadgeElement, which performs the dynamic import of
-          // hui-error-badge. Once the class lands, requestUpdate redraws the item
-          // through the working path below.
+          // hui-error-badge. The item is left as a hole until the class lands.
           void helpers.createBadgeElement({ type: "\x00" } as never);
-          void customElements.whenDefined("hui-error-badge").then(() => this.requestUpdate());
+          if (!this._awaitingErrorBadge) {
+            this._awaitingErrorBadge = true;
+            void customElements.whenDefined("hui-error-badge").then(() => {
+              this._awaitingErrorBadge = false;
+              // requestUpdate would not reach the hole: `updated` only syncs items
+              // on a config change, and `_syncItems` only rebuilds when the shape
+              // changed — which it has not. Invalidating the shape is what reopens
+              // it. Safe to do here: `_renderedTypes = types` is assigned in the
+              // same synchronous block as the loop that called us, so it has
+              // already run by the time this callback fires.
+              this._renderedTypes = [];
+              void this._syncItems();
+            });
+          }
           return undefined;
         }
         return helpers.createBadgeElement({
