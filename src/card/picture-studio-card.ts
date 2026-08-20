@@ -15,7 +15,7 @@ import {
   stubConfig,
 } from "../config";
 import "./card-heading";
-import { badgeTypeProblem } from "../editor/badge-existence";
+import { isSupportedBadgeType } from "../editor/badge-catalog";
 import {
   type Anchor,
   type MarkerCorner,
@@ -460,39 +460,39 @@ export class PictureStudioCard extends LitElement {
     if (item.type === "unknown") return undefined;
     if (item.type === "badge") {
       const type = String((item.config as Record<string, unknown>).type ?? "");
-      // Only intercept when the type is one Home Assistant *has* and we do not
-      // offer — i.e. when badgeTypeProblem returns "unsupported". The other two
-      // broken cases — verdict "unknown" (type unknown to HA, e.g. "entty") and
-      // verdict "missing" (custom: resource never loaded) — already produce a
-      // Home Assistant error badge whose message names the actual problem.
-      // Using badgeIsBroken here would swallow those messages and replace them
-      // with our generic "Unsupported badge type", which is exactly the
-      // regression this change fixes.
-      // - `error` is an eagerly known type in HA's badge registry, so
-      //   createBadgeElement builds hui-error-badge directly — nothing private
-      //   is imported and nothing is created by tag.
+      const el = helpers.createBadgeElement(item.config) as HTMLElement & LovelaceBadgeElement;
+      // Home Assistant answers the type question synchronously: build the badge
+      // and look at what came back. We do not probe — the card has no machinery
+      // to drive that asynchrony, and on a real dashboard with no editor open
+      // no probe would ever run at all.
+      // - If HA handed back its own error badge (unknown type, missing custom:
+      //   resource, …), keep it — its message names the real problem better than
+      //   ours could.
+      // - If HA built the badge happily but the type is one we do not offer,
+      //   replace it with our error badge: drawing it would silently give the
+      //   user something other than what they asked for.
+      // - `custom:` types are always considered supported by isSupportedBadgeType,
+      //   so they are never intercepted here — HA's hide-then-reveal timer and
+      //   its own error badge for a resource still loading are untouched.
+      // - `error` is eagerly known in HA's badge registry, so createBadgeElement
+      //   builds hui-error-badge directly — nothing private imported, nothing
+      //   created by tag.
       // - `origConfig` is not decoration: hui-error-badge dumps it as YAML in
-      //   the detail dialog its click opens, the same "show me what is wrong"
-      //   affordance Lovelace gives everywhere else.
-      // - The message is deliberately not localised: HA hardcodes its own error
-      //   badge text in English and every language shows it. "Unsupported" is
-      //   also not "Unknown" — the type exists, it is just not handled here.
-      if (type && badgeTypeProblem(type) === "unsupported") {
+      //   the detail dialog its click opens, the same affordance Lovelace gives
+      //   everywhere else.
+      if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== "hui-error-badge") {
         return helpers.createBadgeElement({
           type: "error",
           error: `Unsupported badge type: ${type}`,
           origConfig: item.config,
         } as never) as LovelaceBadgeElement;
       }
-      const el = helpers.createBadgeElement(item.config) as HTMLElement & LovelaceBadgeElement;
-      // HA's badge factory returns a hui-error-badge with style.display="None"
-      // and a 2000 ms timer that restores it — matching its own grace period so
-      // the card and the probe agree on when to complain.  In the editor,
-      // stability across a drag is worth more than flash-avoidance: every config
-      // change rebuilds the whole card element, restarting the timer and hiding
-      // the badge for two seconds on every drag.  Clearing the inline display
-      // here makes error badges visible immediately while editing.  On a real
-      // dashboard the hide stays — this guard is never reached.
+      // HA's badge factory returns a hui-error-badge with style.display="none"
+      // and a 2000 ms timer that restores it. In the editor, stability across a
+      // drag is worth more than flash-avoidance: every config change rebuilds
+      // the whole card element, restarting the timer and re-hiding the badge.
+      // Clearing the inline display here makes error badges visible immediately
+      // while editing.
       if (this.editing && el.tagName.toLowerCase() === "hui-error-badge") {
         el.style.display = "";
       }
