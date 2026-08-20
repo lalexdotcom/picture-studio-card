@@ -428,19 +428,20 @@ definition, and this badge is an error from the start.
 
 ### The message
 
-`Unknown badge type: <type>` — **not localised**, because the content of an error
+`Unsupported badge type: <type>` — **not localised**, because the content of an error
 badge never is: Home Assistant hardcodes its own `Unknown type encountered:
 ${type}` in English, and every error badge in every language shows it. Only the
 badge's *label* is translated, from
 `ui.panel.lovelace.editor.error_section.title`.
 
-Home Assistant's own wording is **not** reused, because it would be false: it
-claims the type is unknown to Home Assistant, which knows it perfectly well. Ours
-says it is unknown to this card, which is the truth.
+Home Assistant's own wording is **not** reused, because it would be false:
+`Unknown type encountered` claims the type does not exist, and it does. Ours says
+it is not supported here, which is the truth.
 
-The wording deliberately reuses the vocabulary the item list already uses for the
-same category — our `unknown_badge_type` string, which the row shows localised.
-One category, one word, each half following its own convention.
+**Two conditions, two words.** `entty` exists nowhere; `state-label` exists and is
+not handled here. The item list had been calling both "Unknown badge type".
+`unknown_badge_type` keeps the first; a new `unsupported_badge_type` takes the
+second, localised in the row and shown in English by the badge.
 
 ### One predicate, exported once
 
