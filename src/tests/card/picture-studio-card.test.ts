@@ -616,6 +616,103 @@ describe("hui-error-badge display in editing mode", () => {
   });
 });
 
+describe("cold-start guard: hui-error-badge not yet registered", () => {
+  // happy-dom defines no Home Assistant element unless a test stubs one, so the
+  // undefined case is the natural state here — no stub needed. The defined case
+  // is what the last test in this block arranges; subsequent describe blocks then
+  // inherit that state and test the working path.
+  afterEach(() => {
+    document.body.replaceChildren();
+    installHelpers();
+  });
+
+  const makeHelpersForColdStart = () => {
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+    return helpers;
+  };
+
+  const mountWithUnsupportedBadge = async (): Promise<{
+    card: PictureStudioCard;
+    helpers: ReturnType<typeof makeHelpersForColdStart>;
+  }> => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeHelpersForColdStart();
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    return { card, helpers };
+  };
+
+  // Failure text recorded before fix (runner F01):
+  // "expected [ …(1) ] to have a length of +0 but got 1"
+  it("renders nothing for an unsupported badge when hui-error-badge is not registered", async () => {
+    const { card } = await mountWithUnsupportedBadge();
+    // No wrapper is added to the layer when _createChild returns undefined.
+    expect(wrappers(card)).toHaveLength(0);
+  });
+
+  // Failure text recorded before fix (runner F02):
+  // "expected [ …(1) ] to have a length of +0 but got 1" (wrappers assertion;
+  // the "not called with error" assertion is never reached under the current code)
+  it("makes a priming call whose result is discarded, not what gets rendered", async () => {
+    const { helpers } = await mountWithUnsupportedBadge();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    // Re-trigger a fresh mount so the spy is in place before the call.
+    const card2 = document.createElement(CARD_TAG) as PictureStudioCard;
+    card2.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card2);
+    await card2.updateComplete;
+    await flush();
+    // The priming call was made (to route through the guarded path and trigger the
+    // dynamic import of hui-error-badge). Its result was discarded, not rendered.
+    expect(spy).toHaveBeenCalled();
+    expect(wrappers(card2)).toHaveLength(0);
+    // The call was NOT our error config — that badge is exactly what we refused.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  // Run last in this block: customElements.define is permanent, so subsequent
+  // describe blocks (which test the "class available" path) inherit the definition.
+  it("requests a re-render once hui-error-badge becomes available", async () => {
+    const { card } = await mountWithUnsupportedBadge();
+    expect(wrappers(card)).toHaveLength(0);
+
+    const spy = rstest.spyOn(card, "requestUpdate");
+    // Simulate the class landing — e.g., another badge on the same dashboard
+    // caused the module to load. This resolves the whenDefined promise registered
+    // by the guard, which calls requestUpdate so the item draws on the next pass.
+    customElements.define("hui-error-badge", class extends HTMLElement {});
+    await flush();
+    expect(spy).toHaveBeenCalled();
+  });
+});
+
 describe("a native badge type outside CORE_BADGES", () => {
   afterEach(() => {
     document.body.replaceChildren();

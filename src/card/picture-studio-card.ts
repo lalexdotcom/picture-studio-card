@@ -474,13 +474,26 @@ export class PictureStudioCard extends LitElement {
       // - `custom:` types are always considered supported by isSupportedBadgeType,
       //   so they are never intercepted here — HA's hide-then-reveal timer and
       //   its own error badge for a resource still loading are untouched.
-      // - `error` is eagerly known in HA's badge registry, so createBadgeElement
-      //   builds hui-error-badge directly — nothing private imported, nothing
-      //   created by tag.
       // - `origConfig` is not decoration: hui-error-badge dumps it as YAML in
       //   the detail dialog its click opens, the same affordance Lovelace gives
       //   everywhere else.
       if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== "hui-error-badge") {
+        // Upstream hole (create-badge-element.ts, frontend 20260729.6): `error` is
+        // in ALWAYS_LOADED_TYPES but hui-error-badge is never statically imported
+        // there, so the always-loaded branch calls setConfig on an unregistered
+        // element — throwing on a cold dashboard. HA itself always reaches error
+        // badges through createErrorBadgeElement, which is guarded and performs its
+        // own dynamic import. Delete this guard once upstream ships the static import.
+        if (!customElements.get("hui-error-badge")) {
+          // Prime the module through the guarded path HA uses itself: routing an
+          // impossible type through createBadgeElement fails inside HA, is caught,
+          // and reaches createErrorBadgeElement, which performs the dynamic import of
+          // hui-error-badge. Once the class lands, requestUpdate redraws the item
+          // through the working path below.
+          void helpers.createBadgeElement({ type: "\x00" } as never);
+          void customElements.whenDefined("hui-error-badge").then(() => this.requestUpdate());
+          return undefined;
+        }
         return helpers.createBadgeElement({
           type: "error",
           error: `Unsupported badge type: ${type}`,
