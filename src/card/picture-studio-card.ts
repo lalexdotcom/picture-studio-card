@@ -46,6 +46,20 @@ type ProbeElement = HTMLElement & {
 
 const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
+/** Home Assistant's own error badge, the one its detail dialog dumps origConfig from. */
+const ERROR_BADGE_TAG = "hui-error-badge";
+
+/**
+ * A badge type Home Assistant cannot build, used to make its factory fail on
+ * purpose. See `_createChild`.
+ *
+ * Spelled out rather than made unprintable: the failure is logged by Home
+ * Assistant as `console.error(kind, config.type, err)`, so an error line in the
+ * user's console names whoever caused it instead of appearing to be a fault in
+ * their own configuration.
+ */
+const PRIMING_TYPE = "picture-studio-priming";
+
 export class PictureStudioCard extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -479,22 +493,22 @@ export class PictureStudioCard extends LitElement {
       // - `origConfig` is not decoration: hui-error-badge dumps it as YAML in
       //   the detail dialog its click opens, the same affordance Lovelace gives
       //   everywhere else.
-      if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== "hui-error-badge") {
+      if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== ERROR_BADGE_TAG) {
         // Upstream hole (create-badge-element.ts, frontend 20260729.6): `error` is
         // in ALWAYS_LOADED_TYPES but hui-error-badge is never statically imported
         // there, so the always-loaded branch calls setConfig on an unregistered
         // element — throwing on a cold dashboard. HA itself always reaches error
         // badges through createErrorBadgeElement, which is guarded and performs its
         // own dynamic import. Delete this guard once upstream ships the static import.
-        if (!customElements.get("hui-error-badge")) {
+        if (!customElements.get(ERROR_BADGE_TAG)) {
           // Prime the module through the guarded path HA uses itself: routing an
           // impossible type through createBadgeElement fails inside HA, is caught,
           // and reaches createErrorBadgeElement, which performs the dynamic import of
           // hui-error-badge. The item is left as a hole until the class lands.
-          void helpers.createBadgeElement({ type: "\x00" } as never);
+          void helpers.createBadgeElement({ type: PRIMING_TYPE } as never);
           if (!this._awaitingErrorBadge) {
             this._awaitingErrorBadge = true;
-            void customElements.whenDefined("hui-error-badge").then(() => {
+            void customElements.whenDefined(ERROR_BADGE_TAG).then(() => {
               this._awaitingErrorBadge = false;
               // requestUpdate would not reach the hole: `updated` only syncs items
               // on a config change, and `_syncItems` only rebuilds when the shape
@@ -508,11 +522,30 @@ export class PictureStudioCard extends LitElement {
           }
           return undefined;
         }
-        return helpers.createBadgeElement({
-          type: "error",
-          error: `Unsupported badge type: ${type}`,
-          origConfig: item.config,
-        } as never) as LovelaceBadgeElement;
+        // Built by hand rather than asked of helpers.createBadgeElement, and that
+        // is the whole point: `error` is an always-loaded type, so the factory
+        // routes it straight back through the unguarded branch described above.
+        // When that branch fails, Home Assistant does not throw — it catches and
+        // returns an error badge carrying its own internal message, so our verdict
+        // on the user's badge would silently read "n.setConfig is not a function".
+        // These two lines are what HA's own _createElement runs anyway.
+        try {
+          const errorBadge = document.createElement(ERROR_BADGE_TAG) as HTMLElement &
+            LovelaceBadgeElement;
+          errorBadge.setConfig({
+            type: "error",
+            error: `Unsupported badge type: ${type}`,
+            origConfig: item.config,
+          } as never);
+          return errorBadge;
+        } catch {
+          // Unreachable by the guard above, and kept anyway: a hole is an honest
+          // failure, Home Assistant's internal message presented as our verdict is
+          // not. No retry is armed here — the class was registered a line ago, so
+          // there is nothing left to wait for, and re-arming would rebuild into
+          // this same failure forever.
+          return undefined;
+        }
       }
       // HA's badge factory returns a hui-error-badge with style.display="none"
       // and a 2000 ms timer that restores it. In the editor, stability across a
@@ -520,7 +553,7 @@ export class PictureStudioCard extends LitElement {
       // the whole card element, restarting the timer and re-hiding the badge.
       // Clearing the inline display here makes error badges visible immediately
       // while editing.
-      if (this.editing && el.tagName.toLowerCase() === "hui-error-badge") {
+      if (this.editing && el.tagName.toLowerCase() === ERROR_BADGE_TAG) {
         el.style.display = "";
       }
       return el;

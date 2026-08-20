@@ -22,6 +22,14 @@ import {
 // an assertion throws before the test reaches its own release() call.
 let releaseEditor: (() => void) | undefined;
 
+/**
+ * What the card actually put on the picture for an item — the element inside its
+ * wrapper. Asserting on this rather than on a spy is what distinguishes the badge
+ * Home Assistant handed back from the one the card built to replace it.
+ */
+const drawn = (card: PictureStudioCard, index = 0) =>
+  wrappers(card)[index]?.firstElementChild as (HTMLElement & { config?: unknown }) | null;
+
 // Remove every card the test mounted so broker subscriptions added in
 // connectedCallback don't bleed into the next test — even when a previous
 // assertion throws before reaching a manual card.remove().
@@ -691,7 +699,9 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
     await flush();
     // The priming call was made (to route through the guarded path and trigger the
     // dynamic import of hui-error-badge). Its result was discarded, not rendered.
-    expect(spy).toHaveBeenCalled();
+    // The type is asserted literally: Home Assistant logs it to the console, so
+    // this string is what tells a user which card caused the error line.
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "picture-studio-priming" }));
     expect(wrappers(card2)).toHaveLength(0);
     // The call was NOT our error config — that badge is exactly what we refused.
     expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
@@ -711,12 +721,22 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
 
     // Simulate the class landing — the dynamic import the priming call triggered,
     // or another badge on the same dashboard having loaded the module.
-    customElements.define("hui-error-badge", class extends HTMLElement {});
+    // setConfig is part of the stub on purpose: the card builds its own error
+    // badge and calls it directly, so a bare HTMLElement would send every test
+    // in and after this block down the catch and assert nothing.
+    customElements.define(
+      "hui-error-badge",
+      class extends HTMLElement {
+        config?: unknown;
+        setConfig(config: unknown) {
+          this.config = config;
+        }
+      },
+    );
     await flush();
 
     expect(wrappers(card)).toHaveLength(1);
-    const drawn = wrappers(card)[0]?.firstElementChild as { config?: unknown } | null;
-    expect(drawn?.config).toEqual(
+    expect(drawn(card)?.config).toEqual(
       expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
     );
   });
@@ -748,14 +768,16 @@ describe("a native badge type outside CORE_BADGES", () => {
     return helpers;
   };
 
+  // Failure text recorded against the previous construction (through
+  // helpers.createBadgeElement, runner F15):
+  // "expected 'fake-child' to be 'hui-error-badge' // Object.is equality"
   it("replaces state-label with our error badge with no probe seeded (regression)", async () => {
     // The defect: the card relied on a verdict from the editor's probe, which
     // only the editor's badge list ever starts. On a real dashboard, with no
     // editor open, no probe ran and the badge drew normally.
     // This test never seeds a probe verdict — the card must refuse on its own.
     if (!customElements.get(CARD_TAG)) installHelpers();
-    const helpers = makeTrackedHelpers();
-    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    makeTrackedHelpers();
     const card = document.createElement(CARD_TAG) as PictureStudioCard;
     card.setConfig({
       type: CARD_TYPE,
@@ -767,12 +789,16 @@ describe("a native badge type outside CORE_BADGES", () => {
     document.body.append(card);
     await card.updateComplete;
     await flush();
-    expect(spy).toHaveBeenCalledWith(
+    expect(drawn(card)?.tagName.toLowerCase()).toBe("hui-error-badge");
+    expect(drawn(card)?.config).toEqual(
       expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
     );
   });
 
-  it("passes an error config to createBadgeElement instead of the item's config", async () => {
+  // Failure text recorded against the previous construction (runner F15):
+  // "expected \"createBadgeElement\" to not be called with arguments:
+  //  [ ObjectContaining {\"type\": \"error\"} ] … Number of calls: 2"
+  it("builds the error badge itself rather than asking the factory for one", async () => {
     // state-label is the triggering case: also an element kind, so writing
     // type: badge was a silent way to get the wrong thing on the picture.
     if (!customElements.get(CARD_TAG)) installHelpers();
@@ -789,15 +815,18 @@ describe("a native badge type outside CORE_BADGES", () => {
     document.body.append(card);
     await card.updateComplete;
     await flush();
-    // The card called createBadgeElement with the error shape, not the item config.
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
-    );
-    // origConfig carries the original config so the error badge's detail dialog
-    // can show it — the same affordance Lovelace gives everywhere else.
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ origConfig: { type: "state-label" } }),
-    );
+    // The badge on the picture carries our verdict, not the item's own config.
+    // origConfig carries that config so the error badge's detail dialog can show
+    // it — the same affordance Lovelace gives everywhere else.
+    expect(drawn(card)?.config).toEqual({
+      type: "error",
+      error: "Unsupported badge type: state-label",
+      origConfig: { type: "state-label" },
+    });
+    // And it was never asked of the factory: `error` is an always-loaded type,
+    // whose branch in create-element-base is the one that fails on a cold
+    // dashboard, returning HA's internal message in place of ours.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 
   it("does not intercept a supported badge type", async () => {
@@ -857,7 +886,11 @@ describe("a native badge type outside CORE_BADGES", () => {
     await card.updateComplete;
     await flush();
     // The card must NOT have substituted its own error badge — HA's message
-    // "Unknown type encountered: entty" is more informative than ours.
+    // "Unknown type encountered: entty" is more informative than ours. Both
+    // candidates are a hui-error-badge, so the tag cannot tell them apart: the
+    // discriminator is setConfig, which only our own construction calls.
+    expect(drawn(card)?.tagName.toLowerCase()).toBe("hui-error-badge");
+    expect(drawn(card)?.config).toBeUndefined();
     expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 
