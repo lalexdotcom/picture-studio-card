@@ -16,7 +16,7 @@ import type { Anchor, Position } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { stubBadgeConfig } from "./badge-catalog";
-import { badgeVerdict } from "./badge-existence";
+import { badgeIsBroken } from "./badge-existence";
 import { itemsSeverity } from "./badge-list";
 import { stubElementConfig } from "./element-catalog";
 import {
@@ -177,7 +177,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (!raw || raw.type === "unknown") return undefined;
     if (raw.type === "badge") {
       const type = String(raw.config.type ?? "");
-      if (type && badgeVerdict(type) === "missing") return undefined;
+      if (type && badgeIsBroken(type)) return undefined;
     }
     return raw;
   }

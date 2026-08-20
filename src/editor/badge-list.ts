@@ -3,8 +3,8 @@ import { repeat } from "lit/directives/repeat.js";
 import { hasVisibility, type PictureItem } from "../config";
 import { localizeOwn } from "../strings";
 import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
-import { type BadgeChoice, badgeCatalog, choiceLabel, isSupportedBadgeType } from "./badge-catalog";
-import { badgeVerdict, probeBadgeType } from "./badge-existence";
+import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
+import { badgeIsBroken, badgeTypeProblem, probeBadgeType } from "./badge-existence";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { itemIcon } from "./icons";
 import { rowLabel } from "./items";
@@ -92,9 +92,7 @@ export const itemsSeverity = (items: readonly PictureItem[]): "error" | "warning
     if (item.type === "unknown") return "error";
     if (item.type === "badge") {
       const type = String((item.config as Record<string, unknown>).type ?? "");
-      // Static check first — same order as the row, so the two stay in sync.
-      if (type && !isSupportedBadgeType(type)) return "error";
-      if (type && badgeVerdict(type) === "missing") return "error";
+      if (type && badgeIsBroken(type)) return "error";
     }
     if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
   }
@@ -207,12 +205,12 @@ export class PictureStudioBadgeList extends LitElement {
       // A badge with no type at all is legal and means `entity` — the factory's
       // last argument is the default type. Nothing to probe.
       if (!type) return false;
-      // An unsupported native type needs no probe: membership of a known list is
-      // decided at once. The check is ahead of the probe so the row turns red
-      // immediately without touching the verdict cache or the grace timer.
-      if (!isSupportedBadgeType(type)) return true;
+      // Probe all non-empty types: for custom: types the verdict determines
+      // broken; for unsupported native types the verdict determines the wording
+      // (broken is immediate via badgeIsBroken, the word waits one microtask).
+      // Harmless once the verdict is settled — probeBadgeType returns at once.
       probeBadgeType(type, () => this.requestUpdate());
-      return badgeVerdict(type) === "missing";
+      return badgeIsBroken(type);
     });
     // The glyph says which family the problem is in, whenever we know the family.
     const glyphs = rows.map((item, i) => {
@@ -225,9 +223,12 @@ export class PictureStudioBadgeList extends LitElement {
       if (item.type === "unknown" || !broken[i]) return labels[i]?.secondary;
       // Two conditions, two words: a type nothing can build is "unknown"; a
       // native type we do not support is "unsupported". A reader must be able to
-      // tell them apart at a glance.
+      // tell them apart at a glance. While the probe is pending (one microtask
+      // on first use), show the type alone — better than retracting a word.
       const type = String(item.config.type ?? "");
-      const key = isSupportedBadgeType(type) ? "unknown_badge_type" : "unsupported_badge_type";
+      const problem = badgeTypeProblem(type);
+      if (!problem) return type;
+      const key = problem === "unsupported" ? "unsupported_badge_type" : "unknown_badge_type";
       return `${localizeOwn(this.hass, key)}: ${type}`;
     });
     // Display position of the selected array index; -1 when nothing is selected

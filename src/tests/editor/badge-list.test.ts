@@ -15,10 +15,24 @@ import { cssRules } from "../card/harness";
 // Provides a minimal loadCardHelpers stub for tests that render badge rows but
 // do not need probe control. Without it, probeBadgeType throws when it calls
 // window.loadCardHelpers() for badge items now that render() wires the probe.
+//
+// Native HA badge types that HA can actually build (i.e. createBadgeElement
+// returns a real badge, not hui-error-badge). Includes all types HA's badge
+// registry knows about: CORE_BADGES plus the non-offered native types.
+const HA_NATIVE_BADGE_TYPES = new Set([
+  "error",
+  "entity",
+  "entity-filter",
+  "shortcut",
+  "state-label",
+  "power-total",
+  "gas-total",
+  "water-total",
+]);
 const defaultHelpers = {
   createBadgeElement: (c: { type?: string }) =>
     document.createElement(
-      c.type === "entity" || c.type === "shortcut" ? `hui-${c.type}-badge` : "hui-error-badge",
+      HA_NATIVE_BADGE_TYPES.has(c.type ?? "") ? `hui-${c.type}-badge` : "hui-error-badge",
     ),
 };
 beforeEach(() => {
@@ -597,6 +611,11 @@ describe("the secondary line of a probe-missing badge carries the type", () => {
     expect(secondary?.textContent).toBe("Unknown badge type: custom:entty");
   });
 
+  // Failure text recorded before retargeting (F05):
+  // "expected 'state-label' to be 'Unsupported badge type: state-label'"
+  // The probe now runs for all non-empty types; the word appears once the
+  // verdict lands (one microtask via loadCardHelpers cache). The test must
+  // flush that hop before asserting the word.
   it("uses 'Unsupported badge type' for a native type outside CORE_BADGES", async () => {
     const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
     el.items = [
@@ -608,9 +627,35 @@ describe("the secondary line of a probe-missing badge carries the type", () => {
       },
     ] as PictureItem[];
     document.body.append(el);
-    await el.updateComplete; // static check, no probe — already broken on first render
+    await Promise.resolve(); // let the render run so probeBadgeType queues its hop
+    // Flush the probe: loadCardHelpers resolves from cache and settles the verdict
+    // (ok — HA can build state-label), then wait for the re-render.
+    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    await el.updateComplete;
     const secondary = el.shadowRoot!.querySelector(".secondary");
     expect(secondary?.textContent).toBe("Unsupported badge type: state-label");
+  });
+
+  // Failure text recorded before retargeting (TEMP_DEFECT2, run against current code):
+  // "expected 'Unsupported badge type: entty' to be 'Unknown badge type: entty'"
+  it("uses 'Unknown badge type' for a non-existent native type", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "badge",
+        position: { top: 5, left: 5 },
+        anchor: "auto",
+        config: { type: "entty" },
+      },
+    ] as PictureItem[];
+    document.body.append(el);
+    await Promise.resolve(); // let the render run so probeBadgeType queues its hop
+    // Flush the probe: entty is not in HA's registry, verdict settles to "missing".
+    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    await el.updateComplete;
+    expect((el.shadowRoot?.querySelector(".secondary") as Element | null)?.textContent).toBe(
+      "Unknown badge type: entty",
+    );
   });
 });
 
@@ -770,25 +815,16 @@ describe("itemsSeverity", () => {
     expect(itemsSeverity([broken, warned])).toBe("error");
   });
 
-  it("reports an error for a badge whose type Home Assistant does not have", async () => {
-    // Mount a component to drive probeBadgeType — the same mechanism the rows use,
-    // so the classifier and the row verdict can never diverge.
-    if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
-    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
-    const missing = badge({ type: "entty" }); // outer loadCardHelpers marks non-entity types missing
-    el.items = [missing];
-    document.body.append(el);
-    await Promise.resolve(); // first paint; probe in flight
-    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
-    await el.updateComplete; // re-render after verdict lands
-    expect(itemsSeverity([missing])).toBe("error");
-    document.body.replaceChildren(); // outer afterEach resets verdicts
+  it("reports an error for a non-existent native badge type, without a probe", () => {
+    // entty is not in CORE_BADGES and has no custom: prefix — badgeIsBroken
+    // returns true immediately via !isSupportedBadgeType, no probe needed.
+    expect(itemsSeverity([badge({ type: "entty" })])).toBe("error");
   });
 
   it("reports an error for a native badge type outside CORE_BADGES, without a probe", () => {
     // state-label is statically known to be unsupported — no component, no
-    // probe, no timer. isSupportedBadgeType decides synchronously, and
-    // itemsSeverity mirrors the same check so the two stay in sync.
+    // probe, no timer. badgeIsBroken decides synchronously via !isSupportedBadgeType,
+    // and itemsSeverity mirrors the same check so the two stay in sync.
     expect(itemsSeverity([badge({ type: "state-label" })])).toBe("error");
   });
 });

@@ -1,4 +1,4 @@
-import { CUSTOM_PREFIX } from "./badge-catalog";
+import { CUSTOM_PREFIX, isSupportedBadgeType } from "./badge-catalog";
 
 /**
  * Does this Home Assistant know this badge type?
@@ -109,4 +109,56 @@ export const resetBadgeVerdicts = (): void => {
   TIMERS.clear();
   VERDICTS.clear();
   WAITERS.clear();
+};
+
+/**
+ * The one answer to "is this badge type broken", for every consumer: the item
+ * list's rows, the severity classifier, the editor's decision to open a form,
+ * and the card's decision to draw an error badge instead.
+ *
+ * It exists because there were three copies of this boolean and a change to the
+ * rule reached only two of them, so a refused type still opened its form.
+ */
+export const badgeIsBroken = (type: string): boolean =>
+  !isSupportedBadgeType(type) || badgeVerdict(type) === "missing";
+
+/**
+ * Why a badge type is refused, or undefined when it is fine or the probe is
+ * still pending.
+ *
+ * For a non-custom type outside CORE_BADGES the probe determines the word —
+ * whether Home Assistant can build it (verdict "ok" → "unsupported") or not
+ * (verdict "missing" → "unknown"). This is better than a duplicated registry:
+ * a static list drifts silently the day Home Assistant adds a type, whereas
+ * the probe is the truth at the moment it is asked.
+ *
+ * While the verdict has not yet landed (verdict "unknown"), returns undefined
+ * so the row shows no category word rather than one it might have to retract.
+ * In practice this window is one microtask — loadCardHelpers resolves from the
+ * module cache after its first use — not a state users perceive.
+ *
+ * "unsupported" and "unknown" are for wording only, never for a verdict.
+ * `badgeIsBroken` answers the "is this broken?" question, always statically
+ * and immediately for non-custom types.
+ */
+export const badgeTypeProblem = (type: string): "unsupported" | "unknown" | undefined => {
+  if (isSupportedBadgeType(type)) {
+    // For custom: types the probe determines whether the resource is present.
+    // Once the verdict is "missing" the row is broken and the word is "unknown".
+    // An "ok" verdict (resource loaded) or "unknown" (probe in flight) produces
+    // no problem word.
+    if (type.startsWith(CUSTOM_PREFIX))
+      return badgeVerdict(type) === "missing" ? "unknown" : undefined;
+    // CORE_BADGES: fully supported, no problem.
+    return undefined;
+  }
+  // Non-custom, non-CORE_BADGES: the probe determines the word — whether Home
+  // Assistant can build the type ("ok" → "unsupported") or not ("missing" →
+  // "unknown"). This is better than a duplicated registry: a static list drifts
+  // silently the day Home Assistant adds a type, whereas the probe is the truth
+  // at the moment it is asked. While the verdict is still pending, no word yet.
+  const verdict = badgeVerdict(type);
+  if (verdict === "ok") return "unsupported";
+  if (verdict === "missing") return "unknown";
+  return undefined; // probe pending (one microtask on first probe)
 };

@@ -15,7 +15,7 @@ import {
   stubConfig,
 } from "../config";
 import "./card-heading";
-import { isSupportedBadgeType } from "../editor/badge-catalog";
+import { badgeIsBroken } from "../editor/badge-existence";
 import {
   type Anchor,
   type MarkerCorner,
@@ -472,7 +472,7 @@ export class PictureStudioCard extends LitElement {
       // - The message is deliberately not localised: HA hardcodes its own error
       //   badge text in English and every language shows it. "Unsupported" is
       //   also not "Unknown" — the type exists, it is just not handled here.
-      if (type && !isSupportedBadgeType(type)) {
+      if (type && badgeIsBroken(type)) {
         return helpers.createBadgeElement({
           type: "error",
           error: `Unsupported badge type: ${type}`,

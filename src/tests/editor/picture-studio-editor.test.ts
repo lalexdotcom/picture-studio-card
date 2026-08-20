@@ -561,6 +561,44 @@ describe("Items section follows the work", () => {
     expect(scrollSpy).toHaveBeenCalledWith(0);
   });
 
+  // Failure text recorded against the defect (run before the fix):
+  // "expected 'expand' to be called 1 times, but got 0 times"
+  // _formTarget() was checking badgeVerdict === "missing" only. state-label is
+  // statically refused (badgeIsBroken via !isSupportedBadgeType) and never
+  // probed, so its verdict stays "unknown" and the guard missed it. The form
+  // opened. Now badgeIsBroken() covers both conditions.
+  it("refuses a form for an unsupported native badge type (state-label) without awaiting a probe", async () => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    } as unknown as PictureStudioConfig);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    const expandSpy = rstest.spyOn(section, "expand");
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(0); // state-label badge — should refuse form immediately (no probe needed)
+    await el.updateComplete;
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
+    rstest.advanceTimersByTime(300);
+    await Promise.resolve();
+    expect(scrollSpy).toHaveBeenCalledWith(0);
+  });
+
   it("expands the Items section and scrolls to the previously-edited row when returning from a form", async () => {
     const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
     el.setConfig(CONFIG); // two valid badges at indices 0 and 1
