@@ -73,16 +73,16 @@ first time they open the editor; a config never opened keeps rendering.
 
 ## 2. The editor
 
-**Amended 2026-08-19, later the same day: where these two touch points land is
-reopened.** The user has since asked for the whole config form to be redrawn —
-"Card config" split into *Heading* (with the badge list **directly inside**,
-not as a section after it), *Image* / *Background* and *Filter*, and "Items"
-made collapsible with a count badge and a max-height. That is
-`mem:picture-studio/follow-ups` entry 8, and it is brainstormed together with
-this. What follows describes the *fields* and the *plumbing*, which the
-reorganisation does not change; only their placement is in question.
+**Settled 2026-08-20, and the placement moved.** The whole config form is being
+redrawn — five sections, designed in
+[`2026-08-20-config-form-design.md`](2026-08-20-config-form-design.md). Both of
+this section's touch points now live in one **Heading** section: `heading`,
+`icon`, then an `<hr>`, a "Badges" caption carrying the heading card's own
+section icon, and the badge list. **The badges are no longer a section of their
+own**, and there is no longer a "Card config" section to sit after.
 
-Two touch points, both where the user asked for them.
+The *fields* and the *plumbing* below are unchanged by that move; only read
+"the section after Card config" as "inside Heading".
 
 **In "Card config"**, an icon field right after the title:
 
@@ -311,12 +311,20 @@ text recorded — trap n°5.
    not an argument.
 2. **The icon's size** once the weight is settled — 18px sits under 16px text
    for them; ~22px is the proportional guess, unverified.
-3. **The header's own padding**, now that `ha-card`'s no longer applies.
+3. ~~**The header's own padding.**~~ **Settled 2026-08-20**: the header sits
+   **above the image, in the chrome the title occupies today, which it
+   replaces.** So the padding is `.card-header`'s —
+   `var(--ha-space-3) var(--ha-space-4) var(--ha-space-4)` — and not the heading
+   card's `0 var(--ha-space-1)`, which only makes sense because that card *is*
+   the card. This also answers question 6.
 4. ~~**"Card config" writing to two places.**~~ **Superseded 2026-08-19** by
    `mem:picture-studio/follow-ups` entry 8: the section is being split, and a
    *Heading* section carrying title, icon and the badge list answers this by
    removing the section that had the problem. Nothing to decide here any more —
    it is decided in that brainstorm.
 5. **A tolerated `heading_style`** in stored config, or an unknown key we drop.
-6. **Whether the header sits above or below the image** — assumed above
-   throughout, never actually asked.
+6. ~~**Whether the header sits above or below the image.**~~ **Settled
+   2026-08-20: above**, replacing today's title chrome. Below was weighed — the
+   caption reading, badges as a status strip under the plan — and refused: it
+   moves every existing user's title, and status badges speak about the present
+   rather than about the picture they would sit beneath.
