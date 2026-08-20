@@ -707,6 +707,97 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
     expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 
+  // Home Assistant logs every factory call it cannot satisfy, and always in the
+  // same shape: console.error(kind, config.type, error). This stub reproduces it,
+  // and emits a second, unrelated line inside the same call so the filter has
+  // something to let through.
+  const mountWithLoggingHelpers = async (): Promise<{
+    card: PictureStudioCard;
+    seen: unknown[][];
+    installed: (...args: unknown[]) => void;
+    after: unknown;
+  }> => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        if ((c as Record<string, unknown>).type === "picture-studio-priming") {
+          console.error("badge", "unrelated", new Error("Unknown type encountered: unrelated"));
+          console.error(
+            "badge",
+            "picture-studio-priming",
+            new Error("Unknown type encountered: picture-studio-priming"),
+          );
+        }
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+
+    const seen: unknown[][] = [];
+    const original = console.error;
+    const installed = (...args: unknown[]) => {
+      seen.push(args);
+    };
+    console.error = installed;
+    try {
+      const card = document.createElement(CARD_TAG) as PictureStudioCard;
+      card.setConfig({
+        type: CARD_TYPE,
+        image: "/local/plan.png",
+        items: [
+          { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+        ],
+      });
+      document.body.append(card);
+      await card.updateComplete;
+      await flush();
+      // Read inside the try: the finally below is the test harness putting the
+      // console back, and it would mask whether the card had already done so.
+      return { card, seen, installed, after: console.error };
+    } finally {
+      console.error = original;
+    }
+  };
+
+  // Failure text recorded against no rewriting at all (runner F16):
+  // "expected undefined to be an instance of Error"
+  it("rewrites the priming log into our own verdict, in Home Assistant's own shape", async () => {
+    const { seen } = await mountWithLoggingHelpers();
+    // The sentinel never reaches the console: what is printed names the badge the
+    // user actually wrote, and carries the same message the badge itself shows.
+    const ours = seen.find((args) => args[0] === "badge" && args[1] === "state-label");
+    const reported = ours?.[2] as Error | undefined;
+    expect(reported).toBeInstanceOf(Error);
+    expect(reported?.message).toBe("Unsupported badge type: state-label");
+    expect(seen.some((args) => args[1] === "picture-studio-priming")).toBe(false);
+  });
+
+  // Guards the opposite defect of the test above — a filter wide enough to eat
+  // lines that are not ours. Failure text recorded against a wrapper that drops
+  // everything (runner F16): "expected [] to have a length of 1 but got +0"
+  it("lets every other line through untouched", async () => {
+    const { seen } = await mountWithLoggingHelpers();
+    const others = seen.filter((args) => args[1] === "unrelated");
+    expect(others).toHaveLength(1);
+    expect((others[0]?.[2] as Error | undefined)?.message).toBe(
+      "Unknown type encountered: unrelated",
+    );
+  });
+
+  // Failure text recorded against a swap with no restore (runner F16):
+  // "expected false to be true // Object.is equality"
+  it("puts console.error back once the priming call returns", async () => {
+    const { installed, after } = await mountWithLoggingHelpers();
+    expect(after === installed).toBe(true);
+  });
+
   // Run last in this block: customElements.define is permanent, so subsequent
   // describe blocks (which test the "class available" path) inherit the definition.
   //
