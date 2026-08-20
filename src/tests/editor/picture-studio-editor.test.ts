@@ -343,6 +343,27 @@ describe("the five sections", () => {
     expect(glyph?.getAttribute("slot")).toBe("event");
   });
 
+  it("renders the severity glyph before the count pill in the Items header", async () => {
+    // Both adornments present: 2 items with an error-severity config.
+    const el = await mountEditor({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: { type: "state-label", entity: "sensor.a", show: [] },
+          position: {},
+        },
+        { type: "nope" },
+      ],
+    });
+    const slotted = [...(el.shadowRoot?.querySelectorAll('#items-section > [slot="event"]') ?? [])];
+    expect(slotted).toHaveLength(2);
+    // Glyph first: sits nearest the title.
+    expect(slotted[0]?.tagName.toLowerCase()).toBe("ha-icon");
+    // Count second: the pill follows at the wider gap.
+    expect(slotted[1]?.classList.contains("count")).toBe(true);
+  });
+
   it("does not write an empty heading back", async () => {
     const el = await mountEditor({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
     const emitted: Record<string, unknown>[] = [];
@@ -367,6 +388,13 @@ describe("CSS rules", () => {
   it(":host has a gap between sections", () => {
     const rules = cssRules(PictureStudioEditor.styles);
     expect(rules.get(":host")).toContain("gap: var(--ha-space-4)");
+  });
+
+  it("count pill rule comes from the shared header-adornments module", () => {
+    // styles is an array; cssRules must receive the whole array, not one entry.
+    const rule = cssRules(PictureStudioEditor.styles).get(".count");
+    expect(rule).toBeDefined();
+    expect(rule).toContain("var(--ha-border-radius-pill");
   });
 });
 

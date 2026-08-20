@@ -29,6 +29,7 @@ import {
   PICTURE_ENTITY,
 } from "./form-schemas";
 import { type FormSchema, formLabel, sectionData, sectionMerge } from "./form-section";
+import { headerAdornments } from "./header-adornments";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
 import "./badge-list";
@@ -44,30 +45,26 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     _editingIndex: { state: true },
   };
 
-  static styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      gap: var(--ha-space-4);
-    }
-    .count {
-      font-size: var(--ha-font-size-s);
-      color: var(--secondary-text-color);
-      background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
-      border-radius: var(--ha-border-radius-pill, 9999px);
-      padding: 0 var(--ha-space-2);
-      line-height: var(--ha-space-5);
-    }
-    .severity {
-      --mdc-icon-size: 20px;
-    }
-    .severity.error {
-      color: var(--error-color);
-    }
-    .severity.warning {
-      color: var(--warning-color);
-    }
-  `;
+  static styles = [
+    headerAdornments,
+    css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ha-space-4);
+      }
+      .severity {
+        --mdc-icon-size: 20px;
+        margin-inline-start: var(--ha-space-2, 8px);
+      }
+      .severity.error {
+        color: var(--error-color);
+      }
+      .severity.warning {
+        color: var(--warning-color);
+      }
+    `,
+  ];
 
   declare hass?: HomeAssistant;
   declare lovelace?: unknown;
@@ -410,14 +407,9 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
         icon="mdi:format-list-bulleted"
       >
         ${
-          config.items.length
-            ? html`<span class="count" slot="event">${config.items.length}</span>`
-            : nothing
-        }
-        ${
           // The strongest state wins: one glyph, never two. Same vocabulary as
           // visibility-section.ts, and the same asymmetry — the normal case gets
-          // no ink at all.
+          // no ink at all. Glyph first: it sits nearest the title.
           (() => {
             const severity = itemsSeverity(config.items);
             if (!severity) return nothing;
@@ -428,6 +420,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
               title=${localizeOwn(hass, severity === "error" ? "items_error" : "items_warning")}
             ></ha-icon>`;
           })()
+        }
+        ${
+          config.items.length
+            ? html`<span class="count" slot="event">${config.items.length}</span>`
+            : nothing
         }
         <picture-studio-badge-list
           .hass=${hass}
