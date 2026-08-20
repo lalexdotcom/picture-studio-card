@@ -3,6 +3,7 @@ import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TAG, PROBE_TYPE } from "../../config";
+import { probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence";
 import type { HomeAssistant } from "../../types";
 import {
   background,
@@ -619,6 +620,7 @@ describe("a native badge type outside CORE_BADGES", () => {
   afterEach(() => {
     document.body.replaceChildren();
     installHelpers(); // restore the default loadCardHelpers stub
+    resetBadgeVerdicts(); // probe verdicts are module-level; clear between tests
   });
 
   // The spy must target the exact helpers object the card will receive — not a
@@ -647,6 +649,11 @@ describe("a native badge type outside CORE_BADGES", () => {
     if (!customElements.get(CARD_TAG)) installHelpers();
     const helpers = makeTrackedHelpers();
     const spy = rstest.spyOn(helpers, "createBadgeElement");
+    // Simulate what the editor's badge list does in production: probe the type
+    // so the verdict is settled before the card renders. The fake helper returns
+    // a non-error element, so HA appears to accept state-label (verdict "ok"),
+    // making badgeTypeProblem return "unsupported".
+    await new Promise<void>((r) => probeBadgeType("state-label", r));
     const card = document.createElement(CARD_TAG) as PictureStudioCard;
     card.setConfig({
       type: CARD_TYPE,
@@ -690,6 +697,75 @@ describe("a native badge type outside CORE_BADGES", () => {
     await flush();
     // The card passed the item's own config through, unmodified.
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "entity" }));
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("does not intercept a badge type Home Assistant cannot build (regression: entty)", async () => {
+    // The regression: badgeIsBroken intercepted every broken badge, including
+    // ones HA would have drawn its own "Unknown type encountered" error for.
+    // The fix narrows to badgeTypeProblem === "unsupported", which is only true
+    // when HA has the type but we do not offer it.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    // Helper that simulates HA: "entty" is unknown to HA, so its badge factory
+    // returns hui-error-badge — the same element the probe checks against.
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        if ((c as Record<string, unknown>).type === "entty")
+          return document.createElement("hui-error-badge");
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    // Pre-seed the verdict (verdict "missing": HA returns hui-error-badge for "entty").
+    await new Promise<void>((r) => probeBadgeType("entty", r));
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [{ type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } }],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card must NOT have substituted its own error badge — HA's message
+    // "Unknown type encountered: entty" is more informative than ours.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("does not intercept a custom: type whose resource never loaded (regression: custom:nodash)", async () => {
+    // custom:nodash has no dash — the probe settles it synchronously as "missing".
+    // badgeIsBroken returns true for verdict "missing" on a supported type, so
+    // the old code intercepted it. The fix lets HA draw "Custom element doesn't
+    // exist: nodash" instead, because badgeTypeProblem returns "unknown" here.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeTrackedHelpers();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    // The probe settles synchronously for a no-dash custom: tag.
+    probeBadgeType("custom:nodash", () => {});
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "badge",
+          position: { top: "10%", left: "10%" },
+          config: { type: "custom:nodash" },
+        },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card must NOT have substituted its own error badge.
     expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
   });
 });

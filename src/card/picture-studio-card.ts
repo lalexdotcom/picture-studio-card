@@ -15,7 +15,7 @@ import {
   stubConfig,
 } from "../config";
 import "./card-heading";
-import { badgeIsBroken } from "../editor/badge-existence";
+import { badgeTypeProblem } from "../editor/badge-existence";
 import {
   type Anchor,
   type MarkerCorner,
@@ -460,9 +460,14 @@ export class PictureStudioCard extends LitElement {
     if (item.type === "unknown") return undefined;
     if (item.type === "badge") {
       const type = String((item.config as Record<string, unknown>).type ?? "");
-      // An unsupported native type cannot be built into the right element. Build
-      // an error badge instead, using the same `error` shape the factory already
-      // knows:
+      // Only intercept when the type is one Home Assistant *has* and we do not
+      // offer — i.e. when badgeTypeProblem returns "unsupported". The other two
+      // broken cases — verdict "unknown" (type unknown to HA, e.g. "entty") and
+      // verdict "missing" (custom: resource never loaded) — already produce a
+      // Home Assistant error badge whose message names the actual problem.
+      // Using badgeIsBroken here would swallow those messages and replace them
+      // with our generic "Unsupported badge type", which is exactly the
+      // regression this change fixes.
       // - `error` is an eagerly known type in HA's badge registry, so
       //   createBadgeElement builds hui-error-badge directly — nothing private
       //   is imported and nothing is created by tag.
@@ -472,7 +477,7 @@ export class PictureStudioCard extends LitElement {
       // - The message is deliberately not localised: HA hardcodes its own error
       //   badge text in English and every language shows it. "Unsupported" is
       //   also not "Unknown" — the type exists, it is just not handled here.
-      if (type && badgeIsBroken(type)) {
+      if (type && badgeTypeProblem(type) === "unsupported") {
         return helpers.createBadgeElement({
           type: "error",
           error: `Unsupported badge type: ${type}`,
