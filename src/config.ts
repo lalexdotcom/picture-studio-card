@@ -33,6 +33,9 @@ export const LABEL_TAG = "picture-studio-state-label";
 export const ELEMENT_FORM_TAG = "picture-studio-element-form";
 export const PROBE_TAG = "picture-studio-visibility-probe";
 export const VISIBILITY_SECTION_TAG = "picture-studio-visibility-section";
+export const HEADING_TAG = "picture-studio-heading";
+export const SECTION_TAG = "picture-studio-section";
+export const HEADING_SECTION_TAG = "picture-studio-heading-section";
 export const PROBE_TYPE = `custom:${PROBE_TAG}` as const;
 export const CARD_TYPE = "custom:picture-studio";
 
@@ -189,6 +192,22 @@ export type ImageSource =
 export const imagePath = (value: ImageSource | undefined): string | undefined =>
   typeof value === "object" ? value.media_content_id : value;
 
+/**
+ * The card's header. `badges` is opaque third-party config, exactly like a badge
+ * item's: never read, validated or rewritten. Home Assistant's own
+ * `hui-heading-badge` renders an entry it cannot build as an error badge, so
+ * there is nothing here for us to catch.
+ */
+export interface HeadingConfig {
+  title?: string;
+  icon?: string;
+  badges?: unknown[];
+}
+
+/** Does the header have anything to draw? Three keys, any one of them is enough. */
+export const hasHeading = (heading: HeadingConfig | undefined): boolean =>
+  !!(heading?.title || heading?.icon || heading?.badges?.length);
+
 export interface PictureStudioConfig {
   type: string;
   /**
@@ -206,8 +225,8 @@ export interface PictureStudioConfig {
   dark_mode_filter?: string;
   aspect_ratio?: string;
   filter?: string;
-  /** Rendered as the ha-card header, like picture-elements. Not forwarded. */
-  title?: string;
+  /** Since 1.5.0. A legacy top-level `title` is folded in here at normalization. */
+  heading?: HeadingConfig;
   items: PictureItem[];
 }
 
@@ -320,7 +339,22 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
       : { ...base, type, config: normalizeElementConfig(entry.config, index) };
   });
 
-  return { ...(raw as Record<string, unknown>), items } as PictureStudioConfig;
+  const record = raw as Record<string, unknown>;
+  // `title` lived at the top level from 1.0.0 to 1.4.x. Read it, fold it in, and
+  // drop it — Home Assistant's own migrateHeadingCardConfig does exactly this for
+  // the heading card's legacy `entities`. The in-memory struct is always correct;
+  // the migration reaches the user's YAML the first time they save any change,
+  // since storedConfig rewrites the whole config on every editor commit. A config
+  // never opened keeps rendering from its legacy form.
+  const { title, heading: rawHeading, ...rest } = record;
+  const heading: HeadingConfig = isRecord(rawHeading) ? { ...(rawHeading as HeadingConfig) } : {};
+  if (heading.title === undefined && typeof title === "string") heading.title = title;
+
+  return {
+    ...rest,
+    ...(hasHeading(heading) ? { heading } : {}),
+    items,
+  } as PictureStudioConfig;
 };
 
 /**
@@ -330,6 +364,8 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
  * through the editor changes nothing.
  */
 export const storedConfig = (config: PictureStudioConfig): Record<string, unknown> => ({
+  // `heading` needs no guard here: normalizeConfig only ever sets the key when
+  // hasHeading() is true, so an empty one never reaches memory in the first place.
   ...config,
   items: config.items.map((item) => {
     // Verbatim, and nothing else: no spread, no key deletion, no position

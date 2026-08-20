@@ -46,6 +46,14 @@ wall that this entry once said would decide its shape **does not apply**; see th
 heading-badge facts below. Resume from the spec and
 `mem:picture-studio/follow-ups` entry 2, not from scratch.
 
+## 1.5.0 is in flight — read `mem:picture-studio/1.5.0-handoff` first
+
+Branch `feat/card-heading`, ~39 commits, nothing pushed or merged. The card's
+header and the redrawn five-section editor are built and reviewed; **the browser
+walk is done**. What remains is a delta review over `3a79cd7..HEAD`, the doc pass
+and screenshots, and the version bump. That memory carries the state,
+what was in flight, and the lesson of a five-fix series that only the walk caught.
+
 ## Where things are
 
 - Specs: `docs/superpowers/specs/` — `2026-08-11-picture-badges-design.md`
@@ -244,6 +252,29 @@ In memory only, never in YAML, a third variant holds what we could not read:
   cannot build it returns a `hui-error-badge` carrying the message. That returned tag
   is the only synchronous existence signal available to a custom card, and it is what
   `src/editor/badge-existence.ts` reads.
+- **The badge factory has three branches, and only one is unguarded** (read in
+  `frontend_latest/99344.*.js` and `56721.*.js`, build 20260729.6; module 76541 is
+  `create-badge-element`, 3601 is `create-element-base`). `_createElement` — minified
+  `s = (e,t) => { const n = document.createElement(e); return n.setConfig(t), n }` —
+  is where **`n.setConfig is not a function`** comes from, and that message is its
+  signature: it means `s` was handed a tag that is not registered.
+  - `custom:` → `customElements.get(tag) ? s(...) : error element`. Guarded. **The
+    2000 ms hide-then-reveal timer lives strictly inside this branch** — no other
+    path pays it, so priming and our own error badge never do.
+  - lazy (`entity-filter`, `shortcut`, `state-label`, the three totals) → element
+    created, `setConfig` deferred to `whenDefined`. Guarded.
+  - `ALWAYS_LOADED` → `if (r.has(h)) return s(u, t)`. **Unguarded.** For badges the
+    set is `{error, entity}`; `entity` is statically imported by module 76541,
+    `error` is not. So `type: "error"` on a cold dashboard is the whole bug.
+- **`createErrorBadgeElement` is guarded and is the only fetcher of the error-badge
+  chunk** — `customElements.get(tag) ? setConfig : (Promise.all([…chunks…]),
+  whenDefined.then(upgrade + setConfig))` — **and it is not exported**. That
+  asymmetry is why HA's own error badges appear on a cold load while ours could not:
+  HA reaches its loader directly, a custom card can only reach it by making the
+  public factory fail. Hence `PRIMING_TYPE` in `picture-studio-card.ts`.
+- **HA logs `console.error(kind, config.type, err)`** just before returning an error
+  element. The **second argument is the config type**, which is what makes a
+  deliberate sentinel filterable without ever matching on message text.
 - **A `custom:` badge that is not defined gets its error badge hidden for 2000 ms**
   (`display: None` + a timer) while `customElements.whenDefined(tag)` is awaited, so an
   error is not flashed at a resource about to load. A tag with **no dash** can never be
@@ -452,7 +483,13 @@ In memory only, never in YAML, a third variant holds what we could not read:
    `undefined` where the bug needed a string, and a fixture whose display and array
    indices coincided. **The rule: run every new test against the defect before keeping
    it, and record the failure text.** A green suite proves nothing about a test that
-   has never been red.
+   has never been red. **Refined 2026-08-20:** confront a test with the defect *it*
+   names, not with the session's headline defect. Three tests were written for the
+   console rewriting and two stayed green against "no rewriting at all" — they guard
+   the opposite faults (a filter that eats foreign lines, a swap never restored) and
+   only went red once each was confronted with its own. A failure text recorded
+   against the wrong defect is worse than none: it certifies a guard that does not
+   exist.
 6. **A pair of tests that check different sets is a hole.** The two localization
    tests once asserted different keys; they now share one `KEYS` list. Same
    reasoning put the shared hover block's assertions in one file, with both

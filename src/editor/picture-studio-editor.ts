@@ -1,30 +1,51 @@
-import { html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
+import { cache } from "lit/directives/cache.js";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import {
   type BadgeItem,
   CARD_TYPE,
   type ElementConfig,
   type ElementItem,
+  type HeadingConfig,
+  hasHeading,
   normalizeConfig,
   type PictureStudioConfig,
   storedConfig,
 } from "../config";
 import type { Anchor, Position } from "../position";
-import type { BadgeConfig, HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
-import {
-  type BackgroundData,
-  backgroundData,
-  backgroundLabel,
-  backgroundSchema,
-  mergeBackground,
-} from "./background-schema";
+import { localizeOwn } from "../strings";
+import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { stubBadgeConfig } from "./badge-catalog";
-import { badgeVerdict } from "./badge-existence";
+import { badgeIsBroken } from "./badge-existence";
+import { itemsSeverity } from "./badge-list";
 import { stubElementConfig } from "./element-catalog";
+import {
+  backgroundData,
+  backgroundSchema,
+  entitySchema,
+  filtersSchema,
+  formHelper,
+  mergeBackground,
+  PICTURE_ENTITY,
+} from "./form-schemas";
+import { type FormSchema, formLabel, sectionData, sectionMerge } from "./form-section";
+import { headerAdornments } from "./header-adornments";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
+import "./heading-section";
+import "./section-panel";
+
+/**
+ * Home Assistant's own expansion transition, in milliseconds. It is not read
+ * from anywhere — `ha-expansion-panel` hardcodes 300 in its CSS *and* a second
+ * time in a `setTimeout` inside `willUpdate`, for the same reason we do: the
+ * `transitionend` it would otherwise wait on is not available to it either.
+ * Verified at frontend build 20260729.6. If upstream changes it, the scroll
+ * lands early or late — visibly, never silently.
+ */
+const EXPAND_MS = 300;
 
 export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
@@ -34,6 +55,27 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     _editingIndex: { state: true },
   };
 
+  static styles = [
+    headerAdornments,
+    css`
+      :host {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ha-space-4);
+      }
+      .severity {
+        --mdc-icon-size: 20px;
+        margin-inline-start: var(--ha-space-2, 8px);
+      }
+      .severity.error {
+        color: var(--error-color);
+      }
+      .severity.warning {
+        color: var(--warning-color);
+      }
+    `,
+  ];
+
   declare hass?: HomeAssistant;
   declare lovelace?: unknown;
   declare _config?: PictureStudioConfig;
@@ -42,20 +84,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _unregister?: () => void;
   /** Guards against a native child's config-changed echoing our own push. */
   private _applying = false;
-  /**
-   * The schema now depends on `localize`, so it can no longer be a module constant.
-   * Rebuilding it on every render would hand ha-form a new object each time; cache it
-   * against the localize function, which HA replaces when the language changes.
-   */
-  private _schemaCache?: { localize: LocalizeFunc; schema: ReturnType<typeof backgroundSchema> };
-
-  private _schema(localize: LocalizeFunc): ReturnType<typeof backgroundSchema> {
-    if (this._schemaCache?.localize !== localize) {
-      this._schemaCache = { localize, schema: backgroundSchema(localize) };
-    }
-    return this._schemaCache.schema;
-  }
-
   constructor() {
     super();
     this._editingIndex = undefined;
@@ -149,7 +177,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (!raw || raw.type === "unknown") return undefined;
     if (raw.type === "badge") {
       const type = String(raw.config.type ?? "");
-      if (type && badgeVerdict(type) === "missing") return undefined;
+      if (type && badgeIsBroken(type)) return undefined;
     }
     return raw;
   }
@@ -158,10 +186,54 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     return this._editingIndex;
   }
 
-  private _backgroundChanged = (ev: CustomEvent<{ value: BackgroundData }>): void => {
+  private _backgroundChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
     ev.stopPropagation();
     if (!this._config || this._applying) return;
     this._commit(mergeBackground(this._config, ev.detail.value));
+  };
+
+  /**
+   * One handler shape for the sections that are only fields. Bound per schema so
+   * the merge touches exactly the keys that section rendered — a key another
+   * section owns, or one this schema left out, is never written and never
+   * dropped.
+   */
+  private _sectionChanged =
+    (schema: FormSchema) =>
+    (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
+      ev.stopPropagation();
+      if (!this._config || this._applying) return;
+      this._commit(
+        sectionMerge(
+          schema,
+          this._config as unknown as Record<string, unknown>,
+          ev.detail.value,
+        ) as unknown as PictureStudioConfig,
+      );
+    };
+
+  private _headingChanged = (ev: CustomEvent<{ heading: HeadingConfig }>): void => {
+    ev.stopPropagation();
+    if (!this._config || this._applying) return;
+    const heading = ev.detail.heading;
+    const { heading: _drop, ...rest } = this._config;
+    // The empty heading is dropped rather than written, for the same reason
+    // storedConfig never writes a default chrome: a key that holds nothing.
+    this._commit({
+      ...(rest as PictureStudioConfig),
+      ...(hasHeading(heading) ? { heading } : {}),
+    });
+  };
+
+  private _onItemsExpandedChanged = (ev: CustomEvent<{ expanded: boolean }>): void => {
+    // React only when the section is collapsed, never when it opens.
+    // Our code never collapses a section — it only calls expand() — so a
+    // detail.expanded of false can only have come from the user clicking the
+    // header. Reacting to true as well would introduce a latent hazard: if
+    // Home Assistant ever moved the fireEvent call from _toggleContainer into
+    // willUpdate, our own "expand because an item was selected" would
+    // immediately deselect that item and the feature would silently stop working.
+    if (!ev.detail.expanded) this.select(undefined);
   };
 
   private _addItem = async (
@@ -261,12 +333,47 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * fight the user's own scrolling.
    */
   protected updated(changed: Map<string, unknown>): void {
-    if (!changed.has("_editingIndex") || this._editingIndex === undefined) return;
-    // Scroll the editor to its top only when a form actually opens.  When the
-    // form is refused (broken badge) the list scrolls the selected row into
-    // view instead — the two are mutually exclusive branches of one decision.
-    if (!this._formTarget()) return;
-    this.scrollIntoView({ block: "start" });
+    if (!changed.has("_editingIndex")) return;
+    const prev = changed.get("_editingIndex") as number | undefined;
+    const curr = this._editingIndex;
+
+    // Three mutually exclusive branches of one decision — scroll the editor to
+    // its top only when a form actually opens; show the Items section and bring
+    // the row into view in the other two cases.
+    if (curr !== undefined && this._formTarget()) {
+      this.scrollIntoView({ block: "start" });
+    } else if (curr !== undefined) {
+      // An item was selected but no form opened (unreadable item, or a badge
+      // whose type is missing): expand the Items section and scroll to the row.
+      void this._showListAt(curr);
+    } else if (prev !== undefined) {
+      // The user came back from a form: expand the Items section and bring the
+      // row that was just edited into view.
+      void this._showListAt(prev);
+    }
+  }
+
+  private async _showListAt(index: number): Promise<void> {
+    const section = this.shadowRoot?.querySelector("#items-section") as
+      | (HTMLElement & { expand(): Promise<boolean> })
+      | null;
+    const opened = (await section?.expand()) ?? false;
+    // Wait out the transition only when expand() actually started one and the
+    // browser understands interpolate-size — otherwise there is nothing to wait
+    // for. transitionend is refused on purpose: the container lives in the
+    // panel's shadow root, and happy-dom never fires transition events, so a
+    // scroll gated on it would never run in the suite and could not be tested.
+    const supportsInterpolateSize =
+      typeof CSS !== "undefined" &&
+      typeof CSS.supports === "function" &&
+      CSS.supports("interpolate-size", "allow-keywords");
+    if (opened && supportsInterpolateSize) {
+      await new Promise<void>((resolve) => setTimeout(resolve, EXPAND_MS));
+    }
+    const list = this.shadowRoot?.querySelector("picture-studio-badge-list") as
+      | (HTMLElement & { scrollToItem(i: number): void })
+      | null;
+    list?.scrollToItem(index);
   }
 
   protected render() {
@@ -277,50 +384,123 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const editing = this._formTarget();
 
     if (editing) {
-      return editing.type === "badge"
-        ? html`
-            <picture-studio-badge-form
-              .hass=${hass}
-              .badge=${editing.config}
-              .anchor=${editing.anchor}
-              .visibility=${editing.visibility}
-              @badge-changed=${this._badgeChanged}
-              @anchor-changed=${this._anchorChanged}
-              @visibility-changed=${this._visibilityChanged}
-              @go-back=${() => this.select(undefined)}
-            ></picture-studio-badge-form>
-          `
-        : html`
-            <picture-studio-element-form
-              .hass=${hass}
-              .element=${editing.config}
-              .anchor=${editing.anchor}
-              .visibility=${editing.visibility}
-              @element-changed=${this._elementChanged}
-              @anchor-changed=${this._anchorChanged}
-              @visibility-changed=${this._visibilityChanged}
-              @go-back=${() => this.select(undefined)}
-            ></picture-studio-element-form>
-          `;
+      return cache(
+        editing.type === "badge"
+          ? html`
+              <picture-studio-badge-form
+                .hass=${hass}
+                .badge=${editing.config}
+                .anchor=${editing.anchor}
+                .visibility=${editing.visibility}
+                @badge-changed=${this._badgeChanged}
+                @anchor-changed=${this._anchorChanged}
+                @visibility-changed=${this._visibilityChanged}
+                @go-back=${() => this.select(undefined)}
+              ></picture-studio-badge-form>
+            `
+          : html`
+              <picture-studio-element-form
+                .hass=${hass}
+                .element=${editing.config}
+                .anchor=${editing.anchor}
+                .visibility=${editing.visibility}
+                @element-changed=${this._elementChanged}
+                @anchor-changed=${this._anchorChanged}
+                @visibility-changed=${this._visibilityChanged}
+                @go-back=${() => this.select(undefined)}
+              ></picture-studio-element-form>
+            `,
+      );
     }
 
-    return html`
-      <ha-form
-        .hass=${hass}
-        .data=${backgroundData(config)}
-        .schema=${this._schema(hass.localize)}
-        .computeLabel=${(s: { name: string }) => backgroundLabel(hass.localize, s.name)}
-        @value-changed=${this._backgroundChanged}
-      ></ha-form>
-      <picture-studio-badge-list
-        .hass=${hass}
-        .items=${config.items}
-        .selectedIndex=${this._editingIndex}
-        @item-add=${this._addItem}
-        @item-edit=${this._editBadge}
-        @item-moved=${this._moveBadge}
-        @item-removed=${this._removeBadge}
-      ></picture-studio-badge-list>
-    `;
+    const localize = hass.localize;
+    const background = backgroundSchema(localize, config);
+    const filters = filtersSchema(localize);
+    const entity = entitySchema(localize);
+    const label = (s: { name: string }) =>
+      s.name === PICTURE_ENTITY ? localizeOwn(hass, "picture_entity") : formLabel(localize, s.name);
+    const helper = (s: { name: string }) => formHelper(hass, s.name);
+    const flat = config as unknown as Record<string, unknown>;
+
+    return cache(html`
+      <picture-studio-section open .label=${localizeOwn(hass, "section_background")} icon="mdi:image">
+        <ha-form
+          .hass=${hass}
+          .data=${backgroundData(config)}
+          .schema=${background}
+          .computeLabel=${label}
+          .computeHelper=${helper}
+          @value-changed=${this._backgroundChanged}
+        ></ha-form>
+      </picture-studio-section>
+
+      <picture-studio-section
+        id="items-section"
+        .label=${localizeOwn(hass, "items")}
+        icon="mdi:format-list-bulleted"
+        @expanded-changed=${this._onItemsExpandedChanged}
+      >
+        ${
+          // The strongest state wins: one glyph, never two. Same vocabulary as
+          // visibility-section.ts, and the same asymmetry — the normal case gets
+          // no ink at all. Glyph first: it sits nearest the title.
+          (() => {
+            const severity = itemsSeverity(config.items);
+            if (!severity) return nothing;
+            return html`<ha-icon
+              slot="event"
+              class="severity ${severity}"
+              icon=${severity === "error" ? "mdi:alert-circle" : "mdi:alert-outline"}
+              title=${localizeOwn(hass, severity === "error" ? "items_error" : "items_warning")}
+            ></ha-icon>`;
+          })()
+        }
+        ${
+          config.items.length
+            ? html`<span class="count" slot="event">${config.items.length}</span>`
+            : nothing
+        }
+        <picture-studio-badge-list
+          .hass=${hass}
+          .items=${config.items}
+          .selectedIndex=${this._editingIndex}
+          @item-add=${this._addItem}
+          @item-edit=${this._editBadge}
+          @item-moved=${this._moveBadge}
+          @item-removed=${this._removeBadge}
+        ></picture-studio-badge-list>
+      </picture-studio-section>
+
+      <picture-studio-section
+        .label=${hass.localize("ui.panel.lovelace.editor.card.heading.name")}
+        icon="mdi:format-title"
+      >
+        <picture-studio-heading-section
+          .hass=${hass}
+          .heading=${config.heading}
+          @heading-changed=${this._headingChanged}
+        ></picture-studio-heading-section>
+      </picture-studio-section>
+
+      <picture-studio-section .label=${localizeOwn(hass, "section_filters")} icon="mdi:image-filter-black-white">
+        <ha-form
+          .hass=${hass}
+          .data=${sectionData(filters, flat)}
+          .schema=${filters}
+          .computeLabel=${label}
+          @value-changed=${this._sectionChanged(filters)}
+        ></ha-form>
+      </picture-studio-section>
+
+      <picture-studio-section .label=${localizeOwn(hass, "section_entity")} icon="mdi:image-auto-adjust">
+        <ha-form
+          .hass=${hass}
+          .data=${sectionData(entity, flat)}
+          .schema=${entity}
+          .computeLabel=${label}
+          @value-changed=${this._sectionChanged(entity)}
+        ></ha-form>
+      </picture-studio-section>
+    `);
   }
 }

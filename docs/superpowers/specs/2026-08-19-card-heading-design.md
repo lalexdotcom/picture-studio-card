@@ -67,9 +67,10 @@ Home Assistant's own precedent is the model — `migrateHeadingCardConfig` in
 `hui-heading-card.ts` reads the legacy `entities` key, folds it into `badges`,
 and deletes it, silently, at both `setConfig` and editor `setConfig`. Ours does
 the same at normalization: a top-level `title` becomes `heading.title` when
-`heading.title` is absent, and is dropped. Because `storedConfig` rewrites the
-whole config on every editor commit, the migration lands in the user's YAML the
-first time they open the editor; a config never opened keeps rendering.
+`heading.title` is absent, and is dropped. The in-memory struct is always correct; the migration reaches the user's YAML
+the first time they save any change, since `storedConfig` rewrites the whole
+config on every editor commit. A config never opened keeps rendering from its
+legacy form.
 
 ## 2. The editor
 

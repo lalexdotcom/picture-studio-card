@@ -5,7 +5,7 @@ import type { HomeAssistant } from "./types";
  * `localize` only serves the frontend's own keys, `loadBackendTranslation` needs an
  * integration behind it, and `loadFragmentTranslation` is reserved for HA's panels.
  * So anything HA has no key for ships here. Everything HA does have a key for goes
- * through `hass.localize` instead — see background-schema and badge-list.
+ * through `hass.localize` instead — see form-schemas and badge-list.
  */
 const STRINGS = {
   en: {
@@ -39,11 +39,19 @@ const STRINGS = {
     unknown_config_missing: "Missing config",
     unknown_element_type: "Unknown element type",
     unknown_badge_type: "Unknown badge type",
+    unsupported_badge_type: "Unsupported badge type",
     badge_type_unavailable: "This badge type is not available on this Home Assistant.",
     visibility_unreadable: "Unreadable conditions",
     visibility_unreadable_body:
       "This item's conditions are not a list. They are ignored, and the item always shows.",
     visibility_reset: "Reset",
+    section_background: "Background",
+    section_filters: "Filters",
+    section_entity: "Entity",
+    picture_entity: "Image or camera entity",
+    items_error: "Some items are unreadable",
+    items_warning: "Some items need attention",
+    aspect_ratio_hint: "16:9, 16x9, 1.78 or 56.25% — decimals use a point.",
   },
   fr: {
     items: "Items",
@@ -76,11 +84,19 @@ const STRINGS = {
     unknown_config_missing: "Config manquante",
     unknown_element_type: "Type d'élément inconnu",
     unknown_badge_type: "Type de badge inconnu",
+    unsupported_badge_type: "Type de badge non pris en charge",
     badge_type_unavailable: "Ce type de badge n'est pas disponible sur ce Home Assistant.",
     visibility_unreadable: "Conditions illisibles",
     visibility_unreadable_body:
       "Les conditions de cet item ne forment pas une liste. Elles sont ignorées, et l'item reste toujours visible.",
     visibility_reset: "Réinitialiser",
+    section_background: "Fond",
+    section_filters: "Filtres",
+    section_entity: "Entité",
+    picture_entity: "Entité image ou caméra",
+    items_error: "Des items sont illisibles",
+    items_warning: "Des items demandent attention",
+    aspect_ratio_hint: "16:9, 16x9, 1.78 ou 56.25% — les décimales s'écrivent avec un point.",
   },
 } as const;
 

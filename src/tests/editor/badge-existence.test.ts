@@ -1,10 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, rstest } from "@rstest/core";
-import { badgeVerdict, probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence";
+import {
+  badgeIsBroken,
+  badgeTypeProblem,
+  badgeVerdict,
+  probeBadgeType,
+  resetBadgeVerdicts,
+} from "../../editor/badge-existence";
 
+// All types HA's badge registry knows how to build. Used by tests that need the
+// probe to settle correctly for both existing and non-existing types.
+const HA_NATIVE_BADGE_TYPES = new Set([
+  "error",
+  "entity",
+  "entity-filter",
+  "shortcut",
+  "state-label",
+  "power-total",
+  "gas-total",
+  "water-total",
+]);
 const helpers = {
   createBadgeElement: (c: { type?: string }) =>
     document.createElement(
-      c.type === "entity" || c.type === "shortcut" ? `hui-${c.type}-badge` : "hui-error-badge",
+      HA_NATIVE_BADGE_TYPES.has(c.type ?? "") ? `hui-${c.type}-badge` : "hui-error-badge",
     ),
 };
 
@@ -95,5 +113,80 @@ describe("two callers for the same in-flight type", () => {
     expect(count1).toBe(1);
     expect(count2).toBe(1);
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("badgeIsBroken", () => {
+  // Failure text recorded against the defect (TEMP_DEFECT1, run against current code):
+  // "expected 'expand' to be called 1 times, but got 0 times"
+  // _formTarget() checked badgeVerdict === "missing" only; state-label is
+  // statically refused and never probed, so its verdict stayed "unknown" and
+  // the guard missed it. badgeIsBroken now consolidates both checks.
+  it("is true for a native type outside CORE_BADGES without advancing timers or awaiting", () => {
+    expect(badgeIsBroken("state-label")).toBe(true);
+    expect(badgeIsBroken("power-total")).toBe(true);
+  });
+
+  it("is true for a non-existent type without advancing timers or awaiting", () => {
+    expect(badgeIsBroken("entty")).toBe(true);
+  });
+
+  it("is false for a supported type before any probe", () => {
+    expect(badgeIsBroken("entity")).toBe(false);
+    expect(badgeIsBroken("shortcut")).toBe(false);
+  });
+
+  it("is false for a custom: type before its probe settles", () => {
+    expect(badgeIsBroken("custom:never-arrived")).toBe(false);
+  });
+
+  it("is true for a custom: type once its probe settles to missing", async () => {
+    // custom:nodash has no dash — probeBadgeType settles it synchronously.
+    probeBadgeType("custom:nodash", () => {});
+    expect(badgeIsBroken("custom:nodash")).toBe(true);
+  });
+});
+
+describe("badgeTypeProblem", () => {
+  it("is undefined for supported CORE_BADGES types", () => {
+    expect(badgeTypeProblem("entity")).toBeUndefined();
+    expect(badgeTypeProblem("shortcut")).toBeUndefined();
+  });
+
+  it("is undefined for any custom: type before its probe settles", () => {
+    expect(badgeTypeProblem("custom:not-yet-defined")).toBeUndefined();
+  });
+
+  it("is undefined for a non-custom type before its probe settles", () => {
+    // While the verdict is "unknown" (probe in flight), no category word yet —
+    // better than retracting one a tick later.
+    expect(badgeTypeProblem("state-label")).toBeUndefined();
+    expect(badgeTypeProblem("entty")).toBeUndefined();
+  });
+
+  it("is 'unsupported' for a native type HA can build, once the probe settles", async () => {
+    // state-label is in HA's registry but not in CORE_BADGES. The probe settles
+    // to "ok" (HA can build it), so the word is "unsupported" — it exists, we
+    // just do not offer it here.
+    const settled = new Promise<void>((r) => probeBadgeType("state-label", r));
+    await settled;
+    expect(badgeTypeProblem("state-label")).toBe("unsupported");
+    // Another native type HA offers but we do not:
+    const settled2 = new Promise<void>((r) => probeBadgeType("power-total", r));
+    await settled2;
+    expect(badgeTypeProblem("power-total")).toBe("unsupported");
+  });
+
+  it("is 'unknown' for a type HA cannot build, once the probe settles", async () => {
+    // entty names nothing — probe settles to "missing".
+    const settled = new Promise<void>((r) => probeBadgeType("entty", r));
+    await settled;
+    expect(badgeTypeProblem("entty")).toBe("unknown");
+  });
+
+  it("is 'unknown' for a custom: type whose resource never loaded, once the probe settles", async () => {
+    // custom:nodash has no dash — settles synchronously to missing.
+    probeBadgeType("custom:nodash", () => {});
+    expect(badgeTypeProblem("custom:nodash")).toBe("unknown");
   });
 });

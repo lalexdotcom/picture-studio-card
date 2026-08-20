@@ -3,6 +3,7 @@ import { activeEditor, registerCard, subscribeEditors } from "../broker";
 import {
   BACKGROUND_KEYS,
   EDITOR_TAG,
+  hasHeading,
   hasVisibility,
   ICON_TAG,
   imagePath,
@@ -13,6 +14,8 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
+import "./card-heading";
+import { isSupportedBadgeType } from "../editor/badge-catalog";
 import {
   type Anchor,
   type MarkerCorner,
@@ -42,6 +45,20 @@ type ProbeElement = HTMLElement & {
 };
 
 const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+
+/** Home Assistant's own error badge, the one its detail dialog dumps origConfig from. */
+const ERROR_BADGE_TAG = "hui-error-badge";
+
+/**
+ * A badge type Home Assistant cannot build, used to make its factory fail on
+ * purpose. See `_createChild`.
+ *
+ * Spelled out rather than made unprintable: the failure is logged by Home
+ * Assistant as `console.error(kind, config.type, err)`, so an error line in the
+ * user's console names whoever caused it instead of appearing to be a fault in
+ * their own configuration.
+ */
+const PRIMING_TYPE = "picture-studio-priming";
 
 export class PictureStudioCard extends LitElement {
   static properties = {
@@ -75,6 +92,8 @@ export class PictureStudioCard extends LitElement {
   /** Indexed like _wrappers; a hole where the item carries no conditions. */
   private _probes: (ProbeElement | undefined)[] = [];
   private _renderedTypes: string[] = [];
+  /** One subscription is enough, however many items are waiting on the class. */
+  private _awaitingErrorBadge = false;
   /** Released when the card stops editing; see the broker's card registry. */
   private _unregisterCard?: () => void;
   private _unsubscribe?: () => void;
@@ -456,16 +475,68 @@ export class PictureStudioCard extends LitElement {
   ): LovelaceBadgeElement | undefined {
     if (item.type === "unknown") return undefined;
     if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
       const el = helpers.createBadgeElement(item.config) as HTMLElement & LovelaceBadgeElement;
-      // HA's badge factory returns a hui-error-badge with style.display="None"
-      // and a 2000 ms timer that restores it — matching its own grace period so
-      // the card and the probe agree on when to complain.  In the editor,
-      // stability across a drag is worth more than flash-avoidance: every config
-      // change rebuilds the whole card element, restarting the timer and hiding
-      // the badge for two seconds on every drag.  Clearing the inline display
-      // here makes error badges visible immediately while editing.  On a real
-      // dashboard the hide stays — this guard is never reached.
-      if (this.editing && el.tagName.toLowerCase() === "hui-error-badge") {
+      // Home Assistant answers the type question synchronously: build the badge
+      // and look at what came back. We do not probe — the card has no machinery
+      // to drive that asynchrony, and on a real dashboard with no editor open
+      // no probe would ever run at all.
+      // - If HA handed back its own error badge (unknown type, missing custom:
+      //   resource, …), keep it — its message names the real problem better than
+      //   ours could.
+      // - If HA built the badge happily but the type is one we do not offer,
+      //   replace it with our error badge: drawing it would silently give the
+      //   user something other than what they asked for.
+      // - `custom:` types are always considered supported by isSupportedBadgeType,
+      //   so they are never intercepted here — HA's hide-then-reveal timer and
+      //   its own error badge for a resource still loading are untouched.
+      // - `origConfig` is not decoration: hui-error-badge dumps it as YAML in
+      //   the detail dialog its click opens, the same affordance Lovelace gives
+      //   everywhere else.
+      if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== ERROR_BADGE_TAG) {
+        // One verdict, two channels: the badge drawn on the picture and the line
+        // Home Assistant prints while loading the component that draws it.
+        const message = `Unsupported badge type: ${type}`;
+        // Upstream hole (create-badge-element.ts, frontend 20260729.6): `error` is
+        // in ALWAYS_LOADED_TYPES but hui-error-badge is never statically imported
+        // there, so the always-loaded branch calls setConfig on an unregistered
+        // element — throwing on a cold dashboard. HA itself always reaches error
+        // badges through createErrorBadgeElement, which is guarded and performs its
+        // own dynamic import. Delete this guard once upstream ships the static import.
+        if (!customElements.get(ERROR_BADGE_TAG))
+          return this._primeErrorBadge(helpers, type, message);
+        // Built by hand rather than asked of helpers.createBadgeElement, and that
+        // is the whole point: `error` is an always-loaded type, so the factory
+        // routes it straight back through the unguarded branch described above.
+        // When that branch fails, Home Assistant does not throw — it catches and
+        // returns an error badge carrying its own internal message, so our verdict
+        // on the user's badge would silently read "n.setConfig is not a function".
+        // These two lines are what HA's own _createElement runs anyway.
+        try {
+          const errorBadge = document.createElement(ERROR_BADGE_TAG) as HTMLElement &
+            LovelaceBadgeElement;
+          errorBadge.setConfig({
+            type: "error",
+            error: message,
+            origConfig: item.config,
+          } as never);
+          return errorBadge;
+        } catch {
+          // Unreachable by the guard above, and kept anyway: a hole is an honest
+          // failure, Home Assistant's internal message presented as our verdict is
+          // not. No retry is armed here — the class was registered a line ago, so
+          // there is nothing left to wait for, and re-arming would rebuild into
+          // this same failure forever.
+          return undefined;
+        }
+      }
+      // HA's badge factory returns a hui-error-badge with style.display="none"
+      // and a 2000 ms timer that restores it. In the editor, stability across a
+      // drag is worth more than flash-avoidance: every config change rebuilds
+      // the whole card element, restarting the timer and re-hiding the badge.
+      // Clearing the inline display here makes error badges visible immediately
+      // while editing.
+      if (this.editing && el.tagName.toLowerCase() === ERROR_BADGE_TAG) {
         el.style.display = "";
       }
       return el;
@@ -502,6 +573,55 @@ export class PictureStudioCard extends LitElement {
    * "is hidden", so no verdict is needed there — and that is where the drag
    * layer is already the heaviest.
    */
+  /**
+   * Make Home Assistant fetch hui-error-badge, and arrange for the item to be
+   * drawn once it lands. Returns undefined: until then the item is a hole.
+   *
+   * The module is fetched from exactly one place in Home Assistant's bundle —
+   * its internal createErrorBadgeElement — which is not exported. The only way
+   * in is the public badge factory, and it only reaches that routine by
+   * failing, hence a type built to be impossible to construct.
+   *
+   * The failure is genuine, so Home Assistant logs it. The log is rewritten in
+   * place rather than silenced: same shape it uses everywhere else
+   * (`kind, config.type, error`), naming the badge actually at fault instead of
+   * our sentinel. Matching is on the type argument, never on the message text —
+   * the text is Home Assistant's and may change, the sentinel is ours and
+   * cannot. The swap is undone in a `finally`, and the window it covers is one
+   * synchronous call, so nothing else can log inside it.
+   */
+  private _primeErrorBadge(
+    helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
+    type: string,
+    message: string,
+  ): undefined {
+    const log = console.error;
+    console.error = (...args: unknown[]) => {
+      if (args[1] === PRIMING_TYPE) log("badge", type, new Error(message));
+      else log(...args);
+    };
+    try {
+      void helpers.createBadgeElement({ type: PRIMING_TYPE } as never);
+    } finally {
+      console.error = log;
+    }
+
+    if (!this._awaitingErrorBadge) {
+      this._awaitingErrorBadge = true;
+      void customElements.whenDefined(ERROR_BADGE_TAG).then(() => {
+        this._awaitingErrorBadge = false;
+        // requestUpdate would not reach the hole: `updated` only syncs items on a
+        // config change, and `_syncItems` only rebuilds when the shape changed —
+        // which it has not. Invalidating the shape is what reopens it. Safe here:
+        // `_renderedTypes = types` is assigned in the same synchronous block as
+        // the loop that called us, so it has already run by the time this fires.
+        this._renderedTypes = [];
+        void this._syncItems();
+      });
+    }
+    return undefined;
+  }
+
   private _createProbe(item: PictureItem): ProbeElement | undefined {
     if (item.type === "unknown" || this.editing || !hasVisibility(item)) return undefined;
     const probe = document.createElement("hui-card") as ProbeElement;
@@ -608,7 +728,18 @@ export class PictureStudioCard extends LitElement {
     if (!this._config) return nothing;
 
     return html`
-      <ha-card .header=${this._config.title}>
+      <ha-card>
+        ${
+          hasHeading(this._config.heading)
+            ? html`
+                <picture-studio-heading
+                  .hass=${this.hass}
+                  .heading=${this._config.heading}
+                  .preview=${this.preview}
+                ></picture-studio-heading>
+              `
+            : nothing
+        }
         <div class="root ${this.editing ? "editing" : ""} ${this.preview ? "previewing" : ""}">
           <div class="layer"></div>
         </div>

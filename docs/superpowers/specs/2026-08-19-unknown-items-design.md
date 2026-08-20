@@ -377,6 +377,79 @@ the menu only offers known types, but the same file is about to gain an
 existence test, and the test must not be built on `whenDefined`. Short-circuit
 on the tag returned by `createBadgeElement`.
 
+## Amendment, 2026-08-20 — a native badge type outside our catalogue is an error
+
+**The rule changes: tolerance applies to `custom:` types only.**
+
+Until now a badge whose type was absent from `CORE_BADGES` was accepted whenever
+Home Assistant could render it. `CORE_BADGES` mirrors `coreBadges`, which is the
+*picker's* list — two entries — while Home Assistant's badge registry knows eight
+types. So five native types Home Assistant does not offer (`state-label`,
+`entity-filter`, `power-total`, `gas-total`, `water-total`) rendered silently and
+correctly.
+
+**What that hid.** `state-label` exists in *both* families: it is a
+picture-elements element kind **and** a native badge type. A user who wants a
+state label on the plan and writes `type: badge` instead of `type: element` gets
+something that works — and is not what they asked for, with nothing anywhere
+saying so. The tolerance built for third-party badges was concealing the one
+confusion the two families make possible.
+
+**The new line.** For a `custom:` type we cannot know the list, so we defer to the
+runtime, exactly as before. For a native type we *do* know the list, so our
+catalogue decides. A native type outside `CORE_BADGES` is an error.
+
+Consequences, accepted:
+
+- **It breaks configs that work.** The five types above become error rows. That is
+  a `Changed` entry, said plainly.
+- **A new native badge type in Home Assistant becomes a release here.** That is
+  the price of knowing the list, and `badge-catalog.ts` must say so — its current
+  comment promises the opposite ("that type stays usable from YAML, since
+  rendering does not filter on this list") and becomes false.
+- **The verdict is static.** No probe, no cache, no grace period: membership of a
+  known list is decided at once. The row turns red immediately, which is better
+  than what a genuinely missing type gets.
+
+### The card draws Home Assistant's own error badge
+
+Not "renders anyway with a red row" and not "renders nothing". The item's place on
+the picture shows `hui-error-badge`, the same one an unbuildable type already
+produces two centimetres away.
+
+It is reachable with nothing private: `error` is an **eagerly known** badge type
+in the registry, so the public `createBadgeElement` builds it directly from
+`{ type: "error", error, origConfig }` — the shape
+`createErrorBadgeConfig` uses upstream. Passing `origConfig` is not decoration:
+`hui-error-badge` dumps it as YAML in the detail dialog its click opens, which is
+the same "show me what is wrong" affordance Lovelace gives everywhere else. No
+hide-then-reveal timer applies either — that one is for a `custom:` tag awaiting
+definition, and this badge is an error from the start.
+
+### The message
+
+`Unsupported badge type: <type>` — **not localised**, because the content of an error
+badge never is: Home Assistant hardcodes its own `Unknown type encountered:
+${type}` in English, and every error badge in every language shows it. Only the
+badge's *label* is translated, from
+`ui.panel.lovelace.editor.error_section.title`.
+
+Home Assistant's own wording is **not** reused, because it would be false:
+`Unknown type encountered` claims the type does not exist, and it does. Ours says
+it is not supported here, which is the truth.
+
+**Two conditions, two words.** `entty` exists nowhere; `state-label` exists and is
+not handled here. The item list had been calling both "Unknown badge type".
+`unknown_badge_type` keeps the first; a new `unsupported_badge_type` takes the
+second, localised in the row and shown in English by the badge.
+
+### One predicate, exported once
+
+Two places now decide whether a badge type is supported — the editor's row and the
+card's render — and two places deciding it separately would drift. The predicate
+lives beside `CORE_BADGES` and `CUSTOM_PREFIX` in `badge-catalog.ts`, and both
+call it. Same reasoning as `itemsSeverity`.
+
 ## The exhaustiveness hardening — follow-up 8
 
 The parked note expected two ternaries in `element-form.ts` to become reachable

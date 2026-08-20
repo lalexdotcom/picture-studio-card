@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, describe, expect, it, rstest } from "@rstest/core";
 import type { EditorChannel } from "../../broker";
 import { notifyEditors, registerEditor } from "../../broker";
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TAG, PROBE_TYPE } from "../../config";
+
 import type { HomeAssistant } from "../../types";
 import {
   background,
@@ -20,6 +21,14 @@ import {
 // Tracks an editor registered mid-test so afterEach can release it even when
 // an assertion throws before the test reaches its own release() call.
 let releaseEditor: (() => void) | undefined;
+
+/**
+ * What the card actually put on the picture for an item — the element inside its
+ * wrapper. Asserting on this rather than on a spy is what distinguishes the badge
+ * Home Assistant handed back from the one the card built to replace it.
+ */
+const drawn = (card: PictureStudioCard, index = 0) =>
+  wrappers(card)[index]?.firstElementChild as (HTMLElement & { config?: unknown }) | null;
 
 // Remove every card the test mounted so broker subscriptions added in
 // connectedCallback don't bleed into the next test — even when a previous
@@ -554,6 +563,12 @@ describe("an unknown item does not shift the items after it", () => {
 });
 
 describe("hui-error-badge display in editing mode", () => {
+  // Failure text recorded before retargeting (F01):
+  // "expected 'none' to be '' // Object.is equality"
+  // entty is now caught by isSupportedBadgeType before createBadgeElement is
+  // called, so the display-clearing code (for HA's grace-period timer) was
+  // never reached. The test now uses a custom: type which goes through the
+  // existing path: createBadgeElement(item.config) → hui-error-badge → clear.
   const ERROR_BADGE_CONFIG = {
     type: CARD_TYPE,
     image: "/local/plan.png",
@@ -561,7 +576,7 @@ describe("hui-error-badge display in editing mode", () => {
       {
         type: "badge",
         position: { top: "10%", left: "10%" },
-        config: { type: "entty" },
+        config: { type: "custom:entty" },
       },
     ],
   };
@@ -606,5 +621,420 @@ describe("hui-error-badge display in editing mode", () => {
   it("leaves the inline display of hui-error-badge untouched outside editing", async () => {
     const badge = await mountWithErrorBadge(false);
     expect(badge.style.display).toBe("none");
+  });
+});
+
+describe("cold-start guard: hui-error-badge not yet registered", () => {
+  // happy-dom defines no Home Assistant element unless a test stubs one, so the
+  // undefined case is the natural state here — no stub needed. The defined case
+  // is what the last test in this block arranges; subsequent describe blocks then
+  // inherit that state and test the working path.
+  afterEach(() => {
+    document.body.replaceChildren();
+    installHelpers();
+  });
+
+  const makeHelpersForColdStart = () => {
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+    return helpers;
+  };
+
+  const mountWithUnsupportedBadge = async (): Promise<{
+    card: PictureStudioCard;
+    helpers: ReturnType<typeof makeHelpersForColdStart>;
+  }> => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeHelpersForColdStart();
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    return { card, helpers };
+  };
+
+  // Failure text recorded before fix (runner F01):
+  // "expected [ …(1) ] to have a length of +0 but got 1"
+  it("renders nothing for an unsupported badge when hui-error-badge is not registered", async () => {
+    const { card } = await mountWithUnsupportedBadge();
+    // No wrapper is added to the layer when _createChild returns undefined.
+    expect(wrappers(card)).toHaveLength(0);
+  });
+
+  // Failure text recorded before fix (runner F02):
+  // "expected [ …(1) ] to have a length of +0 but got 1" (wrappers assertion;
+  // the "not called with error" assertion is never reached under the current code)
+  it("makes a priming call whose result is discarded, not what gets rendered", async () => {
+    const { helpers } = await mountWithUnsupportedBadge();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    // Re-trigger a fresh mount so the spy is in place before the call.
+    const card2 = document.createElement(CARD_TAG) as PictureStudioCard;
+    card2.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card2);
+    await card2.updateComplete;
+    await flush();
+    // The priming call was made (to route through the guarded path and trigger the
+    // dynamic import of hui-error-badge). Its result was discarded, not rendered.
+    // The type is asserted literally: Home Assistant logs it to the console, so
+    // this string is what tells a user which card caused the error line.
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "picture-studio-priming" }));
+    expect(wrappers(card2)).toHaveLength(0);
+    // The call was NOT our error config — that badge is exactly what we refused.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  // Home Assistant logs every factory call it cannot satisfy, and always in the
+  // same shape: console.error(kind, config.type, error). This stub reproduces it,
+  // and emits a second, unrelated line inside the same call so the filter has
+  // something to let through.
+  const mountWithLoggingHelpers = async (): Promise<{
+    card: PictureStudioCard;
+    seen: unknown[][];
+    installed: (...args: unknown[]) => void;
+    after: unknown;
+  }> => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        if ((c as Record<string, unknown>).type === "picture-studio-priming") {
+          console.error("badge", "unrelated", new Error("Unknown type encountered: unrelated"));
+          console.error(
+            "badge",
+            "picture-studio-priming",
+            new Error("Unknown type encountered: picture-studio-priming"),
+          );
+        }
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+
+    const seen: unknown[][] = [];
+    const original = console.error;
+    const installed = (...args: unknown[]) => {
+      seen.push(args);
+    };
+    console.error = installed;
+    try {
+      const card = document.createElement(CARD_TAG) as PictureStudioCard;
+      card.setConfig({
+        type: CARD_TYPE,
+        image: "/local/plan.png",
+        items: [
+          { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+        ],
+      });
+      document.body.append(card);
+      await card.updateComplete;
+      await flush();
+      // Read inside the try: the finally below is the test harness putting the
+      // console back, and it would mask whether the card had already done so.
+      return { card, seen, installed, after: console.error };
+    } finally {
+      console.error = original;
+    }
+  };
+
+  // Failure text recorded against no rewriting at all (runner F16):
+  // "expected undefined to be an instance of Error"
+  it("rewrites the priming log into our own verdict, in Home Assistant's own shape", async () => {
+    const { seen } = await mountWithLoggingHelpers();
+    // The sentinel never reaches the console: what is printed names the badge the
+    // user actually wrote, and carries the same message the badge itself shows.
+    const ours = seen.find((args) => args[0] === "badge" && args[1] === "state-label");
+    const reported = ours?.[2] as Error | undefined;
+    expect(reported).toBeInstanceOf(Error);
+    expect(reported?.message).toBe("Unsupported badge type: state-label");
+    expect(seen.some((args) => args[1] === "picture-studio-priming")).toBe(false);
+  });
+
+  // Guards the opposite defect of the test above — a filter wide enough to eat
+  // lines that are not ours. Failure text recorded against a wrapper that drops
+  // everything (runner F16): "expected [] to have a length of 1 but got +0"
+  it("lets every other line through untouched", async () => {
+    const { seen } = await mountWithLoggingHelpers();
+    const others = seen.filter((args) => args[1] === "unrelated");
+    expect(others).toHaveLength(1);
+    expect((others[0]?.[2] as Error | undefined)?.message).toBe(
+      "Unknown type encountered: unrelated",
+    );
+  });
+
+  // Failure text recorded against a swap with no restore (runner F16):
+  // "expected false to be true // Object.is equality"
+  it("puts console.error back once the priming call returns", async () => {
+    const { installed, after } = await mountWithLoggingHelpers();
+    expect(after === installed).toBe(true);
+  });
+
+  // Run last in this block: customElements.define is permanent, so subsequent
+  // describe blocks (which test the "class available" path) inherit the definition.
+  //
+  // Failure text recorded before fix (runner F14):
+  // "expected [] to have a length of 1 but got +0" — the item stayed a hole forever.
+  // The test this replaced asserted requestUpdate had been called, which it had:
+  // green, and guarding nothing, because neither `updated`'s config gate nor
+  // `_syncItems`'s shape check lets a bare re-render reach the hole.
+  it("draws the refused badge once hui-error-badge becomes available", async () => {
+    const { card } = await mountWithUnsupportedBadge();
+    expect(wrappers(card)).toHaveLength(0);
+
+    // Simulate the class landing — the dynamic import the priming call triggered,
+    // or another badge on the same dashboard having loaded the module.
+    // setConfig is part of the stub on purpose: the card builds its own error
+    // badge and calls it directly, so a bare HTMLElement would send every test
+    // in and after this block down the catch and assert nothing.
+    customElements.define(
+      "hui-error-badge",
+      class extends HTMLElement {
+        config?: unknown;
+        setConfig(config: unknown) {
+          this.config = config;
+        }
+      },
+    );
+    await flush();
+
+    expect(wrappers(card)).toHaveLength(1);
+    expect(drawn(card)?.config).toEqual(
+      expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
+    );
+  });
+});
+
+describe("a native badge type outside CORE_BADGES", () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    installHelpers(); // restore the default loadCardHelpers stub
+  });
+
+  // The spy must target the exact helpers object the card will receive — not a
+  // separate call, since the default stub returns a new object each time.
+  // Set up a stable reference and point loadCardHelpers at it, then spy.
+  const makeTrackedHelpers = () => {
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+    return helpers;
+  };
+
+  // Failure text recorded against the previous construction (through
+  // helpers.createBadgeElement, runner F15):
+  // "expected 'fake-child' to be 'hui-error-badge' // Object.is equality"
+  it("replaces state-label with our error badge with no probe seeded (regression)", async () => {
+    // The defect: the card relied on a verdict from the editor's probe, which
+    // only the editor's badge list ever starts. On a real dashboard, with no
+    // editor open, no probe ran and the badge drew normally.
+    // This test never seeds a probe verdict — the card must refuse on its own.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    makeTrackedHelpers();
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    expect(drawn(card)?.tagName.toLowerCase()).toBe("hui-error-badge");
+    expect(drawn(card)?.config).toEqual(
+      expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
+    );
+  });
+
+  // Failure text recorded against the previous construction (runner F15):
+  // "expected \"createBadgeElement\" to not be called with arguments:
+  //  [ ObjectContaining {\"type\": \"error\"} ] … Number of calls: 2"
+  it("builds the error badge itself rather than asking the factory for one", async () => {
+    // state-label is the triggering case: also an element kind, so writing
+    // type: badge was a silent way to get the wrong thing on the picture.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeTrackedHelpers();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The badge on the picture carries our verdict, not the item's own config.
+    // origConfig carries that config so the error badge's detail dialog can show
+    // it — the same affordance Lovelace gives everywhere else.
+    expect(drawn(card)?.config).toEqual({
+      type: "error",
+      error: "Unsupported badge type: state-label",
+      origConfig: { type: "state-label" },
+    });
+    // And it was never asked of the factory: `error` is an always-loaded type,
+    // whose branch in create-element-base is the one that fails on a cold
+    // dashboard, returning HA's internal message in place of ours.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("does not intercept a supported badge type", async () => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeTrackedHelpers();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "badge",
+          position: { top: "10%", left: "10%" },
+          config: { type: "entity", entity: "light.a" },
+        },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card passed the item's own config through, unmodified.
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "entity" }));
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("does not intercept a badge type Home Assistant cannot build (regression: entty)", async () => {
+    // HA's badge factory returns hui-error-badge for unknown types like "entty".
+    // The card must keep that — HA's message names the real problem better than
+    // our generic "Unsupported badge type" would.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    // Helper that simulates HA: "entty" is unknown to HA, so its badge factory
+    // returns hui-error-badge — the same element the probe checks against.
+    const helpers = {
+      createHuiElement: (c: unknown) => {
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+      createBadgeElement: (c: unknown) => {
+        if ((c as Record<string, unknown>).type === "entty")
+          return document.createElement("hui-error-badge");
+        const el = document.createElement(FAKE_TAG);
+        (el as { config?: unknown }).config = c;
+        return el;
+      },
+    };
+    (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => helpers;
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [{ type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } }],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card must NOT have substituted its own error badge — HA's message
+    // "Unknown type encountered: entty" is more informative than ours. Both
+    // candidates are a hui-error-badge, so the tag cannot tell them apart: the
+    // discriminator is setConfig, which only our own construction calls.
+    expect(drawn(card)?.tagName.toLowerCase()).toBe("hui-error-badge");
+    expect(drawn(card)?.config).toBeUndefined();
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  it("does not intercept a custom: type whose resource never loaded (regression: custom:nodash)", async () => {
+    // isSupportedBadgeType returns true for any custom:-prefixed type, so the
+    // card never intercepts them — HA's own error badge (or hide-then-reveal
+    // timer for a resource still loading) is untouched.
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    const helpers = makeTrackedHelpers();
+    const spy = rstest.spyOn(helpers, "createBadgeElement");
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "badge",
+          position: { top: "10%", left: "10%" },
+          config: { type: "custom:nodash" },
+        },
+      ],
+    });
+    document.body.append(card);
+    await card.updateComplete;
+    await flush();
+    // The card must NOT have substituted its own error badge.
+    expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+});
+
+describe("the header", () => {
+  it("is absent when the heading holds nothing", async () => {
+    const card = await mountCard({ type: CARD_TYPE, items: [] });
+    expect(card.shadowRoot?.querySelector("picture-studio-heading")).toBeNull();
+  });
+
+  it("appears for an icon alone, with no title", async () => {
+    const card = await mountCard({ type: CARD_TYPE, heading: { icon: "mdi:desk" }, items: [] });
+    expect(card.shadowRoot?.querySelector("picture-studio-heading")).not.toBeNull();
+  });
+
+  it("appears for a badge alone", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      heading: { badges: [{ type: "entity", entity: "sensor.a" }] },
+      items: [],
+    });
+    expect(card.shadowRoot?.querySelector("picture-studio-heading")).not.toBeNull();
+  });
+
+  it("no longer uses ha-card's own header", async () => {
+    const card = await mountCard({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
+    const haCard = card.shadowRoot?.querySelector("ha-card") as { header?: string } | null;
+    expect(haCard?.header).toBeUndefined();
   });
 });

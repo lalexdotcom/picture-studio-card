@@ -1,5 +1,34 @@
 # Changelog
 
+## unreleased
+
+### Added
+
+- The card header can now carry an **icon** and **badges** beside its title,
+  using Home Assistant's own heading badges — the same ones the Heading card
+  offers, with their own visibility conditions.
+- Every setting is now reachable from the editor. `entity`, `image_entity`,
+  `state_image`, `aspect_ratio` and `filter` were YAML-only and are not any more.
+
+### Changed
+
+- A badge whose type is one Home Assistant knows but does not offer in its
+  picker — `state-label`, `entity-filter`, `power-total`, `gas-total`,
+  `water-total` — now shows a red error badge in its place on the picture;
+  clicking it opens Home Assistant's dialog with the offending YAML. The
+  editor's item list flags the row as well. `state-label` in particular is
+  also an *element* kind, so writing it as a badge was a silent way of getting
+  the wrong thing. Custom badges are unaffected.
+- The editor is now five collapsible sections — Background, Items, Heading,
+  Filters and Entity — instead of one panel and a list. The item list carries
+  its count and no longer grows without limit.
+- The camera entity and the image entity are now **one field**: they were always
+  mutually exclusive on screen, and choosing one clears the other.
+- `title` moves into `heading.title`. **Existing configs keep working** — an
+  existing `title` appears in the Heading section immediately, and is written to
+  its new place the first time you save any change.
+- The header's title is smaller than it was.
+
 ## 1.4.0 — 2026-08-19
 
 ### Added

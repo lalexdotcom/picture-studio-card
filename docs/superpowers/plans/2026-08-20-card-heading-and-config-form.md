@@ -268,7 +268,7 @@ first time its editor is opened."
 Create `src/tests/card/card-heading.test.ts`:
 
 ```ts
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, beforeAll, describe, expect, it } from "@rstest/core";
 import { HEADING_TAG } from "../../config";
 import { PictureStudioHeading } from "../../card/card-heading";
 import type { HomeAssistant } from "../../types";
@@ -285,6 +285,15 @@ const mount = async (heading: Record<string, unknown>): Promise<PictureStudioHea
   await el.updateComplete;
   return el;
 };
+
+beforeAll(() => {
+  // The component guards on customElements.get, and happy-dom defines no Home
+  // Assistant tag. Without this stub the badge assertions would pass against a
+  // row that was never rendered — a test that cannot distinguish the defect.
+  if (!customElements.get("hui-heading-badge")) {
+    customElements.define("hui-heading-badge", class extends HTMLElement {});
+  }
+});
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -1133,7 +1142,7 @@ describe("mergeBackground", () => {
     expect(next.camera_view).toBe("live");
   });
 
-  it("unwraps a media selector value back to a path", () => {
+  it("stores the media selector value as written; the card unwraps at render", () => {
     const next = mergeBackground(config(), { image: { media_content_id: "/local/p.png" } });
     expect(next.image).toEqual({ media_content_id: "/local/p.png" });
   });
@@ -1306,7 +1315,7 @@ export const formHelper = (hass: HomeAssistant, name: string): string | undefine
 git rm src/editor/background-schema.ts src/tests/editor/background-schema.test.ts
 ```
 
-Use Serena's `find_referencing_symbols` on `backgroundSchema` first and fix every importer; the only one is `src/editor/picture-studio-editor.ts`, which Task 8 rewrites. Until then, point its import at `./form-schemas` and `./form-section` and pass `config` to `backgroundSchema`.
+Use Serena's `find_referencing_symbols` on `backgroundSchema` first and fix every importer; the only one is `src/editor/picture-studio-editor.ts`, which Task 8 rewrites. Until then, point its import at `./form-schemas` and `./form-section`, pass `config` to `backgroundSchema`, **and replace `backgroundLabel` with `formLabel`** — it was exported by the deleted module, so leaving it would end this task on a broken `tsc`.
 
 - [ ] **Step 6: Run the tests**
 
@@ -1687,8 +1696,8 @@ heading-badge type."
 - Test: `src/tests/editor/badge-list.test.ts`
 
 **Interfaces:**
-- Consumes: `SECTION_TAG` and `PictureStudioSection` from Tasks 1 and 3.
-- Produces: no new exports; `picture-studio-badge-list` now renders inside a `picture-studio-section` and exposes its count.
+- Consumes: `PictureItem` from `src/config.ts`; `badgeVerdict` from `./badge-existence`.
+- Produces: `itemsSeverity(items: readonly PictureItem[]): "error" | "warning" | undefined`, exported from `src/editor/badge-list.ts`. Task 8 renders its result in the Items panel's header.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1696,21 +1705,16 @@ Append to `src/tests/editor/badge-list.test.ts`:
 
 ```ts
 describe("the Items section", () => {
-  it("wraps the list in a section panel", async () => {
+  it("no longer draws a heading of its own — the panel carries the title", async () => {
     const el = await mountList([]);
-    expect(el.shadowRoot?.querySelector("picture-studio-section")).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("h3")).toBeNull();
   });
 
-  it("shows the item count beside the title, in the event slot", async () => {
-    const el = await mountList([badgeItem(), badgeItem(), badgeItem()]);
-    const count = el.shadowRoot?.querySelector(".count");
-    expect(count?.getAttribute("slot")).toBe("event");
-    expect(count?.textContent?.trim()).toBe("3");
-  });
-
-  it("shows no count pill when the list is empty", async () => {
+  it("keeps the caption and the add button on one line", async () => {
     const el = await mountList([]);
-    expect(el.shadowRoot?.querySelector(".count")).toBeNull();
+    const header = el.shadowRoot?.querySelector(".header");
+    expect(header?.querySelector(".hint")).not.toBeNull();
+    expect(header?.querySelector("ha-button, ha-dropdown")).not.toBeNull();
   });
 
   it("keeps the sortable's container inside the scrolling wrapper", async () => {
@@ -1727,6 +1731,48 @@ describe("the Items section", () => {
     expect(rules[".scroll"]?.["overflow-y"]).toBe("auto");
   });
 });
+
+describe("itemsSeverity", () => {
+  const badge = (config: Record<string, unknown>) =>
+    ({ type: "badge", config, position: { top: 0, left: 0 }, anchor: "auto" }) as never;
+  const label = (show: string[]) =>
+    ({
+      type: "element",
+      config: { type: "state-label", entity: "sensor.a", show },
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+    }) as never;
+
+  it("is undefined when every item is fine", () => {
+    expect(itemsSeverity([badge({ type: "entity", entity: "sensor.a" })])).toBeUndefined();
+  });
+
+  it("is undefined for an empty list", () => {
+    expect(itemsSeverity([])).toBeUndefined();
+  });
+
+  it("reports an error for an unreadable item", () => {
+    expect(itemsSeverity([{ type: "unknown", raw: {}, reason: "item-type" } as never])).toBe(
+      "error",
+    );
+  });
+
+  it("reports a warning for unreadable visibility", () => {
+    const item = { ...badge({ type: "entity" }), visibility: "nope" } as never;
+    expect(itemsSeverity([item])).toBe("warning");
+  });
+
+  it("reports a warning for a label that shows nothing", () => {
+    expect(itemsSeverity([label([])])).toBe("warning");
+  });
+
+  it("lets the error win over the warning, whatever the order", () => {
+    const broken = { type: "unknown", raw: {}, reason: "item-type" } as never;
+    const warned = label([]);
+    expect(itemsSeverity([warned, broken])).toBe("error");
+    expect(itemsSeverity([broken, warned])).toBe("error");
+  });
+});
 ```
 
 Reuse the file's existing mount helper and item factory; if they are named differently, adapt the calls rather than the helpers.
@@ -1738,40 +1784,35 @@ Expected: FAIL — no `picture-studio-section` in the shadow root.
 
 - [ ] **Step 3: Restructure the render**
 
-In `badge-list.ts`, import the panel (`import "./section-panel";`) and `SECTION_TAG` is not needed at the call site. Replace the existing `.header` block and wrap the sortable:
+**The list does not draw its own panel.** The editor owns all five sections
+(Task 8), so this component renders only the panel's *contents*: the caption row
+and the capped list. Keeping the panel here would put the Items panel in a
+different shadow root from the other four and make it the one section the editor
+does not own.
+
+In `badge-list.ts`, drop the `<h3>` — the panel's header carries the title now —
+and wrap the sortable:
 
 ```ts
     return html`
-      <picture-studio-section
-        open
-        .label=${localizeOwn(this.hass, "items")}
-        .icon=${ITEMS_ICON}
-      >
-        ${
-          rows.length
-            ? html`<span class="count" slot="event">${rows.length}</span>`
-            : nothing
-        }
-        <div class="header">
-          <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
-          ${this._addMenu(localize)}
-        </div>
-        <div class="scroll">
-          <ha-sortable
-            handle-selector=".handle"
-            draggable-selector=".item"
-            @item-moved=${…unchanged…}
-          >
-            …unchanged rows…
-          </ha-sortable>
-        </div>
-      </picture-studio-section>
+      <div class="header">
+        <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
+        ${this._addMenu(localize)}
+      </div>
+      <div class="scroll">
+        <ha-sortable
+          handle-selector=".handle"
+          draggable-selector=".item"
+          @item-moved=${…unchanged…}
+        >
+          …unchanged rows…
+        </ha-sortable>
+      </div>
     `;
 ```
 
-The `<h3>` goes: the panel's own header carries the title now. The caption keeps its line, beside the Add button.
-
-Add `const ITEMS_ICON = "mdi:format-list-bulleted";` beside the file's other constants.
+The caption keeps its line, beside the Add button. `.titles` goes with the
+`<h3>`; `.header` keeps its flex row with the two children it now has.
 
 - [ ] **Step 4: Add the styles**
 
@@ -1788,30 +1829,60 @@ In `badge-list.ts`'s `static styles`, delete the `h3` and `.titles` rules and ad
       overflow-y: auto;
       overflow-x: hidden;
     }
-    .count {
-      font-size: var(--ha-font-size-s);
-      color: var(--secondary-text-color);
-      background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
-      border-radius: var(--ha-border-radius-pill, 9999px);
-      padding: 0 var(--ha-space-2);
-      line-height: var(--ha-space-5);
-    }
 ```
 
-- [ ] **Step 5: Run the tests**
+- [ ] **Step 5: Export the severity classifier**
+
+The panel's header must say that something inside needs attention while it is
+folded. The four states are already decided per row in this file; the classifier
+reuses those same predicates so the header and the rows can never disagree.
+
+Add to `src/editor/badge-list.ts`, beside `hasUnreadableVisibility` and
+`showsNothing`:
+
+```ts
+/**
+ * The worst state among the items, for the section header's glyph — error beats
+ * warning, and neither draws anything.
+ *
+ * Deliberately built from the very predicates the rows use. Two places deciding
+ * "is this item broken" would drift, and the row is the one that has to stay
+ * right.
+ */
+export const itemsSeverity = (
+  items: readonly PictureItem[],
+): "error" | "warning" | undefined => {
+  let warning = false;
+  for (const item of items) {
+    if (item.type === "unknown") return "error";
+    if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
+      if (type && badgeVerdict(type) === "missing") return "error";
+    }
+    if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
+  }
+  return warning ? "warning" : undefined;
+};
+```
+
+Add `itemsSeverity` to the test file's import from `../../editor/badge-list`, and
+make sure `PictureItem` and `badgeVerdict` are imported in `badge-list.ts` (both
+already are, for the row rendering).
+
+- [ ] **Step 6: Run the tests**
 
 Run: `pnpm test src/tests/editor/badge-list.test.ts && pnpm test`
 Expected: PASS. The pre-existing tests that queried `h3` need retargeting to the panel's `label` property — change the assertion, not the markup.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/editor/badge-list.ts src/tests/editor/badge-list.test.ts
-git commit -m "feat(editor): the item list becomes a section with a count
+git commit -m "feat(editor): cap the item list and classify its worst state
 
 The list is capped in height so a long one stops pushing the sections
-below it off the screen, and its count sits beside the panel's title —
-in the event slot, since icons lands after the chevron."
+below it off the screen, and itemsSeverity reuses the rows' own
+predicates so the section header and the rows cannot disagree."
 ```
 
 ---
@@ -1874,6 +1945,25 @@ describe("the five sections", () => {
     expect(emitted.at(-1)?.heading).toEqual({ title: "Office" });
   });
 
+  it("shows the strongest severity in the Items header, and nothing when all is well", async () => {
+    const ok = await mountEditor({
+      type: CARD_TYPE,
+      items: [{ type: "badge", config: { type: "entity", entity: "sensor.a" }, position: {} }],
+    });
+    expect(ok.shadowRoot?.querySelector(".severity")).toBeNull();
+
+    const bad = await mountEditor({
+      type: CARD_TYPE,
+      items: [
+        { type: "element", config: { type: "state-label", entity: "sensor.a", show: [] }, position: {} },
+        { type: "nope" },
+      ],
+    });
+    const glyph = bad.shadowRoot?.querySelector(".severity");
+    expect(glyph?.classList.contains("error")).toBe(true);
+    expect(glyph?.getAttribute("slot")).toBe("event");
+  });
+
   it("does not write an empty heading back", async () => {
     const el = await mountEditor({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
     const emitted: Record<string, unknown>[] = [];
@@ -1925,15 +2015,37 @@ Replace the non-form branch of `render()` in `picture-studio-editor.ts`:
         ></ha-form>
       </picture-studio-section>
 
-      <picture-studio-badge-list
-        .hass=${hass}
-        .items=${config.items}
-        .selectedIndex=${this._editingIndex}
-        @item-add=${this._addItem}
-        @item-edit=${this._editBadge}
-        @item-moved=${this._moveBadge}
-        @item-removed=${this._removeBadge}
-      ></picture-studio-badge-list>
+      <picture-studio-section .label=${localizeOwn(hass, "items")} icon="mdi:format-list-bulleted">
+        ${
+          config.items.length
+            ? html`<span class="count" slot="event">${config.items.length}</span>`
+            : nothing
+        }
+        ${
+          // The strongest state wins: one glyph, never two. Same vocabulary as
+          // visibility-section.ts, and the same asymmetry — the normal case gets
+          // no ink at all.
+          (() => {
+            const severity = itemsSeverity(config.items);
+            if (!severity) return nothing;
+            return html`<ha-icon
+              slot="event"
+              class="severity ${severity}"
+              icon=${severity === "error" ? "mdi:alert-circle" : "mdi:alert-outline"}
+              title=${localizeOwn(hass, severity === "error" ? "items_error" : "items_warning")}
+            ></ha-icon>`;
+          })()
+        }
+        <picture-studio-badge-list
+          .hass=${hass}
+          .items=${config.items}
+          .selectedIndex=${this._editingIndex}
+          @item-add=${this._addItem}
+          @item-edit=${this._editBadge}
+          @item-moved=${this._moveBadge}
+          @item-removed=${this._removeBadge}
+        ></picture-studio-badge-list>
+      </picture-studio-section>
 
       <picture-studio-section
         .label=${hass.localize("ui.panel.lovelace.editor.card.heading.name")}
@@ -2007,9 +2119,39 @@ Beside `_backgroundChanged`:
   };
 ```
 
+Give the editor a `static styles` for the count pill it now owns — the Items
+panel lives here, beside the other four, so the pill does too:
+
+```ts
+  static styles = css`
+    .count {
+      font-size: var(--ha-font-size-s);
+      color: var(--secondary-text-color);
+      background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
+      border-radius: var(--ha-border-radius-pill, 9999px);
+      padding: 0 var(--ha-space-2);
+      line-height: var(--ha-space-5);
+    }
+    .severity {
+      --mdc-icon-size: 20px;
+    }
+    .severity.error {
+      color: var(--error-color);
+    }
+    .severity.warning {
+      color: var(--warning-color);
+    }
+  `;
+```
+
+If the class already declares `static styles`, add the rule to the existing block
+rather than replacing it.
+
 Delete `_schemaCache` and `_schema`: the schema now depends on the config as well as on `localize`, and `ha-form` is handed a fresh array per render. If a profiler ever shows that this matters, memoize on the pair — not on `localize` alone, which would return a stale schema when the chosen entity's domain changes.
 
-Update the imports: `formLabel`, `sectionData`, `sectionMerge`, `type FormSchema` from `./form-section`; `backgroundData`, `backgroundSchema`, `entitySchema`, `filtersSchema`, `formHelper`, `mergeBackground`, `PICTURE_ENTITY` from `./form-schemas`; `hasHeading`, `type HeadingConfig` from `../config`; `localizeOwn` from `../strings`; and `import "./section-panel"; import "./heading-section";`.
+Add two strings to `src/strings.ts` for the glyph's hover title — `items_error` (en: "Some items are unreadable", fr: "Des items sont illisibles") and `items_warning` (en: "Some items need attention", fr: "Des items demandent attention").
+
+Update the imports: `itemsSeverity` from `./badge-list`; `formLabel`, `sectionData`, `sectionMerge`, `type FormSchema` from `./form-section`; `backgroundData`, `backgroundSchema`, `entitySchema`, `filtersSchema`, `formHelper`, `mergeBackground`, `PICTURE_ENTITY` from `./form-schemas`; `hasHeading`, `type HeadingConfig` from `../config`; `localizeOwn` from `../strings`; and `import "./section-panel"; import "./heading-section";`.
 
 - [ ] **Step 5: Run everything**
 

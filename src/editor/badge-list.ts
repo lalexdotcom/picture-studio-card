@@ -4,7 +4,7 @@ import { hasVisibility, type PictureItem } from "../config";
 import { localizeOwn } from "../strings";
 import type { CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
 import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
-import { badgeVerdict, probeBadgeType } from "./badge-existence";
+import { badgeIsBroken, badgeTypeProblem, probeBadgeType } from "./badge-existence";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { itemIcon } from "./icons";
 import { rowLabel } from "./items";
@@ -77,6 +77,27 @@ const showsNothing = (item: PictureItem): boolean =>
   item.config.type === "state-label" &&
   Array.isArray((item.config as { show?: unknown[] }).show) &&
   (item.config as { show: unknown[] }).show.length === 0;
+
+/**
+ * The worst state among the items, for the section header's glyph — error beats
+ * warning, and neither draws anything.
+ *
+ * Deliberately built from the very predicates the rows use. Two places deciding
+ * "is this item broken" would drift, and the row is the one that has to stay
+ * right.
+ */
+export const itemsSeverity = (items: readonly PictureItem[]): "error" | "warning" | undefined => {
+  let warning = false;
+  for (const item of items) {
+    if (item.type === "unknown") return "error";
+    if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
+      if (type && badgeIsBroken(type)) return "error";
+    }
+    if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
+  }
+  return warning ? "warning" : undefined;
+};
 
 /** An item whose `visibility` key is present but not a list — renders, but
     always shows, because the card cannot parse the conditions. Orange, not
@@ -184,8 +205,12 @@ export class PictureStudioBadgeList extends LitElement {
       // A badge with no type at all is legal and means `entity` — the factory's
       // last argument is the default type. Nothing to probe.
       if (!type) return false;
+      // Probe all non-empty types: for custom: types the verdict determines
+      // broken; for unsupported native types the verdict determines the wording
+      // (broken is immediate via badgeIsBroken, the word waits one microtask).
+      // Harmless once the verdict is settled — probeBadgeType returns at once.
       probeBadgeType(type, () => this.requestUpdate());
-      return badgeVerdict(type) === "missing";
+      return badgeIsBroken(type);
     });
     // The glyph says which family the problem is in, whenever we know the family.
     const glyphs = rows.map((item, i) => {
@@ -194,41 +219,41 @@ export class PictureStudioBadgeList extends LitElement {
       if (item.reason === "config-missing" && item.token === "badge") return "mdi:alert-box";
       return "mdi:alert-circle";
     });
-    const secondary = rows.map((item, i) =>
-      item.type !== "unknown" && broken[i]
-        ? `${localizeOwn(this.hass, "unknown_badge_type")}: ${String(item.config.type ?? "")}`
-        : labels[i]?.secondary,
-    );
+    const secondary = rows.map((item, i) => {
+      if (item.type === "unknown" || !broken[i]) return labels[i]?.secondary;
+      // Two conditions, two words: a type nothing can build is "unknown"; a
+      // native type we do not support is "unsupported". A reader must be able to
+      // tell them apart at a glance. While the probe is pending (one microtask
+      // on first use), show the type alone — better than retracting a word.
+      const type = String(item.config.type ?? "");
+      const problem = badgeTypeProblem(type);
+      if (!problem) return type;
+      const key = problem === "unsupported" ? "unsupported_badge_type" : "unknown_badge_type";
+      return `${localizeOwn(this.hass, key)}: ${type}`;
+    });
     // Display position of the selected array index; -1 when nothing is selected
     // so it can never accidentally match a real row.
     const selectedDisplay = this.selectedIndex !== undefined ? this._flip(this.selectedIndex) : -1;
 
     return html`
       <div class="header">
-        <div class="titles">
-          <!-- Our own string, not Home Assistant's "Badges": the list has carried
-               two families since 1.2.0, and naming it after one of them was true
-               for exactly one release. -->
-          <h3>${localizeOwn(this.hass, "items")}</h3>
-          <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
-        </div>
-        ${this._addMenu(localize)}
+        <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
       </div>
       <ha-sortable
-        handle-selector=".handle"
-        draggable-selector=".item"
-        @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
-          ev.stopPropagation();
-          // ha-sortable reports the positions of the rows it can see, which are
-          // display positions. Flipping both is equivalent to reversing the
-          // array, moving, and reversing back — the splice is symmetric under
-          // reversal — and it keeps one mechanism in the file rather than two.
-          this._fire("item-moved", {
-            oldIndex: this._flip(ev.detail.oldIndex),
-            newIndex: this._flip(ev.detail.newIndex),
-          });
-        }}
-      >
+          handle-selector=".handle"
+          draggable-selector=".item"
+          @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
+            ev.stopPropagation();
+            // ha-sortable reports the positions of the rows it can see, which are
+            // display positions. Flipping both is equivalent to reversing the
+            // array, moving, and reversing back — the splice is symmetric under
+            // reversal — and it keeps one mechanism in the file rather than two.
+            this._fire("item-moved", {
+              oldIndex: this._flip(ev.detail.oldIndex),
+              newIndex: this._flip(ev.detail.newIndex),
+            });
+          }}
+        >
         <div class="rows">
           ${repeat(
             rows,
@@ -318,6 +343,7 @@ export class PictureStudioBadgeList extends LitElement {
           )}
         </div>
       </ha-sortable>
+      ${this._addMenu(localize)}
     `;
   }
 
@@ -325,42 +351,23 @@ export class PictureStudioBadgeList extends LitElement {
     if (!changedProperties.has("selectedIndex") || this.selectedIndex === undefined) return;
     // selectedIndex is an array index; the list renders top-down, so flip it to
     // a display position before querying the DOM.
-    const displayIndex = this._flip(this.selectedIndex);
+    this.scrollToItem(this.selectedIndex);
+  }
+
+  public scrollToItem(index: number): void {
+    const displayIndex = this._flip(index);
     const itemRows = this.shadowRoot?.querySelectorAll(".item");
     const row = itemRows?.[displayIndex] as HTMLElement | undefined;
     row?.scrollIntoView({ block: "nearest" });
   }
 
   static styles = css`
-    /* The title, its caption and the add button on one line. The button is
-       aligned on the block's last line rather than centred on the pair: beside a
-       two-line title, centring floats it between the heading and the caption and
-       reads as belonging to neither. */
+    /* The stacking hint, sitting off the first row by the same gap the rows keep
+       between themselves. */
     .header {
       display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
       gap: var(--ha-space-2, 8px);
-      /* The gap the rows keep between themselves, so the header reads as the
-         first thing in the same rhythm rather than as a block glued to the list.
-         It sits on the row rather than on the caption: the button is taller than
-         the text beside it, and a margin under the text alone would leave the
-         button nearly touching the first item. */
       margin-bottom: var(--ha-space-2, 8px);
-    }
-    /* The heading and its caption move as one block, so the flex row has two
-       children rather than three. */
-    .titles {
-      min-width: 0;
-    }
-    .add {
-      flex: none;
-    }
-    /* Otherwise unstyled, as picture-elements' "Elements" heading is: only the
-       gap below is dropped, so the hint reads as its caption. */
-    h3 {
-      margin-top: 0;
-      margin-bottom: var(--ha-space-1);
     }
     .hint {
       color: var(--secondary-text-color);
@@ -492,7 +499,7 @@ export class PictureStudioBadgeList extends LitElement {
     /* The trigger sizes itself; only the spacing is ours. */
     .add {
       display: block;
-      margin-top: 12px;
+      margin-top: var(--ha-space-2, 8px);
     }
   `;
 }

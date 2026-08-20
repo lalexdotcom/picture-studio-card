@@ -32,12 +32,12 @@ afterEach(() => {
 describe("the visibility section", () => {
   it("shows no count when there are no conditions", async () => {
     const el = await mount();
-    expect(el.renderRoot.querySelector("ha-label")).toBeNull();
+    expect(el.renderRoot.querySelector(".count")).toBeNull();
   });
 
   it("counts the top-level conditions in the header", async () => {
     const el = await mount([{ condition: "state" }, { condition: "screen" }]);
-    expect(el.renderRoot.querySelector("ha-label")?.textContent?.trim()).toBe("2");
+    expect(el.renderRoot.querySelector(".count")?.textContent?.trim()).toBe("2");
   });
 
   it("falls back when Home Assistant's editor is not defined", async () => {
@@ -154,16 +154,18 @@ describe("status icon with ha-visibility-status available", () => {
 
   it("shows neither pill nor icon when there are no conditions", async () => {
     const el = await mount();
-    expect(el.renderRoot.querySelector("ha-label")).toBeNull();
+    expect(el.renderRoot.querySelector(".count")).toBeNull();
     expect(el.renderRoot.querySelector(".status-icon")).toBeNull();
   });
 
-  it("renders pill then status icon in DOM order when conditions are hidden", async () => {
+  it("renders status icon then count pill in DOM order when conditions are hidden", async () => {
     const el = await mountWithStatus("hidden", [{ condition: "state" }]);
     const slotted = Array.from(el.renderRoot.querySelectorAll("[slot='event']"));
     expect(slotted).toHaveLength(2);
-    expect(slotted[0]?.tagName.toLowerCase()).toBe("ha-label");
-    expect(slotted[1]?.tagName.toLowerCase()).toBe("ha-icon");
+    // Glyph first: status icon sits nearest the title.
+    expect(slotted[0]?.tagName.toLowerCase()).toBe("ha-icon");
+    // Count second: the pill follows at the wider gap.
+    expect(slotted[1]?.classList.contains("count")).toBe(true);
   });
 
   it("colours the hidden icon with the warning token", async () => {
@@ -195,6 +197,20 @@ describe("status icon with ha-visibility-status available", () => {
     expect(rule).not.toContain("padding");
   });
 
+  it("count pill rule comes from the shared header-adornments module", () => {
+    // styles is an array; cssRules must receive the whole array, not one entry.
+    const rule = cssRules(PictureStudioVisibilitySection.styles).get(".count");
+    expect(rule).toBeDefined();
+    expect(rule).toContain("var(--ha-border-radius-pill");
+    // Light pill mixed from the header's own colour; --primary-text-color keeps text
+    // readable in both light and dark themes.
+    expect(rule).toContain("var(--ha-color-fill-neutral-normal-resting)");
+    expect(rule).toContain(
+      "color-mix(in srgb, var(--input-fill-color) 88%, var(--primary-text-color) 12%)",
+    );
+    expect(rule).toContain("var(--primary-text-color)");
+  });
+
   it("idles the oracle when conditions are cleared — resets verdict and empties the condition list", async () => {
     // Start: conditions present, oracle created, icon shown.
     const el = await mountWithStatus("hidden", [{ condition: "state" }]);
@@ -209,7 +225,7 @@ describe("status icon with ha-visibility-status available", () => {
     await el.updateComplete;
 
     // Neither pill nor icon in the header.
-    expect(el.renderRoot.querySelector("ha-label")).toBeNull();
+    expect(el.renderRoot.querySelector(".count")).toBeNull();
     expect(el.renderRoot.querySelector(".status-icon")).toBeNull();
 
     // Oracle handed an empty list — ConditionListenersController released all
@@ -264,7 +280,7 @@ describe("a malformed visibility", () => {
     // "on" is a YAML boolean that becomes a string; "on".length === 2 on
     // the unpatched path, making the section render a pill reading "2".
     const section = await mountSection({ visibility: "on" as never });
-    expect(section.shadowRoot!.querySelector("ha-label")).toBeNull();
+    expect(section.shadowRoot!.querySelector(".count")).toBeNull();
   });
 
   it("mounts no oracle — a string is not a condition list", async () => {
@@ -300,7 +316,7 @@ describe("a malformed visibility", () => {
 describe("a well-formed visibility is unchanged", () => {
   it("still shows the count pill and no warning", async () => {
     const section = await mountSection({ visibility: [{ condition: "user", users: [] }] });
-    expect(section.shadowRoot!.querySelector("ha-label")?.textContent?.trim()).toBe("1");
+    expect(section.shadowRoot!.querySelector(".count")?.textContent?.trim()).toBe("1");
     expect(section.shadowRoot!.querySelector("ha-alert")).toBeNull();
   });
 });

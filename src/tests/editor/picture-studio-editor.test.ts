@@ -1,9 +1,24 @@
-import { afterEach, describe, expect, it } from "@rstest/core";
-import { EDITOR_TAG, type PictureStudioConfig } from "../../config";
+import { afterEach, describe, expect, it, rstest } from "@rstest/core";
+import {
+  CARD_TYPE,
+  EDITOR_TAG,
+  HEADING_SECTION_TAG,
+  LIST_TAG,
+  type PictureStudioConfig,
+  SECTION_TAG,
+} from "../../config";
 import { probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence";
+import { PictureStudioBadgeList } from "../../editor/badge-list";
+import { PictureStudioHeadingSection } from "../../editor/heading-section";
 import { PictureStudioEditor } from "../../editor/picture-studio-editor";
+import { PictureStudioSection } from "../../editor/section-panel";
+import { cssRules } from "../card/harness";
 
 if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, PictureStudioEditor);
+if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
+if (!customElements.get(HEADING_SECTION_TAG))
+  customElements.define(HEADING_SECTION_TAG, PictureStudioHeadingSection);
+if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 
 const CONFIG = {
   type: "custom:picture-studio",
@@ -248,5 +263,447 @@ describe("_moveBadge remaps the selection through the move", () => {
     const el = await mountSelected2();
     move(el, 0, 3);
     expect(el.selectedIndex()).toBe(1);
+  });
+});
+
+const mountEditor = async (config: unknown): Promise<PictureStudioEditor> => {
+  const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+  el.setConfig(config as PictureStudioConfig);
+  el.hass = {
+    localize: (key: string) =>
+      key === "ui.panel.lovelace.editor.card.heading.name" ? "Heading" : "",
+    states: {},
+  } as never;
+  document.body.append(el);
+  await el.updateComplete;
+  return el;
+};
+
+describe("the five sections", () => {
+  it("renders them in order, Background open", async () => {
+    const el = await mountEditor({ type: CARD_TYPE, items: [] });
+    const labels = [...(el.shadowRoot?.querySelectorAll("picture-studio-section") ?? [])].map(
+      (s) => (s as unknown as { label: string }).label,
+    );
+    expect(labels).toEqual(["Background", "Items", "Heading", "Filters", "Entity"]);
+    const first = el.shadowRoot?.querySelector("picture-studio-section") as unknown as {
+      open: boolean;
+    };
+    expect(first.open).toBe(true);
+  });
+
+  it("gives each ha-form only its own section's data", async () => {
+    const el = await mountEditor({
+      type: CARD_TYPE,
+      items: [],
+      filter: "brightness(0.9)",
+      entity: "light.salon",
+    });
+    const forms = [...(el.shadowRoot?.querySelectorAll("ha-form") ?? [])].map(
+      (f) => (f as unknown as { data: Record<string, unknown> }).data,
+    );
+    expect(forms.some((d) => "filter" in d && !("entity" in d))).toBe(true);
+    expect(forms.some((d) => "entity" in d && !("filter" in d))).toBe(true);
+  });
+
+  it("commits a heading change from the Heading section", async () => {
+    const el = await mountEditor({ type: CARD_TYPE, items: [] });
+    const emitted: Record<string, unknown>[] = [];
+    el.addEventListener("config-changed", (ev) => emitted.push((ev as CustomEvent).detail.config));
+    el.shadowRoot?.querySelector("picture-studio-heading-section")?.dispatchEvent(
+      new CustomEvent("heading-changed", {
+        detail: { heading: { title: "Office" } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(emitted.at(-1)?.heading).toEqual({ title: "Office" });
+  });
+
+  it("shows the strongest severity in the Items header, and nothing when all is well", async () => {
+    const ok = await mountEditor({
+      type: CARD_TYPE,
+      items: [{ type: "badge", config: { type: "entity", entity: "sensor.a" }, position: {} }],
+    });
+    expect(ok.shadowRoot?.querySelector(".severity")).toBeNull();
+
+    const bad = await mountEditor({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: { type: "state-label", entity: "sensor.a", show: [] },
+          position: {},
+        },
+        { type: "nope" },
+      ],
+    });
+    const glyph = bad.shadowRoot?.querySelector(".severity");
+    expect(glyph?.classList.contains("error")).toBe(true);
+    expect(glyph?.getAttribute("slot")).toBe("event");
+  });
+
+  it("renders the severity glyph before the count pill in the Items header", async () => {
+    // Both adornments present: 2 items with an error-severity config.
+    const el = await mountEditor({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: { type: "state-label", entity: "sensor.a", show: [] },
+          position: {},
+        },
+        { type: "nope" },
+      ],
+    });
+    const slotted = [...(el.shadowRoot?.querySelectorAll('#items-section > [slot="event"]') ?? [])];
+    expect(slotted).toHaveLength(2);
+    // Glyph first: sits nearest the title.
+    expect(slotted[0]?.tagName.toLowerCase()).toBe("ha-icon");
+    // Count second: the pill follows at the wider gap.
+    expect(slotted[1]?.classList.contains("count")).toBe(true);
+  });
+
+  it("does not write an empty heading back", async () => {
+    const el = await mountEditor({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
+    const emitted: Record<string, unknown>[] = [];
+    el.addEventListener("config-changed", (ev) => emitted.push((ev as CustomEvent).detail.config));
+    el.shadowRoot?.querySelector("picture-studio-heading-section")?.dispatchEvent(
+      new CustomEvent("heading-changed", {
+        detail: { heading: {} },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect("heading" in (emitted.at(-1) ?? {})).toBe(false);
+  });
+});
+
+describe("CSS rules", () => {
+  it(":host is a flex column", () => {
+    const rules = cssRules(PictureStudioEditor.styles);
+    expect(rules.get(":host")).toContain("flex-direction: column");
+  });
+
+  it(":host has a gap between sections", () => {
+    const rules = cssRules(PictureStudioEditor.styles);
+    expect(rules.get(":host")).toContain("gap: var(--ha-space-4)");
+  });
+
+  it("count pill rule comes from the shared header-adornments module", () => {
+    // styles is an array; cssRules must receive the whole array, not one entry.
+    const rule = cssRules(PictureStudioEditor.styles).get(".count");
+    expect(rule).toBeDefined();
+    expect(rule).toContain("var(--ha-border-radius-pill");
+    // Light pill mixed from the header's own colour; --primary-text-color keeps text
+    // readable in both light and dark themes.
+    expect(rule).toContain("var(--ha-color-fill-neutral-normal-resting)");
+    expect(rule).toContain(
+      "color-mix(in srgb, var(--input-fill-color) 88%, var(--primary-text-color) 12%)",
+    );
+    expect(rule).toContain("var(--primary-text-color)");
+  });
+});
+
+describe("_showListAt scroll timing", () => {
+  // EXPAND_MS = 300 — mirrors the module constant; kept in sync by the comment
+  // on the constant itself (the scroll landing early or late would be visible).
+  const EXPAND_MS = 300;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    rstest.useRealTimers();
+  });
+
+  it("scrolls immediately when expand() returns false (section already open)", async () => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    rstest.spyOn(section, "expand").mockResolvedValue(false); // already open: nothing will animate
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(1);
+    await el.updateComplete;
+    el.select(undefined); // return from form → _showListAt(1), opened=false
+    await el.updateComplete;
+
+    // No timer advance needed — scroll must have happened immediately.
+    expect(scrollSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("waits EXPAND_MS before scrolling when a transition started and interpolate-size is supported", async () => {
+    // CSS.supports("interpolate-size", "allow-keywords") returns true natively
+    // in happy-dom — no mocking needed for the supported branch.
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    rstest.spyOn(section, "expand").mockResolvedValue(true); // transition started
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(1);
+    await el.updateComplete;
+    el.select(undefined); // return from form → _showListAt(1), opened=true
+    await el.updateComplete;
+
+    // Scroll must not have happened yet — the timer is still pending.
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    rstest.advanceTimersByTime(EXPAND_MS);
+    await Promise.resolve(); // flush the microtask that resumes _showListAt after the timer
+
+    expect(scrollSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("scrolls immediately when interpolate-size is not supported, even though a transition started", async () => {
+    // Replace CSS globally so the defensive feature test sees a browser without
+    // the property. rstest.spyOn(CSS, "supports") does not intercept calls in
+    // this environment — the spy's mockReturnValue is ignored and the native
+    // implementation runs regardless. Replacing globalThis.CSS is the only
+    // reliable way to drive this branch here.
+    const cssGlobal = globalThis as Record<string, unknown>;
+    const savedCSS = cssGlobal.CSS;
+    cssGlobal.CSS = { supports: () => false };
+
+    try {
+      const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+      el.setConfig(CONFIG);
+      el.hass = { localize: () => "", states: {} } as never;
+      document.body.append(el);
+      await el.updateComplete;
+
+      const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+      const list = el.shadowRoot?.querySelector(
+        "picture-studio-badge-list",
+      ) as PictureStudioBadgeList;
+      rstest.spyOn(section, "expand").mockResolvedValue(true); // transition started
+      const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+      rstest.useFakeTimers();
+      el.select(1);
+      await el.updateComplete;
+      el.select(undefined); // return from form → _showListAt(1), opened=true but no CSS support
+      await el.updateComplete;
+
+      // No timer advance needed — without interpolate-size support there is no
+      // animation and the scroll must happen immediately.
+      expect(scrollSpy).toHaveBeenCalledWith(1);
+    } finally {
+      cssGlobal.CSS = savedCSS;
+    }
+  });
+});
+
+describe("Items section follows the work", () => {
+  // loadCardHelpers stub needed for badge probe machinery.
+  const probeHelpers = {
+    createBadgeElement: (c: { type?: string }) =>
+      document.createElement(c.type === "entity" ? "hui-entity-badge" : "hui-error-badge"),
+  };
+
+  // Config with item 0 missing (bad type) so selecting it opens no form.
+  const CONFIG_MISSING = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [
+      { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "entty" } },
+      { type: "badge", position: { top: "20%", left: "20%" }, config: { type: "entity" } },
+    ],
+  } as unknown as PictureStudioConfig;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+    resetBadgeVerdicts();
+    rstest.useRealTimers();
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  it("expands the Items section and scrolls to the row when selecting an item that opens no form", async () => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG_MISSING);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    // Settle the verdict before selecting so _formTarget() sees "missing".
+    await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    const expandSpy = rstest.spyOn(section, "expand");
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(0); // missing badge — no form opens
+    await el.updateComplete;
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
+    // expand() opened the section (returned true) and CSS.supports("interpolate-size",
+    // "allow-keywords") is true in happy-dom, so _showListAt is waiting out the
+    // 300 ms transition. Advance the fake clock and flush the microtask.
+    rstest.advanceTimersByTime(300);
+    await Promise.resolve();
+    expect(scrollSpy).toHaveBeenCalledWith(0);
+  });
+
+  // Failure text recorded against the defect (run before the fix):
+  // "expected 'expand' to be called 1 times, but got 0 times"
+  // _formTarget() was checking badgeVerdict === "missing" only. state-label is
+  // statically refused (badgeIsBroken via !isSupportedBadgeType) and never
+  // probed, so its verdict stays "unknown" and the guard missed it. The form
+  // opened. Now badgeIsBroken() covers both conditions.
+  it("refuses a form for an unsupported native badge type (state-label) without awaiting a probe", async () => {
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      probeHelpers;
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig({
+      type: CARD_TYPE,
+      image: "/local/plan.png",
+      items: [
+        { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+      ],
+    } as unknown as PictureStudioConfig);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    const expandSpy = rstest.spyOn(section, "expand");
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    rstest.useFakeTimers();
+    el.select(0); // state-label badge — should refuse form immediately (no probe needed)
+    await el.updateComplete;
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
+    rstest.advanceTimersByTime(300);
+    await Promise.resolve();
+    expect(scrollSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("expands the Items section and scrolls to the previously-edited row when returning from a form", async () => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG); // two valid badges at indices 0 and 1
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    const section = el.shadowRoot?.querySelector("#items-section") as PictureStudioSection;
+    const list = el.shadowRoot?.querySelector(
+      "picture-studio-badge-list",
+    ) as PictureStudioBadgeList;
+    const expandSpy = rstest.spyOn(section, "expand");
+    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+
+    el.select(1); // valid badge — form opens, sections cached
+    await el.updateComplete;
+
+    rstest.useFakeTimers();
+    el.select(undefined); // go back — sections restored, _showListAt(1) fires
+    await el.updateComplete;
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
+    // expand() opened the section (returned true) — advance the fake clock and flush.
+    rstest.advanceTimersByTime(300);
+    await Promise.resolve();
+    expect(scrollSpy).toHaveBeenCalledWith(1); // previous index was 1
+  });
+});
+
+describe("folding the Items section clears the selection", () => {
+  // An item of type "unknown" keeps _formTarget() falsy, so the list view
+  // (sections) stays rendered and the items section is in the DOM throughout.
+  const CONFIG_UNKNOWN_ITEM = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [{ type: "unknown", position: { top: "10%", left: "10%" } }],
+  } as unknown as PictureStudioConfig;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("clears the selection when the Items section is collapsed", async () => {
+    const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
+    el.select(0);
+    await el.updateComplete;
+    expect(el.selectedIndex()).toBe(0);
+
+    const section = el.shadowRoot?.querySelector("#items-section");
+    section?.dispatchEvent(
+      new CustomEvent("expanded-changed", {
+        detail: { expanded: false },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(el.selectedIndex()).toBeUndefined();
+  });
+
+  it("does not clear the selection when the Items section is opened", async () => {
+    // Guard test: an implementation that deselects on every expanded-changed
+    // would pass the test above but break the feature — our own expand() fires
+    // this event, and deselecting on true would undo the selection that triggered
+    // the expand.
+    const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
+    el.select(0);
+    await el.updateComplete;
+    expect(el.selectedIndex()).toBe(0);
+
+    const section = el.shadowRoot?.querySelector("#items-section");
+    section?.dispatchEvent(
+      new CustomEvent("expanded-changed", {
+        detail: { expanded: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(el.selectedIndex()).toBe(0);
+  });
+
+  it("does not clear the selection when a different section (Background) is collapsed", async () => {
+    // Verifies the listener is scoped to the Items section, not the editor host.
+    const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
+    el.select(0);
+    await el.updateComplete;
+    expect(el.selectedIndex()).toBe(0);
+
+    // Background section — first picture-studio-section in the render, before the Items one.
+    const section = el.shadowRoot?.querySelectorAll("picture-studio-section")[0];
+    section?.dispatchEvent(
+      new CustomEvent("expanded-changed", {
+        detail: { expanded: false },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(el.selectedIndex()).toBe(0);
   });
 });

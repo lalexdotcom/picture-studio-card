@@ -2,6 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import type { StringKey } from "../strings";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, VisibilityCondition } from "../types";
+import { headerAdornments } from "./header-adornments";
 
 /** Home Assistant's whole visibility tab: the status banner and the list. */
 const HA_EDITOR = "hui-card-visibility-editor";
@@ -207,9 +208,9 @@ export class PictureStudioVisibilitySection extends LitElement {
         ${
           // The `event` slot, not `icons`: ha-expansion-panel renders its header
           // as leading-icon → header → event → chevron → icons, so anything in
-          // `icons` lands after the chevron. The count belongs beside the title.
-          // The status icon follows the count pill in the same slot so the two
-          // read as a unit: "3 conditions, currently hidden".
+          // `icons` lands after the chevron. The glyph leads the count pill in
+          // the same slot — the verdict reads first, then the tally:
+          // "hidden, 3 conditions".
           malformed
             ? html`
                 <ha-icon
@@ -233,18 +234,18 @@ export class PictureStudioVisibilitySection extends LitElement {
               `
             : count > 0
               ? html`
-                  <ha-label slot="event" dense>${count}</ha-label>
                   ${
                     statusAvailable && this._oracleState
                       ? html`<ha-icon
-                        slot="event"
-                        class="status-icon"
-                        .icon=${VERDICT_ICONS[this._oracleState]}
-                        style="color: ${VERDICT_COLORS[this._oracleState]}"
-                        title=${localizeOwn(hass, VERDICT_KEYS[this._oracleState])}
-                      ></ha-icon>`
+                          slot="event"
+                          class="status-icon"
+                          .icon=${VERDICT_ICONS[this._oracleState]}
+                          style="color: ${VERDICT_COLORS[this._oracleState]}"
+                          title=${localizeOwn(hass, VERDICT_KEYS[this._oracleState])}
+                        ></ha-icon>`
                       : nothing
                   }
+                  <span class="count" slot="event">${count}</span>
                 `
               : nothing
         }
@@ -307,49 +308,49 @@ export class PictureStudioVisibilitySection extends LitElement {
     </ha-alert>`;
   }
 
-  static styles = css`
-    /* Mirrors the placement sections of both forms: the panel's own content
-       padding is zeroed and the section supplies its own, so every section of
-       an item form sits exactly like Home Assistant's own expandable ones. */
-    ha-expansion-panel {
-      display: block;
-      --expansion-panel-content-padding: 0;
-      border-radius: var(--ha-border-radius-md);
-      --ha-card-border-radius: var(--ha-border-radius-md);
-    }
-    .content {
-      padding: 12px;
-    }
-    ha-icon[slot="leading-icon"] {
-      color: var(--secondary-text-color);
-    }
-    .fallback {
-      color: var(--secondary-text-color);
-      margin: 0;
-    }
-    /* The count sits against the title rather than floating away from it, and
-       leaves the chevron its own space. */
-    ha-label[slot="event"] {
-      margin-inline-start: var(--ha-space-2, 8px);
-    }
-    /* Bare icon — no background, no border-radius, no padding — matching the
-       .empty marker in the item list. 16px rather than the list's 14px: the
-       pill gives the eye its body; a bare glyph has only its stroke. Color is
-       set inline per verdict so the theme's own tokens carry through. */
-    .status-icon {
-      display: flex;
-      flex: none;
-      --mdc-icon-size: 16px;
-      margin-inline-start: var(--ha-space-3, 12px);
-    }
-    .warning-icon {
-      color: var(--warning-color);
-      --mdc-icon-size: 16px;
-    }
-    /* The ha-alert fallback, never seen on a frontend that has ha-alert. */
-    p.warning {
-      color: var(--warning-color);
-      margin: 0;
-    }
-  `;
+  static styles = [
+    headerAdornments,
+    css`
+      /* Mirrors the placement sections of both forms: the panel's own content
+         padding is zeroed and the section supplies its own, so every section of
+         an item form sits exactly like Home Assistant's own expandable ones. */
+      ha-expansion-panel {
+        display: block;
+        --expansion-panel-content-padding: 0;
+        border-radius: var(--ha-border-radius-md);
+        --ha-card-border-radius: var(--ha-border-radius-md);
+      }
+      .content {
+        padding: 12px;
+      }
+      ha-icon[slot="leading-icon"] {
+        color: var(--secondary-text-color);
+      }
+      .fallback {
+        color: var(--secondary-text-color);
+        margin: 0;
+      }
+      /* Bare icon — no background, no border-radius, no padding — matching the
+         .empty marker in the item list. 16px rather than the list's 14px: the
+         pill gives the eye its body; a bare glyph has only its stroke. Color is
+         set inline per verdict so the theme's own tokens carry through. The glyph
+         leads the count pill in the event slot, sitting nearest the title. */
+      .status-icon {
+        display: flex;
+        flex: none;
+        --mdc-icon-size: 16px;
+        margin-inline-start: var(--ha-space-2, 8px);
+      }
+      .warning-icon {
+        color: var(--warning-color);
+        --mdc-icon-size: 16px;
+        margin-inline-start: var(--ha-space-2, 8px);
+      }
+      /* The ha-alert fallback, never seen on a frontend that has ha-alert. */
+      p.warning {
+        color: var(--warning-color);
+        margin: 0;
+      }
+    `,
+  ];
 }
