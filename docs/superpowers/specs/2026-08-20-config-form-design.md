@@ -289,6 +289,18 @@ error, no message, the image simply resumes its natural height. That was
 acceptable while the key belonged to someone writing YAML with the docs open.
 Exposed as a free text field, it gets a **hint line listing the accepted forms**.
 
+**Four examples cover the five parse branches**: `16:9` and `16x9` for the two
+separators, `1.78` for the bare number, and a percentage. Listing `1.78:1` and
+`1.78x1` as well would teach a synonym rather than a form. Note when phrasing it
+that `16:9` resolves to a 56.25 % padding and `56%` to 56 %, so those two examples
+describe nearly the same picture — either a useful equivalence or a confusing
+redundancy; `75%` is the visibly different alternative.
+
+The hint wraps: `::part(hint)` is a `display: flex` with
+`min-height: var(--ha-space-5)` and `align-items: center`, spanning the field's
+width at `--ha-font-size-s`. Nothing is truncated, so length is not the
+constraint.
+
 The mechanism exists and we already use it: `ha-form` takes a `computeHelper`
 callback, twin of `computeLabel` and keyed on the field name — `element-form.ts`
 drives `halo_enabled_helper` through it today. For `{ text: {} }`,
