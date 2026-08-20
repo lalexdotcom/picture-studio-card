@@ -1,9 +1,20 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
-import { EDITOR_TAG, type PictureStudioConfig } from "../../config";
+import {
+  CARD_TYPE,
+  EDITOR_TAG,
+  HEADING_SECTION_TAG,
+  type PictureStudioConfig,
+  SECTION_TAG,
+} from "../../config";
 import { probeBadgeType, resetBadgeVerdicts } from "../../editor/badge-existence";
+import { PictureStudioHeadingSection } from "../../editor/heading-section";
 import { PictureStudioEditor } from "../../editor/picture-studio-editor";
+import { PictureStudioSection } from "../../editor/section-panel";
 
 if (!customElements.get(EDITOR_TAG)) customElements.define(EDITOR_TAG, PictureStudioEditor);
+if (!customElements.get(SECTION_TAG)) customElements.define(SECTION_TAG, PictureStudioSection);
+if (!customElements.get(HEADING_SECTION_TAG))
+  customElements.define(HEADING_SECTION_TAG, PictureStudioHeadingSection);
 
 const CONFIG = {
   type: "custom:picture-studio",
@@ -248,5 +259,97 @@ describe("_moveBadge remaps the selection through the move", () => {
     const el = await mountSelected2();
     move(el, 0, 3);
     expect(el.selectedIndex()).toBe(1);
+  });
+});
+
+const mountEditor = async (config: unknown): Promise<PictureStudioEditor> => {
+  const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+  el.setConfig(config as PictureStudioConfig);
+  el.hass = {
+    localize: (key: string) =>
+      key === "ui.panel.lovelace.editor.card.heading.name" ? "Heading" : "",
+    states: {},
+  } as never;
+  document.body.append(el);
+  await el.updateComplete;
+  return el;
+};
+
+describe("the five sections", () => {
+  it("renders them in order, Background open", async () => {
+    const el = await mountEditor({ type: CARD_TYPE, items: [] });
+    const labels = [...(el.shadowRoot?.querySelectorAll("picture-studio-section") ?? [])].map(
+      (s) => (s as unknown as { label: string }).label,
+    );
+    expect(labels).toEqual(["Background", "Items", "Heading", "Filters", "Entity"]);
+    const first = el.shadowRoot?.querySelector("picture-studio-section") as unknown as {
+      open: boolean;
+    };
+    expect(first.open).toBe(true);
+  });
+
+  it("gives each ha-form only its own section's data", async () => {
+    const el = await mountEditor({
+      type: CARD_TYPE,
+      items: [],
+      filter: "brightness(0.9)",
+      entity: "light.salon",
+    });
+    const forms = [...(el.shadowRoot?.querySelectorAll("ha-form") ?? [])].map(
+      (f) => (f as unknown as { data: Record<string, unknown> }).data,
+    );
+    expect(forms.some((d) => "filter" in d && !("entity" in d))).toBe(true);
+    expect(forms.some((d) => "entity" in d && !("filter" in d))).toBe(true);
+  });
+
+  it("commits a heading change from the Heading section", async () => {
+    const el = await mountEditor({ type: CARD_TYPE, items: [] });
+    const emitted: Record<string, unknown>[] = [];
+    el.addEventListener("config-changed", (ev) => emitted.push((ev as CustomEvent).detail.config));
+    el.shadowRoot?.querySelector("picture-studio-heading-section")?.dispatchEvent(
+      new CustomEvent("heading-changed", {
+        detail: { heading: { title: "Office" } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(emitted.at(-1)?.heading).toEqual({ title: "Office" });
+  });
+
+  it("shows the strongest severity in the Items header, and nothing when all is well", async () => {
+    const ok = await mountEditor({
+      type: CARD_TYPE,
+      items: [{ type: "badge", config: { type: "entity", entity: "sensor.a" }, position: {} }],
+    });
+    expect(ok.shadowRoot?.querySelector(".severity")).toBeNull();
+
+    const bad = await mountEditor({
+      type: CARD_TYPE,
+      items: [
+        {
+          type: "element",
+          config: { type: "state-label", entity: "sensor.a", show: [] },
+          position: {},
+        },
+        { type: "nope" },
+      ],
+    });
+    const glyph = bad.shadowRoot?.querySelector(".severity");
+    expect(glyph?.classList.contains("error")).toBe(true);
+    expect(glyph?.getAttribute("slot")).toBe("event");
+  });
+
+  it("does not write an empty heading back", async () => {
+    const el = await mountEditor({ type: CARD_TYPE, heading: { title: "Office" }, items: [] });
+    const emitted: Record<string, unknown>[] = [];
+    el.addEventListener("config-changed", (ev) => emitted.push((ev as CustomEvent).detail.config));
+    el.shadowRoot?.querySelector("picture-studio-heading-section")?.dispatchEvent(
+      new CustomEvent("heading-changed", {
+        detail: { heading: {} },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect("heading" in (emitted.at(-1) ?? {})).toBe(false);
   });
 });

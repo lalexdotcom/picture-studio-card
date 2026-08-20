@@ -48,6 +48,8 @@ const STRINGS = {
     section_filters: "Filters",
     section_entity: "Entity",
     picture_entity: "Image or camera entity",
+    items_error: "Some items are unreadable",
+    items_warning: "Some items need attention",
     aspect_ratio_hint: "16:9, 16x9, 1.78 or 56.25% — decimals use a point.",
   },
   fr: {
@@ -90,6 +92,8 @@ const STRINGS = {
     section_filters: "Filtres",
     section_entity: "Entité",
     picture_entity: "Entité image ou caméra",
+    items_error: "Des items sont illisibles",
+    items_warning: "Des items demandent attention",
     aspect_ratio_hint: "16:9, 16x9, 1.78 ou 56.25% — les décimales s'écrivent avec un point.",
   },
 } as const;

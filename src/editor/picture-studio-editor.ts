@@ -1,25 +1,39 @@
-import { html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
 import {
   type BadgeItem,
   CARD_TYPE,
   type ElementConfig,
   type ElementItem,
+  type HeadingConfig,
+  hasHeading,
   normalizeConfig,
   type PictureStudioConfig,
   storedConfig,
 } from "../config";
 import type { Anchor, Position } from "../position";
+import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { stubBadgeConfig } from "./badge-catalog";
 import { badgeVerdict } from "./badge-existence";
+import { itemsSeverity } from "./badge-list";
 import { stubElementConfig } from "./element-catalog";
-import { backgroundData, backgroundSchema, mergeBackground } from "./form-schemas";
-import { formLabel } from "./form-section";
+import {
+  backgroundData,
+  backgroundSchema,
+  entitySchema,
+  filtersSchema,
+  formHelper,
+  mergeBackground,
+  PICTURE_ENTITY,
+} from "./form-schemas";
+import { type FormSchema, formLabel, sectionData, sectionMerge } from "./form-section";
 import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
+import "./heading-section";
+import "./section-panel";
 
 export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
@@ -28,6 +42,26 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     _config: { state: true },
     _editingIndex: { state: true },
   };
+
+  static styles = css`
+    .count {
+      font-size: var(--ha-font-size-s);
+      color: var(--secondary-text-color);
+      background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
+      border-radius: var(--ha-border-radius-pill, 9999px);
+      padding: 0 var(--ha-space-2);
+      line-height: var(--ha-space-5);
+    }
+    .severity {
+      --mdc-icon-size: 20px;
+    }
+    .severity.error {
+      color: var(--error-color);
+    }
+    .severity.warning {
+      color: var(--warning-color);
+    }
+  `;
 
   declare hass?: HomeAssistant;
   declare lovelace?: unknown;
@@ -143,6 +177,39 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     ev.stopPropagation();
     if (!this._config || this._applying) return;
     this._commit(mergeBackground(this._config, ev.detail.value));
+  };
+
+  /**
+   * One handler shape for the sections that are only fields. Bound per schema so
+   * the merge touches exactly the keys that section rendered — a key another
+   * section owns, or one this schema left out, is never written and never
+   * dropped.
+   */
+  private _sectionChanged =
+    (schema: FormSchema) =>
+    (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
+      ev.stopPropagation();
+      if (!this._config || this._applying) return;
+      this._commit(
+        sectionMerge(
+          schema,
+          this._config as unknown as Record<string, unknown>,
+          ev.detail.value,
+        ) as unknown as PictureStudioConfig,
+      );
+    };
+
+  private _headingChanged = (ev: CustomEvent<{ heading: HeadingConfig }>): void => {
+    ev.stopPropagation();
+    if (!this._config || this._applying) return;
+    const heading = ev.detail.heading;
+    const { heading: _drop, ...rest } = this._config;
+    // The empty heading is dropped rather than written, for the same reason
+    // storedConfig never writes a default chrome: a key that holds nothing.
+    this._commit({
+      ...(rest as PictureStudioConfig),
+      ...(hasHeading(heading) ? { heading } : {}),
+    });
   };
 
   private _addItem = async (
@@ -285,23 +352,89 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
           `;
     }
 
+    const localize = hass.localize;
+    const background = backgroundSchema(localize, config);
+    const filters = filtersSchema(localize);
+    const entity = entitySchema(localize);
+    const label = (s: { name: string }) =>
+      s.name === PICTURE_ENTITY ? localizeOwn(hass, "picture_entity") : formLabel(localize, s.name);
+    const helper = (s: { name: string }) => formHelper(hass, s.name);
+    const flat = config as unknown as Record<string, unknown>;
+
     return html`
-      <ha-form
-        .hass=${hass}
-        .data=${backgroundData(config)}
-        .schema=${backgroundSchema(hass.localize, config)}
-        .computeLabel=${(s: { name: string }) => formLabel(hass.localize, s.name)}
-        @value-changed=${this._backgroundChanged}
-      ></ha-form>
-      <picture-studio-badge-list
-        .hass=${hass}
-        .items=${config.items}
-        .selectedIndex=${this._editingIndex}
-        @item-add=${this._addItem}
-        @item-edit=${this._editBadge}
-        @item-moved=${this._moveBadge}
-        @item-removed=${this._removeBadge}
-      ></picture-studio-badge-list>
+      <picture-studio-section open .label=${localizeOwn(hass, "section_background")} icon="mdi:image">
+        <ha-form
+          .hass=${hass}
+          .data=${backgroundData(config)}
+          .schema=${background}
+          .computeLabel=${label}
+          .computeHelper=${helper}
+          @value-changed=${this._backgroundChanged}
+        ></ha-form>
+      </picture-studio-section>
+
+      <picture-studio-section .label=${localizeOwn(hass, "items")} icon="mdi:format-list-bulleted">
+        ${
+          config.items.length
+            ? html`<span class="count" slot="event">${config.items.length}</span>`
+            : nothing
+        }
+        ${
+          // The strongest state wins: one glyph, never two. Same vocabulary as
+          // visibility-section.ts, and the same asymmetry — the normal case gets
+          // no ink at all.
+          (() => {
+            const severity = itemsSeverity(config.items);
+            if (!severity) return nothing;
+            return html`<ha-icon
+              slot="event"
+              class="severity ${severity}"
+              icon=${severity === "error" ? "mdi:alert-circle" : "mdi:alert-outline"}
+              title=${localizeOwn(hass, severity === "error" ? "items_error" : "items_warning")}
+            ></ha-icon>`;
+          })()
+        }
+        <picture-studio-badge-list
+          .hass=${hass}
+          .items=${config.items}
+          .selectedIndex=${this._editingIndex}
+          @item-add=${this._addItem}
+          @item-edit=${this._editBadge}
+          @item-moved=${this._moveBadge}
+          @item-removed=${this._removeBadge}
+        ></picture-studio-badge-list>
+      </picture-studio-section>
+
+      <picture-studio-section
+        .label=${hass.localize("ui.panel.lovelace.editor.card.heading.name")}
+        icon="mdi:format-title"
+      >
+        <picture-studio-heading-section
+          .hass=${hass}
+          .heading=${config.heading}
+          @heading-changed=${this._headingChanged}
+        ></picture-studio-heading-section>
+      </picture-studio-section>
+
+      <picture-studio-section .label=${localizeOwn(hass, "section_filters")} icon="mdi:image-filter-black-white">
+        <ha-form
+          .hass=${hass}
+          .data=${sectionData(filters, flat)}
+          .schema=${filters}
+          .computeLabel=${label}
+          @value-changed=${this._sectionChanged(filters)}
+        ></ha-form>
+      </picture-studio-section>
+
+      <picture-studio-section .label=${localizeOwn(hass, "section_entity")} icon="mdi:lightbulb">
+        <ha-form
+          .hass=${hass}
+          .data=${sectionData(entity, flat)}
+          .schema=${entity}
+          .computeLabel=${label}
+          @value-changed=${this._sectionChanged(entity)}
+        ></ha-form>
+      </picture-studio-section>
     `;
   }
 }
