@@ -268,7 +268,7 @@ first time its editor is opened."
 Create `src/tests/card/card-heading.test.ts`:
 
 ```ts
-import { afterEach, describe, expect, it } from "@rstest/core";
+import { afterEach, beforeAll, describe, expect, it } from "@rstest/core";
 import { HEADING_TAG } from "../../config";
 import { PictureStudioHeading } from "../../card/card-heading";
 import type { HomeAssistant } from "../../types";
@@ -285,6 +285,15 @@ const mount = async (heading: Record<string, unknown>): Promise<PictureStudioHea
   await el.updateComplete;
   return el;
 };
+
+beforeAll(() => {
+  // The component guards on customElements.get, and happy-dom defines no Home
+  // Assistant tag. Without this stub the badge assertions would pass against a
+  // row that was never rendered — a test that cannot distinguish the defect.
+  if (!customElements.get("hui-heading-badge")) {
+    customElements.define("hui-heading-badge", class extends HTMLElement {});
+  }
+});
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -1133,7 +1142,7 @@ describe("mergeBackground", () => {
     expect(next.camera_view).toBe("live");
   });
 
-  it("unwraps a media selector value back to a path", () => {
+  it("stores the media selector value as written; the card unwraps at render", () => {
     const next = mergeBackground(config(), { image: { media_content_id: "/local/p.png" } });
     expect(next.image).toEqual({ media_content_id: "/local/p.png" });
   });
@@ -1306,7 +1315,7 @@ export const formHelper = (hass: HomeAssistant, name: string): string | undefine
 git rm src/editor/background-schema.ts src/tests/editor/background-schema.test.ts
 ```
 
-Use Serena's `find_referencing_symbols` on `backgroundSchema` first and fix every importer; the only one is `src/editor/picture-studio-editor.ts`, which Task 8 rewrites. Until then, point its import at `./form-schemas` and `./form-section` and pass `config` to `backgroundSchema`.
+Use Serena's `find_referencing_symbols` on `backgroundSchema` first and fix every importer; the only one is `src/editor/picture-studio-editor.ts`, which Task 8 rewrites. Until then, point its import at `./form-schemas` and `./form-section`, pass `config` to `backgroundSchema`, **and replace `backgroundLabel` with `formLabel`** — it was exported by the deleted module, so leaving it would end this task on a broken `tsc`.
 
 - [ ] **Step 6: Run the tests**
 
@@ -1696,21 +1705,16 @@ Append to `src/tests/editor/badge-list.test.ts`:
 
 ```ts
 describe("the Items section", () => {
-  it("wraps the list in a section panel", async () => {
+  it("no longer draws a heading of its own — the panel carries the title", async () => {
     const el = await mountList([]);
-    expect(el.shadowRoot?.querySelector("picture-studio-section")).not.toBeNull();
+    expect(el.shadowRoot?.querySelector("h3")).toBeNull();
   });
 
-  it("shows the item count beside the title, in the event slot", async () => {
-    const el = await mountList([badgeItem(), badgeItem(), badgeItem()]);
-    const count = el.shadowRoot?.querySelector(".count");
-    expect(count?.getAttribute("slot")).toBe("event");
-    expect(count?.textContent?.trim()).toBe("3");
-  });
-
-  it("shows no count pill when the list is empty", async () => {
+  it("keeps the caption and the add button on one line", async () => {
     const el = await mountList([]);
-    expect(el.shadowRoot?.querySelector(".count")).toBeNull();
+    const header = el.shadowRoot?.querySelector(".header");
+    expect(header?.querySelector(".hint")).not.toBeNull();
+    expect(header?.querySelector("ha-button, ha-dropdown")).not.toBeNull();
   });
 
   it("keeps the sortable's container inside the scrolling wrapper", async () => {
@@ -1738,40 +1742,35 @@ Expected: FAIL — no `picture-studio-section` in the shadow root.
 
 - [ ] **Step 3: Restructure the render**
 
-In `badge-list.ts`, import the panel (`import "./section-panel";`) and `SECTION_TAG` is not needed at the call site. Replace the existing `.header` block and wrap the sortable:
+**The list does not draw its own panel.** The editor owns all five sections
+(Task 8), so this component renders only the panel's *contents*: the caption row
+and the capped list. Keeping the panel here would put the Items panel in a
+different shadow root from the other four and make it the one section the editor
+does not own.
+
+In `badge-list.ts`, drop the `<h3>` — the panel's header carries the title now —
+and wrap the sortable:
 
 ```ts
     return html`
-      <picture-studio-section
-        open
-        .label=${localizeOwn(this.hass, "items")}
-        .icon=${ITEMS_ICON}
-      >
-        ${
-          rows.length
-            ? html`<span class="count" slot="event">${rows.length}</span>`
-            : nothing
-        }
-        <div class="header">
-          <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
-          ${this._addMenu(localize)}
-        </div>
-        <div class="scroll">
-          <ha-sortable
-            handle-selector=".handle"
-            draggable-selector=".item"
-            @item-moved=${…unchanged…}
-          >
-            …unchanged rows…
-          </ha-sortable>
-        </div>
-      </picture-studio-section>
+      <div class="header">
+        <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
+        ${this._addMenu(localize)}
+      </div>
+      <div class="scroll">
+        <ha-sortable
+          handle-selector=".handle"
+          draggable-selector=".item"
+          @item-moved=${…unchanged…}
+        >
+          …unchanged rows…
+        </ha-sortable>
+      </div>
     `;
 ```
 
-The `<h3>` goes: the panel's own header carries the title now. The caption keeps its line, beside the Add button.
-
-Add `const ITEMS_ICON = "mdi:format-list-bulleted";` beside the file's other constants.
+The caption keeps its line, beside the Add button. `.titles` goes with the
+`<h3>`; `.header` keeps its flex row with the two children it now has.
 
 - [ ] **Step 4: Add the styles**
 
@@ -1787,14 +1786,6 @@ In `badge-list.ts`'s `static styles`, delete the `h3` and `.titles` rules and ad
       max-height: var(--psc-items-max-height, 320px);
       overflow-y: auto;
       overflow-x: hidden;
-    }
-    .count {
-      font-size: var(--ha-font-size-s);
-      color: var(--secondary-text-color);
-      background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
-      border-radius: var(--ha-border-radius-pill, 9999px);
-      padding: 0 var(--ha-space-2);
-      line-height: var(--ha-space-5);
     }
 ```
 
@@ -1925,15 +1916,22 @@ Replace the non-form branch of `render()` in `picture-studio-editor.ts`:
         ></ha-form>
       </picture-studio-section>
 
-      <picture-studio-badge-list
-        .hass=${hass}
-        .items=${config.items}
-        .selectedIndex=${this._editingIndex}
-        @item-add=${this._addItem}
-        @item-edit=${this._editBadge}
-        @item-moved=${this._moveBadge}
-        @item-removed=${this._removeBadge}
-      ></picture-studio-badge-list>
+      <picture-studio-section .label=${localizeOwn(hass, "items")} icon="mdi:format-list-bulleted">
+        ${
+          config.items.length
+            ? html`<span class="count" slot="event">${config.items.length}</span>`
+            : nothing
+        }
+        <picture-studio-badge-list
+          .hass=${hass}
+          .items=${config.items}
+          .selectedIndex=${this._editingIndex}
+          @item-add=${this._addItem}
+          @item-edit=${this._editBadge}
+          @item-moved=${this._moveBadge}
+          @item-removed=${this._removeBadge}
+        ></picture-studio-badge-list>
+      </picture-studio-section>
 
       <picture-studio-section
         .label=${hass.localize("ui.panel.lovelace.editor.card.heading.name")}
@@ -2006,6 +2004,25 @@ Beside `_backgroundChanged`:
     });
   };
 ```
+
+Give the editor a `static styles` for the count pill it now owns — the Items
+panel lives here, beside the other four, so the pill does too:
+
+```ts
+  static styles = css`
+    .count {
+      font-size: var(--ha-font-size-s);
+      color: var(--secondary-text-color);
+      background: var(--ha-color-fill-neutral-quiet-resting, rgba(0, 0, 0, 0.06));
+      border-radius: var(--ha-border-radius-pill, 9999px);
+      padding: 0 var(--ha-space-2);
+      line-height: var(--ha-space-5);
+    }
+  `;
+```
+
+If the class already declares `static styles`, add the rule to the existing block
+rather than replacing it.
 
 Delete `_schemaCache` and `_schema`: the schema now depends on the config as well as on `localize`, and `ha-form` is handed a fresh array per render. If a profiler ever shows that this matters, memoize on the pair — not on `localize` alone, which would return a stale schema when the chosen entity's domain changes.
 
