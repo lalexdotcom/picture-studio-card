@@ -133,9 +133,15 @@ A **chrome** surrounds an item with its own surface.
 
 ```yaml
 type: custom:picture-studio
+heading:                           # optional card header
+  title: My floorplan
+  icon: mdi:floor-plan
+  badges:                          # Home Assistant's heading badges
+    - type: entity
+      entity: sensor.temperature
 # One of image, image_entity or camera_image is required
 image: /local/floorplan.png
-image_entity: image.floorplan      # optional, an image or person entity instead of image
+image_entity: image.floorplan      # optional, an `image` entity instead of image
 camera_image: camera.front_door   # optional, instead of image
 camera_view: auto                  # optional: "auto" | "live"
 entity: light.living_room          # optional — required for state_image / state_filter
@@ -148,7 +154,6 @@ dark_mode_image: /local/floorplan-dark.png   # optional
 dark_mode_filter: brightness(0.7)  # optional CSS filter applied in dark mode
 aspect_ratio: "16:9"               # optional, e.g. "16:9" or "1:1"
 filter: brightness(0.9)            # optional CSS filter
-title: My floorplan                # optional card header
 items:
   - type: badge                  # family discriminant; required
     config:
@@ -215,6 +220,8 @@ items:
       top: 50%
       left: 30%
 ```
+
+> `image_entity` takes an `image` entity only. A `person` entity is not supported: the background is a `hui-image-element`, whose image resolution needs an access token that a person has not — and it suppresses the static `image` along with it, leaving the card blank.
 
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
 
@@ -372,9 +379,11 @@ where a 4% veil would be invisible. So the item grows by 8% instead.
 Nothing reacts while you are editing the card: the whole picture belongs to
 placing items there.
 
-#### YAML-only keys
+#### Editor sections
 
-The editor covers the keys you set every day: title, image, dark mode image, camera entity, camera view, state filter and dark mode filter. `entity`, `image_entity`, `state_image`, `aspect_ratio` and `filter` are set in YAML only. Field labels follow your Home Assistant interface language.
+The editor is five collapsible sections: **Background** (open by default), **Items**, **Heading**, **Filters**, and **Entity**. Every key in this reference is reachable from one of them. Field labels follow your Home Assistant interface language.
+
+Setting `entity` without any filter greys the picture while that entity is off or unavailable — Home Assistant's own behaviour for a state-driven image.
 
 #### Card size
 
