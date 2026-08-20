@@ -29,6 +29,9 @@ doing, and it is the last thing done before that release rather than the first.
 Worth deciding while shooting them: whether an error row is worth showing at all,
 or whether the happy path is the whole story a landing page should tell.
 
+**Scheduled 2026-08-20: this is the next session**, together with a review pass
+over `README.md` and `CHANGELOG.md` — the user named all three at the close.
+
 ## 2. Badges in the card header — designed, not yet planned
 
 **Asked 2026-08-19 at the close of 1.4.0; brainstormed the same day.** The
