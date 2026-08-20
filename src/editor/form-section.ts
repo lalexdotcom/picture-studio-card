@@ -24,7 +24,8 @@ export const sectionData = <T extends Record<string, unknown>>(
   const data: Record<string, unknown> = {};
   for (const field of schema) {
     const value = source[field.name];
-    if (value !== undefined) data[field.name] = value;
+    // null and undefined both mean "the user left it empty"; omit both.
+    if (value !== undefined && value !== null) data[field.name] = value;
   }
   return data;
 };
