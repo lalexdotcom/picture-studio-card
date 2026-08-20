@@ -716,4 +716,19 @@ describe("itemsSeverity", () => {
     expect(itemsSeverity([warned, broken])).toBe("error");
     expect(itemsSeverity([broken, warned])).toBe("error");
   });
+
+  it("reports an error for a badge whose type Home Assistant does not have", async () => {
+    // Mount a component to drive probeBadgeType — the same mechanism the rows use,
+    // so the classifier and the row verdict can never diverge.
+    if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    const missing = badge({ type: "entty" }); // outer loadCardHelpers marks non-entity types missing
+    el.items = [missing];
+    document.body.append(el);
+    await Promise.resolve(); // first paint; probe in flight
+    await (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers();
+    await el.updateComplete; // re-render after verdict lands
+    expect(itemsSeverity([missing])).toBe("error");
+    document.body.replaceChildren(); // outer afterEach resets verdicts
+  });
 });
