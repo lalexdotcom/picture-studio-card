@@ -120,12 +120,18 @@ routing per schema.
 { name: "dark_mode_filter", selector: { text: {} } }
 ```
 
-**A correction to carry, not to copy.** Both filters are `string`, but today's
-form gives `dark_mode_filter` an `object` selector — because picture-elements'
-editor does, against its own `dark_mode_filter?: string` type. It renders a YAML
-editor where a text field belongs, and it survives only because `brightness(0.7)`
-happens to parse as the string `"brightness(0.7)"`. Redrawing the form is the
-moment to use `text` for both. `object` stays where the value really is a map.
+**`object`, not `text`, and on purpose.** Both filters are `string`, so `text`
+would match the type — and it was rejected. `ha-selector-object` renders an
+`ha-yaml-editor`: a CodeMirror with syntax colouring, selection and copy-paste.
+A CSS filter chain is code, and it is written more comfortably in a code editor
+than in a one-line input. Home Assistant already does this for
+`dark_mode_filter`; we extend it to `filter` rather than undo it.
+
+The one consequence to know: the YAML editor **types** what is entered.
+`brightness(0.7)` comes back as a string, but a bare `0.5` would come back as a
+number, which `hui-image` would concatenate into the filter chain as-is — an
+invalid filter that does nothing, silently. Marginal, and not a reason to prefer
+`text`.
 
 **Entity**
 
@@ -156,11 +162,28 @@ owns it.
 
 **`camera_view` is conditional**, so the Background schema is a function of
 `localize` **and** of the data — a `memoizeOne` on the chosen entity's domain, as
-Home Assistant's own editors do. Concretely, the merge must key its "drop what
-the form left empty" pass on **the schema it actually rendered**, not on a fixed
-`FORM_KEYS` list: with a fixed list, `camera_view` leaving the schema reads as
-"the user emptied it", and the deletion happens for the wrong reason at the wrong
-moment. The dispatch in the table above is the only thing that deletes it.
+Home Assistant's own editors do.
+
+That breaks an invariant the current code relies on without naming it. Three
+lists govern a section today — the **schema** (what is rendered), the **data
+builder** (what `ha-form` is handed), and the **drop list** (which keys are
+removed when the form leaves them empty). In `background-schema.ts` all three are
+the same fixed set; `FORM_KEYS` is even declared
+`satisfies ReadonlyArray<keyof BackgroundData>`. They cannot disagree, so nothing
+guards against their disagreeing.
+
+Make one of them conditional and both failure directions open up:
+
+- **Data supplies `camera_view`, schema does not render it.** `ha-form` echoes it
+  back untouched, the merge writes it into config, and it survives forever — a
+  key invisible in the form and inert at render.
+- **Data omits it, drop list still names it.** It is deleted as a side effect of
+  editing any *other* field in the section, for a reason no one asked for.
+
+So: **derive the data builder and the drop list from the schema actually
+rendered**, and keep the three in step by construction rather than by
+coincidence. The dispatch in the table above stays the only deliberate deleter
+of `camera_view`.
 
 ## 5. The image-or-camera entity field
 
