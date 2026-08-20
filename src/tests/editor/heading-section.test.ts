@@ -100,7 +100,7 @@ describe("picture-studio-heading-section", () => {
     expect(typeof detail?.saveConfig).toBe("function");
   });
 
-  it("saves an edited badge back into the list", async () => {
+  it("saves an edited badge back into the list, reading the current heading not the captured one", async () => {
     const el = await mount({ badges: [{ type: "entity", entity: "sensor.a" }] });
     let detail: { saveConfig: (config: unknown) => void } | undefined;
     let received: unknown;
@@ -110,6 +110,7 @@ describe("picture-studio-heading-section", () => {
     el.addEventListener("heading-changed", (ev) => {
       received = (ev as CustomEvent).detail.heading;
     });
+    // Capture the callback — this is the moment saveConfig is handed to the sub-editor.
     el.shadowRoot?.querySelector("hui-heading-badges-editor")?.dispatchEvent(
       new CustomEvent("edit-heading-badge", {
         detail: { index: 0 },
@@ -117,7 +118,24 @@ describe("picture-studio-heading-section", () => {
         composed: true,
       }),
     );
+    // Simulate the component receiving an updated heading while the sub-editor
+    // is open (e.g. another tab or a parallel state change). A closure over the
+    // captured badges array would splice into the stale 1-item list; the correct
+    // implementation re-reads this.heading?.badges at call time and produces the
+    // new 2-item list with only index 0 replaced.
+    el.heading = {
+      badges: [
+        { type: "entity", entity: "sensor.a" },
+        { type: "state", entity: "sensor.c" },
+      ],
+    };
+    await el.updateComplete;
     detail?.saveConfig({ type: "entity", entity: "sensor.b" });
-    expect(received).toEqual({ badges: [{ type: "entity", entity: "sensor.b" }] });
+    expect(received).toEqual({
+      badges: [
+        { type: "entity", entity: "sensor.b" },
+        { type: "state", entity: "sensor.c" },
+      ],
+    });
   });
 });
