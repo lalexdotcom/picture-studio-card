@@ -46,6 +46,13 @@ wall that this entry once said would decide its shape **does not apply**; see th
 heading-badge facts below. Resume from the spec and
 `mem:picture-studio/follow-ups` entry 2, not from scratch.
 
+## 1.5.0 is in flight — read `mem:picture-studio/1.5.0-handoff` first
+
+Branch `feat/card-heading`, 34 commits, nothing pushed or merged. The card's
+header and the redrawn five-section editor are built and reviewed; the user's
+browser walk and the version bump are what remain. That memory carries the state,
+what was in flight, and the lesson of a five-fix series that only the walk caught.
+
 ## Where things are
 
 - Specs: `docs/superpowers/specs/` — `2026-08-11-picture-badges-design.md`
