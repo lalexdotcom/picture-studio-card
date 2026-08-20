@@ -63,17 +63,10 @@ export const backgroundLabel = (localize: LocalizeFunc, name: string): string =>
 
 export type BackgroundData = Pick<
   PictureStudioConfig,
-  | "title"
-  | "image"
-  | "dark_mode_image"
-  | "camera_image"
-  | "camera_view"
-  | "state_filter"
-  | "dark_mode_filter"
+  "image" | "dark_mode_image" | "camera_image" | "camera_view" | "state_filter" | "dark_mode_filter"
 >;
 
 const FORM_KEYS = [
-  "title",
   "image",
   "dark_mode_image",
   "camera_image",
@@ -92,7 +85,6 @@ const asMediaValue = (value: ImageSource | undefined): ImageSource | undefined =
   typeof value === "string" ? { media_content_id: value } : value;
 
 export const backgroundData = (config: PictureStudioConfig): BackgroundData => ({
-  title: config.title,
   image: asMediaValue(config.image),
   dark_mode_image: asMediaValue(config.dark_mode_image),
   camera_image: config.camera_image,

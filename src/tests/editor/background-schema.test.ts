@@ -95,7 +95,7 @@ describe("backgroundData", () => {
 
   it("exposes only the form's keys", () => {
     const data = backgroundData(
-      config({ title: "Plan", image: "/local/plan.png", entity: "light.a", filter: "blur(1px)" }),
+      config({ image: "/local/plan.png", entity: "light.a", filter: "blur(1px)" }),
     );
     expect(Object.keys(data).sort()).toEqual([
       "camera_image",
@@ -104,19 +104,15 @@ describe("backgroundData", () => {
       "dark_mode_image",
       "image",
       "state_filter",
-      "title",
     ]);
-    expect(data.title).toBe("Plan");
   });
 });
 
 describe("mergeBackground", () => {
   it("drops keys the form left empty", () => {
-    const next = mergeBackground(config({ title: "Plan" }), {
-      title: "",
+    const next = mergeBackground(config({ image: "/local/plan.png" }), {
       image: undefined,
     } as BackgroundData);
-    expect("title" in next).toBe(false);
     expect("image" in next).toBe(false);
   });
 

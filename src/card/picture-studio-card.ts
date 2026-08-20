@@ -608,7 +608,7 @@ export class PictureStudioCard extends LitElement {
     if (!this._config) return nothing;
 
     return html`
-      <ha-card .header=${this._config.title}>
+      <ha-card .header=${this._config.heading?.title}>
         <div class="root ${this.editing ? "editing" : ""} ${this.preview ? "previewing" : ""}">
           <div class="layer"></div>
         </div>

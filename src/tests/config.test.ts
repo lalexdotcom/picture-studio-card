@@ -4,6 +4,7 @@ import {
   type BadgeItem,
   CARD_TYPE,
   type ElementItem,
+  hasHeading,
   hasVisibility,
   imagePath,
   normalizeConfig,
@@ -87,7 +88,7 @@ describe("normalizeConfig", () => {
     expect(out.dark_mode_image).toBe("/local/night.png");
     expect(out.dark_mode_filter).toBe("brightness(0.5)");
     expect(out.state_image).toEqual({ on: "/local/on.png" });
-    expect(out.title).toBe("Front door");
+    expect(out.heading).toEqual({ title: "Front door" });
   });
 
   it("never mutates the input", () => {
@@ -983,5 +984,72 @@ describe("a malformed `visibility` is ignored, not fatal", () => {
       ((storedConfig(config).items as Record<string, unknown>[])[0] as { visibility: unknown })
         .visibility,
     ).toEqual(item.visibility);
+  });
+});
+
+describe("heading", () => {
+  it("migrates a legacy top-level title into heading.title", () => {
+    const config = normalizeConfig({ type: CARD_TYPE, title: "Office", items: [] });
+    expect(config.heading).toEqual({ title: "Office" });
+    expect((config as unknown as Record<string, unknown>).title).toBeUndefined();
+  });
+
+  it("lets an existing heading.title win over a legacy title", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      title: "old",
+      heading: { title: "new" },
+      items: [],
+    });
+    expect(config.heading).toEqual({ title: "new" });
+  });
+
+  it("drops the legacy key even when heading has no title", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      title: "Office",
+      heading: { icon: "mdi:desk" },
+      items: [],
+    });
+    expect(config.heading).toEqual({ icon: "mdi:desk", title: "Office" });
+  });
+
+  it("keeps a non-record heading out of the way", () => {
+    const config = normalizeConfig({ type: CARD_TYPE, heading: "nope", items: [] });
+    expect(config.heading).toBeUndefined();
+  });
+
+  it("does not write an empty heading back", () => {
+    const stored = storedConfig(normalizeConfig({ type: CARD_TYPE, heading: {}, items: [] }));
+    expect("heading" in stored).toBe(false);
+  });
+
+  it("writes a heading that carries something", () => {
+    const stored = storedConfig(
+      normalizeConfig({ type: CARD_TYPE, heading: { title: "Office" }, items: [] }),
+    );
+    expect(stored.heading).toEqual({ title: "Office" });
+  });
+
+  it("never writes the legacy title back", () => {
+    const stored = storedConfig(normalizeConfig({ type: CARD_TYPE, title: "Office", items: [] }));
+    expect("title" in stored).toBe(false);
+  });
+});
+
+describe("hasHeading", () => {
+  it("is false for undefined and for an empty record", () => {
+    expect(hasHeading(undefined)).toBe(false);
+    expect(hasHeading({})).toBe(false);
+  });
+
+  it("is true when any of the three carries something", () => {
+    expect(hasHeading({ title: "x" })).toBe(true);
+    expect(hasHeading({ icon: "mdi:desk" })).toBe(true);
+    expect(hasHeading({ badges: [{ type: "entity" }] })).toBe(true);
+  });
+
+  it("is false for an empty badge list", () => {
+    expect(hasHeading({ badges: [] })).toBe(false);
   });
 });
