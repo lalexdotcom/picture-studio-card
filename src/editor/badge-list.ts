@@ -78,6 +78,27 @@ const showsNothing = (item: PictureItem): boolean =>
   Array.isArray((item.config as { show?: unknown[] }).show) &&
   (item.config as { show: unknown[] }).show.length === 0;
 
+/**
+ * The worst state among the items, for the section header's glyph — error beats
+ * warning, and neither draws anything.
+ *
+ * Deliberately built from the very predicates the rows use. Two places deciding
+ * "is this item broken" would drift, and the row is the one that has to stay
+ * right.
+ */
+export const itemsSeverity = (items: readonly PictureItem[]): "error" | "warning" | undefined => {
+  let warning = false;
+  for (const item of items) {
+    if (item.type === "unknown") return "error";
+    if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
+      if (type && badgeVerdict(type) === "missing") return "error";
+    }
+    if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
+  }
+  return warning ? "warning" : undefined;
+};
+
 /** An item whose `visibility` key is present but not a list — renders, but
     always shows, because the card cannot parse the conditions. Orange, not
     red: unlike an unreadable item it is still drawn and editable. Aligns
@@ -205,30 +226,25 @@ export class PictureStudioBadgeList extends LitElement {
 
     return html`
       <div class="header">
-        <div class="titles">
-          <!-- Our own string, not Home Assistant's "Badges": the list has carried
-               two families since 1.2.0, and naming it after one of them was true
-               for exactly one release. -->
-          <h3>${localizeOwn(this.hass, "items")}</h3>
-          <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
-        </div>
+        <p class="hint">${localizeOwn(this.hass, "stacking_hint")}</p>
         ${this._addMenu(localize)}
       </div>
-      <ha-sortable
-        handle-selector=".handle"
-        draggable-selector=".item"
-        @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
-          ev.stopPropagation();
-          // ha-sortable reports the positions of the rows it can see, which are
-          // display positions. Flipping both is equivalent to reversing the
-          // array, moving, and reversing back — the splice is symmetric under
-          // reversal — and it keeps one mechanism in the file rather than two.
-          this._fire("item-moved", {
-            oldIndex: this._flip(ev.detail.oldIndex),
-            newIndex: this._flip(ev.detail.newIndex),
-          });
-        }}
-      >
+      <div class="scroll">
+        <ha-sortable
+          handle-selector=".handle"
+          draggable-selector=".item"
+          @item-moved=${(ev: CustomEvent<{ oldIndex: number; newIndex: number }>) => {
+            ev.stopPropagation();
+            // ha-sortable reports the positions of the rows it can see, which are
+            // display positions. Flipping both is equivalent to reversing the
+            // array, moving, and reversing back — the splice is symmetric under
+            // reversal — and it keeps one mechanism in the file rather than two.
+            this._fire("item-moved", {
+              oldIndex: this._flip(ev.detail.oldIndex),
+              newIndex: this._flip(ev.detail.newIndex),
+            });
+          }}
+        >
         <div class="rows">
           ${repeat(
             rows,
@@ -318,6 +334,7 @@ export class PictureStudioBadgeList extends LitElement {
           )}
         </div>
       </ha-sortable>
+      </div>
     `;
   }
 
@@ -332,10 +349,9 @@ export class PictureStudioBadgeList extends LitElement {
   }
 
   static styles = css`
-    /* The title, its caption and the add button on one line. The button is
-       aligned on the block's last line rather than centred on the pair: beside a
-       two-line title, centring floats it between the heading and the caption and
-       reads as belonging to neither. */
+    /* The caption and the add button on one line. The button is aligned on the
+       block's last baseline rather than centred: beside a taller trigger,
+       centring floats it off the text and reads as belonging to neither. */
     .header {
       display: flex;
       align-items: flex-end;
@@ -348,19 +364,18 @@ export class PictureStudioBadgeList extends LitElement {
          button nearly touching the first item. */
       margin-bottom: var(--ha-space-2, 8px);
     }
-    /* The heading and its caption move as one block, so the flex row has two
-       children rather than three. */
-    .titles {
-      min-width: 0;
-    }
     .add {
       flex: none;
     }
-    /* Otherwise unstyled, as picture-elements' "Elements" heading is: only the
-       gap below is dropped, so the hint reads as its caption. */
-    h3 {
-      margin-top: 0;
-      margin-bottom: var(--ha-space-1);
+    /* The list is capped so a long one stops pushing the sections below it off
+       the screen. The wrapper sits ABOVE ha-sortable, never between it and the
+       rows: ha-sortable takes children[0] as its container, and SortableJS's
+       autoscroll — forced to its fallback by HA, with scroll: true and
+       scrollSpeed: 20 — walks up to the nearest scrollable ancestor. */
+    .scroll {
+      max-height: var(--psc-items-max-height, 320px);
+      overflow-y: auto;
+      overflow-x: hidden;
     }
     .hint {
       color: var(--secondary-text-color);

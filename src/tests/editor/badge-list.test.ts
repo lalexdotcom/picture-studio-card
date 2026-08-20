@@ -4,6 +4,7 @@ import { badgeCatalog } from "../../editor/badge-catalog";
 import { resetBadgeVerdicts } from "../../editor/badge-existence";
 import {
   addChoices,
+  itemsSeverity,
   kindLabel,
   PictureStudioBadgeList,
   splitChoiceValue,
@@ -262,7 +263,8 @@ describe("the add menu", () => {
   it("sits on the title's line rather than under the rows", async () => {
     const el = await mount();
     const header = el.shadowRoot?.querySelector(".header");
-    expect(header?.querySelector("h3")).not.toBeNull();
+    // h3 is gone — the panel (Task 8) carries the title now. The header keeps
+    // the hint and the add button; that is what "on one line" means here.
     expect(header?.querySelector(".hint")).not.toBeNull();
     expect(header?.querySelector("ha-dropdown.add")).not.toBeNull();
   });
@@ -621,5 +623,97 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
     el.selectedIndex = undefined;
     await el.updateComplete;
     for (const spy of spies) expect(spy).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("the Items section", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const badgeItem = (): PictureItem =>
+    ({
+      type: "badge",
+      config: { type: "entity", entity: "sensor.a" },
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+    }) as unknown as PictureItem;
+
+  const mountList = async (its: PictureItem[]) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = its;
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("no longer draws a heading of its own — the panel carries the title", async () => {
+    const el = await mountList([]);
+    expect(el.shadowRoot?.querySelector("h3")).toBeNull();
+  });
+
+  it("keeps the caption and the add button on one line", async () => {
+    const el = await mountList([]);
+    const header = el.shadowRoot?.querySelector(".header");
+    expect(header?.querySelector(".hint")).not.toBeNull();
+    expect(header?.querySelector("ha-button, ha-dropdown")).not.toBeNull();
+  });
+
+  it("keeps the sortable's container inside the scrolling wrapper", async () => {
+    const el = await mountList([badgeItem()]);
+    const wrapper = el.shadowRoot?.querySelector(".scroll");
+    // ha-sortable takes children[0] as its container, so the scrolling wrapper
+    // must sit ABOVE it, never between it and the rows.
+    expect(wrapper?.firstElementChild?.tagName.toLowerCase()).toBe("ha-sortable");
+  });
+
+  it("caps the list's height", async () => {
+    const rules = cssRules(PictureStudioBadgeList.styles);
+    expect(rules[".scroll"]?.["max-height"]).toBe("var(--psc-items-max-height, 320px)");
+    expect(rules[".scroll"]?.["overflow-y"]).toBe("auto");
+  });
+});
+
+describe("itemsSeverity", () => {
+  const badge = (config: Record<string, unknown>) =>
+    ({ type: "badge", config, position: { top: 0, left: 0 }, anchor: "auto" }) as never;
+  const label = (show: string[]) =>
+    ({
+      type: "element",
+      config: { type: "state-label", entity: "sensor.a", show },
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+    }) as never;
+
+  it("is undefined when every item is fine", () => {
+    expect(itemsSeverity([badge({ type: "entity", entity: "sensor.a" })])).toBeUndefined();
+  });
+
+  it("is undefined for an empty list", () => {
+    expect(itemsSeverity([])).toBeUndefined();
+  });
+
+  it("reports an error for an unreadable item", () => {
+    expect(itemsSeverity([{ type: "unknown", raw: {}, reason: "item-type" } as never])).toBe(
+      "error",
+    );
+  });
+
+  it("reports a warning for unreadable visibility", () => {
+    const item = { ...(badge({ type: "entity" }) as object), visibility: "nope" } as never;
+    expect(itemsSeverity([item])).toBe("warning");
+  });
+
+  it("reports a warning for a label that shows nothing", () => {
+    expect(itemsSeverity([label([])])).toBe("warning");
+  });
+
+  it("lets the error win over the warning, whatever the order", () => {
+    const broken = { type: "unknown", raw: {}, reason: "item-type" } as never;
+    const warned = label([]);
+    expect(itemsSeverity([warned, broken])).toBe("error");
+    expect(itemsSeverity([broken, warned])).toBe("error");
   });
 });
