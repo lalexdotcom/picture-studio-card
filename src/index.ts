@@ -8,19 +8,23 @@ import {
   EDITOR_TAG,
   ELEMENT_FORM_TAG,
   FORM_TAG,
+  HEADING_SECTION_TAG,
   HEADING_TAG,
   ICON_TAG,
   LABEL_TAG,
   LIST_TAG,
   PICKER_TAG,
   PROBE_TAG,
+  SECTION_TAG,
   VISIBILITY_SECTION_TAG,
 } from "./config";
 import { PictureStudioAnchorPicker } from "./editor/anchor-picker";
 import { PictureStudioBadgeForm } from "./editor/badge-form";
 import { PictureStudioBadgeList } from "./editor/badge-list";
 import { PictureStudioElementForm } from "./editor/element-form";
+import { PictureStudioHeadingSection } from "./editor/heading-section";
 import { PictureStudioEditor } from "./editor/picture-studio-editor";
+import { PictureStudioSection } from "./editor/section-panel";
 import { PictureStudioVisibilitySection } from "./editor/visibility-section";
 import { entitySuggestion } from "./suggestion";
 
@@ -61,6 +65,14 @@ if (!customElements.get(PROBE_TAG)) {
 
 if (!customElements.get(VISIBILITY_SECTION_TAG)) {
   customElements.define(VISIBILITY_SECTION_TAG, PictureStudioVisibilitySection);
+}
+
+if (!customElements.get(SECTION_TAG)) {
+  customElements.define(SECTION_TAG, PictureStudioSection);
+}
+
+if (!customElements.get(HEADING_SECTION_TAG)) {
+  customElements.define(HEADING_SECTION_TAG, PictureStudioHeadingSection);
 }
 
 window.customCards = window.customCards ?? [];
