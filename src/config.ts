@@ -342,9 +342,10 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
   const record = raw as Record<string, unknown>;
   // `title` lived at the top level from 1.0.0 to 1.4.x. Read it, fold it in, and
   // drop it — Home Assistant's own migrateHeadingCardConfig does exactly this for
-  // the heading card's legacy `entities`. Because storedConfig rewrites the whole
-  // config on every editor commit, the migration lands in the user's YAML the
-  // first time they open the editor; a config never opened keeps rendering.
+  // the heading card's legacy `entities`. The in-memory struct is always correct;
+  // the migration reaches the user's YAML the first time they save any change,
+  // since storedConfig rewrites the whole config on every editor commit. A config
+  // never opened keeps rendering from its legacy form.
   const { title, heading: rawHeading, ...rest } = record;
   const heading: HeadingConfig = isRecord(rawHeading) ? { ...(rawHeading as HeadingConfig) } : {};
   if (heading.title === undefined && typeof title === "string") heading.title = title;

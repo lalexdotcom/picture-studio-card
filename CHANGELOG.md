@@ -17,8 +17,9 @@
   its count and no longer grows without limit.
 - The camera entity and the image entity are now **one field**: they were always
   mutually exclusive on screen, and choosing one clears the other.
-- `title` moves into `heading.title`. **Existing configs keep working** — a
-  top-level `title` is read and moved the first time you open the card's editor.
+- `title` moves into `heading.title`. **Existing configs keep working** — an
+  existing `title` appears in the Heading section immediately, and is written to
+  its new place the first time you save any change.
 - The header's title is smaller than it was.
 
 ## 1.4.0 — 2026-08-19
