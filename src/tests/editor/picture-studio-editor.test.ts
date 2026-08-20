@@ -585,3 +585,80 @@ describe("Items section follows the work", () => {
     expect(scrollSpy).toHaveBeenCalledWith(1); // previous index was 1
   });
 });
+
+describe("folding the Items section clears the selection", () => {
+  // An item of type "unknown" keeps _formTarget() falsy, so the list view
+  // (sections) stays rendered and the items section is in the DOM throughout.
+  const CONFIG_UNKNOWN_ITEM = {
+    type: CARD_TYPE,
+    image: "/local/plan.png",
+    items: [{ type: "unknown", position: { top: "10%", left: "10%" } }],
+  } as unknown as PictureStudioConfig;
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("clears the selection when the Items section is collapsed", async () => {
+    const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
+    el.select(0);
+    await el.updateComplete;
+    expect(el.selectedIndex()).toBe(0);
+
+    const section = el.shadowRoot?.querySelector("#items-section");
+    section?.dispatchEvent(
+      new CustomEvent("expanded-changed", {
+        detail: { expanded: false },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(el.selectedIndex()).toBeUndefined();
+  });
+
+  it("does not clear the selection when the Items section is opened", async () => {
+    // Guard test: an implementation that deselects on every expanded-changed
+    // would pass the test above but break the feature — our own expand() fires
+    // this event, and deselecting on true would undo the selection that triggered
+    // the expand.
+    const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
+    el.select(0);
+    await el.updateComplete;
+    expect(el.selectedIndex()).toBe(0);
+
+    const section = el.shadowRoot?.querySelector("#items-section");
+    section?.dispatchEvent(
+      new CustomEvent("expanded-changed", {
+        detail: { expanded: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(el.selectedIndex()).toBe(0);
+  });
+
+  it("does not clear the selection when a different section (Background) is collapsed", async () => {
+    // Verifies the listener is scoped to the Items section, not the editor host.
+    const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
+    el.select(0);
+    await el.updateComplete;
+    expect(el.selectedIndex()).toBe(0);
+
+    // Background section — first picture-studio-section in the render, before the Items one.
+    const section = el.shadowRoot?.querySelectorAll("picture-studio-section")[0];
+    section?.dispatchEvent(
+      new CustomEvent("expanded-changed", {
+        detail: { expanded: false },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+
+    expect(el.selectedIndex()).toBe(0);
+  });
+});

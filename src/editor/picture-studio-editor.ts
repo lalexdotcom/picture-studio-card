@@ -225,6 +225,17 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     });
   };
 
+  private _onItemsExpandedChanged = (ev: CustomEvent<{ expanded: boolean }>): void => {
+    // React only when the section is collapsed, never when it opens.
+    // Our code never collapses a section — it only calls expand() — so a
+    // detail.expanded of false can only have come from the user clicking the
+    // header. Reacting to true as well would introduce a latent hazard: if
+    // Home Assistant ever moved the fireEvent call from _toggleContainer into
+    // willUpdate, our own "expand because an item was selected" would
+    // immediately deselect that item and the feature would silently stop working.
+    if (!ev.detail.expanded) this.select(undefined);
+  };
+
   private _addItem = async (
     ev: CustomEvent<{ family: "badge" | "element"; type: string }>,
   ): Promise<void> => {
@@ -427,6 +438,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
         id="items-section"
         .label=${localizeOwn(hass, "items")}
         icon="mdi:format-list-bulleted"
+        @expanded-changed=${this._onItemsExpandedChanged}
       >
         ${
           // The strongest state wins: one glyph, never two. Same vocabulary as
