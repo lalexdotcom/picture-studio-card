@@ -16,11 +16,13 @@ import { type CSSResult, css } from "lit";
  */
 export const headerAdornments: CSSResult = css`
   .count {
-    font-size: var(--ha-font-size-s);
-    /* Loud neutral separates from --input-fill-color on focused headers;
-       --ha-color-on-neutral-loud is HA's paired text token — never hardcode white. */
-    background: var(--ha-color-fill-neutral-loud-resting);
-    color: var(--ha-color-on-neutral-loud);
+    font-size: var(--ha-font-size-xs);
+    font-weight: var(--ha-font-weight-bold);
+    color: var(--primary-text-color);
+    /* Fallback for browsers without color-mix support; the mix overrides it everywhere it
+       is understood. 12% is an eye value — turn it first if the pill reads too faint or strong. */
+    background: var(--ha-color-fill-neutral-normal-resting);
+    background: color-mix(in srgb, var(--input-fill-color) 88%, var(--primary-text-color) 12%);
     border-radius: var(--ha-border-radius-pill, 9999px);
     padding: 0 var(--ha-space-2);
     line-height: var(--ha-space-5);

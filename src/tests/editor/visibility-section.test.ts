@@ -202,10 +202,13 @@ describe("status icon with ha-visibility-status available", () => {
     const rule = cssRules(PictureStudioVisibilitySection.styles).get(".count");
     expect(rule).toBeDefined();
     expect(rule).toContain("var(--ha-border-radius-pill");
-    // Loud neutral so the pill reads on a focused header (--input-fill-color background).
-    // --ha-color-on-neutral-loud is HA's paired text token for that fill — never hardcode white.
-    expect(rule).toContain("var(--ha-color-fill-neutral-loud-resting)");
-    expect(rule).toContain("var(--ha-color-on-neutral-loud)");
+    // Light pill mixed from the header's own colour; --primary-text-color keeps text
+    // readable in both light and dark themes.
+    expect(rule).toContain("var(--ha-color-fill-neutral-normal-resting)");
+    expect(rule).toContain(
+      "color-mix(in srgb, var(--input-fill-color) 88%, var(--primary-text-color) 12%)",
+    );
+    expect(rule).toContain("var(--primary-text-color)");
   });
 
   it("idles the oracle when conditions are cleared — resets verdict and empties the condition list", async () => {
