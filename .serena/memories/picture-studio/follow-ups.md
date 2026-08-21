@@ -78,6 +78,13 @@ takes two hops, because the frontend and Home Assistant ship on different clocks
    `homeassistant/package_constraints.txt` (also visible in `requirements_all.txt`).
    The first core release whose pin is that build or later is the real floor.
 
+**Expect two identical console lines on a cold dashboard, not one** — and do not
+"fix" it. `_createChild` reports the verdict, primes, and leaves a hole; the
+`whenDefined` callback rebuilds and `_createChild` runs again for the same item,
+reporting once more before drawing the badge. Both lines are honest and name the
+right badge. Reviewed and accepted 2026-08-21: the second line evaporates with
+the workaround, since a fixed frontend never enters the guard at all.
+
 Only then: raise the card's minimum Home Assistant (see the auto-memory
 `raising-the-ha-floor-is-cheap`) and delete `_primeErrorBadge`,
 `_awaitingErrorBadge` and `PRIMING_TYPE` in one commit. The console line for a
@@ -86,6 +93,41 @@ on 2026-08-21 precisely so it would survive.
 
 Our current floor is HA 2026.6.0, frontend 20260527.4. The container runs
 20260729.6.
+
+## 2c. Real-browser tests — Playwright driven by rstest
+
+**Asked 2026-08-21, at the close of the error-badge work. Not designed, not
+planned: this is a brainstorm starting point, and the user leads it.**
+
+The motive is explicit and it is not coverage for its own sake: **cut the number
+of manual browser walks the user has to do on every delivery.** Read trap 3 in
+`mem:picture-studio/state` before proposing anything — happy-dom does no layout,
+so nothing about `clamp()`, `cqw`, positioning, pointer muting, compositing or CSS
+is observable in the current suite. 1.2.0 shipped six such defects past a green
+suite and two reviews; 1.3.0 added the chromeless-circle clipping that five
+reviews read and the user saw in seconds; walk fixes 9–16 were all caught by the
+walk and none by the suite. That is the gap this would close.
+
+What makes it plausible here rather than generic: the repo already runs Home
+Assistant in `docker compose` (container `picture-studio-ha`, port 8123), `dist/`
+is mounted at `/config/www/picture-studio-card/`, and the test dashboard
+`.ha/config/.storage/lovelace.dashboard_test` already holds the three views the
+walks use — panel, sections, masonry. A real browser would drive the thing the
+user drives.
+
+Questions that will decide the shape, none of them settled:
+- rstest's browser mode versus a separate Playwright runner — what actually
+  integrates, and whether one command can still be `pnpm rstest run`.
+- authentication against the local Home Assistant, and whether a long-lived token
+  in `.ha/` (git-ignored) is acceptable.
+- what is asserted: screenshots compared against baselines, or geometry read from
+  the live DOM. Baselines drift with every Home Assistant update; geometry does
+  not, and the walks have almost always been about position, clipping and
+  pointer behaviour rather than pixels.
+- whether it runs in CI at all, or locally only. The container is a dev
+  dependency, not a CI one today.
+- which walks it can actually retire, and which stay the user's — an honest list
+  matters more than a broad one.
 
 ## 3. The chrome, beyond icons
 
