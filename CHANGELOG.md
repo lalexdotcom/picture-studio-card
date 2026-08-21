@@ -9,6 +9,10 @@
   offers, with their own visibility conditions.
 - Every setting is now reachable from the editor. `entity`, `image_entity`,
   `state_image`, `aspect_ratio` and `filter` were YAML-only and are not any more.
+- **Precise placement by hand.** Nudging a badge by a pixel or two now works:
+  hold it a moment before letting go and the adjustment is kept. Until now only
+  movements of more than a few pixels were, so fine positioning was impossible —
+  a small correction was read as a click and thrown away.
 
 ### Changed
 
@@ -28,6 +32,12 @@
   existing `title` appears in the Heading section immediately, and is written to
   its new place the first time you save any change.
 - The header's title is smaller than it was.
+
+### Fixed
+
+- Clicking a badge to select it no longer leaves it a couple of pixels away from
+  where it was. The picture and the saved configuration disagreed until the next
+  redraw put it back.
 
 ## 1.4.0 — 2026-08-19
 

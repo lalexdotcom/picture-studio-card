@@ -26,6 +26,30 @@ export const DRAG_THRESHOLD_PX = 4;
 export const hasMoved = (dx: number, dy: number): boolean =>
   dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX;
 
+/**
+ * How long the pointer must stay down before a gesture too small to clear
+ * DRAG_THRESHOLD_PX is taken at its word.
+ *
+ * The threshold alone could only answer "was this obviously a drag", and it
+ * answered the opposite question by default: someone nudging a badge one pixel
+ * into place means it, and their adjustment was being discarded as tremor.
+ * Duration separates the two intents that distance cannot — a tap is quick, a
+ * deliberate adjustment is not.
+ */
+export const DRAG_HOLD_MS = 300;
+
+/**
+ * Whether a finished gesture is worth a config round trip.
+ *
+ * `travelled` is the gesture's own sticky verdict on distance: once the travel
+ * passed the threshold it stays passed, so a drag that wanders far and returns
+ * near its start still commits. `displaced` is the only question the hold path
+ * asks — a press-and-think, or a nudge the clamp swallowed against an edge, has
+ * no new position to store however long it lasted.
+ */
+export const isDrag = (travelled: boolean, heldMs: number, displaced: boolean): boolean =>
+  travelled || (heldMs >= DRAG_HOLD_MS && displaced);
+
 interface DragOptions {
   /** Resolve a pointer target to the wrapper it belongs to, with its index. */
   getIndexedWrapper(target: EventTarget | null): Hit | undefined;
@@ -55,6 +79,13 @@ interface DragOptions {
    * landed on the image, which clears the selection.
    */
   onSelect(index: number | undefined): void;
+  /**
+   * The clock the hold is measured against. Injected so the boundary can be
+   * tested exactly rather than by sleeping through it; `performance.now` in
+   * production, because it is monotonic and a clock change mid-gesture must not
+   * turn a click into a drag.
+   */
+  now?(): number;
 }
 
 interface DragState {
@@ -76,6 +107,18 @@ interface DragState {
   startY: number;
   /** True once the travel passed the threshold; never goes back to false. */
   moved: boolean;
+  /** When the pointer went down, on the injected clock. */
+  downAt: number;
+  /** Where the item sat at pointerdown, to tell a real displacement from none. */
+  originX: number;
+  originY: number;
+  /**
+   * The three declarations pointerdown is about to overwrite, kept verbatim.
+   * A gesture that commits nothing has to put back exactly what was there —
+   * recomputing them through toPercent and round2 would land a hundredth of a
+   * percent off for no reason, and the exact strings are already in hand.
+   */
+  originStyle: { left: string; top: string; transform: string };
 }
 
 /**
@@ -88,6 +131,7 @@ interface DragState {
 export const createDragController = (options: DragOptions) => {
   let root: HTMLElement | undefined;
   let state: DragState | undefined;
+  const now = (): number => (options.now ?? performance.now.bind(performance))();
 
   const onPointerDown = (ev: PointerEvent): void => {
     if (ev.button !== 0) return;
@@ -120,6 +164,14 @@ export const createDragController = (options: DragOptions) => {
       startX: ev.clientX,
       startY: ev.clientY,
       moved: false,
+      downAt: now(),
+      originX: box.left - surfaceBox.left,
+      originY: box.top - surfaceBox.top,
+      originStyle: {
+        left: hit.element.style.left,
+        top: hit.element.style.top,
+        transform: hit.element.style.transform,
+      },
     };
 
     // Survive the cursor leaving the surface.
@@ -186,11 +238,30 @@ export const createDragController = (options: DragOptions) => {
 
   const onPointerUp = (ev: PointerEvent): void => {
     if (!state || ev.pointerId !== state.pointerId) return;
-    const { hit, x, y, surface, width, height, moved } = state;
+    const { hit, x, y, surface, width, height, moved, downAt, originX, originY, originStyle } =
+      state;
     state = undefined;
 
     hit.element.releasePointerCapture(ev.pointerId);
     hit.element.classList.remove("dragging");
+
+    // Not the pointer's travel: against an edge the clamp absorbs the whole
+    // gesture, so the only question worth asking is whether the badge itself
+    // ended somewhere else.
+    const displaced = x !== originX || y !== originY;
+
+    // pointerdown switched the element to raw pixels, so a derived style has to
+    // come back either way — left in pixels the badge would shift by its own
+    // anchoring translate. A gesture that commits nothing goes back to the exact
+    // strings it replaced: no setConfig is coming to correct it, so the pixels
+    // the pointer wandered to would otherwise stay on screen, a few off from the
+    // coordinates the config still holds.
+    if (!isDrag(moved, now() - downAt, displaced)) {
+      hit.element.style.left = originStyle.left;
+      hit.element.style.top = originStyle.top;
+      hit.element.style.transform = originStyle.transform;
+      return;
+    }
 
     const anchor = options.getAnchor(hit.index);
     const position: Position = {
@@ -198,21 +269,16 @@ export const createDragController = (options: DragOptions) => {
       top: toPercent(y, surface.height, height, axisOffset(anchor, "y")),
     };
 
-    // Restore the derived style here and not only on the next setConfig: a drag
-    // that ends where it started produces no config change, so no setConfig
-    // would come back, and the badge would stay in raw pixels with no transform.
-    // Same geometry either way, so there is no flash.
+    // Restored here and not only on the next setConfig: a drag that ends where
+    // it started produces no config change, so no setConfig would come back, and
+    // the badge would stay in raw pixels with no transform. Same geometry, so
+    // there is no flash.
     const style = positionStyle(position, anchor);
     hit.element.style.left = style.left;
     hit.element.style.top = style.top;
     hit.element.style.transform = style.transform;
 
-    // The style above is restored either way — pointerdown switched the element
-    // to raw pixels, so leaving it there would shift the badge by its own
-    // anchoring translate. Only the commit is conditional: a click selected the
-    // badge and moved nothing, and an unchanged position is not worth a config
-    // round trip.
-    if (moved) options.onCommit(hit.index, position);
+    options.onCommit(hit.index, position);
   };
 
   return {
