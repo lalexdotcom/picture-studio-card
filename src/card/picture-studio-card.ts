@@ -614,10 +614,16 @@ export class PictureStudioCard extends LitElement {
         this._awaitingErrorBadge = false;
         // A card removed from the document keeps its renderRoot, so `_layer` still
         // resolves and the rebuild below would run: work nobody can see, plus a
-        // console line about a badge on a card that is gone. The flag is cleared
-        // first, so a card put back into the document arms a fresh subscription
-        // the next time _createChild runs — which needs a config change, the only
-        // thing that calls _syncItems.
+        // console line about a badge on a card that is gone.
+        //
+        // The flag is cleared first so nothing is left latched: a card put back
+        // into the document will build the badge, or prime again if the class is
+        // somehow still missing, on its next config change — which is the only
+        // thing that calls _syncItems. Reconnecting does not, so an item primed
+        // and then disconnected before the class landed stays a hole until then.
+        // Unreachable in practice: Home Assistant builds a new card element on
+        // every config change and on navigation, so the same element is never
+        // taken out and put back mid-flight.
         if (!this.isConnected) return;
         // requestUpdate would not reach the hole: `updated` only syncs items on a
         // config change, and `_syncItems` only rebuilds when the shape changed —
