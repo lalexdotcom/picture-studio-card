@@ -86,11 +86,11 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 39 | 811 |
-| `pnpm test --project happy-dom` | 36 | 768 |
+| `pnpm test` — both lanes, **this is the baseline** | 38 | 813 |
+| `pnpm test --project happy-dom` | 35 | 770 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **210.0 kB / 49.4 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **210.3 kB / 49.5 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
