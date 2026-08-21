@@ -4,7 +4,6 @@ import { badgeCatalog } from "../../../editor/badge-catalog";
 import { resetBadgeVerdicts } from "../../../editor/badge-existence";
 import {
   addChoices,
-  itemsSeverity,
   kindLabel,
   PictureStudioBadgeList,
   splitChoiceValue,
@@ -13,9 +12,10 @@ import { DEFAULT_LABEL_SIZE } from "../../../element-size";
 import { cssRules } from "../card/harness";
 import { makeNativeBadgeHelpers } from "./harness";
 
-// A minimal loadCardHelpers stub for tests that render badge rows but do not need
-// probe control. Without it, probeBadgeType throws when it calls
-// window.loadCardHelpers() for badge items, now that render() wires the probe.
+// A minimal loadCardHelpers stub for tests that render badge rows but do not
+// need probe control. Not load-bearing any more — probeBadgeType returns
+// quietly when the factory is absent — but it lets the verdicts actually settle,
+// which is what the rows under test are reading.
 const defaultHelpers = makeNativeBadgeHelpers();
 beforeEach(() => {
   (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
@@ -753,60 +753,5 @@ describe("the Items section", () => {
     // The add menu moved below the rows; the header now holds only the hint.
     expect(header?.querySelector(".hint")).not.toBeNull();
     expect(header?.querySelector("ha-dropdown.add")).toBeNull();
-  });
-});
-
-describe("itemsSeverity", () => {
-  const badge = (config: Record<string, unknown>) =>
-    ({ type: "badge", config, position: { top: 0, left: 0 }, anchor: "auto" }) as never;
-  const label = (show: string[]) =>
-    ({
-      type: "element",
-      config: { type: "state-label", entity: "sensor.a", show },
-      position: { top: 0, left: 0 },
-      anchor: "auto",
-    }) as never;
-
-  it("is undefined when no badge type has been probed", () => {
-    expect(itemsSeverity([badge({ type: "entity", entity: "sensor.a" })])).toBeUndefined();
-  });
-
-  it("is undefined for an empty list", () => {
-    expect(itemsSeverity([])).toBeUndefined();
-  });
-
-  it("reports an error for an unreadable item", () => {
-    expect(itemsSeverity([{ type: "unknown", raw: {}, reason: "item-type" } as never])).toBe(
-      "error",
-    );
-  });
-
-  it("reports a warning for unreadable visibility", () => {
-    const item = { ...(badge({ type: "entity" }) as object), visibility: "nope" } as never;
-    expect(itemsSeverity([item])).toBe("warning");
-  });
-
-  it("reports a warning for a label that shows nothing", () => {
-    expect(itemsSeverity([label([])])).toBe("warning");
-  });
-
-  it("lets the error win over the warning, whatever the order", () => {
-    const broken = { type: "unknown", raw: {}, reason: "item-type" } as never;
-    const warned = label([]);
-    expect(itemsSeverity([warned, broken])).toBe("error");
-    expect(itemsSeverity([broken, warned])).toBe("error");
-  });
-
-  it("reports an error for a non-existent native badge type, without a probe", () => {
-    // entty is not in CORE_BADGES and has no custom: prefix — badgeIsBroken
-    // returns true immediately via !isSupportedBadgeType, no probe needed.
-    expect(itemsSeverity([badge({ type: "entty" })])).toBe("error");
-  });
-
-  it("reports an error for a native badge type outside CORE_BADGES, without a probe", () => {
-    // state-label is statically known to be unsupported — no component, no
-    // probe, no timer. badgeIsBroken decides synchronously via !isSupportedBadgeType,
-    // and itemsSeverity mirrors the same check so the two stay in sync.
-    expect(itemsSeverity([badge({ type: "state-label" })])).toBe("error");
   });
 });

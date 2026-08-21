@@ -7,6 +7,7 @@ import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types"
 import "./visibility-section";
 import { elementLabel } from "./element-catalog";
 import { PLACEMENT_ICON } from "./icons";
+import { elementShowsNothing } from "./items";
 import {
   iconChromeSchema,
   iconContentInnerSchema,
@@ -276,9 +277,10 @@ export class PictureStudioElementForm extends LitElement {
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
     const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
 
-    // The warning marker: a state-label whose show list is empty displays nothing
-    // at all — same condition that badge-list.ts uses for its row marker.
-    const showEmptyWarning = isLabel && (element as StateLabelConfig).show.length === 0;
+    // The warning marker: a state-label whose show list is empty displays
+    // nothing at all. The very predicate the item list marks its row with, so
+    // the two cannot come to disagree about what that means.
+    const showEmptyWarning = elementShowsNothing(element);
 
     return html`
       <div class="header">

@@ -17,7 +17,6 @@ import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { stubBadgeConfig } from "./badge-catalog";
 import { badgeIsBroken } from "./badge-existence";
-import { itemsSeverity } from "./badge-list";
 import { stubElementConfig } from "./element-catalog";
 import {
   backgroundData,
@@ -30,7 +29,15 @@ import {
 } from "./form-schemas";
 import { type FormSchema, formLabel, sectionData, sectionMerge } from "./form-section";
 import { headerAdornments } from "./header-adornments";
-import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
+import {
+  addItem,
+  itemsSeverity,
+  moveItem,
+  removeItem,
+  replaceConfig,
+  setAnchor,
+  setVisibility,
+} from "./items";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";

@@ -2,6 +2,7 @@ import type { ElementConfig, PictureItem, UnknownReason } from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
 import { localizeOwn, type StringKey } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
+import { badgeIsBroken } from "./badge-existence";
 
 /**
  * Every operation moves a {type, position, anchor, config} item as a unit, which
@@ -167,4 +168,51 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
   const primary = named ?? entityId ?? badgeName ?? config.type ?? "badge";
   if (config.type && config.type !== primary) return { primary, secondary: config.type };
   return { primary };
+};
+
+/**
+ * A label with an empty `show` draws nothing on the dashboard — say so here.
+ *
+ * Asked of the element config rather than of a list item, because the two
+ * callers hold different things: the item list walks `PictureItem`s, the element
+ * form has only the config it is editing. One rule, phrased where both can reach
+ * it — the row marker and the form's warning must never disagree about what
+ * "displays nothing" means.
+ */
+export const elementShowsNothing = (config: ElementConfig): boolean =>
+  config.type === "state-label" &&
+  Array.isArray((config as { show?: unknown[] }).show) &&
+  (config as { show: unknown[] }).show.length === 0;
+
+/** The same question, asked of a list item. */
+export const showsNothing = (item: PictureItem): boolean =>
+  item.type === "element" && elementShowsNothing(item.config);
+
+/** An item whose `visibility` key is present but not a list — renders, but
+    always shows, because the card cannot parse the conditions. Orange, not
+    red: unlike an unreadable item it is still drawn and editable. Aligns
+    with `hasVisibility` in config.ts, which is the "usable" gate: if
+    `hasVisibility` is false but visibility is defined, this is true. */
+export const hasUnreadableVisibility = (item: PictureItem): boolean =>
+  item.type !== "unknown" && item.visibility !== undefined && !Array.isArray(item.visibility);
+
+/**
+ * The worst state among the items, for the section header's glyph — error beats
+ * warning, and neither draws anything.
+ *
+ * Deliberately built from the very predicates the rows use. Two places deciding
+ * "is this item broken" would drift, and the row is the one that has to stay
+ * right.
+ */
+export const itemsSeverity = (items: readonly PictureItem[]): "error" | "warning" | undefined => {
+  let warning = false;
+  for (const item of items) {
+    if (item.type === "unknown") return "error";
+    if (item.type === "badge") {
+      const type = String((item.config as Record<string, unknown>).type ?? "");
+      if (type && badgeIsBroken(type)) return "error";
+    }
+    if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
+  }
+  return warning ? "warning" : undefined;
 };
