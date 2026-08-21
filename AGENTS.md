@@ -52,14 +52,29 @@ Run the project's linter/formatter after every modification if one is configured
    anchors on the `## <version>` headings and copies everything until the next
    one, so the order of the `###` sections inside is ours to choose and cannot
    break a release.
-4. At each delivery, **ask whether this is a version bump**, and which one.
-   Never decide it alone.
+4. **Never bump a version on your own initiative.** The bump happens only when
+   the user asks for it in so many words.
 5. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
    `package.json`, and the git tag of the release must agree. HACS installs
    from the GitHub release, so the tag is what users actually get.
-6. The bump lands with the release, not before: while work is in progress the
-   heading reads `unreleased` and `package.json` still names the last shipped
-   version.
+6. **The bump opens the version, it does not close it.** When the user calls for
+   a new version, `package.json` and the `CHANGELOG.md` heading both take the
+   new number straight away, and the heading's date reads `unreleased`:
+
+   ```
+   ## 1.6.0 — unreleased
+   ```
+
+   Everything delivered from then on is written under that heading — there is
+   never a separate `## unreleased` section alongside a numbered one. Replacing
+   `unreleased` with a real date is the act that releases the version, and it is
+   the last thing done, not the first.
+7. **The date is the safety catch, and the release workflow enforces it.** Its
+   changelog step refuses to publish while the heading for the version in
+   `package.json` still says `unreleased`, and refuses just as flatly when that
+   version has no section at all. So an in-progress version cannot be shipped by
+   an accidental push, and the catch is a property of the pipeline rather than a
+   habit anyone has to remember.
 
 ## Tooling — Serena (symbol-aware MCP)
 

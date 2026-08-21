@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.5.0 — 2026-08-21
+## 1.5.0 — unreleased
 
 ### Added
 
@@ -37,6 +37,21 @@
 - Clicking a badge to select it no longer leaves it a couple of pixels away from
   where it was. The picture and the saved configuration disagreed until the next
   redraw put it back.
+- Adding a badge no longer discards a change made while it was being added.
+  Picking a badge from the list takes a moment to load it, and anything done in
+  that moment — dragging another item, deleting one, adding a second badge —
+  was silently undone when the new badge landed.
+- A gesture the system interrupts — a scroll taking over, a palm on a tablet,
+  the browser stepping in — now leaves the item where it was instead of
+  dropping it wherever the pointer had reached.
+- Tapping an item no longer runs its `tap_action` twice. It could happen on a
+  cold dashboard, when the card drew before Home Assistant had finished setting
+  up its gesture handling.
+- The badge editor no longer resets itself while you are using it on a busy
+  installation: it was being handed its configuration again on every state
+  change in the house, rather than only when the badge actually changed.
+- A drag landing at the same moment as an item being added or removed no longer
+  makes the picture flash back to the previous arrangement for a frame.
 
 ## 1.4.0 — 2026-08-19
 
