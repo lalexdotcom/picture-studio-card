@@ -366,3 +366,77 @@ describe("what a hass tick costs", () => {
     expect(el.style.getPropertyValue("--psc-icon-size")).not.toBe("");
   });
 });
+
+/**
+ * Home Assistant injects the action-handler element itself, and our first render
+ * can beat it there. The card degrades to a plain click listener when that
+ * happens — and has to take it back off when the real handler finally lands, or
+ * the two both answer the same tap.
+ */
+describe("the tap fallback while action-handler is not ready", () => {
+  /**
+   * `actionHandler()` returns whatever sits on the body and the caller tests
+   * `handler?.bind`, so an element without `bind` is exactly the not-ready state
+   * the card sees before Home Assistant has wired its singleton.
+   */
+  const placeHandler = (): FakeActionHandler => {
+    const handler = document.createElement("action-handler") as FakeActionHandler;
+    document.body.append(handler);
+    return handler;
+  };
+
+  const withoutBind = (handler: FakeActionHandler): FakeActionHandler => {
+    Object.defineProperty(handler, "bind", { value: undefined, configurable: true });
+    return handler;
+  };
+
+  /** Stands in for the real gesture machinery: one tap, one action, bound once. */
+  const withRealBind = (handler: FakeActionHandler): FakeActionHandler => {
+    const bound = new WeakSet<HTMLElement>();
+    Object.defineProperty(handler, "bind", {
+      configurable: true,
+      value: (element: HTMLElement) => {
+        if (bound.has(element)) return;
+        bound.add(element);
+        element.addEventListener("click", () => {
+          element.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
+        });
+      },
+    });
+    return handler;
+  };
+
+  it("answers a tap while degraded", async () => {
+    withoutBind(placeHandler());
+    const el = await mount({ entity: "light.a", tap_action: { action: "toggle" } });
+
+    const seen: CustomEvent[] = [];
+    document.body.addEventListener("hass-action", (ev) => seen.push(ev as CustomEvent));
+    el.click();
+
+    expect(seen).toHaveLength(1);
+  });
+
+  it("answers a tap exactly once after a real handler arrives", async () => {
+    const handler = withoutBind(placeHandler());
+    const el = await mount({ entity: "light.a", tap_action: { action: "toggle" } });
+
+    // The handler is wired up, and the next render is what notices.
+    withRealBind(handler);
+    el.setConfig({
+      type: "state-icon",
+      size: DEFAULT_ICON_SIZE,
+      entity: "light.a",
+      tap_action: { action: "toggle" },
+    });
+    await el.updateComplete;
+
+    const seen: CustomEvent[] = [];
+    document.body.addEventListener("hass-action", (ev) => seen.push(ev as CustomEvent));
+    el.click();
+
+    // Two would mean the degraded listener stayed on alongside the handler, and
+    // the user's tap_action ran twice on one tap.
+    expect(seen).toHaveLength(1);
+  });
+});

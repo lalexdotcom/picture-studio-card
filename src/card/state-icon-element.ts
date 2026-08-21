@@ -46,7 +46,8 @@ export class PictureStudioStateIcon extends LitElement {
   // Reactive, not a plain field: shouldUpdate below reads the previous value out
   // of changedProperties, which only a declared property records.
   declare _hass?: HomeAssistant;
-  private _clickFallback = false;
+  /** The degraded tap listener while one is bound, so it can be taken back off. */
+  private _clickFallback?: () => void;
 
   constructor() {
     super();
@@ -197,6 +198,14 @@ export class PictureStudioStateIcon extends LitElement {
 
     const handler = actionHandler();
     if (handler?.bind) {
+      // The handler can arrive after we have already degraded — its element is
+      // injected by Home Assistant, and the first render can precede it. Take
+      // the fallback back off before binding, or one tap dispatches twice: once
+      // through the handler's pointer machinery, once through our click.
+      if (this._clickFallback) {
+        this.removeEventListener("click", this._clickFallback);
+        this._clickFallback = undefined;
+      }
       handler.bind(this, {
         hasHold: hasAction(config.hold_action),
         hasDoubleClick: hasAction(config.double_tap_action),
@@ -204,12 +213,12 @@ export class PictureStudioStateIcon extends LitElement {
       return;
     }
     // Honest degradation: without the handler we lose hold and double-tap, not
-    // the card. Bound once, hence the flag.
+    // the card. Bound once, hence the field.
     if (this._clickFallback) return;
-    this._clickFallback = true;
-    this.addEventListener("click", () => {
+    this._clickFallback = (): void => {
       this.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-    });
+    };
+    this.addEventListener("click", this._clickFallback);
   }
 
   static styles = [

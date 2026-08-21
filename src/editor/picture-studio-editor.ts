@@ -239,12 +239,17 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _addItem = async (
     ev: CustomEvent<{ family: "badge" | "element"; type: string }>,
   ): Promise<void> => {
-    const config = this._config;
-    if (!config || !this.hass) return;
+    if (!this.hass) return;
     const item =
       ev.detail.family === "badge"
         ? ({ type: "badge", config: await stubBadgeConfig(ev.detail.type, this.hass) } as const)
         : ({ type: "element", config: stubElementConfig(ev.detail.type) } as const);
+    // Read the config *after* the await, never before: stubBadgeConfig loads a
+    // chunk, and anything the user does meanwhile — a drag commit, a delete, a
+    // second Add — has already written a new one. Committing the pre-await
+    // snapshot would silently undo it.
+    const config = this._config;
+    if (!config) return;
     this._commit({ ...config, items: addItem(config.items, item) });
     // Open the new item's form straight away: a stub is rarely usable as-is —
     // an element's has no entity at all — and this is what the native picker does.

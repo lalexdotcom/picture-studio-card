@@ -1,4 +1,4 @@
-import { css, html, LitElement, nothing } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
@@ -42,14 +42,22 @@ export class PictureStudioBadgeForm extends LitElement {
    * pass a type-string comparison — are detected and discarded. */
   private _editorGen = 0;
 
-  protected updated(): void {
-    void this._syncEditor();
+  protected updated(changed: PropertyValues): void {
+    // `hass` is republished on every state change in the house, and this ran
+    // unconditionally — so the badge's own editor took a setConfig per tick.
+    // Only a badge change is a reason to push the config back down; the freshly
+    // built case is handled inside, where it is known.
+    void this._syncEditor(changed.has("badge"));
   }
 
-  private async _syncEditor(): Promise<void> {
+  private async _syncEditor(badgeChanged: boolean): Promise<void> {
     const badge = this.badge;
     const host = this.renderRoot.querySelector(".form");
     if (!badge?.type || !host) return;
+
+    // A newly mounted editor has never been given a config, so it needs one
+    // whether or not `badge` is what changed this pass.
+    let built = false;
 
     if (this._editorType !== badge.type) {
       host.replaceChildren();
@@ -80,11 +88,12 @@ export class PictureStudioBadgeForm extends LitElement {
       editor.addEventListener("config-changed", this._onChange);
       this._editor = editor;
       host.append(editor);
+      built = true;
     }
 
     if (!this._editor) return;
     if (this.hass) this._editor.hass = this.hass;
-    this._editor.setConfig(badge);
+    if (built || badgeChanged) this._editor.setConfig(badge);
   }
 
   private _onChange = (ev: Event): void => {

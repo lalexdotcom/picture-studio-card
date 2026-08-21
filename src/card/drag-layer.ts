@@ -236,7 +236,12 @@ export const createDragController = (options: DragOptions) => {
     ev.preventDefault();
   };
 
-  const onPointerUp = (ev: PointerEvent): void => {
+  /**
+   * Ends the gesture. `cancelled` marks the pointercancel path — a scroll
+   * takeover, palm rejection or a browser intervention — where the user never
+   * released, so whatever the badge had reached is not a decision to store.
+   */
+  const endGesture = (ev: PointerEvent, cancelled: boolean): void => {
     if (!state || ev.pointerId !== state.pointerId) return;
     const { hit, x, y, surface, width, height, moved, downAt, originX, originY, originStyle } =
       state;
@@ -256,7 +261,12 @@ export const createDragController = (options: DragOptions) => {
     // strings it replaced: no setConfig is coming to correct it, so the pixels
     // the pointer wandered to would otherwise stay on screen, a few off from the
     // coordinates the config still holds.
-    if (!isDrag(moved, now() - downAt, displaced)) {
+    // `cancelled` short-circuits the whole question: the system took the
+    // gesture away, so the answer is always "put it back", however far the
+    // badge had travelled. Committing here would write a position the user
+    // never chose — and, having gone through onCommit, one they would have to
+    // undo by hand.
+    if (cancelled || !isDrag(moved, now() - downAt, displaced)) {
       hit.element.style.left = originStyle.left;
       hit.element.style.top = originStyle.top;
       hit.element.style.transform = originStyle.transform;
@@ -281,6 +291,9 @@ export const createDragController = (options: DragOptions) => {
     options.onCommit(hit.index, position);
   };
 
+  const onPointerUp = (ev: PointerEvent): void => endGesture(ev, false);
+  const onPointerCancel = (ev: PointerEvent): void => endGesture(ev, true);
+
   return {
     attach(element: HTMLElement): void {
       if (root) return;
@@ -288,13 +301,13 @@ export const createDragController = (options: DragOptions) => {
       root.addEventListener("pointerdown", onPointerDown);
       root.addEventListener("pointermove", onPointerMove);
       root.addEventListener("pointerup", onPointerUp);
-      root.addEventListener("pointercancel", onPointerUp);
+      root.addEventListener("pointercancel", onPointerCancel);
     },
     detach(): void {
       root?.removeEventListener("pointerdown", onPointerDown);
       root?.removeEventListener("pointermove", onPointerMove);
       root?.removeEventListener("pointerup", onPointerUp);
-      root?.removeEventListener("pointercancel", onPointerUp);
+      root?.removeEventListener("pointercancel", onPointerCancel);
       root = undefined;
       state = undefined;
     },

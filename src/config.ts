@@ -275,14 +275,14 @@ export const normalizeElementConfig = (
   throw new Error(`picture-studio: items[${index}].config has an unreadable type`);
 };
 
-/**
- * Validate and fill in defaults. Returns a fresh object: the config handed to
- * setConfig is frozen by Home Assistant and must never be mutated.
- */
 /** True when the item carries at least one condition. */
 export const hasVisibility = (item: PictureItem): boolean =>
   item.type !== "unknown" && Array.isArray(item.visibility) && item.visibility.length > 0;
 
+/**
+ * Validate and fill in defaults. Returns a fresh object: the config handed to
+ * setConfig is frozen by Home Assistant and must never be mutated.
+ */
 export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
   if (!isRecord(raw)) {
     throw new Error("picture-studio: config must be an object");
