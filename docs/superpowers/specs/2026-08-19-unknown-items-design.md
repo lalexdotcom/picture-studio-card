@@ -450,6 +450,32 @@ card's render — and two places deciding it separately would drift. The predica
 lives beside `CORE_BADGES` and `CUSTOM_PREFIX` in `badge-catalog.ts`, and both
 call it. Same reasoning as `itemsSeverity`.
 
+> **Correction, 2026-08-21 — this section describes something that was tried and
+> reversed.** There are **two** predicates, deliberately, and only one of them is
+> in `badge-catalog.ts`.
+>
+> - `isSupportedBadgeType(type)` — `src/editor/badge-catalog.ts`, beside
+>   `CORE_BADGES` and `CUSTOM_PREFIX` as promised above. It answers *is this type
+>   in our catalogue*, from the catalogue alone, with no runtime state. **The card
+>   calls this one**, in `_createChild`.
+> - `badgeIsBroken(type)` — `src/editor/badge-existence.ts`, defined as
+>   `!isSupportedBadgeType(type) || badgeVerdict(type) === "missing"`. It answers
+>   *is this item broken*, which needs the runtime probe as well as the catalogue.
+>   **The editor calls this one**, in `itemsSeverity`, in the row's `broken`, and
+>   in `_formTarget`.
+>
+> Unifying them was attempted during the 1.5.0 walk and had to be undone: the two
+> sites are not asking the same question. The editor asks whether the item is
+> broken; the card asks whether Home Assistant would otherwise have drawn this
+> badge successfully — and a `custom:` type whose resource has not loaded yet is
+> broken in a row while being something the card must leave alone, because Home
+> Assistant's own error badge says it better. *Factoring an identical boolean is
+> not factoring an identical question.*
+>
+> The placement follows from that: `badgeIsBroken` combines the catalogue with the
+> runtime verdict, so it cannot live in the catalogue without inverting the
+> dependency. `badge-existence.ts` is where it belongs.
+
 ## The exhaustiveness hardening — follow-up 8
 
 The parked note expected two ternaries in `element-form.ts` to become reachable
