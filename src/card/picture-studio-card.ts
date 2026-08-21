@@ -522,18 +522,24 @@ export class PictureStudioCard extends LitElement {
             error: message,
             origConfig: item.config,
           } as never);
-          // Reported here, where the badge is actually drawn, and not beside the
-          // verdict above: a cold dashboard runs this method twice for the same
-          // item — once to refuse and prime, once after the class lands — and the
-          // earlier placement wrote the same line on both passes. Reported from
-          // the refusal rather than from _primeErrorBadge, because the refusal is
-          // permanent and that method is not: logging there would take the console
-          // channel down with the workaround the day upstream ships its fix.
-          // Home Assistant's own shape, `(kind, config.type, error)`, and like
-          // Home Assistant it repeats on every rebuild of the card element.
+          // Reported below the guard, so a cold dashboard writes one line and not
+          // two: this method runs twice for the same item — once to refuse and
+          // prime, once after the class lands — and only the second pass gets
+          // here. Reported by the refusal rather than by _primeErrorBadge, because
+          // the refusal is permanent and that method is not: logging there would
+          // take the console channel down with the workaround the day upstream
+          // ships its fix. Home Assistant's own shape, `(kind, config.type,
+          // error)`, and like Home Assistant it repeats on every rebuild.
           //
-          // The cost of this placement, accepted: a badge that can never be drawn
-          // — the chunk never arrives — is never reported either.
+          // Inside the try, and deliberately. A review proposed lifting it out, so
+          // that what is drawn would not depend on a reporting call — but measured,
+          // the trade goes the wrong way: a console.error that threw from above the
+          // try escapes _createChild, aborts the forEach in _syncItems, and leaves
+          // the whole card empty, where from in here the catch contains it to this
+          // one item. Bigger blast radius for tidier semantics is not a bargain.
+          //
+          // The cost of this placement, accepted: a badge that can never be drawn,
+          // because the chunk never arrives, is never reported either.
           console.error("badge", type, new Error(message));
           return errorBadge;
         } catch {
@@ -606,6 +612,13 @@ export class PictureStudioCard extends LitElement {
       this._awaitingErrorBadge = true;
       void customElements.whenDefined(ERROR_BADGE_TAG).then(() => {
         this._awaitingErrorBadge = false;
+        // A card removed from the document keeps its renderRoot, so `_layer` still
+        // resolves and the rebuild below would run: work nobody can see, plus a
+        // console line about a badge on a card that is gone. The flag is cleared
+        // first, so a card put back into the document arms a fresh subscription
+        // the next time _createChild runs — which needs a config change, the only
+        // thing that calls _syncItems.
+        if (!this.isConnected) return;
         // requestUpdate would not reach the hole: `updated` only syncs items on a
         // config change, and `_syncItems` only rebuilds when the shape changed —
         // which it has not. Invalidating the shape is what reopens it. Safe here:
