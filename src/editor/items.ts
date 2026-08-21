@@ -28,7 +28,18 @@ export const replaceConfig = (
 ): PictureItem[] =>
   index < 0 || index >= items.length
     ? items
-    : items.map((item, i) => (i === index ? ({ ...item, config } as PictureItem) : item));
+    : items.map((item, i) => {
+        if (i !== index) return item;
+        // An unknown item has no `config` to replace — it kept the raw YAML and a
+        // reason instead. Spreading one would produce `{ type: "unknown", raw,
+        // reason, config }`, which matches no variant of PictureItem: the cast
+        // below would wave it through, and every later read of that item would be
+        // reading a shape the type system says cannot exist. Callers only pass a
+        // known index today, so this is safe by convention; the guard makes it
+        // safe by construction, as `setAnchor` and `setVisibility` already are.
+        if (item.type === "unknown") return item;
+        return { ...item, config } as PictureItem;
+      });
 
 /**
  * Set an item's anchor, and its coordinates with it when the caller could work

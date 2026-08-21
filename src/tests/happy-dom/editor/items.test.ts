@@ -79,6 +79,18 @@ describe("replaceConfig", () => {
     expect(out[0]).toEqual(items[0]);
   });
 
+  it("leaves an unknown item alone rather than growing it a config", () => {
+    // An unknown item kept the raw YAML and a reason instead of a config.
+    // Spreading one would produce { type: "unknown", raw, reason, config } —
+    // no variant of PictureItem has all four, and the cast would wave it past
+    // the compiler.
+    const unknown = { type: "unknown", raw: {}, reason: "item-type" } as never;
+    const items = [item("light.a", 10, 20), unknown];
+    const out = replaceConfig(items, 1, { type: "entity", entity: "light.b" });
+    expect(out[1]).toEqual(unknown);
+    expect(out[1]).not.toHaveProperty("config");
+  });
+
   it("leaves the list untouched for an out-of-range index", () => {
     const items = [item("light.a", 10, 20)];
     expect(replaceConfig(items, 5, { type: "entity" })).toEqual(items);
