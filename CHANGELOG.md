@@ -52,6 +52,10 @@
   change in the house, rather than only when the badge actually changed.
 - A drag landing at the same moment as an item being added or removed no longer
   makes the picture flash back to the previous arrangement for a frame.
+- **A State label showing `Name` in its state content now shows it.** The entry
+  was silently dropped, so a label set to show `Name` and `Color mode` read
+  "HS" where a badge with the same settings read "Break room · HS". Anything
+  else in the list was unaffected, which is what made it easy to miss.
 
 ## 1.4.0 — 2026-08-19
 
