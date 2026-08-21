@@ -766,12 +766,13 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
     }
   };
 
-  // Failure text recorded against no rewriting at all (runner F16):
+  // Failure text recorded against a refusal that reports nothing (runner F17):
   // "expected undefined to be an instance of Error"
-  it("rewrites the priming log into our own verdict, in Home Assistant's own shape", async () => {
+  it("drops the priming line and keeps the caller's verdict", async () => {
     const { seen } = await mountWithLoggingHelpers();
-    // The sentinel never reaches the console: what is printed names the badge the
-    // user actually wrote, and carries the same message the badge itself shows.
+    // The sentinel never reaches the console; what survives is the line the
+    // refusal itself emitted, naming the badge the user actually wrote and
+    // carrying the same message the badge shows.
     const ours = seen.find((args) => args[0] === "badge" && args[1] === "state-label");
     const reported = ours?.[2] as Error | undefined;
     expect(reported).toBeInstanceOf(Error);
@@ -918,6 +919,47 @@ describe("a native badge type outside CORE_BADGES", () => {
     // whose branch in create-element-base is the one that fails on a cold
     // dashboard, returning HA's internal message in place of ours.
     expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+
+  // The decoupling this guards: the console line used to be emitted from
+  // _primeErrorBadge, which only runs while hui-error-badge is unregistered. On a
+  // warm frontend — and on every frontend once upstream ships its fix — the card
+  // then reported nothing at all, silently losing the channel.
+  //
+  // Failure text recorded against the log living in _primeErrorBadge (runner F17):
+  // "expected undefined to be an instance of Error"
+  it("reports the verdict to the console even when no priming is needed", async () => {
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    makeTrackedHelpers();
+    // Registered by the cold-start block above, so _createChild takes the direct
+    // path and _primeErrorBadge never runs.
+    expect(customElements.get("hui-error-badge")).toBeDefined();
+
+    const seen: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      seen.push(args);
+    };
+    try {
+      const card = document.createElement(CARD_TAG) as PictureStudioCard;
+      card.setConfig({
+        type: CARD_TYPE,
+        image: "/local/plan.png",
+        items: [
+          { type: "badge", position: { top: "10%", left: "10%" }, config: { type: "state-label" } },
+        ],
+      });
+      document.body.append(card);
+      await card.updateComplete;
+      await flush();
+    } finally {
+      console.error = original;
+    }
+
+    const ours = seen.find((args) => args[0] === "badge" && args[1] === "state-label");
+    const reported = ours?.[2] as Error | undefined;
+    expect(reported).toBeInstanceOf(Error);
+    expect(reported?.message).toBe("Unsupported badge type: state-label");
   });
 
   it("does not intercept a supported badge type", async () => {
