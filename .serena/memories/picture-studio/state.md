@@ -110,8 +110,8 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 828 |
-| `pnpm test --project happy-dom` | 37 | 785 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 831 |
+| `pnpm test --project happy-dom` | 37 | 788 |
 | `pnpm test --project playwright` | 3 | 43 |
 
 `pnpm build`: **209.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
@@ -443,6 +443,21 @@ read "Break room · HS". Pinned now by
 `tests/happy-dom/card/state-label-state-display.test.ts`, which asserts all five
 properties rather than the one that broke — the failure mode of this element is a
 property nobody passes, and that is invisible until a config happens to use it.
+
+**`formatEntityName` has two edges worth knowing**, transcribed into that file's
+fake and asserted there rather than approximated (modules 24783 and 58933):
+
+    Y: e => e.slice(e.indexOf(".") + 1)                    // computeObjectId
+    (e, t) => void 0 === t.friendly_name
+      ? computeObjectId(e).replace(/_/g, " ")
+      : (t.friendly_name ?? "").toString()                 // computeStateName
+
+and above it `if ("string" == typeof t) return t; if (!t) return
+computeStateName(…)`. So **a name given as the empty string comes back empty** —
+it does not fall through to the friendly name — and **an entity with no friendly
+name falls back to its object id with underscores turned into spaces**. Both
+apply to a native badge identically, which is why they are the parity worth
+holding.
 
 ## Hard-won facts about Home Assistant (all verified in their source)
 

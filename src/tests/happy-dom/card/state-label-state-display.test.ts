@@ -34,15 +34,47 @@ const STATE_OBJ = {
   attributes: { friendly_name: "Break room", color_mode: "hs" },
 };
 
+/** No friendly_name at all — the branch that falls back to the object id. */
+const NAMELESS = {
+  entity_id: "light.break_room",
+  state: "on",
+  attributes: { color_mode: "hs" },
+};
+
 /**
- * Mirrors `hass.formatEntityName(stateObj, name)`: the override wins, otherwise
- * the friendly name. Distinguishable on purpose, so a test can tell which one
- * travelled.
+ * `hass.formatEntityName(stateObj, name)`, transcribed rather than approximated.
+ *
+ * A stub that is merely close enough is worse than none here: the whole point of
+ * this file is that our element and a native badge agree, and both agree by
+ * calling this function. A fake that rounds off its edges would let a
+ * disagreement about those edges pass. Read out of the shipped frontend, build
+ * 20260729.6, modules 24783 and 58933:
+ *
+ *     Y: e => e.slice(e.indexOf(".") + 1)                    // computeObjectId
+ *     (e, t) => void 0 === t.friendly_name
+ *       ? computeObjectId(e).replace(/_/g, " ")
+ *       : (t.friendly_name ?? "").toString()                 // computeStateName
+ *
+ * and, one level up, `if ("string" == typeof t) return t; if (!t) return
+ * computeStateName(…)`. Two edges follow from that and neither is obvious: a
+ * name given as the empty string is returned **as the empty string**, it does
+ * not fall through to the friendly name; and an entity with no friendly name at
+ * all falls back to its object id with underscores turned into spaces.
  */
+const formatEntityName = (
+  stateObj: { entity_id: string; attributes: Record<string, unknown> },
+  name?: unknown,
+): string => {
+  if (typeof name === "string") return name;
+  const friendly = stateObj.attributes.friendly_name;
+  return friendly === undefined
+    ? stateObj.entity_id.slice(stateObj.entity_id.indexOf(".") + 1).replace(/_/g, " ")
+    : String(friendly ?? "");
+};
+
 const hass = {
-  states: { "light.a": STATE_OBJ },
-  formatEntityName: (stateObj: { attributes: Record<string, unknown> }, name?: unknown) =>
-    typeof name === "string" && name ? name : (stateObj.attributes.friendly_name as string),
+  states: { "light.a": STATE_OBJ, "light.break_room": NAMELESS },
+  formatEntityName,
   formatEntityState: () => "71%",
   formatEntityAttributeValue: () => "HS",
 };
@@ -107,6 +139,32 @@ describe("what the label hands to state-display", () => {
     expect(display(el)?.content).toBeUndefined();
     // The name still travels: HA's default content may itself mention the name.
     expect(display(el)?.name).toBe("Break room");
+  });
+});
+
+/**
+ * The fake above is only worth having if it is faithful, so its two
+ * non-obvious edges are asserted rather than assumed. Both are Home Assistant's
+ * behaviour, and both apply identically to a native badge — which is the parity
+ * this file exists to hold.
+ */
+describe("the name HA would compute, at its edges", () => {
+  it("falls back to the object id, spaces for underscores, when there is no friendly name", async () => {
+    const el = await mount({ entity: "light.break_room", state_content: ["name"] });
+    expect(display(el)?.name).toBe("break room");
+  });
+
+  it("returns an empty name as empty rather than falling through to the friendly one", async () => {
+    // `if ("string" == typeof t) return t` — the empty string is a string, so it
+    // wins. state-display then drops the `name` entry, because its own guard is
+    // `"name" === t && this.name` and "" is falsy. A badge does exactly the same.
+    const el = await mount({ entity: "light.a", name: "", state_content: ["name"] });
+    expect(display(el)?.name).toBe("");
+  });
+
+  it("still prefers a real name over the friendly one", async () => {
+    const el = await mount({ entity: "light.break_room", name: "Ma lampe" });
+    expect(display(el)?.name).toBe("Ma lampe");
   });
 });
 
