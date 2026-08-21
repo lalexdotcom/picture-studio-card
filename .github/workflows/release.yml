@@ -95,7 +95,11 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: .
 
-      - uses: softprops/action-gh-release@v2
+      # Pinned to a commit, not to `v2`: this job holds `contents: write`, and
+      # HACS installs from the asset it publishes. A moved tag would run
+      # someone else's code with enough scope to publish a release to every
+      # user of the card. Bump the SHA and the comment together.
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         if: steps.gate.outputs.release == 'true'
         with:
           tag_name: v${{ steps.version.outputs.version }}
