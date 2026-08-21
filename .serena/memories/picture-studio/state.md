@@ -86,8 +86,8 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 39 | 797 |
-| `pnpm test --project happy-dom` | 36 | 754 |
+| `pnpm test` — both lanes, **this is the baseline** | 39 | 811 |
+| `pnpm test --project happy-dom` | 36 | 768 |
 | `pnpm test --project playwright` | 3 | 43 |
 
 `pnpm build`: **210.0 kB / 49.4 kB gzip**. No scoped variant — a build is always
