@@ -494,14 +494,9 @@ export class PictureStudioCard extends LitElement {
       //   the detail dialog its click opens, the same affordance Lovelace gives
       //   everywhere else.
       if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== ERROR_BADGE_TAG) {
-        // One verdict, two channels: the badge drawn on the picture and this line.
-        // Reported here rather than from _primeErrorBadge because the refusal is
-        // permanent and that method is not — leaving the log there would take the
-        // console channel down with the workaround, silently, the day upstream
-        // ships its fix. Home Assistant's own shape, `(kind, config.type, error)`,
-        // and like Home Assistant it is emitted on every rebuild of the element.
+        // One verdict, two channels: the badge drawn on the picture and the console
+        // line reported beside it below.
         const message = `Unsupported badge type: ${type}`;
-        console.error("badge", type, new Error(message));
         // Upstream hole (create-badge-element.ts, frontend 20260729.6): `error` is
         // in ALWAYS_LOADED_TYPES but hui-error-badge is never statically imported
         // there, so the always-loaded branch calls setConfig on an unregistered
@@ -527,6 +522,19 @@ export class PictureStudioCard extends LitElement {
             error: message,
             origConfig: item.config,
           } as never);
+          // Reported here, where the badge is actually drawn, and not beside the
+          // verdict above: a cold dashboard runs this method twice for the same
+          // item — once to refuse and prime, once after the class lands — and the
+          // earlier placement wrote the same line on both passes. Reported from
+          // the refusal rather than from _primeErrorBadge, because the refusal is
+          // permanent and that method is not: logging there would take the console
+          // channel down with the workaround the day upstream ships its fix.
+          // Home Assistant's own shape, `(kind, config.type, error)`, and like
+          // Home Assistant it repeats on every rebuild of the card element.
+          //
+          // The cost of this placement, accepted: a badge that can never be drawn
+          // — the chunk never arrives — is never reported either.
+          console.error("badge", type, new Error(message));
           return errorBadge;
         } catch {
           // Unreachable by the guard above, and kept anyway: a hole is an honest

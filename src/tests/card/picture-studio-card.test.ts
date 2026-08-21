@@ -766,17 +766,16 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
     }
   };
 
-  // Failure text recorded against a refusal that reports nothing (runner F17):
-  // "expected undefined to be an instance of Error"
-  it("drops the priming line and keeps the caller's verdict", async () => {
+  // Failure text recorded against the verdict reported beside the guard rather
+  // than beside the drawn badge (runner F18): "expected [ [ 'badge',
+  // 'state-label', …(1) ] ] to have a length of +0 but got 1" — the priming pass
+  // wrote the line too.
+  it("drops the priming line and stays quiet until the badge can be drawn", async () => {
     const { seen } = await mountWithLoggingHelpers();
-    // The sentinel never reaches the console; what survives is the line the
-    // refusal itself emitted, naming the badge the user actually wrote and
-    // carrying the same message the badge shows.
-    const ours = seen.find((args) => args[0] === "badge" && args[1] === "state-label");
-    const reported = ours?.[2] as Error | undefined;
-    expect(reported).toBeInstanceOf(Error);
-    expect(reported?.message).toBe("Unsupported badge type: state-label");
+    // The class never lands in this stub, so the badge is never drawn and there is
+    // nothing to report yet.
+    expect(seen.filter((args) => args[1] === "state-label")).toHaveLength(0);
+    // And Home Assistant's line about our own sentinel never reaches the console.
     expect(seen.some((args) => args[1] === "picture-studio-priming")).toBe(false);
   });
 
@@ -808,29 +807,68 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
   // green, and guarding nothing, because neither `updated`'s config gate nor
   // `_syncItems`'s shape check lets a bare re-render reach the hole.
   it("draws the refused badge once hui-error-badge becomes available", async () => {
-    const { card } = await mountWithUnsupportedBadge();
-    expect(wrappers(card)).toHaveLength(0);
+    if (!customElements.get(CARD_TAG)) installHelpers();
+    makeHelpersForColdStart();
 
-    // Simulate the class landing — the dynamic import the priming call triggered,
-    // or another badge on the same dashboard having loaded the module.
-    // setConfig is part of the stub on purpose: the card builds its own error
-    // badge and calls it directly, so a bare HTMLElement would send every test
-    // in and after this block down the catch and assert nothing.
-    customElements.define(
-      "hui-error-badge",
-      class extends HTMLElement {
-        config?: unknown;
-        setConfig(config: unknown) {
-          this.config = config;
-        }
-      },
-    );
-    await flush();
+    // entity-filter, not state-label: every earlier test in this block left a card
+    // holding a whenDefined subscription, and the define below wakes all of them.
+    // A type of its own is what lets the count assertion see only this card.
+    const seen: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      seen.push(args);
+    };
+    try {
+      const card = document.createElement(CARD_TAG) as PictureStudioCard;
+      card.setConfig({
+        type: CARD_TYPE,
+        image: "/local/plan.png",
+        items: [
+          {
+            type: "badge",
+            position: { top: "10%", left: "10%" },
+            config: { type: "entity-filter" },
+          },
+        ],
+      });
+      document.body.append(card);
+      await card.updateComplete;
+      await flush();
+      expect(wrappers(card)).toHaveLength(0);
+      // Nothing reported yet: this pass refused and primed, it drew nothing.
+      expect(seen.filter((args) => args[1] === "entity-filter")).toHaveLength(0);
 
-    expect(wrappers(card)).toHaveLength(1);
-    expect(drawn(card)?.config).toEqual(
-      expect.objectContaining({ type: "error", error: "Unsupported badge type: state-label" }),
-    );
+      // Simulate the class landing — the dynamic import the priming call
+      // triggered, or another badge on the same dashboard having loaded the
+      // module. setConfig is part of the stub on purpose: the card builds its own
+      // error badge and calls it directly, so a bare HTMLElement would send every
+      // test in and after this block down the catch and assert nothing.
+      customElements.define(
+        "hui-error-badge",
+        class extends HTMLElement {
+          config?: unknown;
+          setConfig(config: unknown) {
+            this.config = config;
+          }
+        },
+      );
+      await flush();
+
+      expect(wrappers(card)).toHaveLength(1);
+      expect(drawn(card)?.config).toEqual(
+        expect.objectContaining({ type: "error", error: "Unsupported badge type: entity-filter" }),
+      );
+      // One line for one badge, across both passes of a cold load. _createChild
+      // runs twice for this item — once to refuse and prime, once after the class
+      // lands — and only the pass that draws reports.
+      //
+      // Failure text recorded against the verdict reported beside the guard
+      // (runner F18) — the assertion above it fires first: "expected [ [ 'badge',
+      // 'entity-filter', …(1) ] ] to have a length of +0 but got 1"
+      expect(seen.filter((args) => args[1] === "entity-filter")).toHaveLength(1);
+    } finally {
+      console.error = original;
+    }
   });
 });
 
