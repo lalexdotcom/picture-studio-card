@@ -516,3 +516,108 @@ while exploring, and they are worth putting back on the table:
   the user's own fixture. **It is not what gets filmed and must not become what
   gets tested** — its broken items are error fixtures, and entry 2c's warning
   about not conflating the two applies here too.
+
+### Brainstorm opened 2026-08-21, stopped mid-design — resume at section 2
+
+**The architectural brainstorm was started and the user stopped it after
+validating section 1.** Nothing has been written to `src/` yet, no spec file
+exists. What follows is everything that was settled or measured, so the next
+session resumes at the design's section 2 rather than re-deriving it. **Do not
+re-open the decisions below** — they were taken with the user in front of them.
+
+#### Settled with the user
+
+- **What the lane must prove: all four axes above**, and the user's own wording
+  for the criterion is the durable part — *everything that has ever required a
+  visual validation from them, for want of coverage*.
+- **CI: local now, CI-ready by construction.** The bootstrap must be able to
+  start from a virgin instance (onboarding included); `ci.yml` is not touched in
+  this lot.
+- **This lot stops at bootstrap + one smoke test** — the lane authenticates,
+  reaches both views, reads a real geometry. The four axes become later lots that
+  add only fixtures and assertions.
+- **Everything lives in `src/tests/ha/`, the bootstrap included.** Explicitly
+  *not* in `scripts/`, and explicitly **no refactor of `scripts/screenshot/`** —
+  the user ruled that the capture will copy or take inspiration later and that it
+  is not this lot's problem. So `ha-session.mjs` stays where it is and the new
+  lane duplicates what it needs, deliberately.
+- **The bootstrap owns `ha:up` too**: `docker compose up -d` first, then an
+  **active wait on `:8123`** with a ceiling. Without the wait, `up -d` returns
+  before HA listens and the lane fails on a perfectly good instance.
+- Files agreed: `session.ts`, `bootstrap.ts`, `fixtures.ts` (the two views'
+  literal, source of truth the way `capture-view.mjs` is), `global-setup.ts`,
+  `smoke.test.ts`.
+- Playwright is driven **node-side**, `serviceWorkers: "block"` from the start —
+  see the trap in `mem:picture-studio/screenshots`.
+
+#### The wiring, and it is the user's design
+
+One `rstest.config.ts` with three projects, `ci:` prefixing the ones CI runs:
+`ci:happy-dom`, `ci:playwright`, `ha`. `pnpm test` becomes
+`rstest run --project 'ci:*'`, and each lane gets a named script
+(`test:happy-dom`, `test:playwright`, `test:ha`). The `ha` project carries the
+`globalSetup` that calls the bootstrap.
+
+**Integrating the lane into CI later is renaming `ha` to `ci:ha`** plus the one
+script that targets it. The prefix *is* the declaration "this runs in CI".
+
+**Inclusion by prefix was chosen over `--project '!ha'` for a measured reason:
+filters union.** One negation works; two do not — `'!a' ∪ '!b'` is everything.
+
+#### The new rule this creates, and the memory it invalidates
+
+**Never pass `--project` to `pnpm test`.** Because filters union,
+`pnpm test --project ci:happy-dom` would run `ci:*` **plus** that project — that
+is, everything, silently. It is the exact twin of the `pnpm test -- …` trap.
+Hence the named scripts.
+
+**This kills the `pnpm test --project happy-dom` idiom documented in
+`mem:picture-studio/state`** (baseline section and the two-lane bullet). That
+memory is still correct *today* and must not be edited before the change lands —
+but the delivery that lands it has to fix it in the same breath, and the project
+names in the baseline table change too.
+
+#### Measured, so nobody re-derives it
+
+- **`@rstest/browser` cannot reach Home Assistant, and that is why the lane is
+  node-side.** Its client exports exactly `Locator`, `page`,
+  `setTestIdAttribute` — a locator over *its own* page, no navigation. Test code
+  runs inside the page rstest serves; HA is another origin.
+- **`--project` semantics** (`rstest list`, 0.11.9): repeatable and **unions**,
+  never overrides; `'!name'` negation works; wildcards work; a **positional file
+  filter intersects correctly** (`--project '!playwright' <a playwright file>`
+  yields nothing), so `pnpm test <file>` survives a baked-in project filter.
+- **`globalSetup` is per-project and is skipped for a filtered-out project.**
+  `ProjectConfig` is `Omit<RstestConfig, 'projects'|'reporters'|…>` and does not
+  omit it; proven with a throwaway two-project config — 0 firings under
+  `--project keep`, 1 under `--project probe`. This is what makes the single
+  config viable.
+- **The Home Assistant side, read in the container's own source**, all
+  `require_admin`: `config/auth/list`, `config/auth/create`
+  (`name`, optional `group_ids`, optional `local_only`),
+  `config/auth_provider/homeassistant/create` (`user_id`, `username`,
+  `password`). For a virgin instance it is `POST /api/onboarding/users`, which
+  creates the owner and returns a token directly.
+- **The instance has exactly one real account**: `Card`, owner and admin, login
+  `card` / `card`. So the bootstrap must authenticate as an admin to create the
+  test user — the chicken-and-egg is real and the admin credentials are an input.
+
+#### The argument for the dedicated user, which is stronger than hygiene
+
+It is what makes the **themes** axis possible at all. `settheme` writes to the
+**profile**, permanently — the documented trap in `mem:picture-studio/screenshots`.
+Tests that flip the theme on the user's own account leave it flipped. On an
+account of their own, theme, sidebar and formats are fixtures like any others.
+
+#### Where to pick up
+
+Section 2 of the design: the bootstrap's steps and their idempotence rules —
+onboarding if virgin, user, hidden dashboard, the two views. Then section 3: what
+the two views actually contain and what the smoke test asserts. Then the spec
+under `docs/superpowers/specs/`, then `writing-plans`. The patron to follow for
+idempotence is `setup-capture-dashboard.mjs`: list, create only when absent,
+leave an existing one untouched without `--force`.
+
+**One thing section 3 must decide, and it was already visible:** the two views
+should hold the **same card config**, so that the only difference measured
+between panel and sections is the view type itself.
