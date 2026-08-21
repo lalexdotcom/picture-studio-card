@@ -86,8 +86,8 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 38 | 813 |
-| `pnpm test --project happy-dom` | 35 | 770 |
+| `pnpm test` — both lanes, **this is the baseline** | 38 | 817 |
+| `pnpm test --project happy-dom` | 35 | 774 |
 | `pnpm test --project playwright` | 3 | 43 |
 
 `pnpm build`: **210.3 kB / 49.5 kB gzip**. No scoped variant — a build is always
@@ -347,6 +347,34 @@ In memory only, never in YAML, a third variant holds what we could not read:
 - **`storedConfig`'s `chrome && !isDefaultChrome(chrome)` is not a redundant
   guard.** Two reviewers have flagged it; it is correct.
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
+- **The YAML boundary in `normalizeElementConfig` asserts its type on purpose —
+  do not "fix" it** (arbitrated 2026-08-21, after a review raised it). Everything
+  outside `size`, `chrome`, `halo` and `show` travels unchecked: `entity`,
+  `icon`, `color`, `name`, the three `*_action`. The reasoning is written at the
+  cast itself; the short version is three measured facts.
+
+  **Home Assistant already has the display fallback**, and reimplementing it is
+  against the project's oldest rule. Malformation is per field, not per item — by
+  the time this runs the kind is recognised, so a non-string `entity` just misses
+  in `hass.states` and `state-badge` draws its own marker, and a bad `color`
+  costs only the colour.
+
+  **Validating would cost more than it buys.** Dropping a bad value in memory
+  erases it from the user's YAML on the next commit, because `storedConfig`
+  rewrites everything; refusing the item takes a drawable item off the picture
+  over a decorative field. Both were measured and both are worse.
+
+  **The decision rests on one condition, and it is guarded.** A user must always
+  be able to repair a malformed value from the editor — the bad value reaches the
+  form untouched, picking a valid one writes it back, fixing one field leaves the
+  others alone, and an unedited round trip changes nothing. Four tests in
+  `tests/happy-dom/editor/element-form.test.ts` pin exactly that. **If one of
+  them ever goes red, the escape hatch is gone and this decision reopens.**
+
+  `hasAction` follows the same principle and was left alone for the same reason:
+  an unreadable action keeps the item clickable and lets HA's `handleAction`
+  decide. A stricter test there would make such an item non-clickable, which is
+  further from the intent than the status quo.
 - **The two element forms share sizing and nothing else — and the types are the
   reason** (2026-08-21, from the codebase review). `sizeSchema`,
   `sizeToFormFields` and `sizeFromFormFields` live once, in

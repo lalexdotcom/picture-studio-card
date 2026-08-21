@@ -282,6 +282,40 @@ export const normalizeElementConfig = (
   // of vanishing: storedConfig rewrites the whole config on every editor commit,
   // so anything dropped here would be dropped from the user's YAML on the first
   // drag.
+  //
+  // **The returned type is asserted, not earned, and that is the decision.**
+  // Everything outside `size`, `chrome`, `halo` and `show` travels from the YAML
+  // unchecked — `entity`, `icon`, `color`, `name`, the three `*_action`. A
+  // hand-written `entity: 123` is handed on as the `string` the interface
+  // promises.
+  //
+  // Weighed on 2026-08-21 and left as it is, for three measured reasons:
+  //
+  // 1. **The display fallback is Home Assistant's, and it already exists.**
+  //    Validating here would be us reimplementing a behaviour HA owns — the
+  //    project's oldest rule says not to, and we would do it worse, having to
+  //    guess what "valid" means for every selector HA accepts. Malformation is
+  //    per field, not per item: the kind is already recognised by the time we
+  //    get here, so the element still mounts, a non-string `entity` simply
+  //    misses in `hass.states` and `state-badge` draws its own missing-entity
+  //    marker, and a bad `color` costs only the colour — that item renders
+  //    perfectly. Let HA do its job.
+  // 2. **The user can always repair it from the editor.** The bad value reaches
+  //    the form untouched, picking a valid one writes it back, and fixing one
+  //    field leaves the others alone. That escape hatch is the condition the
+  //    decision rests on, so it is pinned by tests in
+  //    `tests/happy-dom/editor/element-form.test.ts` — do not remove them
+  //    without reopening this.
+  // 3. **Validating would cost more than it buys.** Dropping a bad value in
+  //    memory erases it from the YAML on the next commit (see storedConfig);
+  //    refusing the item takes a drawable item off the picture over a decorative
+  //    field. Both are worse than degrading.
+  //
+  // What this does NOT protect is a reader who trusts the declared type:
+  // `config.entity.split(".")` throws on a number. Narrow before you reach for a
+  // string method here, and if a real need for validation ever appears, the
+  // shape to copy is `visibility`'s — keep the raw value, flag it in the editor,
+  // degrade the render.
   if (raw.type === "state-icon") {
     return {
       ...raw,

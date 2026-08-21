@@ -787,3 +787,53 @@ describe("PictureStudioElementForm — content panel", () => {
     expect(result.tap_action).toEqual({ action: "navigate", navigation_path: "/lovelace" });
   });
 });
+
+/**
+ * `normalizeElementConfig` asserts its return type rather than earning it: every
+ * field outside size, chrome, halo and show travels from the YAML unchecked. That
+ * was weighed on 2026-08-21 and deliberately left alone — Home Assistant already
+ * has display fallbacks for a value it cannot read, and reimplementing them here
+ * would be doing worse what HA does well.
+ *
+ * **The decision rests on one condition: a user must always be able to repair a
+ * malformed value from the editor.** These tests are that condition. If one of
+ * them goes red, the escape hatch is gone and the choice not to validate has to
+ * be reopened — see the note above the cast in `config.ts`.
+ */
+describe("a malformed field can always be repaired from the form", () => {
+  const malformed = {
+    type: "state-icon",
+    size: DEFAULT_ICON_SIZE,
+    entity: 123,
+    color: 456,
+  } as unknown as StateIconConfig;
+
+  it("hands the bad value to the form untouched rather than hiding it", () => {
+    // Hiding it would leave the user staring at an empty field with no idea why
+    // the item misbehaves, and no way to tell "unset" from "unreadable".
+    const data = toFormData(malformed);
+    expect(data.entity).toBe(123);
+    expect(data.color).toBe(456);
+  });
+
+  it("writes a conforming value back when the user picks one", () => {
+    const data = toFormData(malformed);
+    expect(fromFormData(malformed, { ...data, entity: "light.b" }).entity).toBe("light.b");
+  });
+
+  it("repairing one field leaves the other bad value alone", () => {
+    // Not collateral damage: the user fixed the entity, not the colour, and the
+    // colour is still theirs to fix next.
+    const data = toFormData(malformed);
+    const out = fromFormData(malformed, { ...data, entity: "light.b" });
+    expect((out as unknown as { color: unknown }).color).toBe(456);
+  });
+
+  it("survives a round trip with no edit at all", () => {
+    // Opening the form and closing it must not rewrite what the user wrote —
+    // storedConfig commits on any change, so a lossy round trip would erase the
+    // value the moment the item is dragged.
+    const out = fromFormData(malformed, toFormData(malformed));
+    expect((out as unknown as { entity: unknown }).entity).toBe(123);
+  });
+});

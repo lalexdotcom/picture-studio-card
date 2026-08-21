@@ -8,6 +8,21 @@ import type { ActionConfig, HomeAssistant } from "../types";
 import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
 
 /** Home Assistant's own one-liner: an action counts when set and not "none". */
+/**
+ * Whether an action is set and asks for something to happen.
+ *
+ * Only `undefined` and an explicit `none` say no. A value that is neither — a
+ * `tap_action: []` or a bare string from a hand-written YAML — reads as an
+ * action here, and that is deliberate: the item stays clickable, and Home
+ * Assistant's own `handleAction` decides what an unreadable action does, the
+ * same way it decides what an unreadable entity displays.
+ *
+ * Tightening this was considered on 2026-08-21 and rejected. An empty array is
+ * truthy, so the caller's `!config.tap_action` escape does not fire for it; a
+ * stricter test here would flip such an item from "clickable, HA decides" to
+ * "not clickable at all", which is further from the documented intent that an
+ * action nobody could read falls back to more-info.
+ */
 export const hasAction = (action?: ActionConfig): boolean =>
   action !== undefined && action.action !== "none";
 
