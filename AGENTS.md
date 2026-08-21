@@ -53,6 +53,16 @@ stale one expensive.
    trap, the measurement, the decision that must not be re-litigated, and the
    reasoning behind a refusal. What a `git log` already says does not need
    saying twice.
+5. **Never record a value a command gives in a second.** The open version, the
+   published tag, how far `main` is from the remote, whether the changelog
+   heading carries a date — all of it is one command away, and a stored copy
+   can only drift. Record *where to look* and *how to read the answer*, never
+   the answer.
+6. **The exception is a figure that is expensive to derive** — the test count,
+   the build size — and it comes with an obligation: whoever runs `pnpm test`
+   or `pnpm build` updates the recorded figure and its date in the same breath.
+   A baseline nobody refreshes reads as authoritative and is quietly wrong,
+   which is worse than having none.
 
 ## Language
 

@@ -8,37 +8,38 @@ mouse".
 **Two families of item since 1.2.0**: Lovelace **badges**, and **elements** —
 since 1.4.0 two kinds, `state-icon` and `state-label`.
 
-**1.4.0 is the published release** — tag `v1.4.0`, and `origin/main` is that
-exact commit (`2964732`). Verified against the remote on 2026-08-21 with
-`git ls-remote --tags origin`; **`git tag -l` alone lies here**, because this
-clone has never fetched the tags the release workflow creates. A session that
-reads only local tags will conclude 1.4.0 was never published, and be wrong.
+## Where the project stands — look, do not remember
 
-The chain is unchanged: a push to `main` runs CI, then `release.yml` reads
+**Nothing below this heading records a value a command gives in a second.** Those
+went stale twice in one day and were repeated to the user both times. What is
+recorded here is *where to look* and *how to read the answer* — never the answer.
+
+| Question | Command |
+| --- | --- |
+| Which version is open? | `jq -r .version package.json` |
+| Is it releasable? | `head -3 CHANGELOG.md` — a date means yes, `unreleased` means no |
+| What is published? | `git ls-remote --tags origin` |
+| How far is `main` from the remote? | `git log --oneline origin/main..main \| wc -l` |
+
+**`git tag -l` lies here and is the trap that caught a session.** This clone has
+never fetched the tags the release workflow creates, so the local list stops
+several releases behind. A session read it, told the user a published version was
+unreleased, and was corrected by the user. Always the remote.
+
+**The release chain:** a push to `main` runs CI, then `release.yml` reads
 `version` from `package.json` and creates the `v<version>` tag and the release.
 HACS installs from that tag. **The user pushes, never the agent.**
 
-Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
-automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published 2026-08-17),
-1.3.1 (2026-08-17), 1.4.0 (2026-08-19).
+**The CHANGELOG date is the safety catch, and it is load-bearing.** `main` can
+sit a long way ahead of `origin/main` — a push then publishes whatever
+`package.json` names. The only thing between an accidental push and a release is
+`release.yml` refusing while the heading for that version says `unreleased`. Do
+not replace that word until the user asks for the release.
 
-## 1.5.0 is open, unreleased, and 85 commits sit unpushed — read this before anything
-
-**State on 2026-08-21, verified against the repo and the remote, not remembered.**
-
-- `package.json` says **1.5.0**; the CHANGELOG heading reads **`## 1.5.0 — unreleased`**.
-- `origin/main` is still the v1.4.0 commit. Local `main` is **85 commits ahead** of it.
-- Everything 1.5.0 needs is **done**: the card header, the five-section editor, the
-  browser test lane, the re-recorded GIFs and the full README pass. See the struck
-  entries 1, 2 and 8 in `mem:picture-studio/follow-ups`.
-- What is left before release is **the user's decision to release**, and the date
-  that replaces `unreleased`. Nothing else.
-
-**The safety catch is load-bearing now, not decorative.** With 85 commits waiting,
-a push would publish — and the only thing standing between an accidental push and
-a published 1.5.0 is that the CHANGELOG heading says `unreleased`. `release.yml`
-refuses to publish while it does. Do not replace that word until the user asks for
-the release.
+Release history, which is the one thing here that does not go stale by itself:
+1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the automated chain),
+1.2.0 (2026-08-14), 1.3.0 (published 2026-08-17), 1.3.1 (2026-08-17),
+1.4.0 (2026-08-19).
 
 ### The versioning workflow changed on 2026-08-21
 
@@ -48,33 +49,54 @@ heading both take the new number immediately, with `unreleased` standing in for
 the date. Everything delivered afterwards is written under that heading; there is
 never a separate `## unreleased` section beside a numbered one. Replacing
 `unreleased` with a real date is the act of releasing, and it is the last thing
-done.
+done. Written into `AGENTS.md` rules 4 to 7.
 
-This is why 1.5.0 already carries its number while unreleased, and it is written
-into `AGENTS.md` rules 4 to 7. The older text here said "then the bump, then the
-push", which was the previous workflow and is no longer true.
+The older text here said "then the bump, then the push", which was the previous
+workflow and is no longer true.
 
-## The green baseline — 2026-08-21, on `fix/review-2026-08-21`
+### What the open version still needs
 
-Measured, not remembered. Check against these before blaming your own change.
+Whatever it is, it is in `mem:picture-studio/follow-ups` as an open entry. The
+struck ones are done. If an entry there says something is owed, **check the repo
+before repeating it** — that is exactly how a settled entry got reported as
+outstanding.
 
-- **797 tests** across 39 files, `failedFiles: 0`, exit 0. `pnpm test` runs both
-  lanes; `--project happy-dom` or `--project playwright` runs one.
-- `pnpm typecheck` clean.
-- `pnpm lint` **exits 0 with 25 warnings and 4 infos**. That 25/4 is the
-  long-standing baseline, almost all `!` non-null assertions in test files. It is
-  not a regression and no session has been asked to clear it — but a *26th*
-  warning is yours.
-- `pnpm build`: **210.0 kB / 49.4 kB gzip**, one file, as HACS requires.
+## The green baseline — refresh it whenever you run the suite
+
+**This is the one place figures are recorded, and only because deriving them is
+slow.** A full run is minutes; `jq -r .version package.json` is a second. Anything
+in the second category lives under "Where the project stands" as a command, not as
+a value.
+
+**The rule that makes this section trustworthy: whoever runs `pnpm test` or
+`pnpm build` updates these numbers and the date in the same breath.** A baseline
+nobody refreshes is worse than no baseline — it reads as authoritative and is
+quietly wrong, which is precisely how the release status went bad twice in one
+day. If the date below is older than your last run, the numbers are yours to fix.
+
+**Measured 2026-08-21, on `fix/review-2026-08-21`:**
+
+- **797 tests** across **39 files**, `failedFiles: 0`, exit 0.
+- `pnpm build`: **210.0 kB / 49.4 kB gzip**.
+
+`pnpm test` runs both lanes; `--project happy-dom` or `--project playwright` runs
+one. `pnpm typecheck` is expected clean — no number to carry.
+
+**`pnpm lint` exits 0 while reporting warnings, and that is not a failure.** The
+count has sat in the mid-twenties for a long time, almost all `!` non-null
+assertions in test files; no session has been asked to clear them. The
+interpretation is what matters and it does not drift: **a warning you did not
+have before is yours**, whatever the running total says. Compare against `main`
+rather than against a remembered figure.
 
 **On the bundle size, because a review will raise it again:** the whole editor
 ships to every dashboard viewer, and that is not fixable here. Splitting needs a
 dynamic `import()`, which rspack turns into a second chunk that the release never
 publishes — it has shipped a broken card once already. `hacs.json` names one
 filename and `release.yml` uploads one asset. The diagnosis is correct and the
-remedy is refused; the whole reasoning is in
-`docs/reviews/2026-08-21-1414-picture-studio-card.md`. At 49.4 kB gzip for the
-card *and* Lit, the prize is roughly 20 kB, once, before caching.
+remedy is refused; the reasoning is in
+`docs/reviews/2026-08-21-1414-picture-studio-card.md`. At the current gzip figure
+for the card *and* Lit, the prize is roughly 20 kB, once, before caching.
 
 ## Where things are
 
