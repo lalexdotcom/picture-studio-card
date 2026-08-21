@@ -100,7 +100,6 @@ src/card/visibility-probe.ts      the phantom card a hui-card probe carries
 src/card/drag-layer.ts            pointer gesture, injected callbacks
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/visibility-section.ts  hosts HA's own hui-card-visibility-editor
-src/editor/background-schema.ts   ha-form schema for the card itself
 src/editor/badge-list.ts          rows, ha-sortable, the add menu, the flip
 src/editor/badge-form.ts          the badge's own editor + Position section
 src/editor/element-form.ts        our ha-form, Appearance, Size and position
@@ -114,7 +113,8 @@ src/editor/items.ts               add / replace / move / remove / rowLabel (pure
 src/editor/icons.ts               only the icon NAMES two components share
 src/suggestion.ts      entity-first card picker suggestion (pure)
 src/index.ts           registration + window.customCards
-src/tests/**           mirrors the source tree
+src/tests/happy-dom/** mirrors the source tree — the fast lane, no layout
+src/tests/playwright/**  the browser lane: harness.ts + placement / drag / appearance
 ```
 
 ## Config shape (current)
@@ -211,6 +211,23 @@ In memory only, never in YAML, a third variant holds what we could not read:
 - **Ratcheting drag bounds computed in `pointermove`**, never at `pointerdown`.
 - **Pixels during the drag, percentages on release**, one commit per gesture,
   two decimals.
+- **A gesture commits on distance OR on time** (2026-08-21). `isDrag(travelled,
+  heldMs, displaced)` in `drag-layer.ts`: the travel cleared `DRAG_THRESHOLD_PX`
+  (4, sticky — a drag that wanders far and returns near its start still counts),
+  **or** the pointer was held `DRAG_HOLD_MS` (300) and the item ended at
+  different pixels. The time path exists because the threshold could only answer
+  "was this obviously a drag" and answered the opposite by default: a deliberate
+  one-pixel adjustment is smaller than any tremor, and it was being discarded.
+  `displaced` compares the final pixels to those at `pointerdown`, **not** the
+  pointer's travel — against an edge the clamp absorbs the whole gesture, and a
+  press-and-think has nothing to store.
+  **And a non-commit now restores the three inline style strings verbatim**, kept
+  from `pointerdown`. Recomputing them through `toPercent` would land a hundredth
+  of a percent off; more importantly, before this a click left the badge up to
+  4 px from its stored coordinates with no `setConfig` coming to correct it.
+  The clock is injected (`now?()` on `DragOptions`, `performance.now` by default,
+  monotone) purely so the 300 ms boundary is testable exactly rather than slept
+  through.
 - **No `z-index` in the rendered stacking** — DOM order = list order. One
   exception, reserved to the editor: the selected or dragged item is raised while
   `editing`.
@@ -470,11 +487,21 @@ In memory only, never in YAML, a third variant holds what we could not read:
    which refused the state colour on the premise that it was a computation —
    reading HA's source showed it was a string of variable names. **When behaviour
    or a decision rests on a claim about HA, go read HA.**
-3. **What the suite cannot see.** happy-dom does no layout: nothing about
-   `clamp()`, `cqw`, positioning, pointer muting, compositing or CSS is
-   observable there. 1.2.0 shipped six such defects past a green suite and two
-   reviews; 1.3.0 added the chromeless-circle clipping, which five reviews read
-   and the user saw in seconds. **Plan for the walk; do not hope to skip it.**
+3. **What the suite cannot see — narrowed 2026-08-21, not closed.** happy-dom
+   does no layout: nothing about `clamp()`, `cqw`, positioning, pointer muting,
+   compositing or CSS is observable there. 1.2.0 shipped six such defects past a
+   green suite and two reviews; 1.3.0 added the chromeless-circle clipping, which
+   five reviews read and the user saw in seconds.
+   **Since 2026-08-21 there is a second lane that CAN see those things** — real
+   Chromium, real layout, `src/tests/playwright/`. It covers placement under
+   every anchor, `reanchor`, the whole drag gesture, and computed styles
+   including the exact 1.3.0 shape bug, which was reproduced and confirmed to go
+   red. What it still cannot cover: Home Assistant's own components (they are
+   stubbed, so the lane tests *our* layout around children of known size), the
+   panel-versus-sections view difference, themes, and anything that needs a real
+   input device — pointer capture is neutralised in the harness. **So the walk is
+   shorter, not gone.** Ask which of the two lanes can answer a question before
+   writing a test, and put it in the fast one whenever the answer is "either".
 4. **A test that restates a constant stops guarding it.** Assert literals — which
    is why every `state-color` expectation spells the whole `var()` chain out.
 5. **A test that exercises the path but cannot distinguish the defect.** The most
@@ -509,6 +536,10 @@ In memory only, never in YAML, a third variant holds what we could not read:
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
 - **Never `git push`** — it publishes. The user does it.
 - **Leave a clean tree at the close.**
+- **"On clôture" assumes a branch, but work sometimes stays on `main`** (as on
+  2026-08-21). Then there is nothing to merge — and the whole-branch review is
+  still owed, because what it gates is the integration, which in that case is the
+  commit onto `main` itself. Launch it, do not skip it for want of a branch.
 - **The user's browser walks cover a panel view and a sections view, every
   time.** They do not announce it.
 - Serena's symbolic tools are primary for code.
@@ -523,11 +554,43 @@ In memory only, never in YAML, a third variant holds what we could not read:
   not read stdin the way `git commit -F -` does.
 - Review findings have repeatedly been right in conclusion and wrong in
   mechanism. Verify a claim in HA's source before dispatching a fix for it.
-- **`vi` is NOT exported by `@rstest/core` 0.11.6.** Spies and fake timers go through
-  the `rstest` object — `rstest.spyOn`, `rstest.useFakeTimers`,
-  `rstest.advanceTimersByTime`, `rstest.useRealTimers`. It works on DOM element
-  instance methods under happy-dom. `src/tests/editor/badge-existence.test.ts` set the
-  idiom; it is the first file in the repo to need either.
+- **`vi` is NOT exported by `@rstest/core`** — checked at 0.11.6, still true at
+  0.11.9. Spies and fake timers go through the `rstest` object — `rstest.spyOn`,
+  `rstest.useFakeTimers`, `rstest.advanceTimersByTime`, `rstest.useRealTimers`. It
+  works on DOM element instance methods under happy-dom.
+  `src/tests/happy-dom/editor/badge-existence.test.ts` set the idiom.
+- **Two test lanes since 2026-08-21, declared as rstest `projects`.** One command
+  still runs both (`pnpm test`); `--project happy-dom` / `--project playwright`
+  runs one. `@rstest/browser` peer-depends on `@rstest/core` **exactly**, so the
+  two versions move together — and `playwright` is an *optional* peer, which pnpm
+  never installs on its own, hence the explicit devDependency. Chromium binaries
+  come from `pnpm exec playwright install --with-deps chromium`, which the
+  devcontainer's post-create runs.
+  Facts about the browser harness (`src/tests/playwright/harness.ts`) that are
+  not obvious and cost time to rediscover:
+  - **`ha-card` must be stubbed with `display: block`.** An undefined custom
+    element is `display: inline`, so the card's own `ha-card { height: 100% }`
+    does nothing and `.root` never gets a box — every measurement reads zero.
+  - **The stubs are dimensioned**, unlike happy-dom's call-counting fakes. Layer
+    400×300, badge 40×20, round on purpose so expectations read as arithmetic.
+  - **`setPointerCapture` is neutralised globally for the lane.** It throws
+    `NotFoundError` for a pointerId no physical pointer owns, and
+    `@rstest/browser` 0.11.9 exposes no driver for trusted events (its only
+    exports are `createBrowserExecutor` and `validateBrowserConfig`). The cost is
+    precise: nothing proves a gesture survives the cursor leaving the surface.
+  - **`headless: true` is set explicitly.** rstest infers it from CI, which means
+    *headed* locally, and the devcontainer has no X server.
+  - **`cleanup()` must release the editor registrations**, not just remove nodes:
+    `activeEditor()` returns undefined unless exactly one editor is registered, so
+    a leak silently disarms the drag in a later test and it passes for the wrong
+    reason.
+  - **HA design tokens must be set on `documentElement`** or `var(--ha-space-2)`
+    resolves to nothing, the declaration is invalid at computed-value time, and
+    getComputedStyle reports the initial value — a padding regression and a
+    missing token then look identical.
+  - **`color-mix` computes to `color(srgb …)`, not `rgb(…)`.** Assert the
+    mechanism (the mix ran, the value sits between its two inputs), not the
+    format, and not the ratio when the source calls it an eye value.
 - **A Lit property binding (`.icon=${…}`) is a JS property, not an HTML attribute**, and
   happy-dom does not reflect one onto an undefined custom element. Assert
   `(el as { icon?: string } | null)?.icon`, never `getAttribute("icon")`. A *static*
@@ -539,12 +602,14 @@ In memory only, never in YAML, a third variant holds what we could not read:
   project's own copy with `js/ts.tsdk.path` (the old
   `typescript.native-preview.tsdk` is deprecated). `ms-vscode.vscode-typescript-next`
   is the classic JS tsserver on the TS 6 line and was removed — the two compete.
-- **`pnpm lint` is not silent on a clean tree**: measured at `44ef06f` on
-  2026-08-19, **27 warnings and 1 info** — 25 `noNonNullAssertion` and 2
-  `useOptionalChain` across four test files (`visibility-section` 11,
-  `badge-list` 8, `picture-studio-card` 5, `config` 3), plus one
-  `useLiteralKeys` in `element-form.ts`. Default output truncates at 20, so pass
+- **`pnpm lint` is not silent on a clean tree**: the baseline is **25 warnings
+  and 4 infos** — re-measured 2026-08-21 against `530ca40`, unchanged by the
+  browser-test work. They are `noNonNullAssertion`, `useOptionalChain` and
+  `useLiteralKeys`, concentrated in four happy-dom test files
+  (`visibility-section` 11, `badge-list` 5, `picture-studio-card` 5, `config` 3)
+  plus one in `element-form.ts`. Default output truncates at 20, so pass
   `--max-diagnostics=100` to see them all. The bar is **exit code 0**, not an
-  empty output — and an
-  implementer reporting "the lint errors are pre-existing" is to be disbelieved
-  and measured (`git show HEAD:<file>` and compare).
+  empty output — and an implementer reporting "the lint warnings are
+  pre-existing" is to be disbelieved and measured. The cheap way, used this
+  session: `git archive HEAD | tar -x -C <tmpdir>` and run biome there, which
+  compares the whole tree rather than one file at a time.

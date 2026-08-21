@@ -32,6 +32,12 @@ or whether the happy path is the whole story a landing page should tell.
 **Scheduled 2026-08-20: this is the next session**, together with a review pass
 over `README.md` and `CHANGELOG.md` — the user named all three at the close.
 
+**Displaced 2026-08-21**: that session became the browser-test session (entry 2c)
+instead. `README.md` and `CHANGELOG.md` were touched only where the new test lane
+made them wrong — a Prerequisites line, a `### Tests` section, two CHANGELOG
+bullets. **The full doc review and the screenshots are still owed**, and they
+still come before the bump.
+
 ## 2. Badges in the card header — designed, not yet planned
 
 **Asked 2026-08-19 at the close of 1.4.0; brainstormed the same day.** The
@@ -119,60 +125,37 @@ about the mechanism and wrong about the remedy. This one correctly identified th
 drawing depended on a logging call, and proposed a fix that made the failure
 worse. Measure the remedy, not just the diagnosis.
 
-## 2c. Real-browser tests — Playwright driven by rstest
+## 2c. Real-browser tests — BUILT 2026-08-21; what is left is narrower
 
-**Asked 2026-08-21, at the close of the error-badge work. Not designed, not
-planned: this is a brainstorm starting point, and the user leads it.**
+**The lane exists.** rstest browser mode, real Chromium, `src/tests/playwright/`,
+alongside `src/tests/happy-dom/`. The durable half — how it is wired, the harness
+traps, what it can and cannot prove — is in `mem:picture-studio/state`: see the
+two-lane bullet under "How we work" and the **amended trap 3**. Do not re-derive
+it, and do not re-open the choice of runner: rstest's own browser mode was
+confirmed to work, one `pnpm test` still runs both lanes.
 
-The motive is explicit and it is not coverage for its own sake: **cut the number
-of manual browser walks the user has to do on every delivery.** Read trap 3 in
-`mem:picture-studio/state` before proposing anything — happy-dom does no layout,
-so nothing about `clamp()`, `cqw`, positioning, pointer muting, compositing or CSS
-is observable in the current suite. 1.2.0 shipped six such defects past a green
-suite and two reviews; 1.3.0 added the chromeless-circle clipping that five
-reviews read and the user saw in seconds; walk fixes 9–16 were all caught by the
-walk and none by the suite. That is the gap this would close.
+It covers placement under all ten anchors, `reanchor`, the whole drag gesture,
+and computed styles. The 1.3.0 chromeless-circle bug was reproduced deliberately
+and the lane went red on it — the gap that motivated the whole thing is closed
+for that class of defect.
 
-What makes it plausible here rather than generic: the repo already runs Home
-Assistant in `docker compose` (container `picture-studio-ha`, port 8123), `dist/`
-is mounted at `/config/www/picture-studio-card/`, and the test dashboard
-`.ha/config/.storage/lovelace.dashboard_test` already holds the three views the
-walks use — panel, sections, masonry. A real browser would drive the thing the
-user drives.
+**What was NOT decided, because the session never needed it, and what is
+therefore still open:**
 
-**There is an uncommitted change in `.devcontainer/post-create.sh` and it must stay
-that way.** The user pasted it from another project on 2026-08-21 as raw material
-for this session; it is deliberately not committed, and the dirty tree at that
-close is intentional — do not commit it, do not revert it. It appends `pnpm
-install` and `pnpm exec playwright install --with-deps chromium`.
-
-Two things it needs before it can run, both found by inspection, not by trying it:
-
-- **`playwright` is not in the root `devDependencies`** — `package.json` carries
-  only `@rstest/core`. `pnpm exec playwright` would fail, and `set -euo pipefail`
-  at the top of the script means the whole post-create fails with it, so a
-  container rebuild would break.
-- **Its comment cites `mem:conventions`**, a memory that does not exist here — this
-  project has only `picture-studio/{state,follow-ups,1.5.0-handoff}`. The comment
-  is to be rewritten for this repo.
-
-It also pre-decides two of the questions below — rstest's browser mode rather than
-a separate runner, and Chromium only. Fine as a starting point, but they are
-choices to confirm, not plumbing.
-
-Questions that will decide the shape, none of them settled:
-- rstest's browser mode versus a separate Playwright runner — what actually
-  integrates, and whether one command can still be `pnpm rstest run`.
-- authentication against the local Home Assistant, and whether a long-lived token
-  in `.ha/` (git-ignored) is acceptable.
-- what is asserted: screenshots compared against baselines, or geometry read from
-  the live DOM. Baselines drift with every Home Assistant update; geometry does
-  not, and the walks have almost always been about position, clipping and
-  pointer behaviour rather than pixels.
-- whether it runs in CI at all, or locally only. The container is a dev
-  dependency, not a CI one today.
-- which walks it can actually retire, and which stay the user's — an honest list
-  matters more than a broad one.
+- **It never touches the real Home Assistant.** The lane mounts our components
+  with stubbed HA elements of known size. So the docker-compose instance, the
+  test dashboard's three views and the authentication question (a long-lived
+  token in `.ha/`) are all still untouched — and still the obvious next step if
+  the panel-versus-sections difference is ever to be automated.
+- **CI: not attempted.** Chromium is a dev dependency today, installed by the
+  devcontainer's post-create. Nothing runs this lane on a push.
+- **Which walks it retires: not enumerated.** The honest answer needs the user,
+  since only they know what they actually look at. What can be said is that
+  shape, size, placement and the drag gesture now have automated coverage, and
+  themes, view types and HA's own rendering do not.
+- **Screenshot comparison was never built** and was not needed. Geometry and
+  computed styles carried every assertion, which is the outcome the original
+  entry hoped for — baselines drift with every HA update, numbers do not.
 
 ## 3. The chrome, beyond icons
 
