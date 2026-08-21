@@ -39,6 +39,37 @@ export const HEADING_SECTION_TAG = "picture-studio-heading-section";
 export const PROBE_TYPE = `custom:${PROBE_TAG}` as const;
 export const CARD_TYPE = "custom:picture-studio";
 
+/** The prefix a Lovelace config gives every third-party badge type. */
+export const CUSTOM_PREFIX = "custom:";
+
+/**
+ * Mirrors `coreBadges` in home-assistant/frontend,
+ * src/panels/lovelace/editor/lovelace-badges.ts — two entries as of 2026-08.
+ * It is a module export we cannot reach from our bundle, so it is duplicated
+ * here.
+ *
+ * **This list is the acceptance list for native badge types.** A native type
+ * absent from it is an error — both the editor row and the card's render gate
+ * on `isSupportedBadgeType`. If Home Assistant introduces a new native badge
+ * type, add it here and release: that is the price of knowing the list, and a
+ * reader must not discover it by surprise.
+ */
+export const CORE_BADGE_TYPES: readonly string[] = ["entity", "shortcut"];
+
+/**
+ * Whether a badge type is accepted by this card.
+ *
+ * For `custom:` types we cannot know the list, so the runtime probe decides.
+ * For native types `CORE_BADGE_TYPES` decides, and one outside it is an error —
+ * the same rule the card's render and the editor row both enforce.
+ *
+ * It lives here, in the shared layer, rather than with the editor's picker,
+ * because it is policy the *card* enforces too: the runtime asks it on every
+ * render. The editor's catalogue is one consumer of the rule, not its owner.
+ */
+export const isSupportedBadgeType = (type: string): boolean =>
+  type.startsWith(CUSTOM_PREFIX) || CORE_BADGE_TYPES.includes(type);
+
 /**
  * The envelope both item families share: where the item sits (position and
  * anchor). The family is named by `type`; the payload lives in `config`.

@@ -7,6 +7,7 @@ import {
   hasVisibility,
   ICON_TAG,
   imagePath,
+  isSupportedBadgeType,
   LABEL_TAG,
   normalizeConfig,
   type PictureItem,
@@ -15,7 +16,6 @@ import {
   stubConfig,
 } from "../config";
 import "./card-heading";
-import { isSupportedBadgeType } from "../editor/badge-catalog";
 import {
   type Anchor,
   type MarkerCorner,

@@ -1,3 +1,4 @@
+import { CORE_BADGE_TYPES, CUSTOM_PREFIX, isSupportedBadgeType } from "../config";
 import type { BadgeConfig, CustomBadgeEntry, HomeAssistant, LocalizeFunc } from "../types";
 
 export interface BadgeChoice {
@@ -17,33 +18,21 @@ interface BadgeClass {
 }
 
 /**
- * Mirrors `coreBadges` in home-assistant/frontend,
- * src/panels/lovelace/editor/lovelace-badges.ts — two entries as of 2026-08.
- * It is a module export we cannot reach from our bundle, so it is duplicated
- * here.
- *
- * **This list is the acceptance list for native badge types.** A native type
- * absent from it is an error — both the editor row and the card's render gate
- * on `isSupportedBadgeType`. If Home Assistant introduces a new native badge
- * type, add it here and release: that is the price of knowing the list, and a
- * reader must not discover it by surprise.
+ * Re-exported so the editor's own modules keep reading in their local
+ * vocabulary. The rule itself lives in `../config`, because the card enforces it
+ * on every render and must not import from the editor layer to do so.
  */
-export const CUSTOM_PREFIX = "custom:";
-
-export const CORE_BADGES: BadgeChoice[] = [
-  { type: "entity", isCustom: false },
-  { type: "shortcut", isCustom: false },
-];
+export { CUSTOM_PREFIX, isSupportedBadgeType };
 
 /**
- * Whether a badge type is accepted by this card.
- *
- * For `custom:` types we cannot know the list, so the runtime probe decides.
- * For native types `CORE_BADGES` decides, and one outside it is an error —
- * the same rule the card's render and the editor row both enforce.
+ * The acceptance list, wearing the shape the picker needs. Derived rather than
+ * restated: `CORE_BADGE_TYPES` is the single list, and a second literal here
+ * would be free to disagree with the one the card gates on.
  */
-export const isSupportedBadgeType = (type: string): boolean =>
-  type.startsWith(CUSTOM_PREFIX) || CORE_BADGES.some((b) => b.type === type);
+export const CORE_BADGES: BadgeChoice[] = CORE_BADGE_TYPES.map((type) => ({
+  type,
+  isCustom: false,
+}));
 
 /**
  * What the native picker shows, minus fuzzy search and entity suggestions.
