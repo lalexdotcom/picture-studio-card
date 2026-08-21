@@ -264,3 +264,103 @@ session starts.
 
 Also still open, and cheap: section 5's title and the merged field's label, both
 ours to write in `src/strings.ts`.
+
+## 9. The drag has no keyboard alternative
+
+**Raised by the 2026-08-21 codebase review, and parked deliberately — it is the
+one finding of that pass that needs a design, not a patch.**
+
+Positioning an item on the picture is pointer-only. `drag-layer.ts` listens for
+`pointerdown` / `pointermove` / `pointerup` / `pointercancel` and nothing else:
+no `keydown`, no `tabindex` on the wrappers, no role, no ARIA. Someone who
+cannot use a pointer can add an item, configure it, and never place it.
+
+**What does not cover it, and why the gap is easy to miss.** `ha-sortable` in the
+item list gives keyboard reordering — but that is stacking order, not position on
+the image. The Anchor picker sets which corner the coordinates are measured
+from, not the coordinates. The drag is the sole way to set `position`, and the
+config form deliberately does not expose `top`/`left` as fields.
+
+**The obvious shape, and it is only a starting point:** make the selected
+wrapper focusable, nudge it on the arrow keys, and commit through the same
+`options.onCommit` the gesture already uses — so the percentage conversion, the
+clamp and the marker corner all stay in one place. A larger step on Shift, and
+Escape to abandon, would mirror what the pointer path already offers through
+`pointercancel`.
+
+**What wants deciding before any of that is written:**
+
+- **The step.** Pixels are wrong — the card is sized in container-query units
+  and the same nudge must mean the same thing on a phone and on a wall panel.
+  `1cqw` is the natural unit but it is not obviously the right *amount*.
+- **Edit mode only, or not.** The drag layer is only attached while `editing`.
+  A keyboard path that exists solely in the editor is defensible and much
+  smaller; one that works on a live dashboard is a different feature.
+- **What takes focus.** The wrappers are built imperatively in `_syncItems` and
+  carry no `tabindex` today. Making every item a tab stop on a photograph with
+  twenty badges is its own usability problem — focus probably belongs to the
+  selected item only, which ties this to the selection the editor already owns.
+- **What to announce.** `role="application"` and a live region reading the new
+  coordinates is one answer; `role="slider"` per axis with
+  `aria-valuenow` is another and reads better to a screen reader, but it means
+  two controls per item.
+
+**There is now somewhere to test it.** `src/tests/happy-dom/card/drag-layer.test.ts`
+was created in that same session and drives the controller directly with
+synthetic pointer events — a keyboard path can be tested the same way, without
+the browser lane.
+
+**Note the pre-existing split while you are here:** the controller's pure
+predicates still live in `src/tests/happy-dom/drag-threshold.test.ts`, at the
+happy-dom root rather than under `card/` and named after neither the module nor
+the file it tests. The review flagged it; it was left alone rather than folded
+into an unrelated change.
+
+## 10. `picture-studio-editor.test.ts` fails the file when the file gets slower
+
+**Found 2026-08-21 while writing that session's fixes. Attempted the same day
+and NOT solved — five approaches, two of which made the suite worse. What
+follows is the map, so the next attempt starts past the dead ends.**
+
+**The symptom.** Several describes in that file end their `afterEach` by setting
+`window.loadCardHelpers` back to `undefined`. Invisible today only because the
+file is quick: the last renders those tests schedule never get a turn before it
+ends. Give the file any extra duration and they do — `probeBadgeType` reads that
+global **synchronously, from `render()`** — so it throws with no test on the
+stack. rstest then reports `failedFiles: 1` while every test in the file passes,
+and the run exits non-zero. A green-looking file that reddens CI.
+
+**Proven, not guessed:** a describe whose only test is `await new Promise(r =>
+setTimeout(r, 300))`, appended with nothing else changed, produces six of these
+and fails the file. So the trigger is duration, and *any* slow test added to
+this file will hit it — not just the one that found it.
+
+**What was tried, and what each cost:**
+
+| Attempt | Result |
+| --- | --- |
+| Benign stub in the new describe's own `beforeEach`/`afterEach` | No effect — the strays come from *earlier* describes |
+| Benign stub in the outermost `afterEach` | Strays drop, but **2 existing tests fail** (`_showListAt scroll timing`, `Items section follows the work`): with a stub that answers, probes settle, fire `requestUpdate`, and the extra renders move their `expand`/`scrollToItem` counts |
+| Outermost benign stub **+** `resetBadgeVerdicts()` | **5 tests fail.** Worse, not better |
+| Generation counter in `resetBadgeVerdicts`, so an in-flight probe cannot settle after a reset | Suite stays green, **but the strays remain at 6** — the failure is at the synchronous call site, not in the continuation, so cancellation is the wrong lever |
+| `if (this.isConnected)` around the probe call in `badge-list.ts` `render()` | **Strays remain at 6.** Either those renders run before the detach, or happy-dom's `isConnected` does not settle the way the guard assumes — not diagnosed further |
+
+**What that leaves.** Two levers are untried and one is a rabbit hole:
+
+- **Per-describe, one at a time** — settle or cancel what each test leaves
+  pending before its `afterEach` nulls the global. This is what the entry
+  originally proposed and it is still the most likely answer. It is slow work
+  and cannot be done file-wide, which is precisely why the file-wide shortcuts
+  above all failed.
+- **Move the probe out of `render()`** into `updated()`, which is *also* what
+  the 2026-08-21 review's Best Practices axis asked for on its own merits (a
+  side effect in `render()` breaks Lit's contract). Fixing the ecosystem finding
+  may fix this one for free. Worth trying **before** the per-describe grind.
+- Do **not** re-try a file-wide stub in the outermost hook. It is the obvious
+  idea, it is in the table above, and it costs other tests.
+
+**The workaround in place, and it is load-bearing:** the `_addItem` regression
+test lives in its own file, `picture-studio-editor.add-item.test.ts`, whose
+header explains why. Do not fold it back in until this entry is closed — the
+acceptance test for any fix is exactly that: fold it back, and the file stays
+green.
