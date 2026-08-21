@@ -420,6 +420,8 @@ What makes a report actionable here, roughly in order of usefulness:
 - Node.js `^20.19.0 || >=22.12.0`
 - pnpm
 - Docker (Docker-in-Docker is supported in the devcontainer)
+- Chromium for the browser tests: `pnpm exec playwright install --with-deps chromium`
+  (the devcontainer's post-create script already does this)
 
 ### Start the dev build watcher
 
@@ -454,13 +456,32 @@ This step persists in the `.ha/config` volume and only needs to be done once.
 
 If HA serves a stale bundle after a rebuild, increment the `?v=` query parameter in the resource URL and reload.
 
+### Tests
+
+Two lanes, split by what a test actually needs:
+
+| Lane | Environment | Where |
+|---|---|---|
+| `happy-dom` | Simulated DOM, no layout at all | `src/tests/happy-dom/` |
+| `playwright` | Real Chromium, real layout | `src/tests/playwright/` |
+
+```bash
+pnpm test                        # both
+pnpm test --project happy-dom    # the simulated lane alone
+pnpm test --project playwright   # the browser lane alone
+```
+
+A test belongs in the browser lane only when happy-dom cannot answer it:
+computed styles, real geometry, or a pointer gesture. Everything else goes in
+`happy-dom`, which needs no browser installed.
+
 ### Other commands
 
 ```bash
 pnpm run ha:logs   # follow Home Assistant logs
 pnpm run ha:down   # stop the container
 pnpm build         # production build into dist/
-pnpm test          # run the test suite (src/tests/)
+pnpm test          # run both test lanes (see Tests above)
 pnpm lint          # Biome check
 pnpm format        # Biome check --write
 pnpm typecheck     # tsc --noEmit
