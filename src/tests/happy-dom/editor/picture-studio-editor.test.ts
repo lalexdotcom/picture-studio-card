@@ -707,3 +707,67 @@ describe("folding the Items section clears the selection", () => {
     expect(el.selectedIndex()).toBe(0);
   });
 });
+
+/**
+ * Adding a badge suspends: its stub comes from the badge's own class, which for
+ * a native type has to be loaded first. Anything the user does in that window —
+ * a drag landing, a delete, a second Add — has already written a new config by
+ * the time the stub arrives.
+ */
+describe("adding a badge does not undo what landed while its stub loaded", () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    resetBadgeVerdicts();
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  /**
+   * Holds `loadCardHelpers` open so the test decides when `_addItem` resumes.
+   * The helpers answer with an error badge, which is what ends `resolveBadgeClass`
+   * right there — one suspension point to control, not three.
+   */
+  const gateHelpers = (): (() => void) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    window.loadCardHelpers = (async () => {
+      await gate;
+      return { createBadgeElement: () => document.createElement("hui-error-badge") };
+    }) as never;
+    return release;
+  };
+
+  it("commits against the config current at resume, not the one captured before", async () => {
+    const release = gateHelpers();
+    const { el } = await mount();
+
+    const commits: PictureStudioConfig[] = [];
+    el.addEventListener("config-changed", (ev) => {
+      commits.push((ev as CustomEvent<{ config: PictureStudioConfig }>).detail.config);
+    });
+
+    el.shadowRoot
+      ?.querySelector(LIST_TAG)
+      ?.dispatchEvent(new CustomEvent("item-add", { detail: { family: "badge", type: "entity" } }));
+
+    // Home Assistant pushes a third item down while the stub is still loading:
+    // the shape a drag commit or a second editor write leaves behind.
+    el.setConfig({
+      ...CONFIG,
+      items: [
+        ...CONFIG.items,
+        { type: "badge", position: { top: "30%", left: "30%" }, config: { type: "entity" } },
+      ],
+    } as unknown as PictureStudioConfig);
+
+    release();
+    await el.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Four, not three: the item added on top of what was there at resume. Three
+    // would mean the pre-await snapshot won and the third item was dropped.
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.items).toHaveLength(4);
+  });
+});
