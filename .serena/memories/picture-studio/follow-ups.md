@@ -241,7 +241,33 @@ Neither blocks anything; both are worth a minute if the area is reopened.
   seen, and cannot be until a frontend that does not load its chunk is tried.
   Every frontend walked so far loads it.
 
-## 6. The preview's condition marker could show the verdict, not just "conditional"
+## ~~6. The preview's condition marker could show the verdict, not just "conditional"~~ — SETTLED, and it was already settled
+
+**Closed 2026-08-21. The user pointed out this had been arbitrated more than
+once and should not have been carried as open** — this entry was a reopening of a
+question decided on 2026-08-14, which is exactly the failure mode a follow-up
+file is supposed to prevent.
+
+**The marker stays "this item has conditions".** The arguments are in
+`docs/superpowers/specs/2026-08-14-item-visibility-design.md`, section "The
+preview marker", and repeated at `_createProbe` in `picture-studio-card.ts`:
+
+- **The live verdict already exists, where Home Assistant puts it** — the form's
+  banner. A second, different answer to the same question in the editor is
+  confusing, not helpful.
+- **A static mark is the better affordance**: it does not flicker with entity
+  state. A verdict on a photograph would change under the eyes of someone
+  placing an item.
+- The marker keys on `preview`, not `editing`, so it also shows on a dashboard in
+  edit mode. `preview` is what makes Home Assistant hold every conditional item
+  on screen, so the mark is there to explain *why they are all visible* — a
+  verdict would be answering a different question.
+
+Having no probe in the editor is the *consequence* of this, not its cause.
+
+**If it is ever reopened, reopen the spec, not this entry.**
+
+### ~~Original entry~~
 
 **Asked 2026-08-19, deferred with the reason written down.** The marker drawn on
 a conditional item in the edit preview is `.item.conditional` — a CSS mask over
