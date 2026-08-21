@@ -210,13 +210,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
       ev.stopPropagation();
       if (!this._config || this._applying) return;
-      this._commit(
-        sectionMerge(
-          schema,
-          this._config as unknown as Record<string, unknown>,
-          ev.detail.value,
-        ) as unknown as PictureStudioConfig,
-      );
+      this._commit(sectionMerge(schema, this._config, ev.detail.value));
     };
 
   private _headingChanged = (ev: CustomEvent<{ heading: HeadingConfig }>): void => {
@@ -432,7 +426,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const label = (s: { name: string }) =>
       s.name === PICTURE_ENTITY ? localizeOwn(hass, "picture_entity") : formLabel(localize, s.name);
     const helper = (s: { name: string }) => formHelper(hass, s.name);
-    const flat = config as unknown as Record<string, unknown>;
 
     return cache(html`
       <picture-studio-section open .label=${localizeOwn(hass, "section_background")} icon="mdi:image">
@@ -497,7 +490,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-section .label=${localizeOwn(hass, "section_filters")} icon="mdi:image-filter-black-white">
         <ha-form
           .hass=${hass}
-          .data=${sectionData(filters, flat)}
+          .data=${sectionData(filters, config)}
           .schema=${filters}
           .computeLabel=${label}
           @value-changed=${this._sectionChanged(filters)}
@@ -507,7 +500,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-section .label=${localizeOwn(hass, "section_entity")} icon="mdi:image-auto-adjust">
         <ha-form
           .hass=${hass}
-          .data=${sectionData(entity, flat)}
+          .data=${sectionData(entity, config)}
           .schema=${entity}
           .computeLabel=${label}
           @value-changed=${this._sectionChanged(entity)}

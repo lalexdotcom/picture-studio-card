@@ -90,7 +90,7 @@ the same moment this file gets updated anyway.
 | `pnpm test --project happy-dom` | 35 | 774 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **210.3 kB / 49.5 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **210.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -347,6 +347,14 @@ In memory only, never in YAML, a third variant holds what we could not read:
 - **`storedConfig`'s `chrome && !isDefaultChrome(chrome)` is not a redundant
   guard.** Two reviewers have flagged it; it is correct.
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
+- **`PictureStudioConfig` is a `type`, never an `interface`, and that is load
+  bearing** (2026-08-21). Only a type alias gets TypeScript's implicit index
+  signature; without one it does not satisfy `Record<string, unknown>`, which is
+  what forced `sectionMerge`, `sectionData` and `mergeBackground` to launder it
+  through `as unknown as` on the way in and back out. Between those casts sat
+  real key manipulation that nothing checked: a `next.camera_imge = chosen` typo
+  produced **zero** compile errors, measured. It produces one now. Changing it
+  back to an `interface` reinstates the casts and the blind spot.
 - **The YAML boundary in `normalizeElementConfig` asserts its type on purpose —
   do not "fix" it** (arbitrated 2026-08-21, after a review raised it). Everything
   outside `size`, `chrome`, `halo` and `show` travels unchecked: `entity`,

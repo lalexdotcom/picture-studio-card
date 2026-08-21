@@ -239,7 +239,14 @@ export interface HeadingConfig {
 export const hasHeading = (heading: HeadingConfig | undefined): boolean =>
   !!(heading?.title || heading?.icon || heading?.badges?.length);
 
-export interface PictureStudioConfig {
+/**
+ * A `type`, deliberately, not an `interface`. Only a type alias gets TypeScript's
+ * implicit index signature, and without one this does not satisfy
+ * `Record<string, unknown>` — which is what forced the editor's section merge to
+ * launder it through a double cast, losing every check in between. See
+ * `sectionMerge` and `mergeBackground`.
+ */
+export type PictureStudioConfig = {
   type: string;
   /**
    * hui-image-element passthrough keys, snake_case as they appear in YAML.
@@ -259,7 +266,7 @@ export interface PictureStudioConfig {
   /** Since 1.5.0. A legacy top-level `title` is folded in here at normalization. */
   heading?: HeadingConfig;
   items: PictureItem[];
-}
+};
 
 const STUB_IMAGE = "https://demo.home-assistant.io/stub_config/floorplan.png";
 
