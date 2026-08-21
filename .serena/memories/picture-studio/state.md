@@ -56,10 +56,34 @@ workflow and is no longer true.
 
 ### What the open version still needs
 
-Whatever it is, it is in `mem:picture-studio/follow-ups` as an open entry. The
-struck ones are done. If an entry there says something is owed, **check the repo
-before repeating it** — that is exactly how a settled entry got reported as
-outstanding.
+**Nothing but the user's decision to release it, and the date that replaces
+`unreleased`.** The 2026-08-21 review branch is merged and deleted; the doc pass
+and the screenshots were done before it. Anything else is in
+`mem:picture-studio/follow-ups` as an open entry — the struck ones are done. If
+an entry there says something is owed, **check the repo before repeating it**;
+that is exactly how a settled entry got reported as outstanding.
+
+### The 2026-08-21 codebase review, and what it settled
+
+Ten axes, sixty findings, twenty-one commits, merged after a whole-branch review
+came back READY TO MERGE with no blocking findings. The report is kept at
+`docs/reviews/2026-08-21-1414-picture-studio-card.md`.
+
+**Three findings were refused, not implemented**, and each has its reasoning
+recorded where the next review will meet it rather than in the report: the
+monolithic bundle (see the single-file build rule below), the YAML boundary in
+`normalizeElementConfig`, and `hasAction` on an unreadable action. **Do not
+re-open them from the report alone** — the report states the diagnosis, the code
+and this file state why the remedy was declined.
+
+**Three of the review's remedies were wrong**, and following them would each have
+made things worse: deleting a whole JSDoc block that also held the only accurate
+description of a return value; `var(--ha-space-1)` for a gap written as 8px, when
+step 1 of that scale is 4px; and the claim that `off` is active for a
+`lawn_mower`, which the guard above the switch catches first. Each is noted at
+the point it would have landed. **The pattern is the project's oldest lesson: a
+review finding can be right about the mechanism and wrong about the remedy.
+Measure the remedy, not just the diagnosis.**
 
 ## The green baseline — refresh it whenever you run the whole suite
 
@@ -82,7 +106,7 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-21, on `fix/review-2026-08-21`:**
+**Measured 2026-08-21, on `main` after the review branch merged:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |

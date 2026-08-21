@@ -368,11 +368,10 @@ was created in that same session and drives the controller directly with
 synthetic pointer events — a keyboard path can be tested the same way, without
 the browser lane.
 
-**Note the pre-existing split while you are here:** the controller's pure
-predicates still live in `src/tests/happy-dom/drag-threshold.test.ts`, at the
-happy-dom root rather than under `card/` and named after neither the module nor
-the file it tests. The review flagged it; it was left alone rather than folded
-into an unrelated change.
+**~~Note the pre-existing split while you are here~~ — fixed 2026-08-21.** The
+predicates and the controller now share `src/tests/happy-dom/card/drag-layer.test.ts`,
+one file for one module. A keyboard path can be driven there the same way the
+pointer one is: synthetic events against a stubbed layout, no browser needed.
 
 ## ~~10. `picture-studio-editor.test.ts` fails the file when the file gets slower~~ — DONE 2026-08-21
 
