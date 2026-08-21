@@ -71,6 +71,12 @@ what was in flight, and the lesson of a five-fix series that only the walk caugh
   The test dashboard is `.ha/config/.storage/lovelace.dashboard_test`, three
   views: sections, panel ("Office"), masonry. **Reading it as JSON is the fast
   way to answer "which config reproduces this".**
+- **The README's gifs are recorded, not hand-captured**, by `scripts/screenshot/`
+  against a dashboard of their own (`picture-studio-capture`). How to run it, what
+  it films, and the traps — Home Assistant's service worker reloading the page
+  mid-take, the injected cursor, the ffmpeg the devcontainer actually has — are in
+  `mem:picture-studio/screenshots`. `dashboard_test` is not what gets filmed and
+  must not become it: its broken items are error fixtures.
 - **The shipped frontend is readable in the container** at
   `/usr/local/lib/python3.14/site-packages/hass_frontend/frontend_latest/*.js`,
   translations at `static/translations/**/<lang>-*.json`, MDI at `static/mdi/`.
