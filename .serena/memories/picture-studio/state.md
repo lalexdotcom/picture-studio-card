@@ -263,6 +263,22 @@ In memory only, never in YAML, a third variant holds what we could not read:
 - **`storedConfig`'s `chrome && !isDefaultChrome(chrome)` is not a redundant
   guard.** Two reviewers have flagged it; it is correct.
 - **Single-file build, no dynamic import, no decorators, Lit bundled.**
+- **The two element forms share sizing and nothing else — and the types are the
+  reason** (2026-08-21, from the codebase review). `sizeSchema`,
+  `sizeToFormFields` and `sizeFromFormFields` live once, in
+  `editor/element-size-form.ts`; `iconSizeSchema` and `labelSizeSchema` are
+  aliases kept so the call sites still read in the kind's own vocabulary.
+
+  **The chrome conversions stay duplicated on purpose. Do not "finish the job".**
+  The review counted four common keys across `iconToFormData` /
+  `labelToFormData` and asked for a shared base. The two cases are not alike:
+  the size copies were written over the *same* `ElementSize` type, so a bound or
+  a rounding rule could drift with nothing to report it — which is exactly what
+  happened and what the extraction closes. `IconChrome` and `LabelChrome` are
+  **distinct types** (1.4.0: two records over one shared CSS module), so the
+  compiler is already the guard against drift there. Factoring them would trade
+  a real safeguard for four fewer lines, and split each form's reading across
+  two files.
 
 ## Hard-won facts about Home Assistant (all verified in their source)
 
