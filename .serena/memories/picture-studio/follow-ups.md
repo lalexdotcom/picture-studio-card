@@ -190,8 +190,13 @@ therefore still open:**
   test dashboard's three views and the authentication question (a long-lived
   token in `.ha/`) are all still untouched — and still the obvious next step if
   the panel-versus-sections difference is ever to be automated.
-- **CI: not attempted.** Chromium is a dev dependency today, installed by the
-  devcontainer's post-create. Nothing runs this lane on a push.
+- **~~CI: not attempted.~~ — DONE 2026-08-21, the hard way.** This entry was
+  right and got tested by reality: the first push after the lane was added failed
+  CI, which skipped the release. `pnpm test` runs both projects and the runner had
+  no Chromium. `ci.yml` now installs it exactly as the devcontainer does, before
+  lint. **The lesson is the entry itself** — a parked "nothing runs this on a
+  push" is a bill that comes due at the next push, and a release was riding on
+  that one.
 - **Which walks it retires: not enumerated.** The honest answer needs the user,
   since only they know what they actually look at. What can be said is that
   shape, size, placement and the drag gesture now have automated coverage, and

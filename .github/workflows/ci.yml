@@ -16,6 +16,17 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # `pnpm test` runs both rstest projects, and the browser lane needs a real
+      # Chromium. Mirrors `.devcontainer/post-create.sh`, deliberately down to the
+      # single browser family: `--with-deps chromium` rather than the default
+      # three, which saves ~200 MB and tens of seconds per run for browsers we
+      # never launch.
+      #
+      # `pnpm exec`, never `pnpm dlx`: `playwright` is an *optional* peer of
+      # `@rstest/browser`, so it is declared in devDependencies and `pnpm exec`
+      # resolves the version the lockfile pins. `pnpm dlx` would fetch the latest
+      # and download browsers the pinned runtime cannot launch.
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
