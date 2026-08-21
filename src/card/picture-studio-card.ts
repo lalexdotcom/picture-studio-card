@@ -494,17 +494,24 @@ export class PictureStudioCard extends LitElement {
       //   the detail dialog its click opens, the same affordance Lovelace gives
       //   everywhere else.
       if (type && !isSupportedBadgeType(type) && el.tagName.toLowerCase() !== ERROR_BADGE_TAG) {
-        // One verdict, two channels: the badge drawn on the picture and the line
-        // Home Assistant prints while loading the component that draws it.
+        // One verdict, two channels: the badge drawn on the picture and this line.
+        // Reported here rather than from _primeErrorBadge because the refusal is
+        // permanent and that method is not — leaving the log there would take the
+        // console channel down with the workaround, silently, the day upstream
+        // ships its fix. Home Assistant's own shape, `(kind, config.type, error)`,
+        // and like Home Assistant it is emitted on every rebuild of the element.
         const message = `Unsupported badge type: ${type}`;
+        console.error("badge", type, new Error(message));
         // Upstream hole (create-badge-element.ts, frontend 20260729.6): `error` is
         // in ALWAYS_LOADED_TYPES but hui-error-badge is never statically imported
         // there, so the always-loaded branch calls setConfig on an unregistered
         // element — throwing on a cold dashboard. HA itself always reaches error
         // badges through createErrorBadgeElement, which is guarded and performs its
-        // own dynamic import. Delete this guard once upstream ships the static import.
-        if (!customElements.get(ERROR_BADGE_TAG))
-          return this._primeErrorBadge(helpers, type, message);
+        // own dynamic import.
+        // Filed upstream: https://github.com/home-assistant/frontend/issues/53721
+        // Delete this guard, _primeErrorBadge, _awaitingErrorBadge and PRIMING_TYPE
+        // once the fixed frontend is inside this card's minimum Home Assistant.
+        if (!customElements.get(ERROR_BADGE_TAG)) return this._primeErrorBadge(helpers);
         // Built by hand rather than asked of helpers.createBadgeElement, and that
         // is the whole point: `error` is an always-loaded type, so the factory
         // routes it straight back through the unguarded branch described above.
@@ -558,22 +565,6 @@ export class PictureStudioCard extends LitElement {
   }
 
   /**
-   * A `hui-card` carrying nothing but the item's conditions and a phantom card.
-   * It is Home Assistant's own implementation of `visibility`, so the
-   * evaluation, the media-query listeners and the `time` timers are theirs. The
-   * verdict lands on the probe as the native `hidden` attribute, and the
-   * stylesheet's sibling rule reflects it onto the item — no JavaScript of ours
-   * in that path.
-   *
-   * `preview` follows the card's own, not `editing`: it is true both in the edit
-   * dialog and on a dashboard in edit mode, which is exactly when Home Assistant
-   * keeps its own hidden cards on screen.
-   *
-   * None at all while editing. The editor's marker says "has conditions", not
-   * "is hidden", so no verdict is needed there — and that is where the drag
-   * layer is already the heaviest.
-   */
-  /**
    * Make Home Assistant fetch hui-error-badge, and arrange for the item to be
    * drawn once it lands. Returns undefined: until then the item is a hole.
    *
@@ -582,23 +573,20 @@ export class PictureStudioCard extends LitElement {
    * in is the public badge factory, and it only reaches that routine by
    * failing, hence a type built to be impossible to construct.
    *
-   * The failure is genuine, so Home Assistant logs it. The log is rewritten in
-   * place rather than silenced: same shape it uses everywhere else
-   * (`kind, config.type, error`), naming the badge actually at fault instead of
-   * our sentinel. Matching is on the type argument, never on the message text —
-   * the text is Home Assistant's and may change, the sentinel is ours and
-   * cannot. The swap is undone in a `finally`, and the window it covers is one
-   * synchronous call, so nothing else can log inside it.
+   * The failure is genuine, so Home Assistant logs it — a line about a type
+   * nobody wrote, next to the caller's line about the badge that really is at
+   * fault. It is dropped, and only it: matching is on the type argument, never
+   * on the message text, because the text is Home Assistant's and may change
+   * while the sentinel is ours and cannot. The swap is undone in a `finally`,
+   * and the window it covers is one synchronous call, so nothing else can log
+   * inside it.
+   *
+   * Upstream: https://github.com/home-assistant/frontend/issues/53721
    */
-  private _primeErrorBadge(
-    helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>,
-    type: string,
-    message: string,
-  ): undefined {
+  private _primeErrorBadge(helpers: Awaited<ReturnType<typeof window.loadCardHelpers>>): undefined {
     const log = console.error;
     console.error = (...args: unknown[]) => {
-      if (args[1] === PRIMING_TYPE) log("badge", type, new Error(message));
-      else log(...args);
+      if (args[1] !== PRIMING_TYPE) log(...args);
     };
     try {
       void helpers.createBadgeElement({ type: PRIMING_TYPE } as never);
@@ -622,6 +610,22 @@ export class PictureStudioCard extends LitElement {
     return undefined;
   }
 
+  /**
+   * A `hui-card` carrying nothing but the item's conditions and a phantom card.
+   * It is Home Assistant's own implementation of `visibility`, so the
+   * evaluation, the media-query listeners and the `time` timers are theirs. The
+   * verdict lands on the probe as the native `hidden` attribute, and the
+   * stylesheet's sibling rule reflects it onto the item — no JavaScript of ours
+   * in that path.
+   *
+   * `preview` follows the card's own, not `editing`: it is true both in the edit
+   * dialog and on a dashboard in edit mode, which is exactly when Home Assistant
+   * keeps its own hidden cards on screen.
+   *
+   * None at all while editing. The editor's marker says "has conditions", not
+   * "is hidden", so no verdict is needed there — and that is where the drag
+   * layer is already the heaviest.
+   */
   private _createProbe(item: PictureItem): ProbeElement | undefined {
     if (item.type === "unknown" || this.editing || !hasVisibility(item)) return undefined;
     const probe = document.createElement("hui-card") as ProbeElement;
