@@ -58,6 +58,35 @@ that `ha-card`'s no longer applies, whether "Card config" should keep writing to
 two places, the fate of a stored `heading_style`, and whether the header sits
 above or below the image. All of them want an eye, not an argument.
 
+## 2b. Watch the upstream error-badge fix, in two hops
+
+**Filed 2026-08-21 and already assigned:**
+https://github.com/home-assistant/frontend/issues/53721 — `create-badge-element`
+lists `error` in `ALWAYS_LOADED_TYPES` without statically importing
+`hui-error-badge`, so the public factory throws for `type: "error"` on a cold
+dashboard. Our workaround is `_primeErrorBadge` in `src/card/picture-studio-card.ts`.
+
+**The card benefits the moment a user's frontend carries the fix** — the guard
+reads `customElements.get`, so it simply stops firing. Nothing to release, nothing
+to configure. What needs watching is only the *deletion* of the dead code, and it
+takes two hops, because the frontend and Home Assistant ship on different clocks:
+
+1. **Which frontend release closes it.** The frontend repo tags `YYYYMMDD.N`; the
+   closing PR's milestone, or the tag the merge lands in, gives it.
+2. **Which core release carries that frontend.** Core pins it as a Python
+   dependency — `home-assistant-frontend==YYYYMMDD.N` in
+   `homeassistant/package_constraints.txt` (also visible in `requirements_all.txt`).
+   The first core release whose pin is that build or later is the real floor.
+
+Only then: raise the card's minimum Home Assistant (see the auto-memory
+`raising-the-ha-floor-is-cheap`) and delete `_primeErrorBadge`,
+`_awaitingErrorBadge` and `PRIMING_TYPE` in one commit. The console line for a
+refused badge is **not** part of that deletion — it moved into the refusal itself
+on 2026-08-21 precisely so it would survive.
+
+Our current floor is HA 2026.6.0, frontend 20260527.4. The container runs
+20260729.6.
+
 ## 3. The chrome, beyond icons
 
 **Settled in 1.4.0: it does NOT move to item level.** Each element kind reads
