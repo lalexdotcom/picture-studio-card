@@ -8,53 +8,73 @@ mouse".
 **Two families of item since 1.2.0**: Lovelace **badges**, and **elements** —
 since 1.4.0 two kinds, `state-icon` and `state-label`.
 
-**1.3.1 is the published release** — tag `v1.3.1` on `6ef4338`. The chain that
-publishes is unchanged: a push to `main` runs CI, then `release.yml` reads
+**1.4.0 is the published release** — tag `v1.4.0`, and `origin/main` is that
+exact commit (`2964732`). Verified against the remote on 2026-08-21 with
+`git ls-remote --tags origin`; **`git tag -l` alone lies here**, because this
+clone has never fetched the tags the release workflow creates. A session that
+reads only local tags will conclude 1.4.0 was never published, and be wrong.
+
+The chain is unchanged: a push to `main` runs CI, then `release.yml` reads
 `version` from `package.json` and creates the `v<version>` tag and the release.
 HACS installs from that tag. **The user pushes, never the agent.**
 
 Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
 automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published 2026-08-17),
-1.3.1 (2026-08-17).
+1.3.1 (2026-08-17), 1.4.0 (2026-08-19).
 
-## 1.4.0 is bumped, merged and waiting on the push
+## 1.5.0 is open, unreleased, and 85 commits sit unpushed — read this before anything
 
-**Session closed 2026-08-19. 584 tests green, lint 0, `tsc` clean, build 189.6 kB /
-44.5 kB, tree clean, nothing pushed.**
+**State on 2026-08-21, verified against the repo and the remote, not remembered.**
 
-`package.json` says **1.4.0** and the CHANGELOG heading reads `## 1.4.0 — 2026-08-19`.
-Three feature branches merged into `main` and deleted: `feat/state-label` (`29c58bd`),
-`feat/config-tidy-up` (`7da4902`), `feat/unknown-items` (`5cafe9e`). The bump is
-`a0f8dcc`. **Only the push is left, and it is the user's.** Pushing publishes: CI, then
-`release.yml` reads `version` and creates the `v1.4.0` tag and the release.
+- `package.json` says **1.5.0**; the CHANGELOG heading reads **`## 1.5.0 — unreleased`**.
+- `origin/main` is still the v1.4.0 commit. Local `main` is **85 commits ahead** of it.
+- Everything 1.5.0 needs is **done**: the card header, the five-section editor, the
+  browser test lane, the re-recorded GIFs and the full README pass. See the struck
+  entries 1, 2 and 8 in `mem:picture-studio/follow-ups`.
+- What is left before release is **the user's decision to release**, and the date
+  that replaces `unreleased`. Nothing else.
 
-What 1.4.0 contains, for the release note: the `state-label` element kind, the halo
-turned opt-in, the state colour on both kinds, one hover treatment shared by them, the
-item list reading top-down, `anchor` moved inside `position`, a label's `show` list, the
-per-tick guard the elements never had, the Content panel with its warning marker, the
-live visibility verdict in the Visibility header — and, from the last branch, **an
-unreadable item is ignored rather than fatal**.
+**The safety catch is load-bearing now, not decorative.** With 85 commits waiting,
+a push would publish — and the only thing standing between an accidental push and
+a published 1.5.0 is that the CHANGELOG heading says `unreleased`. `release.yml`
+refuses to publish while it does. Do not replace that word until the user asks for
+the release.
 
-**Next release is 1.5.0**, and it carries two things: **badges in the card header**
-and **the redone screenshots** in `docs/images/`, shot last so they are not stale
-on arrival. There is no 1.4.1.
+### The versioning workflow changed on 2026-08-21
 
-The header work was brainstormed on 2026-08-19 and its **draft spec** is
-`docs/superpowers/specs/2026-08-19-card-heading-design.md` — feasibility settled,
-decisions recorded, six questions still open at the end. The `loadCardHelpers`
-wall that this entry once said would decide its shape **does not apply**; see the
-heading-badge facts below. Resume from the spec and
-`mem:picture-studio/follow-ups` entry 2, not from scratch.
+**The bump opens a version; it no longer closes one.** When the user calls for a
+new version — and only then, in so many words — `package.json` and the CHANGELOG
+heading both take the new number immediately, with `unreleased` standing in for
+the date. Everything delivered afterwards is written under that heading; there is
+never a separate `## unreleased` section beside a numbered one. Replacing
+`unreleased` with a real date is the act of releasing, and it is the last thing
+done.
 
-## 1.5.0 is merged on `main` and unpushed — read `mem:picture-studio/1.5.0-handoff` first
+This is why 1.5.0 already carries its number while unreleased, and it is written
+into `AGENTS.md` rules 4 to 7. The older text here said "then the bump, then the
+push", which was the previous workflow and is no longer true.
 
-`feat/card-heading` was reviewed READY TO MERGE and merged (`608ced7`, `--no-ff`)
-on 2026-08-20, then deleted. The card's header, the redrawn five-section editor
-and the browser walk are all behind us. `main` sits ~57 commits ahead of
-`origin/main`; **do not push** — the version is still 1.4.0 and pushing publishes.
-What remains: the doc pass (README, CHANGELOG), the screenshots, then the bump,
-then the push. In that order, settled with the user. That memory carries the state,
-what was in flight, and the lesson of a five-fix series that only the walk caught.
+## The green baseline — 2026-08-21, on `fix/review-2026-08-21`
+
+Measured, not remembered. Check against these before blaming your own change.
+
+- **797 tests** across 39 files, `failedFiles: 0`, exit 0. `pnpm test` runs both
+  lanes; `--project happy-dom` or `--project playwright` runs one.
+- `pnpm typecheck` clean.
+- `pnpm lint` **exits 0 with 25 warnings and 4 infos**. That 25/4 is the
+  long-standing baseline, almost all `!` non-null assertions in test files. It is
+  not a regression and no session has been asked to clear it — but a *26th*
+  warning is yours.
+- `pnpm build`: **210.0 kB / 49.4 kB gzip**, one file, as HACS requires.
+
+**On the bundle size, because a review will raise it again:** the whole editor
+ships to every dashboard viewer, and that is not fixable here. Splitting needs a
+dynamic `import()`, which rspack turns into a second chunk that the release never
+publishes — it has shipped a broken card once already. `hacs.json` names one
+filename and `release.yml` uploads one asset. The diagnosis is correct and the
+remedy is refused; the whole reasoning is in
+`docs/reviews/2026-08-21-1414-picture-studio-card.md`. At 49.4 kB gzip for the
+card *and* Lit, the prize is roughly 20 kB, once, before caching.
 
 ## Where things are
 
@@ -62,7 +82,11 @@ what was in flight, and the lesson of a five-fix series that only the walk caugh
   (authoritative base), then `2026-08-12-item-anchor`,
   `2026-08-13-per-tick-work`, `2026-08-13-release-on-version-bump`,
   `2026-08-13-state-icon-element`, `2026-08-14-icon-chrome`,
-  `2026-08-14-item-visibility`, `2026-08-17-state-label`.
+  `2026-08-14-item-visibility`, `2026-08-17-state-label`,
+  `2026-08-18-config-tidy-up`, `2026-08-19-unknown-items`,
+  `2026-08-19-card-heading`, `2026-08-20-config-form`.
+- Reviews: `docs/reviews/` — one file per full-codebase review, timestamped. The
+  2026-08-21 one is the first.
 - Local HA: `docker compose`, container `picture-studio-ha`, http://localhost:8123.
   `dist/` is mounted at `/config/www/picture-studio-card/`, so a `pnpm build` is
   live at `/local/picture-studio-card/picture-studio.js` — only the dashboard
@@ -106,16 +130,23 @@ src/card/visibility-probe.ts      the phantom card a hui-card probe carries
 src/card/drag-layer.ts            pointer gesture, injected callbacks
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/visibility-section.ts  hosts HA's own hui-card-visibility-editor
-src/editor/badge-list.ts          rows, ha-sortable, the add menu, the flip
+src/editor/badge-list.ts          rows, ha-sortable, the add menu, the flip.
+                                  Renders only — the verdicts it draws live in
+                                  items.ts, and it probes from updated(), never
+                                  from render()
 src/editor/badge-form.ts          the badge's own editor + Position section
 src/editor/element-form.ts        our ha-form, Appearance, Size and position
-src/editor/state-label-form.ts    the label's schema halves
-src/editor/state-icon-form.ts     the icon's schema halves
+src/editor/state-label-form.ts    the label's schema halves (size is shared)
+src/editor/state-icon-form.ts     the icon's schema halves (size is shared)
+src/editor/element-size-form.ts   sizeSchema + size <-> form, once for both kinds
 src/editor/anchor-picker.ts       switch + hand-built 3x3 grid
 src/editor/badge-catalog.ts       core + custom badge choices
 src/editor/badge-existence.ts     does this HA know this badge type? cache + grace
 src/editor/element-catalog.ts     element kinds, labels, stubs
-src/editor/items.ts               add / replace / move / remove / rowLabel (pure)
+src/editor/items.ts               add / replace / move / remove / rowLabel,
+                                  and the item verdicts: itemsSeverity,
+                                  showsNothing / elementShowsNothing,
+                                  hasUnreadableVisibility (pure)
 src/editor/icons.ts               only the icon NAMES two components share
 src/suggestion.ts      entity-first card picker suggestion (pure)
 src/index.ts           registration + window.customCards
@@ -545,6 +576,23 @@ In memory only, never in YAML, a third variant holds what we could not read:
    tests once asserted different keys; they now share one `KEYS` list. Same
    reasoning put the shared hover block's assertions in one file, with both
    element tests asserting the *same* three selectors.
+
+7. **Aiming five fixes at a symptom is not five attempts, it is one mistake
+   repeated.** On 2026-08-21 a test file failed as a *file* while every test in it
+   passed. Five fixes were tried — stubs in three different hooks, a generation
+   counter, an `isConnected` guard — and two of them broke other tests. All five
+   tried to guarantee a global was *present*. The answer was to make the caller
+   tolerate its absence, and one instrumented run named it. **When the second fix
+   for one symptom fails, stop fixing and go measure where the failure actually
+   originates.**
+8. **Local git tags are not the release history.** `git tag -l` stops at v1.3.1 in
+   this clone; the remote has v1.4.0. Use `git ls-remote --tags origin`. A session
+   read the local list, told the user 1.4.0 was unreleased, and was corrected by
+   the user.
+9. **Memory is a claim, not evidence.** The same session repeated "the screenshots
+   are still owed" from a follow-up entry that had been settled hours earlier by a
+   commit sitting in the log. Confront a memory with the repo before acting on it,
+   especially any memory that says something is *owed*.
 
 ## How we work (project rules, see AGENTS.md)
 

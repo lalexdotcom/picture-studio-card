@@ -31,6 +31,29 @@
    memory files, docs, a settled style — commit it without asking. If it is
    not, ask. Pushing is still never yours.
 
+## Project memory
+
+The memory files under `.serena/memories/picture-studio/` are read at the start
+of a session and believed. That is what makes them useful and what makes a
+stale one expensive.
+
+1. **Update the memory as part of the delivery, not at the close.** A commit
+   that settles something and leaves the memory saying it is still owed has not
+   finished. The close is a backstop, not the moment.
+2. **A settled follow-up is struck through, never deleted.**
+   `## ~~4. Its title~~ — DONE <date>`, plus a line naming what closed it. The
+   numbering must never shift: comments, specs and the state file refer to
+   entries by number. A struck entry also tells the next reader that the
+   question was asked and answered, which a deleted one cannot.
+3. **A memory is a claim; the repository is the evidence.** Confront one with
+   `git log`, the file, or the remote before acting on it — above all any
+   memory saying something is *owed*. When the two disagree, the repository
+   wins and the memory gets fixed in the same breath.
+4. **Write what would bite someone cold**, not a changelog of the session: the
+   trap, the measurement, the decision that must not be re-litigated, and the
+   reasoning behind a refusal. What a `git log` already says does not need
+   saying twice.
+
 ## Language
 
 ALWAYS use **French** language for chat. Everything else: **English**.
