@@ -110,8 +110,8 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 39 | 822 |
-| `pnpm test --project happy-dom` | 36 | 779 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 828 |
+| `pnpm test --project happy-dom` | 37 | 785 |
 | `pnpm test --project playwright` | 3 | 43 |
 
 `pnpm build`: **209.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
@@ -421,6 +421,28 @@ In memory only, never in YAML, a third variant holds what we could not read:
   compiler is already the guard against drift there. Factoring them would trade
   a real safeguard for four fewer lines, and split each form's reading across
   two files.
+
+### `state-display` drops a `name` entry unless you hand it `.name`
+
+Verified 2026-08-21 in the shipped frontend, build 20260729.6, chunk 16664:
+
+    if ("name" === t && this.name) return html`${this.name}`;
+    …
+    render() { … .map(t => this._computeContent(t)).filter(Boolean) … }
+
+A `name` entry in `content` renders `this.name` **and only if it is set**.
+Otherwise nothing matches, it falls through to `stateObj.attributes["name"]`,
+finds nothing, returns `undefined` — and `render()` drops it with
+`.filter(Boolean)`. No warning, no gap in the output: the entry simply is not
+there, and the ` · ` join closes over it.
+
+**Every native consumer passes it**, `hui-entity-badge` as
+`hass.formatEntityName(stateObj, config.name)` (chunk 34564). Ours did not, so a
+label set to `[Name, Color mode]` read "HS" while a badge with the same settings
+read "Break room · HS". Pinned now by
+`tests/happy-dom/card/state-label-state-display.test.ts`, which asserts all five
+properties rather than the one that broke — the failure mode of this element is a
+property nobody passes, and that is invisible until a config happens to use it.
 
 ## Hard-won facts about Home Assistant (all verified in their source)
 

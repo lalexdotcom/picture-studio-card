@@ -101,6 +101,22 @@ export class PictureStudioStateLabel extends LitElement {
    * so its absence must degrade to something rather than to a blank label.
    * formatEntityState is a function on hass, always there, and it renders
    * exactly what the default state_content produces.
+   *
+   * **Every property the native entity badge passes, we pass.** `.name` is the
+   * one that was missing, and its absence was invisible until someone put `Name`
+   * in a state content: state-display renders that entry as `this.name` and
+   * *only* if `this.name` is set, otherwise it looks for an attribute called
+   * `name`, finds none, returns undefined — and `render()` drops it with
+   * `.filter(Boolean)`. So `[Name, Color mode]` silently became "HS" here while
+   * the badge beside it, with the same config, read "Break room · HS". Read out
+   * of the shipped frontend, build 20260729.6, chunk 16664:
+   *
+   *     if ("name" === t && this.name) return html`${this.name}`;
+   *     …
+   *     .map(t => this._computeContent(t)).filter(Boolean)
+   *
+   * The badge computes it as `hass.formatEntityName(stateObj, config.name)`,
+   * which is what the name row above already uses — the helper was one line away.
    */
   private _renderState(stateObj?: HassEntity) {
     if (!stateObj) return nothing;
@@ -111,6 +127,7 @@ export class PictureStudioStateLabel extends LitElement {
         .stateObj=${stateObj}
         .content=${this._config?.state_content}
         .timeFormat=${this._config?.time_format}
+        .name=${this._hass?.formatEntityName?.(stateObj, this._config?.name)}
       ></state-display>`;
     }
     return html`<span class="state">${this._hass?.formatEntityState?.(stateObj) ?? ""}</span>`;
