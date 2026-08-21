@@ -198,7 +198,8 @@ therefore still open:**
   push" is a bill that comes due at the next push, and a release was riding on
   that one.
 - **Which walks it retires: not enumerated.** The honest answer needs the user,
-  since only they know what they actually look at. What can be said is that
+  since only they know what they actually look at. **Carried into entry 11**,
+  where it is the question that dimensions the whole thing. What can be said is that
   shape, size, placement and the drag gesture now have automated coverage, and
   themes, view types and HA's own rendering do not.
 - **Screenshot comparison was never built** and was not needed. Geometry and
@@ -440,3 +441,78 @@ mechanism took one attempt.
 The probe also left `render()` for `updated()` in the same commit — the review's
 Best Practices axis asked for that on its own merits, and it is worth being clear
 that **it fixed nothing here**.
+
+## 11. A third test lane, against the real Home Assistant
+
+**Asked 2026-08-21, deliberately not designed — the session ran short of context
+and the user parked it for a fresh one.** It is architectural: a new subsystem,
+authentication, a live instance, fixtures. It starts with a proper brainstorm,
+not with code.
+
+**The ask:** an idempotent bootstrap that creates a dedicated user if absent, a
+hidden dashboard if absent, a sections view and a panel view, and cards with
+fixtures — so that what the user has been validating by hand through every
+browser walk becomes something a command re-runs.
+
+### Most of the plumbing already exists — read it before designing anything
+
+`scripts/screenshot/` solves the hard half already, and the next session should
+start by reading it rather than inventing:
+
+- **`ha-session.mjs`** runs the real login flow — `/auth/login_flow`, then
+  `/auth/token` — and returns what the frontend keeps in `hassTokens`. No
+  long-lived token to store, which is what entry 2c worried about. `seed()`
+  writes it into `localStorage` before the first script runs, so the frontend
+  never shows a login form.
+- **`setup-capture-dashboard.mjs`** creates a dashboard **idempotently** through
+  `hass.callWS` — `lovelace/dashboards/list`, then `create` only when absent,
+  then `lovelace/config/save`. It already passes `show_in_sidebar: false`, which
+  is the "hidden dashboard" half of the ask, and without `--force` an existing
+  one is left untouched.
+
+So the bootstrap pattern is proven against this very instance. What is missing is
+the user, the second view type, the fixtures, and the assertions.
+
+### The dedicated user is its own point, and it cuts both ways
+
+**The screenshots currently log in as an existing user** — `HA_USER`/`HA_PASS`,
+defaulting to `Card`/`card`. The tests must not do that: they need a user of
+their own, created idempotently like the dashboard.
+
+**And so, ideally, should the screenshots.** The user asked for the same
+create-if-absent treatment there — same principle, same script family. That
+makes this entry touch `scripts/screenshot/` as well, not only a new lane.
+
+### The question that dimensions everything, still unanswered
+
+Entry 2c already said it and it is still true: **which walks this retires has
+never been enumerated, and only the user can say.** It decides the number of
+fixtures, the runtime, and how fragile the lane is. Four candidates were drafted
+while exploring, and they are worth putting back on the table:
+
+- **Panel versus sections.** The one thing no current lane can see: the card
+  sizes itself from `container-type: inline-size` on `.root`, so `cqw` resolves
+  against a real card width. This is also the walk the user does *every time*.
+- **The real Home Assistant elements.** `state-badge`, `state-display`,
+  `hui-heading-badge` — everything our stubs replace. This is exactly the class
+  of defect found on 2026-08-21: a missing `.name` on `state-display` that
+  **neither existing lane could see**, because one has no such element and the
+  other has no Home Assistant.
+- **The error paths.** Unreadable items, refused badge types, malformed
+  visibility, the component-missing fallbacks. Static fixtures, deterministic
+  rendering, the least fragile of the four.
+- **Themes and colours.** Follow-up 4 has been open since 1.3.0 for want of
+  exactly this.
+
+### Constraints to carry in
+
+- **CI cannot run this as it stands.** `ci.yml` has a runner, not a Home
+  Assistant. Either the lane is local-only and says so, or CI gains an HA service
+  container — a real decision, not a detail.
+- **Screenshot comparison was already rejected**, on 2026-08-21: baselines drift
+  with every HA update, numbers do not. Assertions should stay geometry and
+  computed styles, as the browser lane's do.
+- `.ha/config/.storage/lovelace.dashboard_test` already holds three views and is
+  the user's own fixture. **It is not what gets filmed and must not become what
+  gets tested** — its broken items are error fixtures, and entry 2c's warning
+  about not conflating the two applies here too.
