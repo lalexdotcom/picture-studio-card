@@ -59,10 +59,18 @@ stale one expensive.
    can only drift. Record *where to look* and *how to read the answer*, never
    the answer.
 6. **The exception is a figure that is expensive to derive** — the test count,
-   the build size — and it comes with an obligation: whoever runs `pnpm test`
-   or `pnpm build` updates the recorded figure and its date in the same breath.
-   A baseline nobody refreshes reads as authoritative and is quietly wrong,
-   which is worse than having none.
+   the build size — and it comes with an obligation: whoever runs the **whole**
+   suite, or a build, updates the recorded figure and its date in the same
+   breath. A baseline nobody refreshes reads as authoritative and is quietly
+   wrong, which is worse than having none.
+7. **A scoped run never touches the baseline.** `pnpm test <file>` prints the
+   same JSON shape as a full run — `"passedTests": 30` with nothing saying it
+   was scoped — so the count from a single file will silently corrupt the
+   record if it is copied in. The tell is `testFiles`: the baseline carries it
+   next to the test count precisely so a partial run is recognisable. **If your
+   run does not report every test file, it is not a baseline.** Scoped runs are
+   the normal thing while working; the full run belongs to the delivery's
+   verification, which is also when the memory is updated.
 
 ## Language
 

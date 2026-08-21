@@ -61,26 +61,57 @@ struck ones are done. If an entry there says something is owed, **check the repo
 before repeating it** — that is exactly how a settled entry got reported as
 outstanding.
 
-## The green baseline — refresh it whenever you run the suite
+## The green baseline — refresh it whenever you run the whole suite
 
 **This is the one place figures are recorded, and only because deriving them is
 slow.** A full run is minutes; `jq -r .version package.json` is a second. Anything
 in the second category lives under "Where the project stands" as a command, not as
 a value.
 
-**The rule that makes this section trustworthy: whoever runs `pnpm test` or
-`pnpm build` updates these numbers and the date in the same breath.** A baseline
+**The rule that makes this section trustworthy: whoever runs the whole suite, or
+a build, updates these numbers and the date in the same breath.** A baseline
 nobody refreshes is worse than no baseline — it reads as authoritative and is
 quietly wrong, which is precisely how the release status went bad twice in one
-day. If the date below is older than your last run, the numbers are yours to fix.
+day. If the date below is older than your last full run, the numbers are yours.
+
+**A scoped run must never be copied in here, and the trap is that it looks
+identical.** `pnpm test src/tests/happy-dom/editor/items.test.ts` prints the same
+JSON as a full run — `"passedTests": 54`, no marker saying it covered one file.
+**`testFiles` is the tell, which is why it is recorded beside the count: if your
+run does not report every file, it is not a baseline.** Scoped runs are the
+normal way to work; the full run belongs to a delivery's verification, which is
+the same moment this file gets updated anyway.
 
 **Measured 2026-08-21, on `fix/review-2026-08-21`:**
 
-- **797 tests** across **39 files**, `failedFiles: 0`, exit 0.
-- `pnpm build`: **210.0 kB / 49.4 kB gzip**.
+| Run | `testFiles` | tests |
+| --- | --- | --- |
+| `pnpm test` — both lanes, **this is the baseline** | 39 | 797 |
+| `pnpm test --project happy-dom` | 36 | 754 |
+| `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm test` runs both lanes; `--project happy-dom` or `--project playwright` runs
-one. `pnpm typecheck` is expected clean — no number to carry.
+`pnpm build`: **210.0 kB / 49.4 kB gzip**. No scoped variant — a build is always
+the whole thing. `pnpm typecheck` is expected clean; no number to carry.
+
+A single lane is a scoped run, so it does not update the baseline either — the
+lane figures are here only so a lane run can be recognised as complete for its
+own lane.
+
+**Never write `pnpm test -- …` here. The `--` discards every argument after it**
+and the whole suite runs regardless — no error, no warning, just 39 files and 797
+tests where a scoped run was expected. Measured on 2026-08-21, all four cases:
+
+| Command | What runs |
+| --- | --- |
+| `pnpm test --project happy-dom` | that lane |
+| `pnpm test <file>` | that file |
+| `pnpm test -- --project happy-dom` | **everything** |
+| `pnpm test -- <file>` | **everything** |
+
+The silence is the danger: the output shape is identical, so a scoped run and a
+full one are told apart only by `testFiles`. A whole session of runs was believed
+to be scoped and was not — and the first draft of this very entry claimed a
+positional path survived the `--`, which measuring disproved.
 
 **`pnpm lint` exits 0 while reporting warnings, and that is not a failure.** The
 count has sat in the mid-twenties for a long time, almost all `!` non-null
@@ -653,7 +684,8 @@ In memory only, never in YAML, a third variant holds what we could not read:
   `src/tests/happy-dom/editor/badge-existence.test.ts` set the idiom.
 - **Two test lanes since 2026-08-21, declared as rstest `projects`.** One command
   still runs both (`pnpm test`); `--project happy-dom` / `--project playwright`
-  runs one. `@rstest/browser` peer-depends on `@rstest/core` **exactly**, so the
+  runs one — **written without a `--`, see the baseline section: `pnpm test --
+  --project happy-dom` silently runs everything**. `@rstest/browser` peer-depends on `@rstest/core` **exactly**, so the
   two versions move together — and `playwright` is an *optional* peer, which pnpm
   never installs on its own, hence the explicit devDependency. Chromium binaries
   come from `pnpm exec playwright install --with-deps chromium`, which the
