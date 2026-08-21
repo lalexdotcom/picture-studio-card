@@ -97,6 +97,28 @@ on 2026-08-21 precisely so it would survive.
 Our current floor is HA 2026.6.0, frontend 20260527.4. The container runs
 20260729.6.
 
+### Raised by the 2026-08-21 review, not acted on
+
+Both are pre-existing, neither blocks anything, and **neither was fixed** — they
+were flagged and left for the user to schedule.
+
+- **`_primeErrorBadge`'s `whenDefined` callback does not check `isConnected`.**
+  `_layer` reads `this.renderRoot`, which survives disconnection, so a card
+  removed from the document still rebuilds and still writes its console line when
+  the class lands. In the suite this is visible: every earlier test in the
+  cold-start block leaves a card subscribed, and the `customElements.define` in
+  the last test wakes all of them at once — which is why the count assertion there
+  had to switch to `entity-filter`, a type no earlier test uses. That isolation
+  works but does not scale: a future count test needs yet another unused type, and
+  nothing enforces it. `if (!this.isConnected) return;` at the top of the callback
+  fixes both the spurious work and the fragility. **The reviewer's one scheduled
+  recommendation.**
+- **The `console.error` call sits inside the `try` that builds the badge.** If it
+  ever threw — a strict spy in some future test — the `catch` would swallow the
+  badge. Harmless today, but it makes drawing depend on a reporting call. Moving
+  it just above the `try` would decouple them, at the price of a line emitted
+  without a badge in the branch documented as unreachable.
+
 ## 2c. Real-browser tests — Playwright driven by rstest
 
 **Asked 2026-08-21, at the close of the error-badge work. Not designed, not
