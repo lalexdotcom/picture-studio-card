@@ -1,36 +1,42 @@
 # Picture Studio
 
-**Put badges and icons on a picture and drag them where they belong — right in the card editor, without writing a line of YAML.**
+**Turn any picture into a dashboard: put your Home Assistant entities where they belong — right in the card editor, without writing a line of YAML.**
 
 A floor plan, a photo, a camera view: pick an image, drop items on it, and place them with the mouse on the live preview. What you drag is what you get.
 
 ## The editor
 
-![Adding a badge in the card editor and dragging it into place on a floor plan](docs/images/editor.gif)
+![Adding an item in the card editor, dragging it onto the floor plan, re-anchoring it, then adding a badge to the card's header](docs/images/editor.gif)
 
-## Badges
+## The dashboard
 
-Once saved, they behave like anything else in Lovelace: tap one to toggle it, or open its more-info dialog.
+Once saved, what you placed behaves like anything else in Lovelace: a tap opens its more-info, unless you give it something else to do.
 
-![Badges on the floor plan being tapped on a dashboard, opening more-info dialogs](docs/images/demo.gif)
+![The floor plan on a dashboard: a tap switches a light on, a long press opens a badge's more-info dialog](docs/images/dashboard.gif)
 
-## Custom badges
+## What goes on the picture
 
-Badges from other frontend plugins appear in the picker next to the built-in ones and render on the image just the same. That is the main reason this card exists.
+Pick the kind that fits what you want to show, then place it by dragging it on the live preview — selecting an item there opens its own settings.
 
-![Adding a Mushroom template badge from the picker and dragging it onto the plan](docs/images/custom-badge.gif)
+### Badges
 
-## Elements
+A badge is Home Assistant's own — the pill you already know from the top of a dashboard view, with its icon, its state and the colour the entity gives it. On the picture it behaves exactly as it does anywhere else.
 
-A badge carries a pill, a label and one fixed size. When what you want on the
-plan is something else, add an **element** item instead: the same entity, name
-and colour controls, without the pill.
+**Custom badges** count too. Badges from other frontend plugins appear in the picker next to the built-in ones and render on the image just the same.
 
-Two kinds are available: a **state icon** that reflects an entity's icon and
-colour, and a **state label** that places the entity's name, state, or both as
-text on the picture.
+You can set a badge's [anchor](#anchor) and its [visibility](#visibility).
 
-You choose [how big each is](#element-size) and [what it stands on](#appearance).
+### Icons
+
+An icon is the entity's glyph and nothing else: no pill, no text, no surface unless you ask for one. It is what you want when the picture has to stay readable underneath — a lamp on a floor plan, a door, a camera. It takes the colour of the entity's state, or a colour you name.
+
+You can set its [anchor](#anchor), its [size](#size), its [appearance](#appearance) and its [visibility](#visibility).
+
+### Labels
+
+A label puts text on the picture: the entity's state, its name, or both. A temperature over the room it measures, a title over an area, a countdown next to the door it belongs to.
+
+You can set its [anchor](#anchor), its [size](#size), its [appearance](#appearance) and its [visibility](#visibility).
 
 ## Install
 
@@ -85,10 +91,47 @@ Updating means repeating steps 1 and 2, then hard-refreshing. Appending a query 
 2. **Add card**.
 3. Search for **Picture Studio**.
 4. Pick the background image.
-5. Add badges or icons, then drag them onto the image in the preview.
+5. Add badges, icons or labels, then drag them onto the image in the preview.
 6. **Save**.
 
-## Configuration
+## Card configuration
+
+### Background
+
+The picture comes from one of three places, and the editor's **Background**
+section holds all three: a **path** you type — `/local/floorplan.png` — a file
+you drop on the field or pick from your media library, or an **entity**. An
+`image` entity draws whatever it currently holds; a **camera** draws its
+snapshot, or its live stream if you ask for **Live** instead of **Auto**.
+
+Around it:
+
+- **Dark mode image** — a second picture, used when your dashboard is dark.
+  Without one, the same picture serves both.
+- **Aspect ratio** — `16:9`, `1:1`, `56.25%`. The card is as tall as the
+  picture unless you say otherwise.
+- **Filters** — a CSS filter over the picture, and a second one for dark mode:
+  `brightness(0.7)`, `grayscale(1)`, anything `filter:` accepts. The editor
+  keeps them in their own **Filters** section.
+- **Entity** — name one in the editor's own **Entity** section, and the picture
+  follows its state: greyed while the entity is off or unavailable, which is
+  Home Assistant's own behaviour for a state-driven image. With **state images**
+  or **state filters** you go further and map each state to its own picture or
+  its own filter.
+
+The card sizes itself to the image by default. If you resize it to a height the
+image does not fit — in the edit dialog's **Layout** tab, not this form — the
+image keeps its proportions, and the part that no longer fits stays reachable by
+scrolling the card.
+
+### Heading
+
+The card can carry a header above the picture: a **title**, an **icon**, and
+**badges** — Home Assistant's own heading badges, the ones a view's heading card
+uses, with the same picker and the same forms. All three are optional and a card
+without them starts straight at the picture.
+
+## Item configuration
 
 ### Size and position
 
@@ -100,11 +143,11 @@ the item they place.
 - **Automatic** *(default)* — the anchor follows the coordinate.
 - **Anchored** — the coordinates place the point you pick in the grid.
 
-#### Element size
+#### Size
 
-An element's size follows the **card**, not the screen: in a sections view a
-narrow column gives a smaller element than a wide one, and the same card on a
-phone scales down with it. Three modes decide how closely:
+An item's size follows the **card**, not the screen: in a sections view a narrow
+column gives a smaller item than a wide one, and the same card on a phone scales
+down with it. Three modes decide how closely:
 
 - **Automatic** *(default)*
 - **Adaptive** — your own ratio, between your own bounds.
@@ -115,21 +158,29 @@ the box is as wide as the text.
 
 ### Appearance
 
-A **halo** lifts an element off the picture with a faint white rim and a soft
-shadow behind it. It is off by default — tick **Stand out** in an item's
-Appearance section to add it. The checkbox is available on both icons and labels.
+**Stand out** draws a halo and a rim to make the item pop off the picture.
 
 A **chrome** surrounds an item with its own surface.
 
 - **Theme** — **Auto**, **Light** or **Dark**.
-- **Radius** — rounded corners. For an icon: a percentage of its box. For a
-  label: pixels.
+- **Radius** — rounded corners.
 - **Opacity** — fades the surface alone.
 - **Content** — how much of the surface an icon's glyph takes.
 - **Pill** (label only) — fully rounded ends, regardless of the box's width.
 - **Padding** (label only) — the gutter between the text and the surface edge.
 
-### YAML reference
+### Interactions
+
+Tap, hold and double tap are Home Assistant's own: default is **More info** on
+tap.
+
+### Visibility
+
+An item is shown or hidden by the same conditions a card is, set in its own
+**Visibility** section — Home Assistant's condition editor, with its live
+preview.
+
+## YAML reference
 
 ```yaml
 type: custom:picture-studio
@@ -221,8 +272,6 @@ items:
       left: 30%
 ```
 
-> `image_entity` takes an `image` entity only. A `person` entity is not supported: the background is a `hui-image-element`, whose image resolution needs an access token that a person has not — and it suppresses the static `image` along with it, leaving the card blank.
-
 `image` and `dark_mode_image` accept a plain path written by hand, or the object the editor's media picker stores once you browse or upload a picture:
 
 ```yaml
@@ -233,7 +282,7 @@ image:
 
 Both forms render identically; the editor displays either one.
 
-#### Positions, anchors and sizes
+### Positions, anchors and sizes
 
 An element's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices
 the editor offers. `adaptive` reads `min`, `ratio` and `max`, `fixed` reads
@@ -268,33 +317,33 @@ they are how you place an item deliberately over the edge. Dragging never create
 an overflow and never worsens one — an item already hanging off the edge can be
 pulled back in but not pushed further out, and once fully inside it stays there.
 
-#### Which item is on top
+### Which item is on top
 
 Items overlap in the order `items` gives them: **the last one in the YAML is
 drawn over the others**. There is no `z-index` to set.
 
-#### Visibility
+### Interaction keys
 
-Every item takes an optional `visibility` list. The conditions are Home
-Assistant's own — entity state, numeric state, screen size, time, user, zone,
-and the `and` / `or` / `not` combinators — the same ones a card or a badge
-accepts. The item is drawn when every entry in the list is met; an absent or
-empty list means always drawn. A `visibility` that is not a list at all is
+Every item takes `tap_action`, `hold_action` and `double_tap_action`, in the
+shape Home Assistant's own cards and badges use. An absent `tap_action` means
+`more-info`; an item stops reacting once `tap_action` is `{ action: none }` and
+neither hold nor double tap carries an action of its own. Nothing reacts while you are editing the card — the whole
+picture belongs to placing items there.
+
+### Visibility keys
+
+Every item takes an optional `visibility` list, holding the same conditions a
+card accepts. The item is drawn when every entry in the list is met; an absent
+or empty list means always drawn. A `visibility` that is not a list at all is
 ignored rather than rejected: the item is drawn, your YAML is left as you wrote
 it, and the editor's Visibility section says so and offers to clear it.
 
-In the editor, items carrying conditions are marked in the preview, and each
-item's form has a "Visibility" section with Home Assistant's condition editor
-and its live "current visibility" banner.
+In the editor, items carrying conditions are marked in the preview.
 
-The card's own visibility is native to Home Assistant and needs nothing from
-this card: the Lovelace engine evaluates `config.visibility` on every card,
-and the edit dialog's "Visibility" tab is generic to all cards.
-
-#### Appearance keys
+### Appearance keys
 
 Anything drawn on a photograph competes with whatever the picture happens to
-show. `halo` adds a white rim and a soft shadow so the element lifts off the
+show. `halo` adds a white rim and a soft shadow so the item lifts off the
 picture — absent or `false` means no halo. `chrome` gives an item a surface to
 stand on instead. Both keys belong to the item rather than one kind of item, and
 both are off by default.
@@ -327,9 +376,9 @@ on does not make the item bigger, it makes what is inside it smaller. For a
 label the chrome widens the item — the text box belongs to the text, and the
 surface grows around it.
 
-#### CSS tokens
+## Theming
 
-Both element kinds expose CSS custom properties you can override in your
+Icons and labels expose CSS custom properties you can override in your
 dashboard's card or theme.
 
 **State icon** (`type: state-icon`):
@@ -365,53 +414,15 @@ by the card and can be read by custom CSS.
 | `--psc-pressed-opacity` | `0.12` | The same, while the pointer is held down |
 | `--psc-item-color` | the item's own colour | What the hover tints with; falls back to the inactive grey when the item names no colour |
 
-#### What an item does under the mouse
-
-Only an item you can click reacts — one that has at least one action, which is
-every item unless you set tap, hold and double tap all to **No action**.
-
-What it does depends on whether it stands on a surface. **With a surface**, the
-surface takes a veil of the item's own colour — the same 4% Home Assistant gives
-a badge, 12% while you hold the pointer down. **Without a surface**, there is
-nothing to tint: a glyph or a line of text sits directly on the photograph,
-where a 4% veil would be invisible. So the item grows by 8% instead.
-
-Nothing reacts while you are editing the card: the whole picture belongs to
-placing items there.
-
-#### Editor sections
-
-The editor is five collapsible sections: **Background** (open by default), **Items**, **Heading**, **Filters**, and **Entity**. Every key in this reference is reachable from one of them. Field labels follow your Home Assistant interface language.
-
-Setting `entity` without any filter greys the picture while that entity is off or unavailable — Home Assistant's own behaviour for a state-driven image.
-
-#### Card size
-
-The card sizes itself to the image by default. If you resize it to a height the image does not fit, the image keeps its proportions and the part that no longer fits stays reachable by scrolling the card.
-
 ## Roadmap
 
-Icons arrived in 1.2.0 and text labels in 1.4.0. Later versions will place more kinds of content on the image — buttons — drawn to sit alongside today's Home Assistant cards rather than to reproduce anything older.
+First there were badges. Then icons arrived in 1.2.0, text labels in 1.4.0, and 1.5.0 gave the card a header of its own.
+
+The future of this card is wide open. Have an improvement in mind? [Open a feature request](https://github.com/lalexdotcom/picture-studio-card/issues/new?template=feature_request.yml) and tell me about it.
 
 ## Bug report
 
-Found something wrong? [Open an issue](https://github.com/lalexdotcom/picture-studio-card/issues/new).
-
-What makes a report actionable here, roughly in order of usefulness:
-
-- **The card's YAML.** Use the editor's three-dot menu → *Edit in YAML* and paste
-  the whole card. Most defects in this card are defects of one particular
-  configuration.
-- **Which view type** the dashboard uses — sections, panel or masonry. A view
-  redefines styling for everything underneath it, and this card has already
-  shipped bugs that only appeared in one of the three.
-- **Your Home Assistant version**, and the card's — the version is in the
-  release you installed through HACS.
-- **A screenshot**, when the problem is something you can see. Placement,
-  sizing and colour issues are far quicker to fix from an image than from a
-  description.
-- **The browser console**, if the card shows an error card or nothing at all. It
-  now names any item the card could not read, with its index and why.
+Found something wrong? [Open an issue](https://github.com/lalexdotcom/picture-studio-card/issues/new/choose).
 
 ## Development
 
