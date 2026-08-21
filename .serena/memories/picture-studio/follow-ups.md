@@ -140,6 +140,26 @@ is mounted at `/config/www/picture-studio-card/`, and the test dashboard
 walks use — panel, sections, masonry. A real browser would drive the thing the
 user drives.
 
+**There is an uncommitted change in `.devcontainer/post-create.sh` and it must stay
+that way.** The user pasted it from another project on 2026-08-21 as raw material
+for this session; it is deliberately not committed, and the dirty tree at that
+close is intentional — do not commit it, do not revert it. It appends `pnpm
+install` and `pnpm exec playwright install --with-deps chromium`.
+
+Two things it needs before it can run, both found by inspection, not by trying it:
+
+- **`playwright` is not in the root `devDependencies`** — `package.json` carries
+  only `@rstest/core`. `pnpm exec playwright` would fail, and `set -euo pipefail`
+  at the top of the script means the whole post-create fails with it, so a
+  container rebuild would break.
+- **Its comment cites `mem:conventions`**, a memory that does not exist here — this
+  project has only `picture-studio/{state,follow-ups,1.5.0-handoff}`. The comment
+  is to be rewritten for this repo.
+
+It also pre-decides two of the questions below — rstest's browser mode rather than
+a separate runner, and Chromium only. Fine as a starting point, but they are
+choices to confirm, not plumbing.
+
 Questions that will decide the shape, none of them settled:
 - rstest's browser mode versus a separate Playwright runner — what actually
   integrates, and whether one command can still be `pnpm rstest run`.
