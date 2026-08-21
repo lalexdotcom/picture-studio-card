@@ -17,7 +17,6 @@ import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { stubBadgeConfig } from "./badge-catalog";
 import { badgeIsBroken } from "./badge-existence";
-import { itemsSeverity } from "./badge-list";
 import { stubElementConfig } from "./element-catalog";
 import {
   backgroundData,
@@ -30,7 +29,15 @@ import {
 } from "./form-schemas";
 import { type FormSchema, formLabel, sectionData, sectionMerge } from "./form-section";
 import { headerAdornments } from "./header-adornments";
-import { addItem, moveItem, removeItem, replaceConfig, setAnchor, setVisibility } from "./items";
+import {
+  addItem,
+  itemsSeverity,
+  moveItem,
+  removeItem,
+  replaceConfig,
+  setAnchor,
+  setVisibility,
+} from "./items";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
@@ -203,13 +210,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
       ev.stopPropagation();
       if (!this._config || this._applying) return;
-      this._commit(
-        sectionMerge(
-          schema,
-          this._config as unknown as Record<string, unknown>,
-          ev.detail.value,
-        ) as unknown as PictureStudioConfig,
-      );
+      this._commit(sectionMerge(schema, this._config, ev.detail.value));
     };
 
   private _headingChanged = (ev: CustomEvent<{ heading: HeadingConfig }>): void => {
@@ -239,12 +240,17 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _addItem = async (
     ev: CustomEvent<{ family: "badge" | "element"; type: string }>,
   ): Promise<void> => {
-    const config = this._config;
-    if (!config || !this.hass) return;
+    if (!this.hass) return;
     const item =
       ev.detail.family === "badge"
         ? ({ type: "badge", config: await stubBadgeConfig(ev.detail.type, this.hass) } as const)
         : ({ type: "element", config: stubElementConfig(ev.detail.type) } as const);
+    // Read the config *after* the await, never before: stubBadgeConfig loads a
+    // chunk, and anything the user does meanwhile — a drag commit, a delete, a
+    // second Add — has already written a new one. Committing the pre-await
+    // snapshot would silently undo it.
+    const config = this._config;
+    if (!config) return;
     this._commit({ ...config, items: addItem(config.items, item) });
     // Open the new item's form straight away: a stub is rarely usable as-is —
     // an element's has no entity at all — and this is what the native picker does.
@@ -420,7 +426,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const label = (s: { name: string }) =>
       s.name === PICTURE_ENTITY ? localizeOwn(hass, "picture_entity") : formLabel(localize, s.name);
     const helper = (s: { name: string }) => formHelper(hass, s.name);
-    const flat = config as unknown as Record<string, unknown>;
 
     return cache(html`
       <picture-studio-section open .label=${localizeOwn(hass, "section_background")} icon="mdi:image">
@@ -485,7 +490,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-section .label=${localizeOwn(hass, "section_filters")} icon="mdi:image-filter-black-white">
         <ha-form
           .hass=${hass}
-          .data=${sectionData(filters, flat)}
+          .data=${sectionData(filters, config)}
           .schema=${filters}
           .computeLabel=${label}
           @value-changed=${this._sectionChanged(filters)}
@@ -495,7 +500,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       <picture-studio-section .label=${localizeOwn(hass, "section_entity")} icon="mdi:image-auto-adjust">
         <ha-form
           .hass=${hass}
-          .data=${sectionData(entity, flat)}
+          .data=${sectionData(entity, config)}
           .schema=${entity}
           .computeLabel=${label}
           @value-changed=${this._sectionChanged(entity)}

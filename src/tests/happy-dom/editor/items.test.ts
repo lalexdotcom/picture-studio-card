@@ -2,6 +2,8 @@ import { describe, expect, it } from "@rstest/core";
 import type { BadgeItem, PictureItem } from "../../../config";
 import {
   addItem,
+  elementShowsNothing,
+  itemsSeverity,
   moveItem,
   removeItem,
   replaceConfig,
@@ -9,7 +11,7 @@ import {
   setAnchor,
   setVisibility,
 } from "../../../editor/items";
-import { DEFAULT_ICON_SIZE } from "../../../element-size";
+import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE } from "../../../element-size";
 import { DEFAULT_ANCHOR, DEFAULT_POSITION } from "../../../position";
 
 const item = (entity: string, top: number, left: number): PictureItem => ({
@@ -75,6 +77,18 @@ describe("replaceConfig", () => {
     expect(changed?.config).toEqual({ type: "entity", entity: "light.CHANGED" });
     expect(changed?.position).toEqual({ top: 30, left: 40 });
     expect(out[0]).toEqual(items[0]);
+  });
+
+  it("leaves an unknown item alone rather than growing it a config", () => {
+    // An unknown item kept the raw YAML and a reason instead of a config.
+    // Spreading one would produce { type: "unknown", raw, reason, config } —
+    // no variant of PictureItem has all four, and the cast would wave it past
+    // the compiler.
+    const unknown = { type: "unknown", raw: {}, reason: "item-type" } as never;
+    const items = [item("light.a", 10, 20), unknown];
+    const out = replaceConfig(items, 1, { type: "entity", entity: "light.b" });
+    expect(out[1]).toEqual(unknown);
+    expect(out[1]).not.toHaveProperty("config");
   });
 
   it("leaves the list untouched for an out-of-range index", () => {
@@ -375,5 +389,95 @@ describe("rowLabel for an unreadable item", () => {
       primary: "Unreadable item",
       secondary: "Unknown item type",
     });
+  });
+});
+
+/**
+ * One rule, two callers: the item list marks a row with it, the element form
+ * marks its Content panel with it. Tested here rather than through either, so a
+ * change to the rule is caught where the rule lives.
+ */
+describe("elementShowsNothing", () => {
+  it("is true for a label whose show list is empty", () => {
+    expect(elementShowsNothing({ type: "state-label", size: DEFAULT_LABEL_SIZE, show: [] })).toBe(
+      true,
+    );
+  });
+
+  it("is false as soon as the label shows one part", () => {
+    expect(
+      elementShowsNothing({ type: "state-label", size: DEFAULT_LABEL_SIZE, show: ["state"] }),
+    ).toBe(false);
+  });
+
+  it("is false for a state-icon, which has no show list at all", () => {
+    expect(elementShowsNothing({ type: "state-icon", size: DEFAULT_ICON_SIZE })).toBe(false);
+  });
+
+  it("is false when show is present but not a list — unreadable is not empty", () => {
+    // An unreadable key is somebody else's warning; claiming "shows nothing"
+    // here would put the wrong marker on the row.
+    expect(
+      elementShowsNothing({
+        type: "state-label",
+        size: DEFAULT_LABEL_SIZE,
+        show: "state",
+      } as never),
+    ).toBe(false);
+  });
+});
+
+describe("itemsSeverity", () => {
+  const badge = (config: Record<string, unknown>) =>
+    ({ type: "badge", config, position: { top: 0, left: 0 }, anchor: "auto" }) as never;
+  const label = (show: string[]) =>
+    ({
+      type: "element",
+      config: { type: "state-label", entity: "sensor.a", show },
+      position: { top: 0, left: 0 },
+      anchor: "auto",
+    }) as never;
+
+  it("is undefined when no badge type has been probed", () => {
+    expect(itemsSeverity([badge({ type: "entity", entity: "sensor.a" })])).toBeUndefined();
+  });
+
+  it("is undefined for an empty list", () => {
+    expect(itemsSeverity([])).toBeUndefined();
+  });
+
+  it("reports an error for an unreadable item", () => {
+    expect(itemsSeverity([{ type: "unknown", raw: {}, reason: "item-type" } as never])).toBe(
+      "error",
+    );
+  });
+
+  it("reports a warning for unreadable visibility", () => {
+    const item = { ...(badge({ type: "entity" }) as object), visibility: "nope" } as never;
+    expect(itemsSeverity([item])).toBe("warning");
+  });
+
+  it("reports a warning for a label that shows nothing", () => {
+    expect(itemsSeverity([label([])])).toBe("warning");
+  });
+
+  it("lets the error win over the warning, whatever the order", () => {
+    const broken = { type: "unknown", raw: {}, reason: "item-type" } as never;
+    const warned = label([]);
+    expect(itemsSeverity([warned, broken])).toBe("error");
+    expect(itemsSeverity([broken, warned])).toBe("error");
+  });
+
+  it("reports an error for a non-existent native badge type, without a probe", () => {
+    // entty is not in CORE_BADGES and has no custom: prefix — badgeIsBroken
+    // returns true immediately via !isSupportedBadgeType, no probe needed.
+    expect(itemsSeverity([badge({ type: "entty" })])).toBe("error");
+  });
+
+  it("reports an error for a native badge type outside CORE_BADGES, without a probe", () => {
+    // state-label is statically known to be unsupported — no component, no
+    // probe, no timer. badgeIsBroken decides synchronously via !isSupportedBadgeType,
+    // and itemsSeverity mirrors the same check so the two stay in sync.
+    expect(itemsSeverity([badge({ type: "state-label" })])).toBe("error");
   });
 });

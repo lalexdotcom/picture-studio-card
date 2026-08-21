@@ -31,6 +31,47 @@
    memory files, docs, a settled style — commit it without asking. If it is
    not, ask. Pushing is still never yours.
 
+## Project memory
+
+The memory files under `.serena/memories/picture-studio/` are read at the start
+of a session and believed. That is what makes them useful and what makes a
+stale one expensive.
+
+1. **Update the memory as part of the delivery, not at the close.** A commit
+   that settles something and leaves the memory saying it is still owed has not
+   finished. The close is a backstop, not the moment.
+2. **A settled follow-up is struck through, never deleted.**
+   `## ~~4. Its title~~ — DONE <date>`, plus a line naming what closed it. The
+   numbering must never shift: comments, specs and the state file refer to
+   entries by number. A struck entry also tells the next reader that the
+   question was asked and answered, which a deleted one cannot.
+3. **A memory is a claim; the repository is the evidence.** Confront one with
+   `git log`, the file, or the remote before acting on it — above all any
+   memory saying something is *owed*. When the two disagree, the repository
+   wins and the memory gets fixed in the same breath.
+4. **Write what would bite someone cold**, not a changelog of the session: the
+   trap, the measurement, the decision that must not be re-litigated, and the
+   reasoning behind a refusal. What a `git log` already says does not need
+   saying twice.
+5. **Never record a value a command gives in a second.** The open version, the
+   published tag, how far `main` is from the remote, whether the changelog
+   heading carries a date — all of it is one command away, and a stored copy
+   can only drift. Record *where to look* and *how to read the answer*, never
+   the answer.
+6. **The exception is a figure that is expensive to derive** — the test count,
+   the build size — and it comes with an obligation: whoever runs the **whole**
+   suite, or a build, updates the recorded figure and its date in the same
+   breath. A baseline nobody refreshes reads as authoritative and is quietly
+   wrong, which is worse than having none.
+7. **A scoped run never touches the baseline.** `pnpm test <file>` prints the
+   same JSON shape as a full run — `"passedTests": 30` with nothing saying it
+   was scoped — so the count from a single file will silently corrupt the
+   record if it is copied in. The tell is `testFiles`: the baseline carries it
+   next to the test count precisely so a partial run is recognisable. **If your
+   run does not report every test file, it is not a baseline.** Scoped runs are
+   the normal thing while working; the full run belongs to the delivery's
+   verification, which is also when the memory is updated.
+
 ## Language
 
 ALWAYS use **French** language for chat. Everything else: **English**.
@@ -52,14 +93,29 @@ Run the project's linter/formatter after every modification if one is configured
    anchors on the `## <version>` headings and copies everything until the next
    one, so the order of the `###` sections inside is ours to choose and cannot
    break a release.
-4. At each delivery, **ask whether this is a version bump**, and which one.
-   Never decide it alone.
+4. **Never bump a version on your own initiative.** The bump happens only when
+   the user asks for it in so many words.
 5. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
    `package.json`, and the git tag of the release must agree. HACS installs
    from the GitHub release, so the tag is what users actually get.
-6. The bump lands with the release, not before: while work is in progress the
-   heading reads `unreleased` and `package.json` still names the last shipped
-   version.
+6. **The bump opens the version, it does not close it.** When the user calls for
+   a new version, `package.json` and the `CHANGELOG.md` heading both take the
+   new number straight away, and the heading's date reads `unreleased`:
+
+   ```
+   ## 1.6.0 — unreleased
+   ```
+
+   Everything delivered from then on is written under that heading — there is
+   never a separate `## unreleased` section alongside a numbered one. Replacing
+   `unreleased` with a real date is the act that releases the version, and it is
+   the last thing done, not the first.
+7. **The date is the safety catch, and the release workflow enforces it.** Its
+   changelog step refuses to publish while the heading for the version in
+   `package.json` still says `unreleased`, and refuses just as flatly when that
+   version has no section at all. So an in-progress version cannot be shipped by
+   an accidental push, and the catch is a property of the pipeline rather than a
+   habit anyone has to remember.
 
 ## Tooling — Serena (symbol-aware MCP)
 

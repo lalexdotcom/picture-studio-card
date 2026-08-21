@@ -1,8 +1,8 @@
 import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
 import type { StateIconConfig } from "../config";
-import { DEFAULT_ICON_SIZE, normalizeElementSize } from "../element-size";
-import { localizeOwn } from "../strings";
-import type { HomeAssistant, LocalizeFunc } from "../types";
+import { DEFAULT_ICON_SIZE } from "../element-size";
+import type { LocalizeFunc } from "../types";
+import { sizeFromFormFields, sizeSchema, sizeToFormFields } from "./element-size-form";
 
 export const THEME_KEY = "ui.panel.lovelace.editor.card.map";
 export const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
@@ -80,78 +80,8 @@ export const iconSchema = (): unknown[] => [
   ...iconInteractionsSchema(),
 ];
 
-export const iconSizeSchema = (
-  mode: "auto" | "adaptive" | "fixed",
-  localize: LocalizeFunc,
-  hass: HomeAssistant | undefined,
-  // When true, the caller renders ha-radio-group for mode selection and the
-  // schema omits size_mode. When false (the default), size_mode is included as
-  // a vertical ha-form select — correct but not horizontal — guaranteed to
-  // load because ha-selector pulls its own sub-components.
-  radioGroupAvailable = false,
-): unknown[] => {
-  const modeField = {
-    name: "size_mode",
-    selector: {
-      select: {
-        mode: "list",
-        options: [
-          { value: "auto", label: localize("ui.common.auto") || "Automatic" },
-          { value: "adaptive", label: localizeOwn(hass, "size_mode_adaptive") },
-          { value: "fixed", label: localizeOwn(hass, "size_mode_fixed") },
-        ],
-      },
-    },
-  };
-  // When the radio group handles mode selection, it is not repeated in the
-  // form. In the fallback path the select stays so the user can still change
-  // the mode — ha-form is the guarantee that it renders.
-  const preamble = radioGroupAvailable ? [] : [modeField];
-  if (mode === "adaptive") {
-    return [
-      ...preamble,
-      {
-        name: "size_ratio",
-        selector: {
-          // A percentage of the card's width is a value you feel rather than
-          // type, so size_ratio gets a slider (no mode: "box"). The two adaptive
-          // pixel bounds keep "box" because exact pixel values are typed, not
-          // dragged. The fixed size is also a slider — a value you feel.
-          number: { min: 1, max: 100, step: 1, unit_of_measurement: "%" },
-        },
-      },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "size_min",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-          {
-            name: "size_max",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-        ],
-      },
-    ];
-  }
-  if (mode === "fixed") {
-    return [
-      ...preamble,
-      {
-        name: "size_value",
-        selector: { number: { min: 8, max: 128, step: 1, unit_of_measurement: "px" } },
-      },
-    ];
-  }
-  // auto — no numeric fields
-  return preamble;
-};
+/** Sizing is one idea for both kinds — see `element-size-form.ts`. */
+export const iconSizeSchema = sizeSchema;
 
 export const iconChromeSchema = (_localize: LocalizeFunc): unknown[] => [
   {
@@ -179,14 +109,7 @@ export const iconToFormData = (config: StateIconConfig): Record<string, unknown>
   const c = chrome ?? DEFAULT_ICON_CHROME;
   return {
     ...rest,
-    size_mode: size.mode,
-    // Math.round enforces each slider's step:1 contract (same trade as the chrome
-    // numbers below). size_mode is a string; the read path (normalizeIconSize)
-    // keeps any finite number as written — rounding belongs to the editor only.
-    size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
-    size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
-    size_max: typeof size.max === "number" ? Math.round(size.max) : size.max,
-    size_value: typeof size.value === "number" ? Math.round(size.value) : size.value,
+    ...sizeToFormFields(size),
     halo_enabled: halo === true,
     chrome_enabled: c.theme !== "none",
     // The control never offers "none", so an off chrome pre-selects the theme
@@ -263,17 +186,7 @@ export const iconFromFormData = (
     // The kind is ours, never the form's: a stray `type` field cannot rename it.
     type: config.type,
     halo: halo_enabled === true,
-    size: normalizeElementSize(
-      {
-        mode: size_mode,
-        // Math.round on the way back enforces each slider's step:1 contract.
-        min: typeof size_min === "number" ? Math.round(size_min) : size_min,
-        ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
-        max: typeof size_max === "number" ? Math.round(size_max) : size_max,
-        value: typeof size_value === "number" ? Math.round(size_value) : size_value,
-      },
-      DEFAULT_ICON_SIZE,
-    ),
+    size: sizeFromFormFields(data, DEFAULT_ICON_SIZE),
     ...chromeOut,
   };
 };

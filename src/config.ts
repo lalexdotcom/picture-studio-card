@@ -39,6 +39,37 @@ export const HEADING_SECTION_TAG = "picture-studio-heading-section";
 export const PROBE_TYPE = `custom:${PROBE_TAG}` as const;
 export const CARD_TYPE = "custom:picture-studio";
 
+/** The prefix a Lovelace config gives every third-party badge type. */
+export const CUSTOM_PREFIX = "custom:";
+
+/**
+ * Mirrors `coreBadges` in home-assistant/frontend,
+ * src/panels/lovelace/editor/lovelace-badges.ts — two entries as of 2026-08.
+ * It is a module export we cannot reach from our bundle, so it is duplicated
+ * here.
+ *
+ * **This list is the acceptance list for native badge types.** A native type
+ * absent from it is an error — both the editor row and the card's render gate
+ * on `isSupportedBadgeType`. If Home Assistant introduces a new native badge
+ * type, add it here and release: that is the price of knowing the list, and a
+ * reader must not discover it by surprise.
+ */
+export const CORE_BADGE_TYPES: readonly string[] = ["entity", "shortcut"];
+
+/**
+ * Whether a badge type is accepted by this card.
+ *
+ * For `custom:` types we cannot know the list, so the runtime probe decides.
+ * For native types `CORE_BADGE_TYPES` decides, and one outside it is an error —
+ * the same rule the card's render and the editor row both enforce.
+ *
+ * It lives here, in the shared layer, rather than with the editor's picker,
+ * because it is policy the *card* enforces too: the runtime asks it on every
+ * render. The editor's catalogue is one consumer of the rule, not its owner.
+ */
+export const isSupportedBadgeType = (type: string): boolean =>
+  type.startsWith(CUSTOM_PREFIX) || CORE_BADGE_TYPES.includes(type);
+
 /**
  * The envelope both item families share: where the item sits (position and
  * anchor). The family is named by `type`; the payload lives in `config`.
@@ -208,7 +239,14 @@ export interface HeadingConfig {
 export const hasHeading = (heading: HeadingConfig | undefined): boolean =>
   !!(heading?.title || heading?.icon || heading?.badges?.length);
 
-export interface PictureStudioConfig {
+/**
+ * A `type`, deliberately, not an `interface`. Only a type alias gets TypeScript's
+ * implicit index signature, and without one this does not satisfy
+ * `Record<string, unknown>` — which is what forced the editor's section merge to
+ * launder it through a double cast, losing every check in between. See
+ * `sectionMerge` and `mergeBackground`.
+ */
+export type PictureStudioConfig = {
   type: string;
   /**
    * hui-image-element passthrough keys, snake_case as they appear in YAML.
@@ -228,7 +266,7 @@ export interface PictureStudioConfig {
   /** Since 1.5.0. A legacy top-level `title` is folded in here at normalization. */
   heading?: HeadingConfig;
   items: PictureItem[];
-}
+};
 
 const STUB_IMAGE = "https://demo.home-assistant.io/stub_config/floorplan.png";
 
@@ -251,6 +289,40 @@ export const normalizeElementConfig = (
   // of vanishing: storedConfig rewrites the whole config on every editor commit,
   // so anything dropped here would be dropped from the user's YAML on the first
   // drag.
+  //
+  // **The returned type is asserted, not earned, and that is the decision.**
+  // Everything outside `size`, `chrome`, `halo` and `show` travels from the YAML
+  // unchecked — `entity`, `icon`, `color`, `name`, the three `*_action`. A
+  // hand-written `entity: 123` is handed on as the `string` the interface
+  // promises.
+  //
+  // Weighed on 2026-08-21 and left as it is, for three measured reasons:
+  //
+  // 1. **The display fallback is Home Assistant's, and it already exists.**
+  //    Validating here would be us reimplementing a behaviour HA owns — the
+  //    project's oldest rule says not to, and we would do it worse, having to
+  //    guess what "valid" means for every selector HA accepts. Malformation is
+  //    per field, not per item: the kind is already recognised by the time we
+  //    get here, so the element still mounts, a non-string `entity` simply
+  //    misses in `hass.states` and `state-badge` draws its own missing-entity
+  //    marker, and a bad `color` costs only the colour — that item renders
+  //    perfectly. Let HA do its job.
+  // 2. **The user can always repair it from the editor.** The bad value reaches
+  //    the form untouched, picking a valid one writes it back, and fixing one
+  //    field leaves the others alone. That escape hatch is the condition the
+  //    decision rests on, so it is pinned by tests in
+  //    `tests/happy-dom/editor/element-form.test.ts` — do not remove them
+  //    without reopening this.
+  // 3. **Validating would cost more than it buys.** Dropping a bad value in
+  //    memory erases it from the YAML on the next commit (see storedConfig);
+  //    refusing the item takes a drawable item off the picture over a decorative
+  //    field. Both are worse than degrading.
+  //
+  // What this does NOT protect is a reader who trusts the declared type:
+  // `config.entity.split(".")` throws on a number. Narrow before you reach for a
+  // string method here, and if a real need for validation ever appears, the
+  // shape to copy is `visibility`'s — keep the raw value, flag it in the editor,
+  // degrade the render.
   if (raw.type === "state-icon") {
     return {
       ...raw,
@@ -275,14 +347,14 @@ export const normalizeElementConfig = (
   throw new Error(`picture-studio: items[${index}].config has an unreadable type`);
 };
 
-/**
- * Validate and fill in defaults. Returns a fresh object: the config handed to
- * setConfig is frozen by Home Assistant and must never be mutated.
- */
 /** True when the item carries at least one condition. */
 export const hasVisibility = (item: PictureItem): boolean =>
   item.type !== "unknown" && Array.isArray(item.visibility) && item.visibility.length > 0;
 
+/**
+ * Validate and fill in defaults. Returns a fresh object: the config handed to
+ * setConfig is frozen by Home Assistant and must never be mutated.
+ */
 export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
   if (!isRecord(raw)) {
     throw new Error("picture-studio: config must be an object");
@@ -395,37 +467,49 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       delete stored.visibility;
     }
     if (item.type === "element") {
-      // Only when every field is a default: a mode may be off and still carry
-      // numbers the user typed, and dropping the key would lose them. A config
-      // that never touched either key does not grow one.
-      const { size, chrome, halo, show, ...rest } = item.config as ElementConfig & {
-        show?: LabelPart[];
+      const element = item.config;
+
+      // Size and halo ask the same question of both kinds, and `rest` carries
+      // every key we do not know about — dropping one would erase it from the
+      // user's YAML on the next commit. Only when every field is a default: a
+      // mode may be off and still carry numbers the user typed, and dropping the
+      // key would lose them. A config that never touched either key does not
+      // grow one.
+      const common = (
+        rest: Record<string, unknown>,
+        size: ElementSize,
+        halo: boolean | undefined,
+        sizeDefaults: ElementSize,
+      ): Record<string, unknown> => {
+        const out: Record<string, unknown> = { ...rest };
+        if (!isDefaultElementSize(size, sizeDefaults)) out.size = size;
+        if (halo) out.halo = true;
+        return out;
       };
-      const config: Record<string, unknown> = { ...rest };
-      const kind = item.config.type;
-      const isLabel =
-        kind === "state-label"
-          ? true
-          : kind === "state-icon"
-            ? false
-            : assertNever(kind, "element kind");
-      const sizeDefaults = isLabel ? DEFAULT_LABEL_SIZE : DEFAULT_ICON_SIZE;
-      if (!isDefaultElementSize(size, sizeDefaults)) config.size = size;
-      // The guard is what narrows the optional type, not a redundancy — two
-      // reviewers have flagged it, and it is correct.
-      if (chrome) {
-        const isDefault = isLabel
-          ? isDefaultLabelChrome(chrome as LabelChrome)
-          : isDefaultIconChrome(chrome as IconChrome);
-        if (!isDefault) config.chrome = chrome;
+
+      // Narrowed on the kind rather than asserted across it. The two chromes are
+      // different records and only a label has a `show` list, so a single
+      // destructure had to intersect the union and then cast the chrome back —
+      // three assertions doing what one discriminant does for free.
+      if (element.type === "state-label") {
+        const { size, chrome, halo, show, ...rest } = element;
+        const config = common({ ...rest }, size, halo, DEFAULT_LABEL_SIZE);
+        // The guard is what narrows the optional type, not a redundancy — two
+        // reviewers have flagged it, and it is correct.
+        if (chrome && !isDefaultLabelChrome(chrome)) config.chrome = chrome;
+        // The default is the absence of the key. An empty list is not the
+        // default: it is a deliberate "show nothing", and it has to survive the
+        // round trip.
+        if (show && !(show.length === 1 && show[0] === "state")) config.show = show;
+        stored.config = config;
+      } else if (element.type === "state-icon") {
+        const { size, chrome, halo, ...rest } = element;
+        const config = common({ ...rest }, size, halo, DEFAULT_ICON_SIZE);
+        if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
+        stored.config = config;
+      } else {
+        assertNever(element, "element kind");
       }
-      if (halo) config.halo = true;
-      // The default is the absence of the key. An empty list is not the default:
-      // it is a deliberate "show nothing", and it has to survive the round trip.
-      if (!(isLabel && show?.length === 1 && show[0] === "state")) {
-        if (show) config.show = show;
-      }
-      stored.config = config;
     }
     return stored;
   }),

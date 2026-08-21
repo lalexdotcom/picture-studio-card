@@ -7,6 +7,7 @@ import {
   hasVisibility,
   ICON_TAG,
   imagePath,
+  isSupportedBadgeType,
   LABEL_TAG,
   normalizeConfig,
   type PictureItem,
@@ -15,7 +16,6 @@ import {
   stubConfig,
 } from "../config";
 import "./card-heading";
-import { isSupportedBadgeType } from "../editor/badge-catalog";
 import {
   type Anchor,
   type MarkerCorner,
@@ -399,23 +399,35 @@ export class PictureStudioCard extends LitElement {
    */
   private async _syncItems(): Promise<void> {
     const layer = this._layer;
-    const items = this._config?.items ?? [];
     if (!layer) return;
 
     // The family, the kind, and whether the item carries conditions. The last
     // one belongs here because a probe is a sibling in the layer: it appearing
     // or disappearing changes the DOM we build, not just the config we push.
-    const types = items.map((item) =>
-      item.type === "unknown"
-        ? `unknown::`
-        : `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
-    );
+    const shapesOf = (list: readonly PictureItem[]): string[] =>
+      list.map((item) =>
+        item.type === "unknown"
+          ? `unknown::`
+          : `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
+      );
+
+    let items = this._config?.items ?? [];
+    let types = shapesOf(items);
     const sameShape =
       types.length === this._renderedTypes.length &&
       types.every((t, i) => t === this._renderedTypes[i]);
 
     if (!sameShape) {
       const helpers = await window.loadCardHelpers();
+      // Re-read after the await, and re-derive the shapes with it. A drag
+      // commit or an anchor change landing while the helpers chunk loaded has
+      // already written a newer config; rebuilding from the snapshot taken
+      // before the await would put the pre-change items back on screen until
+      // Home Assistant's next setConfig, flashing — and losing a just-dropped
+      // position for that frame.
+      items = this._config?.items ?? [];
+      types = shapesOf(items);
+
       layer.replaceChildren();
       this._elements = [];
       this._wrappers = [];
@@ -727,13 +739,6 @@ export class PictureStudioCard extends LitElement {
    * it lets the caller render it on this same pass, so the item never shows at
    * the pre-recomputation place for a frame.
    *
-   * Guarded on the position being unchanged as well: the diff is indexed, and
-   * _syncBadges keeps the wrappers when only the order changed between badges
-   * of the same type, so a reorder would otherwise look like an anchor change
-   * and recompute from the wrong anchor. An anchor flip never moves the
-   * coordinates; a reorder always brings the other item's along.
-   */
-  /**
    * CardChannel. The editor asks this before it writes the new anchor, because
    * afterwards there is no "before" left to measure: Home Assistant rebuilds the
    * card element on every config change, so this instance — and everything it

@@ -8,53 +8,117 @@ mouse".
 **Two families of item since 1.2.0**: Lovelace **badges**, and **elements** —
 since 1.4.0 two kinds, `state-icon` and `state-label`.
 
-**1.3.1 is the published release** — tag `v1.3.1` on `6ef4338`. The chain that
-publishes is unchanged: a push to `main` runs CI, then `release.yml` reads
+## Where the project stands — look, do not remember
+
+**Nothing below this heading records a value a command gives in a second.** Those
+went stale twice in one day and were repeated to the user both times. What is
+recorded here is *where to look* and *how to read the answer* — never the answer.
+
+| Question | Command |
+| --- | --- |
+| Which version is open? | `jq -r .version package.json` |
+| Is it releasable? | `head -3 CHANGELOG.md` — a date means yes, `unreleased` means no |
+| What is published? | `git ls-remote --tags origin` |
+| How far is `main` from the remote? | `git log --oneline origin/main..main \| wc -l` |
+
+**`git tag -l` lies here and is the trap that caught a session.** This clone has
+never fetched the tags the release workflow creates, so the local list stops
+several releases behind. A session read it, told the user a published version was
+unreleased, and was corrected by the user. Always the remote.
+
+**The release chain:** a push to `main` runs CI, then `release.yml` reads
 `version` from `package.json` and creates the `v<version>` tag and the release.
 HACS installs from that tag. **The user pushes, never the agent.**
 
-Releases: 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the
-automated chain), 1.2.0 (2026-08-14), 1.3.0 (2026-08-14, published 2026-08-17),
-1.3.1 (2026-08-17).
+**The CHANGELOG date is the safety catch, and it is load-bearing.** `main` can
+sit a long way ahead of `origin/main` — a push then publishes whatever
+`package.json` names. The only thing between an accidental push and a release is
+`release.yml` refusing while the heading for that version says `unreleased`. Do
+not replace that word until the user asks for the release.
 
-## 1.4.0 is bumped, merged and waiting on the push
+Release history, which is the one thing here that does not go stale by itself:
+1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the automated chain),
+1.2.0 (2026-08-14), 1.3.0 (published 2026-08-17), 1.3.1 (2026-08-17),
+1.4.0 (2026-08-19).
 
-**Session closed 2026-08-19. 584 tests green, lint 0, `tsc` clean, build 189.6 kB /
-44.5 kB, tree clean, nothing pushed.**
+### The versioning workflow changed on 2026-08-21
 
-`package.json` says **1.4.0** and the CHANGELOG heading reads `## 1.4.0 — 2026-08-19`.
-Three feature branches merged into `main` and deleted: `feat/state-label` (`29c58bd`),
-`feat/config-tidy-up` (`7da4902`), `feat/unknown-items` (`5cafe9e`). The bump is
-`a0f8dcc`. **Only the push is left, and it is the user's.** Pushing publishes: CI, then
-`release.yml` reads `version` and creates the `v1.4.0` tag and the release.
+**The bump opens a version; it no longer closes one.** When the user calls for a
+new version — and only then, in so many words — `package.json` and the CHANGELOG
+heading both take the new number immediately, with `unreleased` standing in for
+the date. Everything delivered afterwards is written under that heading; there is
+never a separate `## unreleased` section beside a numbered one. Replacing
+`unreleased` with a real date is the act of releasing, and it is the last thing
+done. Written into `AGENTS.md` rules 4 to 7.
 
-What 1.4.0 contains, for the release note: the `state-label` element kind, the halo
-turned opt-in, the state colour on both kinds, one hover treatment shared by them, the
-item list reading top-down, `anchor` moved inside `position`, a label's `show` list, the
-per-tick guard the elements never had, the Content panel with its warning marker, the
-live visibility verdict in the Visibility header — and, from the last branch, **an
-unreadable item is ignored rather than fatal**.
+The older text here said "then the bump, then the push", which was the previous
+workflow and is no longer true.
 
-**Next release is 1.5.0**, and it carries two things: **badges in the card header**
-and **the redone screenshots** in `docs/images/`, shot last so they are not stale
-on arrival. There is no 1.4.1.
+### What the open version still needs
 
-The header work was brainstormed on 2026-08-19 and its **draft spec** is
-`docs/superpowers/specs/2026-08-19-card-heading-design.md` — feasibility settled,
-decisions recorded, six questions still open at the end. The `loadCardHelpers`
-wall that this entry once said would decide its shape **does not apply**; see the
-heading-badge facts below. Resume from the spec and
-`mem:picture-studio/follow-ups` entry 2, not from scratch.
+Whatever it is, it is in `mem:picture-studio/follow-ups` as an open entry. The
+struck ones are done. If an entry there says something is owed, **check the repo
+before repeating it** — that is exactly how a settled entry got reported as
+outstanding.
 
-## 1.5.0 is merged on `main` and unpushed — read `mem:picture-studio/1.5.0-handoff` first
+## The green baseline — refresh it whenever you run the whole suite
 
-`feat/card-heading` was reviewed READY TO MERGE and merged (`608ced7`, `--no-ff`)
-on 2026-08-20, then deleted. The card's header, the redrawn five-section editor
-and the browser walk are all behind us. `main` sits ~57 commits ahead of
-`origin/main`; **do not push** — the version is still 1.4.0 and pushing publishes.
-What remains: the doc pass (README, CHANGELOG), the screenshots, then the bump,
-then the push. In that order, settled with the user. That memory carries the state,
-what was in flight, and the lesson of a five-fix series that only the walk caught.
+**This is the one place figures are recorded, and only because deriving them is
+slow.** A full run is minutes; `jq -r .version package.json` is a second. Anything
+in the second category lives under "Where the project stands" as a command, not as
+a value.
+
+**The rule that makes this section trustworthy: whoever runs the whole suite, or
+a build, updates these numbers and the date in the same breath.** A baseline
+nobody refreshes is worse than no baseline — it reads as authoritative and is
+quietly wrong, which is precisely how the release status went bad twice in one
+day. If the date below is older than your last full run, the numbers are yours.
+
+**A scoped run must never be copied in here, and the trap is that it looks
+identical.** `pnpm test src/tests/happy-dom/editor/items.test.ts` prints the same
+JSON as a full run — `"passedTests": 54`, no marker saying it covered one file.
+**`testFiles` is the tell, which is why it is recorded beside the count: if your
+run does not report every file, it is not a baseline.** Scoped runs are the
+normal way to work; the full run belongs to a delivery's verification, which is
+the same moment this file gets updated anyway.
+
+**Measured 2026-08-21, on `fix/review-2026-08-21`:**
+
+| Run | `testFiles` | tests |
+| --- | --- | --- |
+| `pnpm test` — both lanes, **this is the baseline** | 39 | 822 |
+| `pnpm test --project happy-dom` | 36 | 779 |
+| `pnpm test --project playwright` | 3 | 43 |
+
+`pnpm build`: **209.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
+the whole thing. `pnpm typecheck` is expected clean; no number to carry.
+
+A single lane is a scoped run, so it does not update the baseline either — the
+lane figures are here only so a lane run can be recognised as complete for its
+own lane.
+
+**Never write `pnpm test -- …` here. The `--` discards every argument after it**
+and the whole suite runs regardless — no error, no warning, just 39 files and 797
+tests where a scoped run was expected. Measured on 2026-08-21, all four cases:
+
+| Command | What runs |
+| --- | --- |
+| `pnpm test --project happy-dom` | that lane |
+| `pnpm test <file>` | that file |
+| `pnpm test -- --project happy-dom` | **everything** |
+| `pnpm test -- <file>` | **everything** |
+
+The silence is the danger: the output shape is identical, so a scoped run and a
+full one are told apart only by `testFiles`. A whole session of runs was believed
+to be scoped and was not — and the first draft of this very entry claimed a
+positional path survived the `--`, which measuring disproved.
+
+**`pnpm lint` exits 0 while reporting warnings, and that is not a failure.** The
+count has sat in the mid-twenties for a long time, almost all `!` non-null
+assertions in test files; no session has been asked to clear them. The
+interpretation is what matters and it does not drift: **a warning you did not
+have before is yours**, whatever the running total says. Compare against `main`
+rather than against a remembered figure.
 
 ## Where things are
 
@@ -62,7 +126,11 @@ what was in flight, and the lesson of a five-fix series that only the walk caugh
   (authoritative base), then `2026-08-12-item-anchor`,
   `2026-08-13-per-tick-work`, `2026-08-13-release-on-version-bump`,
   `2026-08-13-state-icon-element`, `2026-08-14-icon-chrome`,
-  `2026-08-14-item-visibility`, `2026-08-17-state-label`.
+  `2026-08-14-item-visibility`, `2026-08-17-state-label`,
+  `2026-08-18-config-tidy-up`, `2026-08-19-unknown-items`,
+  `2026-08-19-card-heading`, `2026-08-20-config-form`.
+- Reviews: `docs/reviews/` — one file per full-codebase review, timestamped. The
+  2026-08-21 one is the first.
 - Local HA: `docker compose`, container `picture-studio-ha`, http://localhost:8123.
   `dist/` is mounted at `/config/www/picture-studio-card/`, so a `pnpm build` is
   live at `/local/picture-studio-card/picture-studio.js` — only the dashboard
@@ -100,22 +168,32 @@ src/broker.ts          editor + card registries (pure)
 src/types.ts           hand-declared HA interfaces
 src/card/picture-studio-card.ts   background + item children + lifecycle
 src/card/item-styles.ts           chromeFillStyles, haloStyles, interactionStyles
-src/card/state-icon-element.ts    chrome wrapper, state-badge, actions
-src/card/state-label-element.ts   chrome wrapper, state-display, actions
+src/card/state-icon-element.ts    chrome wrapper, state-badge
+src/card/state-label-element.ts   chrome wrapper, state-display
+src/card/item-actions.ts          the action relay both kinds share:
+                                  hasAction, isClickable, bindActions,
+                                  relayActions
 src/card/visibility-probe.ts      the phantom card a hui-card probe carries
 src/card/drag-layer.ts            pointer gesture, injected callbacks
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA
 src/editor/visibility-section.ts  hosts HA's own hui-card-visibility-editor
-src/editor/badge-list.ts          rows, ha-sortable, the add menu, the flip
+src/editor/badge-list.ts          rows, ha-sortable, the add menu, the flip.
+                                  Renders only — the verdicts it draws live in
+                                  items.ts, and it probes from updated(), never
+                                  from render()
 src/editor/badge-form.ts          the badge's own editor + Position section
 src/editor/element-form.ts        our ha-form, Appearance, Size and position
-src/editor/state-label-form.ts    the label's schema halves
-src/editor/state-icon-form.ts     the icon's schema halves
+src/editor/state-label-form.ts    the label's schema halves (size is shared)
+src/editor/state-icon-form.ts     the icon's schema halves (size is shared)
+src/editor/element-size-form.ts   sizeSchema + size <-> form, once for both kinds
 src/editor/anchor-picker.ts       switch + hand-built 3x3 grid
 src/editor/badge-catalog.ts       core + custom badge choices
 src/editor/badge-existence.ts     does this HA know this badge type? cache + grace
 src/editor/element-catalog.ts     element kinds, labels, stubs
-src/editor/items.ts               add / replace / move / remove / rowLabel (pure)
+src/editor/items.ts               add / replace / move / remove / rowLabel,
+                                  and the item verdicts: itemsSeverity,
+                                  showsNothing / elementShowsNothing,
+                                  hasUnreadableVisibility (pure)
 src/editor/icons.ts               only the icon NAMES two components share
 src/suggestion.ts      entity-first card picker suggestion (pure)
 src/index.ts           registration + window.customCards
@@ -262,7 +340,63 @@ In memory only, never in YAML, a third variant holds what we could not read:
   The 1.2.0 grow at 1.04 was rejected twice by eye before this split.
 - **`storedConfig`'s `chrome && !isDefaultChrome(chrome)` is not a redundant
   guard.** Two reviewers have flagged it; it is correct.
-- **Single-file build, no dynamic import, no decorators, Lit bundled.**
+- **Single-file build, no dynamic import, no decorators, Lit bundled.** The whole
+  editor ships with it, and that is **closed, not open**: splitting needs a
+  dynamic `import()`, rspack then emits a chunk the release never publishes, and
+  it has shipped a broken card once already. Settled 2026-08-21 — it does not
+  need raising again.
+- **`PictureStudioConfig` is a `type`, never an `interface`, and that is load
+  bearing** (2026-08-21). Only a type alias gets TypeScript's implicit index
+  signature; without one it does not satisfy `Record<string, unknown>`, which is
+  what forced `sectionMerge`, `sectionData` and `mergeBackground` to launder it
+  through `as unknown as` on the way in and back out. Between those casts sat
+  real key manipulation that nothing checked: a `next.camera_imge = chosen` typo
+  produced **zero** compile errors, measured. It produces one now. Changing it
+  back to an `interface` reinstates the casts and the blind spot.
+- **The YAML boundary in `normalizeElementConfig` asserts its type on purpose —
+  do not "fix" it** (arbitrated 2026-08-21, after a review raised it). Everything
+  outside `size`, `chrome`, `halo` and `show` travels unchecked: `entity`,
+  `icon`, `color`, `name`, the three `*_action`. The reasoning is written at the
+  cast itself; the short version is three measured facts.
+
+  **Home Assistant already has the display fallback**, and reimplementing it is
+  against the project's oldest rule. Malformation is per field, not per item — by
+  the time this runs the kind is recognised, so a non-string `entity` just misses
+  in `hass.states` and `state-badge` draws its own marker, and a bad `color`
+  costs only the colour.
+
+  **Validating would cost more than it buys.** Dropping a bad value in memory
+  erases it from the user's YAML on the next commit, because `storedConfig`
+  rewrites everything; refusing the item takes a drawable item off the picture
+  over a decorative field. Both were measured and both are worse.
+
+  **The decision rests on one condition, and it is guarded.** A user must always
+  be able to repair a malformed value from the editor — the bad value reaches the
+  form untouched, picking a valid one writes it back, fixing one field leaves the
+  others alone, and an unedited round trip changes nothing. Four tests in
+  `tests/happy-dom/editor/element-form.test.ts` pin exactly that. **If one of
+  them ever goes red, the escape hatch is gone and this decision reopens.**
+
+  `hasAction` follows the same principle and was left alone for the same reason:
+  an unreadable action keeps the item clickable and lets HA's `handleAction`
+  decide. A stricter test there would make such an item non-clickable, which is
+  further from the intent than the status quo.
+- **The two element forms share sizing and nothing else — and the types are the
+  reason** (2026-08-21, from the codebase review). `sizeSchema`,
+  `sizeToFormFields` and `sizeFromFormFields` live once, in
+  `editor/element-size-form.ts`; `iconSizeSchema` and `labelSizeSchema` are
+  aliases kept so the call sites still read in the kind's own vocabulary.
+
+  **The chrome conversions stay duplicated on purpose. Do not "finish the job".**
+  The review counted four common keys across `iconToFormData` /
+  `labelToFormData` and asked for a shared base. The two cases are not alike:
+  the size copies were written over the *same* `ElementSize` type, so a bound or
+  a rounding rule could drift with nothing to report it — which is exactly what
+  happened and what the extraction closes. `IconChrome` and `LabelChrome` are
+  **distinct types** (1.4.0: two records over one shared CSS module), so the
+  compiler is already the guard against drift there. Factoring them would trade
+  a real safeguard for four fewer lines, and split each form's reading across
+  two files.
 
 ## Hard-won facts about Home Assistant (all verified in their source)
 
@@ -530,6 +664,23 @@ In memory only, never in YAML, a third variant holds what we could not read:
    reasoning put the shared hover block's assertions in one file, with both
    element tests asserting the *same* three selectors.
 
+7. **Aiming five fixes at a symptom is not five attempts, it is one mistake
+   repeated.** On 2026-08-21 a test file failed as a *file* while every test in it
+   passed. Five fixes were tried — stubs in three different hooks, a generation
+   counter, an `isConnected` guard — and two of them broke other tests. All five
+   tried to guarantee a global was *present*. The answer was to make the caller
+   tolerate its absence, and one instrumented run named it. **When the second fix
+   for one symptom fails, stop fixing and go measure where the failure actually
+   originates.**
+8. **Local git tags are not the release history.** `git tag -l` stops at v1.3.1 in
+   this clone; the remote has v1.4.0. Use `git ls-remote --tags origin`. A session
+   read the local list, told the user 1.4.0 was unreleased, and was corrected by
+   the user.
+9. **Memory is a claim, not evidence.** The same session repeated "the screenshots
+   are still owed" from a follow-up entry that had been settled hours earlier by a
+   commit sitting in the log. Confront a memory with the repo before acting on it,
+   especially any memory that says something is *owed*.
+
 ## How we work (project rules, see AGENTS.md)
 
 - **Reuse Home Assistant's machinery rather than reimplementing behaviour** —
@@ -567,7 +718,8 @@ In memory only, never in YAML, a third variant holds what we could not read:
   `src/tests/happy-dom/editor/badge-existence.test.ts` set the idiom.
 - **Two test lanes since 2026-08-21, declared as rstest `projects`.** One command
   still runs both (`pnpm test`); `--project happy-dom` / `--project playwright`
-  runs one. `@rstest/browser` peer-depends on `@rstest/core` **exactly**, so the
+  runs one — **written without a `--`, see the baseline section: `pnpm test --
+  --project happy-dom` silently runs everything**. `@rstest/browser` peer-depends on `@rstest/core` **exactly**, so the
   two versions move together — and `playwright` is an *optional* peer, which pnpm
   never installs on its own, hence the explicit devDependency. Chromium binaries
   come from `pnpm exec playwright install --with-deps chromium`, which the

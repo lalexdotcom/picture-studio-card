@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
-import { hasAction, PictureStudioStateIcon } from "../../../card/state-icon-element";
+import { PictureStudioStateIcon } from "../../../card/state-icon-element";
 import { ICON_TAG, type StateIconConfig } from "../../../config";
 import { DEFAULT_ICON_SIZE } from "../../../element-size";
 import { cssRules } from "./harness";
@@ -153,45 +153,6 @@ describe("title", () => {
   });
 });
 
-describe("clickable attribute", () => {
-  it("is present when no action keys are set — default is more-info", async () => {
-    const el = await mount({ entity: "light.a" });
-    expect(el.hasAttribute("clickable")).toBe(true);
-  });
-
-  it("is absent when tap_action is none and the others are unset", async () => {
-    const el = await mount({ entity: "light.a", tap_action: { action: "none" } });
-    expect(el.hasAttribute("clickable")).toBe(false);
-  });
-
-  it("is present when tap_action is none but hold_action is active", async () => {
-    const el = await mount({
-      entity: "light.a",
-      tap_action: { action: "none" },
-      hold_action: { action: "toggle" },
-    });
-    expect(el.hasAttribute("clickable")).toBe(true);
-  });
-});
-
-class FakeActionHandler extends HTMLElement {
-  binds: { element: HTMLElement; options: unknown }[] = [];
-  bind(element: HTMLElement, options: unknown): void {
-    this.binds.push({ element, options });
-  }
-}
-if (!customElements.get("action-handler")) {
-  customElements.define("action-handler", FakeActionHandler);
-}
-
-describe("hasAction", () => {
-  it("counts an action that is set and is not none", () => {
-    expect(hasAction(undefined)).toBe(false);
-    expect(hasAction({ action: "none" })).toBe(false);
-    expect(hasAction({ action: "toggle" })).toBe(true);
-  });
-});
-
 describe("chrome", () => {
   it("always wraps the badge, so the DOM shape never depends on the config", async () => {
     const el = await mount({ entity: "light.a" });
@@ -267,48 +228,6 @@ describe("the halo", () => {
     // The halo lives in its own rule. These two conflated once, and every icon
     // without a chrome came out a circle.
     expect(shaped).not.toContain("filter");
-  });
-});
-
-describe("the action relay", () => {
-  it("binds itself to the singleton action-handler, declaring its gestures", async () => {
-    const el = await mount({
-      entity: "light.a",
-      hold_action: { action: "more-info" },
-      double_tap_action: { action: "none" },
-    });
-    const handler = document.body.querySelector("action-handler") as FakeActionHandler;
-    const bound = handler.binds.find((b) => b.element === el);
-    expect(bound?.options).toEqual({ hasHold: true, hasDoubleClick: false });
-  });
-
-  it("relays an action event as hass-action carrying the item's config", async () => {
-    const el = await mount({ entity: "light.a", tap_action: { action: "toggle" } });
-    const seen: CustomEvent[] = [];
-    document.body.addEventListener("hass-action", (ev) => seen.push(ev as CustomEvent));
-
-    el.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-
-    expect(seen).toHaveLength(1);
-    expect(seen[0]?.detail).toEqual({
-      config: {
-        type: "state-icon",
-        size: DEFAULT_ICON_SIZE,
-        entity: "light.a",
-        tap_action: { action: "toggle" },
-      },
-      action: "tap",
-    });
-    expect(seen[0]?.composed).toBe(true);
-  });
-
-  it("stays silent when it has no config yet", async () => {
-    const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
-    document.body.append(el);
-    const seen: Event[] = [];
-    document.body.addEventListener("hass-action", (ev) => seen.push(ev));
-    el.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-    expect(seen).toHaveLength(0);
   });
 });
 

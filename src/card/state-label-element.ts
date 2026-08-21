@@ -6,19 +6,8 @@ import { hassRenderChanged } from "../has-changed";
 import { itemColorCss, stateColorBrightness } from "../state-color";
 import { localizeOwn } from "../strings";
 import type { HassEntity, HomeAssistant } from "../types";
+import { bindActions, isClickable, relayActions } from "./item-actions";
 import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
-import { hasAction } from "./state-icon-element";
-
-interface ActionHandlerElement extends HTMLElement {
-  bind?: (element: HTMLElement, options: { hasHold: boolean; hasDoubleClick: boolean }) => void;
-}
-
-const actionHandler = (): ActionHandlerElement | undefined => {
-  const existing = document.body.querySelector<ActionHandlerElement>("action-handler");
-  if (existing) return existing;
-  if (!customElements.get("action-handler")) return undefined;
-  return document.body.appendChild(document.createElement("action-handler"));
-};
 
 /**
  * A text-only item. Renders an entity's name, its state, or both, on top of
@@ -38,26 +27,11 @@ export class PictureStudioStateLabel extends LitElement {
   // of changedProperties, which only a declared property records.
   declare _hass?: HomeAssistant;
   declare editing: boolean;
-  private _clickFallback = false;
 
   constructor() {
     super();
     this.editing = false;
-    this.addEventListener("action", (ev: Event) => {
-      const action = (ev as CustomEvent<{ action?: string }>).detail?.action;
-      if (!action || !this._config) return;
-      // hass-action is the event the root <home-assistant> hands to Home
-      // Assistant's own handleAction — more-info, toggle, navigate, url,
-      // perform-action, with the confirmation dialogs. Nothing in the frontend
-      // fires it; it exists for third-party cards, which is what we are.
-      this.dispatchEvent(
-        new CustomEvent("hass-action", {
-          detail: { config: this._config, action },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    });
+    relayActions(this, () => this._config);
   }
 
   setConfig(config: StateLabelConfig): void {
@@ -204,28 +178,8 @@ export class PictureStudioStateLabel extends LitElement {
     // Absent tap_action means clickable (the default action is more-info).
     // Mirrors Home Assistant's own badge.hasAction getter exactly: the cursor
     // disappears only when all three actions are explicitly set to "none".
-    const clickable =
-      !config.tap_action ||
-      hasAction(config.tap_action) ||
-      hasAction(config.hold_action) ||
-      hasAction(config.double_tap_action);
-    this.toggleAttribute("clickable", clickable);
-
-    const handler = actionHandler();
-    if (handler?.bind) {
-      handler.bind(this, {
-        hasHold: hasAction(config.hold_action),
-        hasDoubleClick: hasAction(config.double_tap_action),
-      });
-      return;
-    }
-    // Honest degradation: without the handler we lose hold and double-tap, not
-    // the card. Bound once, hence the flag.
-    if (this._clickFallback) return;
-    this._clickFallback = true;
-    this.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-    });
+    this.toggleAttribute("clickable", isClickable(config));
+    bindActions(this, config);
   }
 
   static styles = [

@@ -54,6 +54,19 @@ export interface ActionConfig {
 }
 
 /**
+ * The three action keys every picture element carries, and the only part of a
+ * config the shared action relay in `card/item-actions.ts` looks at.
+ *
+ * Narrow on purpose: both element kinds satisfy it, and nothing that binds a
+ * gesture needs to know whether it is binding one to an icon or to a label.
+ */
+export interface ElementActions {
+  tap_action?: ActionConfig;
+  hold_action?: ActionConfig;
+  double_tap_action?: ActionConfig;
+}
+
+/**
  * Sizing defaults a card hands to the sections grid. `columns` counts twelfths of a
  * section, or "full" to span it whole; `rows` is a fixed height in grid rows, or
  * "auto" to follow the content. The min/max pairs bound the layout tab's sliders.

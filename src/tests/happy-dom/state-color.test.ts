@@ -82,6 +82,111 @@ describe("stateActive", () => {
     expect(stateActive(entity("button.a", "2026-08-18T10:00:00+00:00"))).toBe(true);
     expect(stateActive(entity("button.a", "unavailable"))).toBe(false);
   });
+
+  // The remaining domain branches, one test each. This function is a verbatim
+  // copy of `stateActive` in home-assistant/frontend, which no custom card can
+  // import — so a slip while transcribing it is permanent and silent, and shows
+  // up only as an item painted with the wrong colour token. Each case pins the
+  // sentinel that is inactive *and* a state that is active, because a branch
+  // that always returned the same answer would satisfy either half alone.
+
+  it("alarm_control_panel: only disarmed is inactive", () => {
+    expect(stateActive(entity("alarm_control_panel.a", "disarmed"))).toBe(false);
+    expect(stateActive(entity("alarm_control_panel.a", "armed_home"))).toBe(true);
+    expect(stateActive(entity("alarm_control_panel.a", "triggered"))).toBe(true);
+  });
+
+  it("media_player: standby is inactive, playing and paused are not", () => {
+    expect(stateActive(entity("media_player.a", "standby"))).toBe(false);
+    expect(stateActive(entity("media_player.a", "playing"))).toBe(true);
+    expect(stateActive(entity("media_player.a", "paused"))).toBe(true);
+  });
+
+  it("lawn_mower: docked and paused are inactive", () => {
+    expect(stateActive(entity("lawn_mower.a", "docked"))).toBe(false);
+    expect(stateActive(entity("lawn_mower.a", "paused"))).toBe(false);
+    expect(stateActive(entity("lawn_mower.a", "mowing"))).toBe(true);
+    expect(stateActive(entity("lawn_mower.a", "error"))).toBe(true);
+  });
+
+  it("vacuum: idle, docked and paused are inactive", () => {
+    expect(stateActive(entity("vacuum.a", "idle"))).toBe(false);
+    expect(stateActive(entity("vacuum.a", "docked"))).toBe(false);
+    expect(stateActive(entity("vacuum.a", "paused"))).toBe(false);
+    expect(stateActive(entity("vacuum.a", "cleaning"))).toBe(true);
+    expect(stateActive(entity("vacuum.a", "returning"))).toBe(true);
+  });
+
+  it("valve: closed is inactive, like a cover", () => {
+    expect(stateActive(entity("valve.a", "closed"))).toBe(false);
+    expect(stateActive(entity("valve.a", "open"))).toBe(true);
+    expect(stateActive(entity("valve.a", "opening"))).toBe(true);
+  });
+
+  it("plant: the branch is inverted — only `problem` is active", () => {
+    // Every other domain names what is *in*active. A healthy plant is the
+    // uninteresting state, so here the rule reads the other way round.
+    expect(stateActive(entity("plant.a", "problem"))).toBe(true);
+    expect(stateActive(entity("plant.a", "ok"))).toBe(false);
+  });
+
+  it("timer: only `active` is active — idle and paused are not", () => {
+    expect(stateActive(entity("timer.a", "active"))).toBe(true);
+    expect(stateActive(entity("timer.a", "idle"))).toBe(false);
+    expect(stateActive(entity("timer.a", "paused"))).toBe(false);
+  });
+
+  it("camera: only `streaming` is active — recording is not", () => {
+    expect(stateActive(entity("camera.a", "streaming"))).toBe(true);
+    expect(stateActive(entity("camera.a", "recording"))).toBe(false);
+    expect(stateActive(entity("camera.a", "idle"))).toBe(false);
+  });
+
+  it("group: an allow-list of five states, not a deny-list", () => {
+    for (const state of ["on", "home", "open", "locked", "problem"]) {
+      expect(stateActive(entity("group.a", state))).toBe(true);
+    }
+    expect(stateActive(entity("group.a", "closed"))).toBe(false);
+    expect(stateActive(entity("group.a", "not_home"))).toBe(false);
+    expect(stateActive(entity("group.a", "unlocked"))).toBe(false);
+  });
+
+  it("device_tracker follows person: not_home is the inactive one", () => {
+    expect(stateActive(entity("device_tracker.a", "not_home"))).toBe(false);
+    expect(stateActive(entity("device_tracker.a", "home"))).toBe(true);
+    expect(stateActive(entity("device_tracker.a", "work"))).toBe(true);
+  });
+
+  it("a domain with no case of its own is active unless off, unknown or unavailable", () => {
+    expect(stateActive(entity("sensor.a", "23.4"))).toBe(true);
+    expect(stateActive(entity("switch.a", "on"))).toBe(true);
+    expect(stateActive(entity("switch.a", "off"))).toBe(false);
+  });
+
+  it("`off` is decided before the switch, so it beats a case that would say active", () => {
+    // The guard runs above the switch: a domain whose case would return true
+    // for some other state still reads `off` as inactive. Alert is the single
+    // exception, and it is asserted in the first test of this block.
+    expect(stateActive(entity("plant.a", "off"))).toBe(false);
+    expect(stateActive(entity("timer.a", "off"))).toBe(false);
+    expect(stateActive(entity("camera.a", "off"))).toBe(false);
+    expect(stateActive(entity("lawn_mower.a", "off"))).toBe(false);
+  });
+
+  it("unavailable and unknown beat every domain rule", () => {
+    for (const domain of ["alarm_control_panel", "plant", "group", "camera", "cover"]) {
+      expect(stateActive(entity(`${domain}.a`, "unavailable"))).toBe(false);
+      expect(stateActive(entity(`${domain}.a`, "unknown"))).toBe(false);
+    }
+  });
+
+  it("an explicit state argument is read instead of the entity's own", () => {
+    // The card passes a state it has already resolved; the entity object is
+    // still needed for its domain.
+    const closed = entity("cover.a", "closed");
+    expect(stateActive(closed)).toBe(false);
+    expect(stateActive(closed, "open")).toBe(true);
+  });
 });
 
 describe("stateColorBrightness", () => {

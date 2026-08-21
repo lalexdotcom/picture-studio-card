@@ -1,8 +1,8 @@
 import { DEFAULT_LABEL_CHROME, normalizeLabelChrome } from "../chrome";
 import { normalizeLabelShow, type StateLabelConfig } from "../config";
-import { DEFAULT_LABEL_SIZE, normalizeElementSize } from "../element-size";
-import { localizeOwn } from "../strings";
-import type { HomeAssistant, LocalizeFunc } from "../types";
+import { DEFAULT_LABEL_SIZE } from "../element-size";
+import type { LocalizeFunc } from "../types";
+import { sizeFromFormFields, sizeSchema, sizeToFormFields } from "./element-size-form";
 export const labelEntitySchema = (): unknown[] => [{ name: "entity", selector: { entity: {} } }];
 
 export const labelContentInnerSchema = (
@@ -82,69 +82,8 @@ export const labelSchema = (showTimeFormat: boolean, localize: LocalizeFunc): un
   ...labelInteractionsSchema(),
 ];
 
-export const labelSizeSchema = (
-  mode: "auto" | "adaptive" | "fixed",
-  localize: LocalizeFunc,
-  hass: HomeAssistant | undefined,
-  // When true, the caller renders ha-radio-group for mode selection and the
-  // schema omits size_mode. When false (the default), size_mode is included as
-  // a vertical ha-form select — correct but not horizontal — guaranteed to
-  // load because ha-selector pulls its own sub-components.
-  radioGroupAvailable = false,
-): unknown[] => {
-  const modeField = {
-    name: "size_mode",
-    selector: {
-      select: {
-        mode: "list",
-        options: [
-          { value: "auto", label: localize("ui.common.auto") || "Automatic" },
-          { value: "adaptive", label: localizeOwn(hass, "size_mode_adaptive") },
-          { value: "fixed", label: localizeOwn(hass, "size_mode_fixed") },
-        ],
-      },
-    },
-  };
-  const preamble = radioGroupAvailable ? [] : [modeField];
-  if (mode === "adaptive") {
-    return [
-      ...preamble,
-      {
-        name: "size_ratio",
-        selector: { number: { min: 1, max: 100, step: 1, unit_of_measurement: "%" } },
-      },
-      {
-        name: "",
-        type: "grid",
-        schema: [
-          {
-            name: "size_min",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-          {
-            name: "size_max",
-            selector: {
-              number: { min: 8, max: 400, step: 1, unit_of_measurement: "px", mode: "box" },
-            },
-          },
-        ],
-      },
-    ];
-  }
-  if (mode === "fixed") {
-    return [
-      ...preamble,
-      {
-        name: "size_value",
-        selector: { number: { min: 8, max: 128, step: 1, unit_of_measurement: "px" } },
-      },
-    ];
-  }
-  // auto — no numeric fields
-  return preamble;
-};
+/** Sizing is one idea for both kinds — see `element-size-form.ts`. */
+export const labelSizeSchema = sizeSchema;
 
 export const labelPillSchema = (): unknown[] => [
   { name: "chrome_pill", selector: { boolean: {} } },
@@ -174,11 +113,7 @@ export const labelToFormData = (config: StateLabelConfig): Record<string, unknow
   return {
     ...rest,
     displayed_elements: [...show],
-    size_mode: size.mode,
-    size_min: typeof size.min === "number" ? Math.round(size.min) : size.min,
-    size_ratio: typeof size.ratio === "number" ? Math.round(size.ratio) : size.ratio,
-    size_max: typeof size.max === "number" ? Math.round(size.max) : size.max,
-    size_value: typeof size.value === "number" ? Math.round(size.value) : size.value,
+    ...sizeToFormFields(size),
     halo_enabled: halo === true,
     chrome_enabled: c.theme !== "none",
     // The control never offers "none", so an off chrome pre-selects the theme
@@ -247,16 +182,7 @@ export const labelFromFormData = (
     // back whatever was in `.data`, and the model owns the shape.
     show: normalizeLabelShow(shown),
     halo: halo_enabled === true,
-    size: normalizeElementSize(
-      {
-        mode: size_mode,
-        min: typeof size_min === "number" ? Math.round(size_min) : size_min,
-        ratio: typeof size_ratio === "number" ? Math.round(size_ratio) : size_ratio,
-        max: typeof size_max === "number" ? Math.round(size_max) : size_max,
-        value: typeof size_value === "number" ? Math.round(size_value) : size_value,
-      },
-      DEFAULT_LABEL_SIZE,
-    ),
+    size: sizeFromFormFields(data, DEFAULT_LABEL_SIZE),
     ...chromeOut,
   };
 };

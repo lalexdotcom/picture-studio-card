@@ -176,3 +176,33 @@ describe("badgeTypeProblem", () => {
     expect(badgeTypeProblem("custom:nodash")).toBe("unknown");
   });
 });
+
+/**
+ * A probe is started from a component update, so what happens here when Home
+ * Assistant's factory is missing is not a probe failing — it is a render
+ * failing, and one row's unknowable verdict taking the whole list with it.
+ */
+describe("when loadCardHelpers is not there", () => {
+  beforeEach(() => {
+    (window as unknown as { loadCardHelpers?: unknown }).loadCardHelpers = undefined;
+  });
+
+  it("does not throw", () => {
+    expect(() => probeBadgeType("entity", () => undefined)).not.toThrow();
+  });
+
+  it("leaves the verdict unknown rather than accusing the type of being missing", () => {
+    probeBadgeType("entity", () => undefined);
+    expect(badgeVerdict("entity")).toBe("unknown");
+    expect(badgeIsBroken("entity")).toBe(false);
+  });
+
+  it("still settles once the factory turns up", async () => {
+    probeBadgeType("entity", () => undefined);
+    (window as unknown as { loadCardHelpers: () => Promise<unknown> }).loadCardHelpers = async () =>
+      helpers;
+    const settled = new Promise<void>((r) => probeBadgeType("entity", r));
+    await settled;
+    expect(badgeVerdict("entity")).toBe("ok");
+  });
+});

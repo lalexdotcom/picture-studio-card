@@ -114,13 +114,17 @@ export const mergeBackground = (
   data: Record<string, unknown>,
 ): PictureStudioConfig => {
   const schema = backgroundSchema(() => "", config);
-  const next = sectionMerge(schema, config as unknown as Record<string, unknown>, data) as Record<
-    string,
-    unknown
-  >;
 
-  const chosen = next[PICTURE_ENTITY] as string | undefined;
-  delete next[PICTURE_ENTITY];
+  // The picker's key belongs to the form, not to the config: it is the one field
+  // whose value has to be split across two real keys. Reading it out of `data`
+  // before the merge is what keeps `next` a genuine PictureStudioConfig — so
+  // every assignment below is checked, where the whole block used to run on an
+  // untyped record between two casts.
+  const { [PICTURE_ENTITY]: picked, ...fields } = data;
+  const chosen = typeof picked === "string" && picked ? picked : undefined;
+
+  const next = sectionMerge(schema, config, fields);
+
   if (!chosen) {
     delete next.camera_image;
     delete next.image_entity;
@@ -133,7 +137,7 @@ export const mergeBackground = (
     delete next.camera_image;
     delete next.camera_view;
   }
-  return next as unknown as PictureStudioConfig;
+  return next;
 };
 
 /**

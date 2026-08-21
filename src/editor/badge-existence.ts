@@ -90,8 +90,19 @@ export const probeBadgeType = (type: string, onSettled: () => void): void => {
     return;
   }
 
-  // Native. One async hop per session — loadCardHelpers — and every probe after
-  // it is synchronous. A placeholder keeps a second row from probing meanwhile.
+  // Native. The verdict comes from Home Assistant's own factory, so with no
+  // factory there is no verdict — and "no verdict" is the right answer, not
+  // "missing". Leaving the type unsettled means the row shows its type plainly
+  // instead of being accused of being broken, and a later probe can still
+  // settle it once the frontend is there.
+  //
+  // The guard matters because of *where* this runs: a probe is kicked off from
+  // a component update, so throwing here does not fail a probe, it fails a
+  // render — and one row's unknowable verdict would take the list down with it.
+  if (typeof window.loadCardHelpers !== "function") return;
+
+  // One async hop per session — loadCardHelpers — and every probe after it is
+  // synchronous. A placeholder keeps a second row from probing meanwhile.
   TIMERS.set(
     type,
     setTimeout(() => undefined, 0),

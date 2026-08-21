@@ -7,7 +7,7 @@ import { type BadgeChoice, badgeCatalog, choiceLabel } from "./badge-catalog";
 import { badgeIsBroken, badgeTypeProblem, probeBadgeType } from "./badge-existence";
 import { elementCatalog, elementLabel } from "./element-catalog";
 import { itemIcon } from "./icons";
-import { rowLabel } from "./items";
+import { hasUnreadableVisibility, rowLabel, showsNothing } from "./items";
 
 export interface AddChoice {
   value: string;
@@ -70,42 +70,6 @@ export const splitChoiceValue = (
   if (family !== "badge" && family !== "element") return undefined;
   return { family, type: value.slice(at + 1) };
 };
-
-/** A label with an empty `show` draws nothing on the dashboard — say so here. */
-const showsNothing = (item: PictureItem): boolean =>
-  item.type === "element" &&
-  item.config.type === "state-label" &&
-  Array.isArray((item.config as { show?: unknown[] }).show) &&
-  (item.config as { show: unknown[] }).show.length === 0;
-
-/**
- * The worst state among the items, for the section header's glyph — error beats
- * warning, and neither draws anything.
- *
- * Deliberately built from the very predicates the rows use. Two places deciding
- * "is this item broken" would drift, and the row is the one that has to stay
- * right.
- */
-export const itemsSeverity = (items: readonly PictureItem[]): "error" | "warning" | undefined => {
-  let warning = false;
-  for (const item of items) {
-    if (item.type === "unknown") return "error";
-    if (item.type === "badge") {
-      const type = String((item.config as Record<string, unknown>).type ?? "");
-      if (type && badgeIsBroken(type)) return "error";
-    }
-    if (hasUnreadableVisibility(item) || showsNothing(item)) warning = true;
-  }
-  return warning ? "warning" : undefined;
-};
-
-/** An item whose `visibility` key is present but not a list — renders, but
-    always shows, because the card cannot parse the conditions. Orange, not
-    red: unlike an unreadable item it is still drawn and editable. Aligns
-    with `hasVisibility` in config.ts, which is the "usable" gate: if
-    `hasVisibility` is false but visibility is defined, this is true. */
-const hasUnreadableVisibility = (item: PictureItem): boolean =>
-  item.type !== "unknown" && item.visibility !== undefined && !Array.isArray(item.visibility);
 
 export class PictureStudioBadgeList extends LitElement {
   static properties = {
@@ -203,13 +167,9 @@ export class PictureStudioBadgeList extends LitElement {
       if (item.type !== "badge") return false;
       const type = String(item.config.type ?? "");
       // A badge with no type at all is legal and means `entity` — the factory's
-      // last argument is the default type. Nothing to probe.
+      // last argument is the default type.
       if (!type) return false;
-      // Probe all non-empty types: for custom: types the verdict determines
-      // broken; for unsupported native types the verdict determines the wording
-      // (broken is immediate via badgeIsBroken, the word waits one microtask).
-      // Harmless once the verdict is settled — probeBadgeType returns at once.
-      probeBadgeType(type, () => this.requestUpdate());
+      // Reads the cache only. The probe that fills it runs in updated().
       return badgeIsBroken(type);
     });
     // The glyph says which family the problem is in, whenever we know the family.
@@ -348,10 +308,39 @@ export class PictureStudioBadgeList extends LitElement {
   }
 
   protected updated(changedProperties: Map<string, unknown>): void {
+    this._probeRows();
     if (!changedProperties.has("selectedIndex") || this.selectedIndex === undefined) return;
     // selectedIndex is an array index; the list renders top-down, so flip it to
     // a display position before querying the DOM.
     this.scrollToItem(this.selectedIndex);
+  }
+
+  /**
+   * Fills in the row verdicts `render()` reads out of the cache.
+   *
+   * Probing is a side effect — it can load a chunk, start a grace timer and
+   * register a callback — and `render()` is required to be a pure function of
+   * the element's state, so it had no business being called from there. Nothing
+   * is lost by waiting: the verdict was always going to land after this paint,
+   * and settling calls `requestUpdate`, which brings us straight back for it.
+   *
+   * Not while detached. Lit finishes an update it has already scheduled even
+   * after the element leaves the document, and there is no point loading a chunk
+   * for a list nobody will see, still less asking to be redrawn when there is
+   * nowhere left to draw it.
+   */
+  private _probeRows(): void {
+    if (!this.isConnected) return;
+    for (const item of this.items) {
+      if (item.type !== "badge") continue;
+      const type = String(item.config.type ?? "");
+      if (!type) continue;
+      // Every non-empty type: for `custom:` types the verdict decides whether
+      // the row is broken; for unsupported native ones it decides the wording,
+      // since `badgeIsBroken` already answers immediately there. Harmless once
+      // settled — probeBadgeType returns at once.
+      probeBadgeType(type, () => this.requestUpdate());
+    }
   }
 
   public scrollToItem(index: number): void {

@@ -1,20 +1,53 @@
 # picture-studio — follow-ups
 
 **A todo list.** What is parked, not what is done: this file holds what has been
-asked for and not yet designed, and an entry **leaves** it once it is settled. An
-entry here is a starting point for a brainstorm, never a decision already taken.
+asked for and not yet designed. An entry here is a starting point for a
+brainstorm, never a decision already taken.
 
 Anything durable belongs in `mem:picture-studio/state` instead — a verified fact
 about Home Assistant, a decision not to re-litigate, a habit to keep across the
 whole project. If an entry here would still be true and useful with nothing left
 to do, it is in the wrong file.
 
-Kept separate because the two age differently: the state file is rewritten as the
-card changes, this one grows and empties.
+## How a settled entry is retired — changed 2026-08-21
+
+**Strike the title through, keep the entry, never renumber.** An entry that is
+done reads `## ~~4. Its title~~ — DONE <date>`, gains a short line saying what
+closed it, and stays exactly where it is.
+
+It used to be deleted outright. That cost more than it saved twice in one day:
+numbering shifted under references written elsewhere, and entry 1 — the
+screenshots — was *not* deleted when it was settled, so a later session read
+"the screenshots are still owed", repeated it to the user, and was corrected by
+the user rather than by the file. Striking through fails safe in both
+directions: a stale entry is visibly closed rather than silently absent, and
+"entry 7" means the same thing forever.
+
+**Update this file as part of the delivery, not after it.** The trap is not
+forgetting to write — it is writing the code, moving on, and leaving the memory
+describing a project that no longer exists.
+
+Kept separate from the state file because the two age differently: the state file
+is rewritten as the card changes, this one accumulates and strikes through.
 
 ---
 
-## 1. The screenshots — they ship with 1.5.0
+## ~~1. The screenshots — they ship with 1.5.0~~ — DONE 2026-08-21
+
+**Closed by `97c5463`**, which retired `demo.gif` and `custom-badge.gif`, added
+`dashboard.gif` and re-recorded `editor.gif`, all from the new pipeline in
+`scripts/screenshot/` — see `mem:picture-studio/screenshots`. The same commit and
+`593ab0a` carried the full README pass: the heading block, the five sections, the
+CSS tokens moved to Theming, and two wrong claims about `tap_action` corrected.
+The capture dashboard builds `state-icon`, `state-label` and a `heading`
+(`capture-view.mjs`), so the GIFs show the 1.5.0 card, not its predecessor.
+
+**This entry was the one that proved the rule above.** It stayed here after it
+was settled, and the next session read it as still owed.
+
+The original text follows, struck for the record.
+
+### ~~Original entry~~
 
 `docs/images/` still shows the card as it was before `state-label` existed. The
 GIFs predate the second element kind, the new hover treatment, the item list
@@ -38,7 +71,17 @@ made them wrong — a Prerequisites line, a `### Tests` section, two CHANGELOG
 bullets. **The full doc review and the screenshots are still owed**, and they
 still come before the bump.
 
-## 2. Badges in the card header — designed, not yet planned
+## ~~2. Badges in the card header — designed, not yet planned~~ — DONE 2026-08-20
+
+**Shipped in 1.5.0.** `feat/card-heading` merged as `608ced7`; the header carries
+a title, an icon and Home Assistant's own heading badges, with `heading.title` and
+the silent `title` → `heading.title` migration. The six questions left open at the
+end of the spec were settled during the build; the answers are in the code and in
+`mem:picture-studio/state`, not here.
+
+The original entry follows, struck for the record.
+
+### ~~Original entry~~
 
 **Asked 2026-08-19 at the close of 1.4.0; brainstormed the same day.** The
 feasibility spike is done and the draft spec is
@@ -157,7 +200,12 @@ therefore still open:**
   computed styles carried every assertion, which is the outcome the original
   entry hoped for — baselines drift with every HA update, numbers do not.
 
-## 3. The chrome, beyond icons
+## ~~3. The chrome, beyond icons~~ — SETTLED in 1.4.0
+
+The decision lives in `mem:picture-studio/state`; the entry says so itself. Struck
+rather than deleted so the numbering below it never moves.
+
+### ~~Original entry~~
 
 **Settled in 1.4.0: it does NOT move to item level.** Each element kind reads
 `chrome` out of its own `config`, and `state-label` took up the idea rather than
@@ -241,7 +289,17 @@ Both are recorded rather than owed; neither blocks anything.
   arithmetic was checked by hand against `moveItem`'s two splices by two
   reviewers. A future off-by-one at an inclusive endpoint would not be caught.
 
-## 8. The config form, redrawn — designed, schema still open
+## ~~8. The config form, redrawn — designed, schema still open~~ — DONE 2026-08-20
+
+**Shipped in 1.5.0**, on the same branch as entry 2. The editor is the five
+collapsible sections — Background, Items, Heading, Filters, Entity — the camera
+and image entities are one field, and every setting that was YAML-only
+(`entity`, `image_entity`, `state_image`, `aspect_ratio`, `filter`) is reachable.
+The schema question this entry ended on is answered by the code.
+
+The original entry follows, struck for the record.
+
+### ~~Original entry~~
 
 **Asked 2026-08-19, designed 2026-08-20.** Everything that was parked here is
 now in `docs/superpowers/specs/2026-08-20-config-form-design.md`, which also
@@ -264,3 +322,91 @@ session starts.
 
 Also still open, and cheap: section 5's title and the merged field's label, both
 ours to write in `src/strings.ts`.
+
+## 9. The drag has no keyboard alternative
+
+**Raised by the 2026-08-21 codebase review, and parked deliberately — it is the
+one finding of that pass that needs a design, not a patch.**
+
+Positioning an item on the picture is pointer-only. `drag-layer.ts` listens for
+`pointerdown` / `pointermove` / `pointerup` / `pointercancel` and nothing else:
+no `keydown`, no `tabindex` on the wrappers, no role, no ARIA. Someone who
+cannot use a pointer can add an item, configure it, and never place it.
+
+**What does not cover it, and why the gap is easy to miss.** `ha-sortable` in the
+item list gives keyboard reordering — but that is stacking order, not position on
+the image. The Anchor picker sets which corner the coordinates are measured
+from, not the coordinates. The drag is the sole way to set `position`, and the
+config form deliberately does not expose `top`/`left` as fields.
+
+**The obvious shape, and it is only a starting point:** make the selected
+wrapper focusable, nudge it on the arrow keys, and commit through the same
+`options.onCommit` the gesture already uses — so the percentage conversion, the
+clamp and the marker corner all stay in one place. A larger step on Shift, and
+Escape to abandon, would mirror what the pointer path already offers through
+`pointercancel`.
+
+**What wants deciding before any of that is written:**
+
+- **The step.** Pixels are wrong — the card is sized in container-query units
+  and the same nudge must mean the same thing on a phone and on a wall panel.
+  `1cqw` is the natural unit but it is not obviously the right *amount*.
+- **Edit mode only, or not.** The drag layer is only attached while `editing`.
+  A keyboard path that exists solely in the editor is defensible and much
+  smaller; one that works on a live dashboard is a different feature.
+- **What takes focus.** The wrappers are built imperatively in `_syncItems` and
+  carry no `tabindex` today. Making every item a tab stop on a photograph with
+  twenty badges is its own usability problem — focus probably belongs to the
+  selected item only, which ties this to the selection the editor already owns.
+- **What to announce.** `role="application"` and a live region reading the new
+  coordinates is one answer; `role="slider"` per axis with
+  `aria-valuenow` is another and reads better to a screen reader, but it means
+  two controls per item.
+
+**There is now somewhere to test it.** `src/tests/happy-dom/card/drag-layer.test.ts`
+was created in that same session and drives the controller directly with
+synthetic pointer events — a keyboard path can be tested the same way, without
+the browser lane.
+
+**Note the pre-existing split while you are here:** the controller's pure
+predicates still live in `src/tests/happy-dom/drag-threshold.test.ts`, at the
+happy-dom root rather than under `card/` and named after neither the module nor
+the file it tests. The review flagged it; it was left alone rather than folded
+into an unrelated change.
+
+## ~~10. `picture-studio-editor.test.ts` fails the file when the file gets slower~~ — DONE 2026-08-21
+
+**Closed by `c6f5f87`, and the diagnosis in the entry was wrong**, which is the
+part worth keeping.
+
+The symptom: several describes in that file end their `afterEach` by setting
+`window.loadCardHelpers` back to `undefined`. Invisible while the file is quick —
+the last renders they schedule never get a turn. Give the file any extra duration
+and they do, and `probeBadgeType` reads that global **synchronously, from a
+component update**, so it threw with no test on the stack: `failedFiles: 1` while
+every test passed, and a non-zero exit. Proven with a describe whose only test was
+`await new Promise(r => setTimeout(r, 300))` — six throws, file red.
+
+**Five fixes were tried against the symptom and all five failed**, two of them by
+breaking other tests: a benign stub in the new describe's hooks (no effect, the
+strays come from earlier describes); the same stub in the outermost `afterEach`
+(2 tests fail — with a stub that answers, probes settle, fire `requestUpdate`,
+and the extra renders move other tests' `expand`/`scrollToItem` counts); that plus
+`resetBadgeVerdicts()` (5 tests fail); a generation counter making an in-flight
+probe a no-op after a reset (suite green, strays unchanged — cancellation is the
+wrong lever when the failure is at the *call site*); an `isConnected` guard around
+the probe (strays unchanged).
+
+**What actually fixed it:** `probeBadgeType` now returns quietly when
+`window.loadCardHelpers` is not a function. Every attempt above tried to guarantee
+the global was *there*; the answer was to make the caller tolerate its absence.
+No factory means no verdict, and no verdict is the honest answer rather than
+"missing" — the row shows its type instead of being accused of being broken.
+
+**The lesson, and it is the project's oldest one restated:** five fixes aimed at
+the symptom, none at the mechanism. The instrumented run that finally named the
+mechanism took one attempt.
+
+The probe also left `render()` for `updated()` in the same commit — the review's
+Best Practices axis asked for that on its own merits, and it is worth being clear
+that **it fixed nothing here**.

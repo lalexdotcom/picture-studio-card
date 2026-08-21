@@ -11,7 +11,6 @@ import {
   iconChromeSchema as chromeSchema,
   iconFromFormData as fromFormData,
   iconSchema as stateIconSchema,
-  iconSizeSchema as stateIconSizeSchema,
   themeModeTitle,
   iconToFormData as toFormData,
 } from "../../../editor/state-icon-form";
@@ -21,16 +20,6 @@ import { cssRules } from "../card/harness";
 
 const base = { type: "state-icon" as const, size: DEFAULT_ICON_SIZE };
 const localize = ((key: string) => `L:${key}`) as never;
-
-/** Navigate a chain of keys through unknown values without using `any`. */
-const get = (obj: unknown, ...keys: string[]): unknown => {
-  let cur: unknown = obj;
-  for (const k of keys) {
-    if (typeof cur !== "object" || cur === null) return undefined;
-    cur = (cur as Record<string, unknown>)[k];
-  }
-  return cur;
-};
 
 const find = (schema: unknown[], name: string): Record<string, unknown> | undefined => {
   for (const entry of schema as Record<string, unknown>[]) {
@@ -51,7 +40,7 @@ describe("stateIconSchema", () => {
     expect(names.slice(0, 4)).toEqual(["name", "color", "icon", "show_entity_picture"]);
   });
 
-  it("does not contain the size fields (they live in stateIconSizeSchema)", () => {
+  it("does not contain the size fields (they live in element-size-form)", () => {
     expect(find(stateIconSchema(), "size_min")).toBeUndefined();
     expect(find(stateIconSchema(), "size_ratio")).toBeUndefined();
     expect(find(stateIconSchema(), "size_max")).toBeUndefined();
@@ -62,110 +51,6 @@ describe("stateIconSchema", () => {
   it("offers hold and double tap as optional actions", () => {
     expect(find(stateIconSchema(), "hold_action")).toBeDefined();
     expect(find(stateIconSchema(), "double_tap_action")).toBeDefined();
-  });
-});
-
-describe("stateIconSizeSchema", () => {
-  // --- Fallback path (radioGroupAvailable = false, the default) ---
-  it("auto: contains size_mode and no numeric fields (fallback path)", () => {
-    const schema = stateIconSizeSchema("auto", localize, undefined);
-    expect(find(schema, "size_mode")).toBeDefined();
-    expect(find(schema, "size_ratio")).toBeUndefined();
-    expect(find(schema, "size_min")).toBeUndefined();
-    expect(find(schema, "size_max")).toBeUndefined();
-    expect(find(schema, "size_value")).toBeUndefined();
-  });
-
-  it("adaptive: contains size_mode, size_ratio, size_min, size_max — no size_value (fallback path)", () => {
-    const schema = stateIconSizeSchema("adaptive", localize, undefined);
-    expect(find(schema, "size_mode")).toBeDefined();
-    expect(find(schema, "size_ratio")).toBeDefined();
-    expect(find(schema, "size_min")).toBeDefined();
-    expect(find(schema, "size_max")).toBeDefined();
-    expect(find(schema, "size_value")).toBeUndefined();
-  });
-
-  it("fixed: contains size_mode and size_value — no adaptive fields (fallback path)", () => {
-    const schema = stateIconSizeSchema("fixed", localize, undefined);
-    expect(find(schema, "size_mode")).toBeDefined();
-    expect(find(schema, "size_value")).toBeDefined();
-    expect(find(schema, "size_ratio")).toBeUndefined();
-    expect(find(schema, "size_min")).toBeUndefined();
-    expect(find(schema, "size_max")).toBeUndefined();
-  });
-
-  it("size_mode field uses a select with mode: list and three options", () => {
-    const schema = stateIconSizeSchema("auto", localize, undefined);
-    const field = find(schema, "size_mode");
-    expect(get(field, "selector", "select", "mode")).toBe("list");
-    const options = get(field, "selector", "select", "options");
-    const values = Array.isArray(options)
-      ? (options as Record<string, unknown>[]).map((o) => o.value)
-      : undefined;
-    expect(values).toEqual(["auto", "adaptive", "fixed"]);
-  });
-
-  // --- Radio-group path (radioGroupAvailable = true) ---
-  it("omits size_mode when radioGroupAvailable is true (radio group path)", () => {
-    expect(
-      find(stateIconSizeSchema("auto", localize, undefined, true), "size_mode"),
-    ).toBeUndefined();
-    expect(
-      find(stateIconSizeSchema("adaptive", localize, undefined, true), "size_mode"),
-    ).toBeUndefined();
-    expect(
-      find(stateIconSizeSchema("fixed", localize, undefined, true), "size_mode"),
-    ).toBeUndefined();
-  });
-
-  it("includes size_mode when radioGroupAvailable is false (fallback path)", () => {
-    expect(
-      find(stateIconSizeSchema("auto", localize, undefined, false), "size_mode"),
-    ).toBeDefined();
-    expect(
-      find(stateIconSizeSchema("adaptive", localize, undefined, false), "size_mode"),
-    ).toBeDefined();
-    expect(
-      find(stateIconSizeSchema("fixed", localize, undefined, false), "size_mode"),
-    ).toBeDefined();
-  });
-
-  it("numeric rows per mode are unchanged regardless of radioGroupAvailable", () => {
-    for (const rga of [true, false] as const) {
-      const adaptive = stateIconSizeSchema("adaptive", localize, undefined, rga);
-      expect(find(adaptive, "size_ratio")).toBeDefined();
-      expect(find(adaptive, "size_min")).toBeDefined();
-      expect(find(adaptive, "size_max")).toBeDefined();
-      expect(find(adaptive, "size_value")).toBeUndefined();
-
-      const fixed = stateIconSizeSchema("fixed", localize, undefined, rga);
-      expect(find(fixed, "size_value")).toBeDefined();
-      expect(find(fixed, "size_ratio")).toBeUndefined();
-
-      const auto = stateIconSizeSchema("auto", localize, undefined, rga);
-      expect(find(auto, "size_ratio")).toBeUndefined();
-      expect(find(auto, "size_value")).toBeUndefined();
-    }
-  });
-
-  it("size_ratio has no mode: box and spans 1 to 100", () => {
-    const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
-    expect(get(find(adaptive, "size_ratio"), "selector", "number", "mode")).toBeUndefined();
-    expect(get(find(adaptive, "size_ratio"), "selector", "number", "min")).toBe(1);
-    expect(get(find(adaptive, "size_ratio"), "selector", "number", "max")).toBe(100);
-  });
-
-  it("adaptive pixel bounds (size_min, size_max) keep mode: box", () => {
-    const adaptive = stateIconSizeSchema("adaptive", localize, undefined);
-    expect(get(find(adaptive, "size_min"), "selector", "number", "mode")).toBe("box");
-    expect(get(find(adaptive, "size_max"), "selector", "number", "mode")).toBe("box");
-  });
-
-  it("fixed size_value is a slider from 10 to 128", () => {
-    const fixed = stateIconSizeSchema("fixed", localize, undefined);
-    expect(get(find(fixed, "size_value"), "selector", "number", "mode")).toBeUndefined();
-    expect(get(find(fixed, "size_value"), "selector", "number", "min")).toBe(8);
-    expect(get(find(fixed, "size_value"), "selector", "number", "max")).toBe(128);
   });
 });
 
@@ -900,5 +785,55 @@ describe("PictureStudioElementForm — content panel", () => {
     expect(result.entity).toBe("sensor.temperature");
     expect(result.show).toEqual(["state"]);
     expect(result.tap_action).toEqual({ action: "navigate", navigation_path: "/lovelace" });
+  });
+});
+
+/**
+ * `normalizeElementConfig` asserts its return type rather than earning it: every
+ * field outside size, chrome, halo and show travels from the YAML unchecked. That
+ * was weighed on 2026-08-21 and deliberately left alone — Home Assistant already
+ * has display fallbacks for a value it cannot read, and reimplementing them here
+ * would be doing worse what HA does well.
+ *
+ * **The decision rests on one condition: a user must always be able to repair a
+ * malformed value from the editor.** These tests are that condition. If one of
+ * them goes red, the escape hatch is gone and the choice not to validate has to
+ * be reopened — see the note above the cast in `config.ts`.
+ */
+describe("a malformed field can always be repaired from the form", () => {
+  const malformed = {
+    type: "state-icon",
+    size: DEFAULT_ICON_SIZE,
+    entity: 123,
+    color: 456,
+  } as unknown as StateIconConfig;
+
+  it("hands the bad value to the form untouched rather than hiding it", () => {
+    // Hiding it would leave the user staring at an empty field with no idea why
+    // the item misbehaves, and no way to tell "unset" from "unreadable".
+    const data = toFormData(malformed);
+    expect(data.entity).toBe(123);
+    expect(data.color).toBe(456);
+  });
+
+  it("writes a conforming value back when the user picks one", () => {
+    const data = toFormData(malformed);
+    expect(fromFormData(malformed, { ...data, entity: "light.b" }).entity).toBe("light.b");
+  });
+
+  it("repairing one field leaves the other bad value alone", () => {
+    // Not collateral damage: the user fixed the entity, not the colour, and the
+    // colour is still theirs to fix next.
+    const data = toFormData(malformed);
+    const out = fromFormData(malformed, { ...data, entity: "light.b" });
+    expect((out as unknown as { color: unknown }).color).toBe(456);
+  });
+
+  it("survives a round trip with no edit at all", () => {
+    // Opening the form and closing it must not rewrite what the user wrote —
+    // storedConfig commits on any change, so a lossy round trip would erase the
+    // value the moment the item is dragged.
+    const out = fromFormData(malformed, toFormData(malformed));
+    expect((out as unknown as { entity: unknown }).entity).toBe(123);
   });
 });
