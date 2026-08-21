@@ -97,27 +97,27 @@ on 2026-08-21 precisely so it would survive.
 Our current floor is HA 2026.6.0, frontend 20260527.4. The container runs
 20260729.6.
 
-### Raised by the 2026-08-21 review, not acted on
+### Raised by the 2026-08-21 review, and both settled the same day
 
-Both are pre-existing, neither blocks anything, and **neither was fixed** — they
-were flagged and left for the user to schedule.
+- **`isConnected` in `_primeErrorBadge`'s `whenDefined` callback — DONE.** `_layer`
+  reads `this.renderRoot`, which outlives a removal, so a card taken out of the
+  document rebuilt itself and wrote its console line when the class landed. The
+  callback now returns early when disconnected, clearing the flag first so a card
+  put back arms a fresh subscription on the next `_createChild`.
+- **`console.error` inside the `try` — LEFT WHERE IT IS, on purpose, and do not
+  reopen it.** The review proposed lifting it above the `try` so that what is drawn
+  would not depend on a reporting call. Measured rather than argued, with a
+  throwaway test that makes `console.error` throw: from **above** the try the throw
+  escapes `_createChild`, aborts the `forEach` in `_syncItems` and leaves the whole
+  card empty; from **inside**, the `catch` contains it to one item. The suggestion
+  enlarges the blast radius it means to remove. The reasoning is in the file, next
+  to the call. Neither case is reachable in a browser — `console.error` does not
+  throw there.
 
-- **`_primeErrorBadge`'s `whenDefined` callback does not check `isConnected`.**
-  `_layer` reads `this.renderRoot`, which survives disconnection, so a card
-  removed from the document still rebuilds and still writes its console line when
-  the class lands. In the suite this is visible: every earlier test in the
-  cold-start block leaves a card subscribed, and the `customElements.define` in
-  the last test wakes all of them at once — which is why the count assertion there
-  had to switch to `entity-filter`, a type no earlier test uses. That isolation
-  works but does not scale: a future count test needs yet another unused type, and
-  nothing enforces it. `if (!this.isConnected) return;` at the top of the callback
-  fixes both the spurious work and the fragility. **The reviewer's one scheduled
-  recommendation.**
-- **The `console.error` call sits inside the `try` that builds the badge.** If it
-  ever threw — a strict spy in some future test — the `catch` would swallow the
-  badge. Harmless today, but it makes drawing depend on a reporting call. Moving
-  it just above the `try` would decouple them, at the price of a line emitted
-  without a badge in the branch documented as unreachable.
+**The lesson, and it is the project's oldest one:** a review finding can be right
+about the mechanism and wrong about the remedy. This one correctly identified that
+drawing depended on a logging call, and proposed a fix that made the failure
+worse. Measure the remedy, not just the diagnosis.
 
 ## 2c. Real-browser tests — Playwright driven by rstest
 

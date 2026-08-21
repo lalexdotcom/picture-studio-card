@@ -806,7 +806,11 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
   // The test this replaced asserted requestUpdate had been called, which it had:
   // green, and guarding nothing, because neither `updated`'s config gate nor
   // `_syncItems`'s shape check lets a bare re-render reach the hole.
-  it("draws the refused badge once hui-error-badge becomes available", async () => {
+  // Two properties in one test, and not by preference: customElements.define is
+  // permanent and happens here, so the moment the class lands can only be observed
+  // once. What lands must therefore be watched by every card that cares about it —
+  // the one still in the document, and the one taken out of it.
+  it("draws the refused badge once available, and leaves a removed card alone", async () => {
     if (!customElements.get(CARD_TAG)) installHelpers();
     makeHelpersForColdStart();
 
@@ -838,6 +842,26 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
       // Nothing reported yet: this pass refused and primed, it drew nothing.
       expect(seen.filter((args) => args[1] === "entity-filter")).toHaveLength(0);
 
+      // A second card, primed exactly like the first and then taken out of the
+      // document before the class lands. Its own type again, so its silence is
+      // its own and not inherited from a card another test left behind.
+      const removed = document.createElement(CARD_TAG) as PictureStudioCard;
+      removed.setConfig({
+        type: CARD_TYPE,
+        image: "/local/plan.png",
+        items: [
+          {
+            type: "badge",
+            position: { top: "10%", left: "10%" },
+            config: { type: "power-total" },
+          },
+        ],
+      });
+      document.body.append(removed);
+      await removed.updateComplete;
+      await flush();
+      removed.remove();
+
       // Simulate the class landing — the dynamic import the priming call
       // triggered, or another badge on the same dashboard having loaded the
       // module. setConfig is part of the stub on purpose: the card builds its own
@@ -866,6 +890,16 @@ describe("cold-start guard: hui-error-badge not yet registered", () => {
       // (runner F18) — the assertion above it fires first: "expected [ [ 'badge',
       // 'entity-filter', …(1) ] ] to have a length of +0 but got 1"
       expect(seen.filter((args) => args[1] === "entity-filter")).toHaveLength(1);
+
+      // And the card that left the document did nothing at all. Its renderRoot
+      // outlives the removal, so without the isConnected guard the callback would
+      // rebuild it and report a badge nobody can see.
+      //
+      // Failure text recorded against the callback with no isConnected guard
+      // (runner F19): "expected [ [ 'badge', 'power-total', …(1) ] ] to have a
+      // length of +0 but got 1"
+      expect(seen.filter((args) => args[1] === "power-total")).toHaveLength(0);
+      expect(wrappers(removed)).toHaveLength(0);
     } finally {
       console.error = original;
     }
