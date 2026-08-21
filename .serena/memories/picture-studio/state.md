@@ -752,7 +752,14 @@ holding.
   same environment. Walk both.
 - Chat in **French**, everything else in English.
 - Propose, then wait for validation — no edit, no dispatch, no commit without it.
-- **Never `git push`** — it publishes. The user does it.
+- **Never push on your own initiative; push when the user asks explicitly**
+  (clarified 2026-08-21, when the older "never, the user does it" was read as
+  absolute and the user corrected it). A push publishes — CI, then `release.yml`
+  cuts the tag and the release, then HACS offers it to everyone. So it is never
+  a step in closing a session and never tidying up; it is an instruction, and
+  when it comes, push `main` and nothing else — no `--tags`, no `--force`. An
+  ambiguous "on release" earns one sentence naming what it will set off, then
+  proceed on the answer.
 - **Leave a clean tree at the close.**
 - **"On clôture" assumes a branch, but work sometimes stays on `main`** (as on
   2026-08-21). Then there is nothing to merge — and the whole-branch review is

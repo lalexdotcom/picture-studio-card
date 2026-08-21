@@ -29,7 +29,22 @@
    bite someone who picked it up cold.
 3. **Commit what is left.** Judge it: if the remaining diff is trivial —
    memory files, docs, a settled style — commit it without asking. If it is
-   not, ask. Pushing is still never yours.
+   not, ask. Pushing is not part of closing — see below.
+
+## Pushing
+
+A push to `main` publishes: CI runs, `release.yml` reads `version` from
+`package.json`, cuts the tag and the GitHub release, and HACS offers it to every
+user of the card.
+
+**Never push on your own initiative** — not to close a session, not to tidy up,
+not because the branch is green. **Push when the user asks for it in so many
+words**, and then push exactly what they asked for and nothing else: `main`,
+never `--tags`, never `--force`.
+
+If the request is ambiguous — "on release", "publie" — say what the push will
+set off and ask once. Being told to go ahead is the answer; asking twice is not
+diligence.
 
 ## Project memory
 
