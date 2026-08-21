@@ -160,10 +160,13 @@ export class PictureStudioBadgeForm extends LitElement {
     .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      /* var(--ha-space-2), not -1: the scale's step 2 is the 8px this rule was
+         written with, and the file's neighbours already say so with the same
+         fallback. Same pixels as before, themeable now. */
+      gap: var(--ha-space-2, 8px);
     }
     .title {
-      font-weight: 500;
+      font-weight: var(--ha-font-weight-medium, 500);
     }
     .fallback {
       color: var(--secondary-text-color);
