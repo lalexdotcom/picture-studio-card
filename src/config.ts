@@ -467,37 +467,49 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
       delete stored.visibility;
     }
     if (item.type === "element") {
-      // Only when every field is a default: a mode may be off and still carry
-      // numbers the user typed, and dropping the key would lose them. A config
-      // that never touched either key does not grow one.
-      const { size, chrome, halo, show, ...rest } = item.config as ElementConfig & {
-        show?: LabelPart[];
+      const element = item.config;
+
+      // Size and halo ask the same question of both kinds, and `rest` carries
+      // every key we do not know about — dropping one would erase it from the
+      // user's YAML on the next commit. Only when every field is a default: a
+      // mode may be off and still carry numbers the user typed, and dropping the
+      // key would lose them. A config that never touched either key does not
+      // grow one.
+      const common = (
+        rest: Record<string, unknown>,
+        size: ElementSize,
+        halo: boolean | undefined,
+        sizeDefaults: ElementSize,
+      ): Record<string, unknown> => {
+        const out: Record<string, unknown> = { ...rest };
+        if (!isDefaultElementSize(size, sizeDefaults)) out.size = size;
+        if (halo) out.halo = true;
+        return out;
       };
-      const config: Record<string, unknown> = { ...rest };
-      const kind = item.config.type;
-      const isLabel =
-        kind === "state-label"
-          ? true
-          : kind === "state-icon"
-            ? false
-            : assertNever(kind, "element kind");
-      const sizeDefaults = isLabel ? DEFAULT_LABEL_SIZE : DEFAULT_ICON_SIZE;
-      if (!isDefaultElementSize(size, sizeDefaults)) config.size = size;
-      // The guard is what narrows the optional type, not a redundancy — two
-      // reviewers have flagged it, and it is correct.
-      if (chrome) {
-        const isDefault = isLabel
-          ? isDefaultLabelChrome(chrome as LabelChrome)
-          : isDefaultIconChrome(chrome as IconChrome);
-        if (!isDefault) config.chrome = chrome;
+
+      // Narrowed on the kind rather than asserted across it. The two chromes are
+      // different records and only a label has a `show` list, so a single
+      // destructure had to intersect the union and then cast the chrome back —
+      // three assertions doing what one discriminant does for free.
+      if (element.type === "state-label") {
+        const { size, chrome, halo, show, ...rest } = element;
+        const config = common({ ...rest }, size, halo, DEFAULT_LABEL_SIZE);
+        // The guard is what narrows the optional type, not a redundancy — two
+        // reviewers have flagged it, and it is correct.
+        if (chrome && !isDefaultLabelChrome(chrome)) config.chrome = chrome;
+        // The default is the absence of the key. An empty list is not the
+        // default: it is a deliberate "show nothing", and it has to survive the
+        // round trip.
+        if (show && !(show.length === 1 && show[0] === "state")) config.show = show;
+        stored.config = config;
+      } else if (element.type === "state-icon") {
+        const { size, chrome, halo, ...rest } = element;
+        const config = common({ ...rest }, size, halo, DEFAULT_ICON_SIZE);
+        if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
+        stored.config = config;
+      } else {
+        assertNever(element, "element kind");
       }
-      if (halo) config.halo = true;
-      // The default is the absence of the key. An empty list is not the default:
-      // it is a deliberate "show nothing", and it has to survive the round trip.
-      if (!(isLabel && show?.length === 1 && show[0] === "state")) {
-        if (show) config.show = show;
-      }
-      stored.config = config;
     }
     return stored;
   }),

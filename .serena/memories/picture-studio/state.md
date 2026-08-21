@@ -90,7 +90,7 @@ the same moment this file gets updated anyway.
 | `pnpm test --project happy-dom` | 36 | 779 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **209.0 kB / 49.5 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **209.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -119,15 +119,6 @@ assertions in test files; no session has been asked to clear them. The
 interpretation is what matters and it does not drift: **a warning you did not
 have before is yours**, whatever the running total says. Compare against `main`
 rather than against a remembered figure.
-
-**On the bundle size, because a review will raise it again:** the whole editor
-ships to every dashboard viewer, and that is not fixable here. Splitting needs a
-dynamic `import()`, which rspack turns into a second chunk that the release never
-publishes — it has shipped a broken card once already. `hacs.json` names one
-filename and `release.yml` uploads one asset. The diagnosis is correct and the
-remedy is refused; the reasoning is in
-`docs/reviews/2026-08-21-1414-picture-studio-card.md`. At the current gzip figure
-for the card *and* Lit, the prize is roughly 20 kB, once, before caching.
 
 ## Where things are
 
@@ -349,7 +340,11 @@ In memory only, never in YAML, a third variant holds what we could not read:
   The 1.2.0 grow at 1.04 was rejected twice by eye before this split.
 - **`storedConfig`'s `chrome && !isDefaultChrome(chrome)` is not a redundant
   guard.** Two reviewers have flagged it; it is correct.
-- **Single-file build, no dynamic import, no decorators, Lit bundled.**
+- **Single-file build, no dynamic import, no decorators, Lit bundled.** The whole
+  editor ships with it, and that is **closed, not open**: splitting needs a
+  dynamic `import()`, rspack then emits a chunk the release never publishes, and
+  it has shipped a broken card once already. Settled 2026-08-21 — it does not
+  need raising again.
 - **`PictureStudioConfig` is a `type`, never an `interface`, and that is load
   bearing** (2026-08-21). Only a type alias gets TypeScript's implicit index
   signature; without one it does not satisfy `Record<string, unknown>`, which is
