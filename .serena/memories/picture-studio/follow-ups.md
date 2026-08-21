@@ -78,12 +78,15 @@ takes two hops, because the frontend and Home Assistant ship on different clocks
    `homeassistant/package_constraints.txt` (also visible in `requirements_all.txt`).
    The first core release whose pin is that build or later is the real floor.
 
-**Expect two identical console lines on a cold dashboard, not one** — and do not
-"fix" it. `_createChild` reports the verdict, primes, and leaves a hole; the
-`whenDefined` callback rebuilds and `_createChild` runs again for the same item,
-reporting once more before drawing the badge. Both lines are honest and name the
-right badge. Reviewed and accepted 2026-08-21: the second line evaporates with
-the workaround, since a fixed frontend never enters the guard at all.
+**One console line per refused badge, and the placement is what guarantees it.**
+The verdict is reported beside the badge on the path that actually draws it, not
+beside the guard: a cold dashboard runs `_createChild` twice for the same item —
+once to refuse and prime, once after the class lands — and only the second pass
+draws. Reported by the refusal rather than by `_primeErrorBadge`, because the
+refusal is permanent and that method is not. **The accepted cost:** a badge that
+can never be drawn, because the chunk never arrives, is never reported either.
+(A review on 2026-08-21 accepted the double line as harmless; the user asked for
+one, and it was moved the same day.)
 
 Only then: raise the card's minimum Home Assistant (see the auto-memory
 `raising-the-ha-floor-is-cheap`) and delete `_primeErrorBadge`,
