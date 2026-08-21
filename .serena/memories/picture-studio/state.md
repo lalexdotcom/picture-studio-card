@@ -86,11 +86,11 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 38 | 817 |
-| `pnpm test --project happy-dom` | 35 | 774 |
+| `pnpm test` — both lanes, **this is the baseline** | 39 | 822 |
+| `pnpm test --project happy-dom` | 36 | 779 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **210.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **209.0 kB / 49.5 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -177,8 +177,11 @@ src/broker.ts          editor + card registries (pure)
 src/types.ts           hand-declared HA interfaces
 src/card/picture-studio-card.ts   background + item children + lifecycle
 src/card/item-styles.ts           chromeFillStyles, haloStyles, interactionStyles
-src/card/state-icon-element.ts    chrome wrapper, state-badge, actions
-src/card/state-label-element.ts   chrome wrapper, state-display, actions
+src/card/state-icon-element.ts    chrome wrapper, state-badge
+src/card/state-label-element.ts   chrome wrapper, state-display
+src/card/item-actions.ts          the action relay both kinds share:
+                                  hasAction, isClickable, bindActions,
+                                  relayActions
 src/card/visibility-probe.ts      the phantom card a hui-card probe carries
 src/card/drag-layer.ts            pointer gesture, injected callbacks
 src/editor/picture-studio-editor.ts  hub: _commit / _reemit, the only exit to HA

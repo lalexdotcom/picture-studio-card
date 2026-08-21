@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
-import { hasAction, PictureStudioStateIcon } from "../../../card/state-icon-element";
+import { PictureStudioStateIcon } from "../../../card/state-icon-element";
 import { ICON_TAG, type StateIconConfig } from "../../../config";
 import { DEFAULT_ICON_SIZE } from "../../../element-size";
 import { cssRules } from "./harness";
@@ -153,45 +153,6 @@ describe("title", () => {
   });
 });
 
-describe("clickable attribute", () => {
-  it("is present when no action keys are set — default is more-info", async () => {
-    const el = await mount({ entity: "light.a" });
-    expect(el.hasAttribute("clickable")).toBe(true);
-  });
-
-  it("is absent when tap_action is none and the others are unset", async () => {
-    const el = await mount({ entity: "light.a", tap_action: { action: "none" } });
-    expect(el.hasAttribute("clickable")).toBe(false);
-  });
-
-  it("is present when tap_action is none but hold_action is active", async () => {
-    const el = await mount({
-      entity: "light.a",
-      tap_action: { action: "none" },
-      hold_action: { action: "toggle" },
-    });
-    expect(el.hasAttribute("clickable")).toBe(true);
-  });
-});
-
-class FakeActionHandler extends HTMLElement {
-  binds: { element: HTMLElement; options: unknown }[] = [];
-  bind(element: HTMLElement, options: unknown): void {
-    this.binds.push({ element, options });
-  }
-}
-if (!customElements.get("action-handler")) {
-  customElements.define("action-handler", FakeActionHandler);
-}
-
-describe("hasAction", () => {
-  it("counts an action that is set and is not none", () => {
-    expect(hasAction(undefined)).toBe(false);
-    expect(hasAction({ action: "none" })).toBe(false);
-    expect(hasAction({ action: "toggle" })).toBe(true);
-  });
-});
-
 describe("chrome", () => {
   it("always wraps the badge, so the DOM shape never depends on the config", async () => {
     const el = await mount({ entity: "light.a" });
@@ -270,48 +231,6 @@ describe("the halo", () => {
   });
 });
 
-describe("the action relay", () => {
-  it("binds itself to the singleton action-handler, declaring its gestures", async () => {
-    const el = await mount({
-      entity: "light.a",
-      hold_action: { action: "more-info" },
-      double_tap_action: { action: "none" },
-    });
-    const handler = document.body.querySelector("action-handler") as FakeActionHandler;
-    const bound = handler.binds.find((b) => b.element === el);
-    expect(bound?.options).toEqual({ hasHold: true, hasDoubleClick: false });
-  });
-
-  it("relays an action event as hass-action carrying the item's config", async () => {
-    const el = await mount({ entity: "light.a", tap_action: { action: "toggle" } });
-    const seen: CustomEvent[] = [];
-    document.body.addEventListener("hass-action", (ev) => seen.push(ev as CustomEvent));
-
-    el.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-
-    expect(seen).toHaveLength(1);
-    expect(seen[0]?.detail).toEqual({
-      config: {
-        type: "state-icon",
-        size: DEFAULT_ICON_SIZE,
-        entity: "light.a",
-        tap_action: { action: "toggle" },
-      },
-      action: "tap",
-    });
-    expect(seen[0]?.composed).toBe(true);
-  });
-
-  it("stays silent when it has no config yet", async () => {
-    const el = document.createElement(ICON_TAG) as PictureStudioStateIcon;
-    document.body.append(el);
-    const seen: Event[] = [];
-    document.body.addEventListener("hass-action", (ev) => seen.push(ev));
-    el.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-    expect(seen).toHaveLength(0);
-  });
-});
-
 describe("the shared interaction block", () => {
   it("is part of the icon's styles, veil and grow together", () => {
     const rules = cssRules(PictureStudioStateIcon.styles);
@@ -364,79 +283,5 @@ describe("what a hass tick costs", () => {
     el.setConfig({ type: "state-icon", size: DEFAULT_ICON_SIZE, entity: "light.a" });
     await el.updateComplete;
     expect(el.style.getPropertyValue("--psc-icon-size")).not.toBe("");
-  });
-});
-
-/**
- * Home Assistant injects the action-handler element itself, and our first render
- * can beat it there. The card degrades to a plain click listener when that
- * happens — and has to take it back off when the real handler finally lands, or
- * the two both answer the same tap.
- */
-describe("the tap fallback while action-handler is not ready", () => {
-  /**
-   * `actionHandler()` returns whatever sits on the body and the caller tests
-   * `handler?.bind`, so an element without `bind` is exactly the not-ready state
-   * the card sees before Home Assistant has wired its singleton.
-   */
-  const placeHandler = (): FakeActionHandler => {
-    const handler = document.createElement("action-handler") as FakeActionHandler;
-    document.body.append(handler);
-    return handler;
-  };
-
-  const withoutBind = (handler: FakeActionHandler): FakeActionHandler => {
-    Object.defineProperty(handler, "bind", { value: undefined, configurable: true });
-    return handler;
-  };
-
-  /** Stands in for the real gesture machinery: one tap, one action, bound once. */
-  const withRealBind = (handler: FakeActionHandler): FakeActionHandler => {
-    const bound = new WeakSet<HTMLElement>();
-    Object.defineProperty(handler, "bind", {
-      configurable: true,
-      value: (element: HTMLElement) => {
-        if (bound.has(element)) return;
-        bound.add(element);
-        element.addEventListener("click", () => {
-          element.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-        });
-      },
-    });
-    return handler;
-  };
-
-  it("answers a tap while degraded", async () => {
-    withoutBind(placeHandler());
-    const el = await mount({ entity: "light.a", tap_action: { action: "toggle" } });
-
-    const seen: CustomEvent[] = [];
-    document.body.addEventListener("hass-action", (ev) => seen.push(ev as CustomEvent));
-    el.click();
-
-    expect(seen).toHaveLength(1);
-  });
-
-  it("answers a tap exactly once after a real handler arrives", async () => {
-    const handler = withoutBind(placeHandler());
-    const el = await mount({ entity: "light.a", tap_action: { action: "toggle" } });
-
-    // The handler is wired up, and the next render is what notices.
-    withRealBind(handler);
-    el.setConfig({
-      type: "state-icon",
-      size: DEFAULT_ICON_SIZE,
-      entity: "light.a",
-      tap_action: { action: "toggle" },
-    });
-    await el.updateComplete;
-
-    const seen: CustomEvent[] = [];
-    document.body.addEventListener("hass-action", (ev) => seen.push(ev as CustomEvent));
-    el.click();
-
-    // Two would mean the degraded listener stayed on alongside the handler, and
-    // the user's tap_action ran twice on one tap.
-    expect(seen).toHaveLength(1);
   });
 });

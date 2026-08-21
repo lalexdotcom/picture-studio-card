@@ -4,44 +4,9 @@ import type { StateIconConfig } from "../config";
 import { DEFAULT_ICON_SIZE, elementSizeCss } from "../element-size";
 import { hassRenderChanged } from "../has-changed";
 import { itemColorCss } from "../state-color";
-import type { ActionConfig, HomeAssistant } from "../types";
+import type { HomeAssistant } from "../types";
+import { bindActions, isClickable, relayActions } from "./item-actions";
 import { chromeFillStyles, haloStyles, interactionStyles } from "./item-styles";
-
-/** Home Assistant's own one-liner: an action counts when set and not "none". */
-/**
- * Whether an action is set and asks for something to happen.
- *
- * Only `undefined` and an explicit `none` say no. A value that is neither — a
- * `tap_action: []` or a bare string from a hand-written YAML — reads as an
- * action here, and that is deliberate: the item stays clickable, and Home
- * Assistant's own `handleAction` decides what an unreadable action does, the
- * same way it decides what an unreadable entity displays.
- *
- * Tightening this was considered on 2026-08-21 and rejected. An empty array is
- * truthy, so the caller's `!config.tap_action` escape does not fire for it; a
- * stricter test here would flip such an item from "clickable, HA decides" to
- * "not clickable at all", which is further from the documented intent that an
- * action nobody could read falls back to more-info.
- */
-export const hasAction = (action?: ActionConfig): boolean =>
-  action !== undefined && action.action !== "none";
-
-interface ActionHandlerElement extends HTMLElement {
-  bind?: (element: HTMLElement, options: { hasHold: boolean; hasDoubleClick: boolean }) => void;
-}
-
-/**
- * The singleton Home Assistant's internal actionHandler directive uses. The
- * directive is nothing but these three lines, so reproducing them borrows the
- * gesture detection — thresholds, finger travel, double-click window — instead
- * of reimplementing it.
- */
-const actionHandler = (): ActionHandlerElement | undefined => {
-  const existing = document.body.querySelector<ActionHandlerElement>("action-handler");
-  if (existing) return existing;
-  if (!customElements.get("action-handler")) return undefined;
-  return document.body.appendChild(document.createElement("action-handler"));
-};
 
 /**
  * An icon-only item. Home Assistant's `state-badge` — the disc at the left of an
@@ -61,26 +26,10 @@ export class PictureStudioStateIcon extends LitElement {
   // Reactive, not a plain field: shouldUpdate below reads the previous value out
   // of changedProperties, which only a declared property records.
   declare _hass?: HomeAssistant;
-  /** The degraded tap listener while one is bound, so it can be taken back off. */
-  private _clickFallback?: () => void;
 
   constructor() {
     super();
-    this.addEventListener("action", (ev: Event) => {
-      const action = (ev as CustomEvent<{ action?: string }>).detail?.action;
-      if (!action || !this._config) return;
-      // hass-action is the event the root <home-assistant> hands to Home
-      // Assistant's own handleAction — more-info, toggle, navigate, url,
-      // perform-action, with the confirmation dialogs. Nothing in the frontend
-      // fires it; it exists for third-party cards, which is what we are.
-      this.dispatchEvent(
-        new CustomEvent("hass-action", {
-          detail: { config: this._config, action },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    });
+    relayActions(this, () => this._config);
   }
 
   setConfig(config: StateIconConfig): void {
@@ -204,36 +153,8 @@ export class PictureStudioStateIcon extends LitElement {
     // Absent tap_action means clickable (the default action is more-info).
     // Mirrors Home Assistant's own badge.hasAction getter exactly: the cursor
     // disappears only when all three actions are explicitly set to "none".
-    const clickable =
-      !config.tap_action ||
-      hasAction(config.tap_action) ||
-      hasAction(config.hold_action) ||
-      hasAction(config.double_tap_action);
-    this.toggleAttribute("clickable", clickable);
-
-    const handler = actionHandler();
-    if (handler?.bind) {
-      // The handler can arrive after we have already degraded — its element is
-      // injected by Home Assistant, and the first render can precede it. Take
-      // the fallback back off before binding, or one tap dispatches twice: once
-      // through the handler's pointer machinery, once through our click.
-      if (this._clickFallback) {
-        this.removeEventListener("click", this._clickFallback);
-        this._clickFallback = undefined;
-      }
-      handler.bind(this, {
-        hasHold: hasAction(config.hold_action),
-        hasDoubleClick: hasAction(config.double_tap_action),
-      });
-      return;
-    }
-    // Honest degradation: without the handler we lose hold and double-tap, not
-    // the card. Bound once, hence the field.
-    if (this._clickFallback) return;
-    this._clickFallback = (): void => {
-      this.dispatchEvent(new CustomEvent("action", { detail: { action: "tap" } }));
-    };
-    this.addEventListener("click", this._clickFallback);
+    this.toggleAttribute("clickable", isClickable(config));
+    bindActions(this, config);
   }
 
   static styles = [
