@@ -1,0 +1,42 @@
+name: Feature request
+description: Something the card should be able to do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        What lands on the picture is drawn to sit alongside today's Home
+        Assistant cards rather than to reproduce anything older. Within that,
+        what gets built next is decided by what people are trying to do — so
+        describe the picture you have in mind, not only the setting you want.
+
+  - type: textarea
+    id: what-for
+    attributes:
+      label: What are you trying to build?
+      description: >-
+        The dashboard you are after, and what stops you today. A floor plan, a
+        rack photograph, a camera view — say which, it changes the answer.
+      placeholder: |
+        A floor plan where each room shows its temperature, and the room itself
+        tints as it warms up. I can place the labels, but nothing lets me colour
+        an area behind them.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would it look like?
+      description: >-
+        Optional. If you already have a shape in mind — a new item kind, a
+        setting on an existing one, a YAML key — describe it. A sketch or a
+        screenshot from another card is welcome.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead today
+      description: >-
+        Optional, and more useful than it sounds: a workaround shows how far
+        the card already goes, and often where it stops for a reason.

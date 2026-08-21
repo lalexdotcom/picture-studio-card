@@ -1,0 +1,75 @@
+name: Bug report
+description: Something the card does wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most defects in this card are defects of one particular configuration —
+        the card's YAML is what makes a report actionable. The fields below are
+        in that order of usefulness.
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I dragged a badge onto the plan and saved. After a refresh it sits a
+        few pixels higher than where I dropped it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: card-yaml
+    attributes:
+      label: The card's YAML
+      description: >-
+        The whole card, from the editor's three-dot menu → *Edit in YAML*.
+        Not just the item that misbehaves — its neighbours and the background
+        are part of the case.
+      render: yaml
+    validations:
+      required: true
+
+  - type: dropdown
+    id: view-type
+    attributes:
+      label: View type
+      description: >-
+        A view redefines styling for everything underneath it, and this card
+        has shipped bugs that only appeared in one of the three.
+      options:
+        - Sections
+        - Panel
+        - Masonry
+        - Something else / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Home Assistant's, and the card's — the one HACS installed.
+      placeholder: "Home Assistant 2026.8.1, Picture Studio 1.5.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: >-
+        When the problem is something you can see. Placement, sizing and colour
+        issues are far quicker to fix from an image than from a description.
+        Drop the file straight into this field.
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console
+      description: >-
+        If the card shows an error card or nothing at all. It names any item it
+        could not read, with its index and why.
+      render: text
