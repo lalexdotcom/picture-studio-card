@@ -680,3 +680,57 @@ Three things it settled that are not about this defect:
 - **The measuring technique is reusable and the plumbing is fragile.** Both are
   recorded under entry 11's "Reaching a real phone" above.
 
+## 13. Getting the card into the default HACS catalog — OPEN, two steps left
+
+Started 2026-08-22, after 1.5.2 was published. Everything doable from the
+repository is committed; what remains needs the GitHub account.
+
+**Already met, verified against the live repo and not from memory:** public,
+not archived, not a fork, issues enabled, description set, nine releases each
+carrying `picture-studio.js` as an asset, a README documenting installation, an
+MIT licence, and `hacs.json` with `name` and `filename`. `.github/workflows/hacs.yml`
+runs the HACS Action, which is what actually gates inclusion.
+
+**The two that are left, and only the owner can do them:**
+
+1. **GitHub topics are empty, and they are a hard requirement.** Set them on the
+   repository's About panel — `home-assistant`, `hacs`, `lovelace`,
+   `custom-card`, `picture-elements` or similar.
+2. **The pull request to `hacs/default`.** Add `"lalexdotcom/picture-studio-card"`
+   at its alphabetical place in the `plugin` file — a JSON array, ~754 entries.
+   Only the owner or a major contributor may submit. HACS also expects the
+   repository to have been added as a custom repository and installed once
+   before the submission.
+
+**When it lands, the README's "Picture Studio is **not** in the default HACS
+catalog" paragraph and its custom-repository instructions become wrong.** That
+is the easiest thing in this entry to forget.
+
+### Two findings worth not re-deriving
+
+- **`filename` in `hacs.json` is what excuses the name mismatch.** The repository
+  is `picture-studio-card`, the bundle is `picture-studio.js`, and HACS otherwise
+  looks for a `.js` named after the repository. Do not "fix" either name.
+- **`render_readme` was removed on purpose, and re-adding it would be a mistake
+  of the pleasant kind.** HACS's schema still accepts it, so nothing complains —
+  but nothing reads it either: in the whole integration the only production
+  mentions are the schema entry and a dataclass field, and
+  `async_get_info_file_contents` hardcodes the README. It used to mean "render
+  README.md rather than info.md"; today it restates the default.
+
+### `gh` in the container, considered and declined
+
+The user judged the setup not worth it on 2026-08-22. If it is ever revisited,
+the expensive part is already established: **no personal access token is
+needed.** `git` reaches GitHub from the container through a credential helper
+VS Code proxies to the host, and
+
+```
+printf 'protocol=https\nhost=github.com\n\n' | git credential fill
+```
+
+returns a `gho_` OAuth token from the host's VS Code GitHub session. `gh` cannot
+read git's credential helper on its own, so the shape that works is a wrapper on
+`PATH` that fetches the token and execs the real binary — never an environment
+variable set at container start, which would go stale when the session rotates.
+Note that the scopes are whatever VS Code asked for, not what a task needs.
