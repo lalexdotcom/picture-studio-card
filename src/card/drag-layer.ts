@@ -74,9 +74,18 @@ interface DragOptions {
    */
   onMove?(index: number, position: Position): void;
   /**
-   * Raised on pointerdown: with an index when a badge was hit, so grabbing one
-   * selects it as surely as clicking it, and with undefined when the press
-   * landed on the image, which clears the selection.
+   * Raised when the pointer is released, and never before: with an index when
+   * the press had landed on a badge, so dropping one selects it as surely as
+   * clicking it, and with undefined when it had landed on the image, which
+   * clears the selection.
+   *
+   * The release, not the press, because the editor answers a selection by
+   * opening a form and scrolling the edit dialog to its top. On a narrow screen
+   * the preview is stacked above that form, so announcing it at pointerdown
+   * carried the picture off the screen the moment an item was grabbed — with
+   * the finger still on it. A cancelled gesture announces nothing at all: the
+   * user never let go, so there is no decision to read, which is exactly the
+   * touch that started on a badge and turned into a scroll.
    */
   onSelect(index: number | undefined): void;
   /**
@@ -131,16 +140,25 @@ interface DragState {
 export const createDragController = (options: DragOptions) => {
   let root: HTMLElement | undefined;
   let state: DragState | undefined;
+  /**
+   * The pointer of a press that landed on the image and has not been released.
+   * It is all the state that path needs — there is nothing to move — and it is
+   * kept only so the deselect can wait for the release, like the selection.
+   */
+  let emptyPress: number | undefined;
   const now = (): number => (options.now ?? performance.now.bind(performance))();
 
   const onPointerDown = (ev: PointerEvent): void => {
     if (ev.button !== 0) return;
     if (state) return; // ignore a second pointer while a drag is in progress
+    // A press released off the card never reaches our pointerup, so the pending
+    // one is dropped here rather than left to answer for the next gesture.
+    emptyPress = undefined;
     const hit = options.getIndexedWrapper(ev.target);
     // The listener sits on the whole surface, not just the badges, so a press on
     // the image itself lands here with no hit — that is the deselect.
     if (!hit) {
-      options.onSelect(undefined);
+      emptyPress = ev.pointerId;
       return;
     }
     const surface = options.getSurface();
@@ -179,9 +197,6 @@ export const createDragController = (options: DragOptions) => {
     // Holds the ring for the whole gesture; :hover alone drops out for a frame
     // under pointer capture and again when the config round trip rebuilds it.
     hit.element.classList.add("dragging");
-    // Grabbing selects too, so the badge being moved is also the one whose form
-    // is open — one notion of "current badge" rather than two.
-    options.onSelect(hit.index);
 
     // Switch to plain pixels for the gesture. Position and transform must move
     // together: dropping translate(-L%, -T%) while left/top are still
@@ -270,29 +285,50 @@ export const createDragController = (options: DragOptions) => {
       hit.element.style.left = originStyle.left;
       hit.element.style.top = originStyle.top;
       hit.element.style.transform = originStyle.transform;
-      return;
+    } else {
+      const anchor = options.getAnchor(hit.index);
+      const position: Position = {
+        left: toPercent(x, surface.width, width, axisOffset(anchor, "x")),
+        top: toPercent(y, surface.height, height, axisOffset(anchor, "y")),
+      };
+
+      // Restored here and not only on the next setConfig: a drag that ends where
+      // it started produces no config change, so no setConfig would come back, and
+      // the badge would stay in raw pixels with no transform. Same geometry, so
+      // there is no flash.
+      const style = positionStyle(position, anchor);
+      hit.element.style.left = style.left;
+      hit.element.style.top = style.top;
+      hit.element.style.transform = style.transform;
+
+      options.onCommit(hit.index, position);
     }
 
-    const anchor = options.getAnchor(hit.index);
-    const position: Position = {
-      left: toPercent(x, surface.width, width, axisOffset(anchor, "x")),
-      top: toPercent(y, surface.height, height, axisOffset(anchor, "y")),
-    };
-
-    // Restored here and not only on the next setConfig: a drag that ends where
-    // it started produces no config change, so no setConfig would come back, and
-    // the badge would stay in raw pixels with no transform. Same geometry, so
-    // there is no flash.
-    const style = positionStyle(position, anchor);
-    hit.element.style.left = style.left;
-    hit.element.style.top = style.top;
-    hit.element.style.transform = style.transform;
-
-    options.onCommit(hit.index, position);
+    // Dropping a badge selects it, so the one that was moved is also the one
+    // whose form opens — one notion of "current badge" rather than two, and a
+    // click that moved nothing selects just the same. A cancel is the exception
+    // it is everywhere else here: the user never let go.
+    if (!cancelled) options.onSelect(hit.index);
   };
 
-  const onPointerUp = (ev: PointerEvent): void => endGesture(ev, false);
-  const onPointerCancel = (ev: PointerEvent): void => endGesture(ev, true);
+  const onPointerUp = (ev: PointerEvent): void => {
+    if (emptyPress === ev.pointerId) {
+      emptyPress = undefined;
+      options.onSelect(undefined);
+      return;
+    }
+    endGesture(ev, false);
+  };
+  const onPointerCancel = (ev: PointerEvent): void => {
+    // Nothing announced: this path does not preventDefault, so a touch on the
+    // image can be taken over as a scroll of the dialog — and someone scrolling
+    // was not asking for the open form to close.
+    if (emptyPress === ev.pointerId) {
+      emptyPress = undefined;
+      return;
+    }
+    endGesture(ev, true);
+  };
 
   return {
     attach(element: HTMLElement): void {
@@ -310,6 +346,7 @@ export const createDragController = (options: DragOptions) => {
       root?.removeEventListener("pointercancel", onPointerCancel);
       root = undefined;
       state = undefined;
+      emptyPress = undefined;
     },
     /** The index of the badge currently being dragged, or undefined if idle. */
     draggingIndex(): number | undefined {

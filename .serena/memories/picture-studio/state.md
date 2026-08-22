@@ -106,15 +106,15 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-21, on `main` after the review branch merged:**
+**Measured 2026-08-22, on `main`, after the 1.5.1 selection-on-release fix:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 831 |
-| `pnpm test --project happy-dom` | 37 | 788 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 838 |
+| `pnpm test --project happy-dom` | 37 | 795 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **209.4 kB / 49.5 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **210.2 kB / 49.6 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -336,6 +336,32 @@ In memory only, never in YAML, a third variant holds what we could not read:
   The clock is injected (`now?()` on `DragOptions`, `performance.now` by default,
   monotone) purely so the 300 ms boundary is testable exactly rather than slept
   through.
+- **The selection is announced at the release, never at the press** (1.5.1).
+  `onSelect` used to fire from `onPointerDown`; the editor answers a selection
+  by opening the item's form and calling `scrollIntoView` on itself, which
+  reaches the dialog's own scroll container several shadow roots up. On a narrow
+  screen the preview is stacked *above* that form rather than beside it, so
+  grabbing an item carried the picture off the screen with the finger still on
+  it. Now: `endGesture` announces it, on both the commit and the click path, and
+  **a `pointercancel` announces nothing** — the touch that turned into a scroll
+  was not a choice. The press on the image that clears the selection waits for
+  the release too, held by a single `emptyPress` pointer id, dropped by the next
+  `pointerdown` because a press released off the card never returns.
+  Nothing was needed for the visuals: `.dragging` already carried the ring and
+  the `z-index` in its own right, precisely because the selection used to arrive
+  a frame late through a re-render.
+- **`_applyMarks` exists because a selection change must not write a
+  coordinate** (1.5.1), and this is the trap the change above sprang. The card's
+  `updated()` re-ran `_applyPositions` on any `editing` / `selected` / `preview`
+  change; between a drag's release and Home Assistant's config coming back down,
+  `item.position` is still the pre-drag one, so that write puts the badge back
+  where it was grabbed from — and nothing but the round trip corrects it. The
+  window used to be unreachable (the only re-render inside it was the selection,
+  and it fired at pointerdown, inside the drag guard). **The browser lane caught
+  it immediately** — seven red tests in `playwright/drag.test.ts`, all of the
+  form "the badge did not move" — which is the clearest demonstration so far of
+  what that lane is for. `_applyPositions` now = `_applyMarks` + the
+  coordinates; the marks branch of `updated()` calls only the former.
 - **No `z-index` in the rendered stacking** — DOM order = list order. One
   exception, reserved to the editor: the selected or dragged item is raised while
   `editing`.

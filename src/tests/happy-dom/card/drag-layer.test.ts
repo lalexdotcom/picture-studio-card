@@ -123,6 +123,7 @@ const setup = () => {
   boxed(item, 20, 10, 20, 20);
 
   const commits: { index: number; position: Position }[] = [];
+  const selections: (number | undefined)[] = [];
   let clock = 0;
 
   const controller = createDragController({
@@ -130,20 +131,30 @@ const setup = () => {
     getSurface: () => surface,
     getAnchor: () => "top-left",
     onCommit: (index, position) => commits.push({ index, position }),
-    onSelect: () => undefined,
+    onSelect: (index) => selections.push(index),
     now: () => clock,
   });
   controller.attach(root);
 
-  const send = (type: string, clientX: number, clientY: number): void => {
-    item.dispatchEvent(
+  // The target decides which branch the press takes: `item` is the only thing
+  // getIndexedWrapper recognises, so a press on anything else is a press on the
+  // picture — the deselect.
+  const send = (
+    type: string,
+    clientX: number,
+    clientY: number,
+    target: HTMLElement = item,
+  ): void => {
+    target.dispatchEvent(
       new PointerEvent(type, { pointerId: 1, clientX, clientY, button: 0, bubbles: true }),
     );
   };
 
   return {
     item,
+    surface,
     commits,
+    selections,
     controller,
     send,
     advance: (ms: number) => {
@@ -215,5 +226,94 @@ describe("a cancelled gesture", () => {
     send("pointerup", 25 + FAR, 15);
 
     expect(commits).toHaveLength(1);
+  });
+});
+
+/**
+ * The selection is a decision, and a decision belongs to the release. Announced
+ * at pointerdown it opened the item's form — and scrolled the edit dialog to the
+ * editor's top — while the finger was still on the badge. On a narrow screen the
+ * preview is stacked above the form rather than set beside it, so grabbing an
+ * item took the picture off the screen at the very moment it was needed.
+ */
+describe("when the selection is announced", () => {
+  const FAR = DRAG_THRESHOLD_PX * 4;
+
+  it("says nothing while the gesture is still under way", async () => {
+    const { selections, send } = setup();
+    send("pointerdown", 25, 15);
+    send("pointermove", 25 + FAR, 15);
+
+    expect(selections).toEqual([]);
+  });
+
+  it("selects the badge that was merely clicked", async () => {
+    const { selections, send } = setup();
+    send("pointerdown", 25, 15);
+    send("pointerup", 25, 15);
+
+    expect(selections).toEqual([0]);
+  });
+
+  it("selects the badge it has just dropped", async () => {
+    const { commits, selections, send } = setup();
+    send("pointerdown", 25, 15);
+    send("pointermove", 25 + FAR, 15);
+    send("pointerup", 25 + FAR, 15);
+
+    expect(commits).toHaveLength(1);
+    expect(selections).toEqual([0]);
+  });
+
+  it("selects nothing when the gesture is cancelled", async () => {
+    // Same reasoning as the commit: the user never let go, so there is no
+    // decision to read — and on a touch screen this is precisely the scroll
+    // that started on a badge.
+    const { selections, send } = setup();
+    send("pointerdown", 25, 15);
+    send("pointermove", 25 + FAR, 15);
+    send("pointercancel", 25 + FAR, 15);
+
+    expect(selections).toEqual([]);
+  });
+});
+
+/**
+ * A press that lands on the picture instead of a badge is the deselect, and it
+ * waits for the release for the same reason the selection does.
+ */
+describe("a press on the picture", () => {
+  it("clears the selection once it is released", async () => {
+    const { selections, send, surface } = setup();
+    send("pointerdown", 5, 5, surface);
+
+    expect(selections).toEqual([]);
+
+    send("pointerup", 5, 5, surface);
+
+    expect(selections).toEqual([undefined]);
+  });
+
+  it("keeps the selection when the browser takes the gesture", async () => {
+    // This path never calls preventDefault, so a touch on the picture can
+    // become a scroll of the dialog. The user was scrolling, not closing the
+    // form they had open.
+    const { selections, send, surface } = setup();
+    send("pointerdown", 5, 5, surface);
+    send("pointercancel", 5, 5, surface);
+
+    expect(selections).toEqual([]);
+  });
+
+  it("does not answer for the gesture that follows it", async () => {
+    // Released off the card, so no pointerup ever reaches the listener. The
+    // pending press must not outlive the next pointerdown.
+    const { selections, send, surface } = setup();
+    send("pointerdown", 5, 5, surface);
+
+    send("pointerdown", 25, 15);
+    send("pointerup", 25, 15);
+
+    expect(selections).toEqual([0]);
   });
 });

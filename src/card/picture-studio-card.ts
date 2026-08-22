@@ -329,7 +329,10 @@ export class PictureStudioCard extends LitElement {
       // dashboard entering or leaving edit mode changes nothing else here, and
       // without this the mark would only appear on the next config change.
     } else if (changed.has("editing") || changed.has("selected") || changed.has("preview")) {
-      this._applyPositions(this._config?.items ?? []);
+      // Marks only: none of these three changes a coordinate, and one of them —
+      // the selection, now announced when a drag is released — arrives while the
+      // config still holds the pre-drag position. See _applyMarks.
+      this._applyMarks(this._config?.items ?? []);
     }
   }
 
@@ -679,15 +682,29 @@ export class PictureStudioCard extends LitElement {
     return probe;
   }
 
-  private _applyPositions(items: PictureItem[]): void {
+  /**
+   * Everything the wrappers carry that is not their position: the two class
+   * marks, and the condition marker's corner.
+   *
+   * Split from `_applyPositions` because a selection change needs exactly this
+   * and must not touch the coordinates. Between a drag's release and the config
+   * coming back down from Home Assistant, `item.position` is still the pre-drag
+   * one, so writing it would put the badge back where it was grabbed from — and
+   * with nothing but the round trip to correct it, that is what the eye sees.
+   * The window used to be unreachable: the selection was announced at
+   * pointerdown, inside the drag guard, and nothing else re-renders in it. It
+   * became reachable when the announcement moved to the release, and the browser
+   * lane caught it at once.
+   */
+  private _applyMarks(items: PictureItem[]): void {
     const dragging = this._drag.draggingIndex();
     items.forEach((item, index) => {
       const wrapper = this._wrappers[index];
       if (!wrapper) return;
       if (item.type === "unknown") return;
-      // The selection mark is a class rather than a Lit binding because the
-      // wrappers are built imperatively, and it is set outside the drag guard
-      // below: the badge being dragged is precisely the selected one.
+      // A class rather than a Lit binding because the wrappers are built
+      // imperatively. It sits outside the drag guard below because a mark is
+      // not a coordinate: nothing about it goes stale mid-gesture.
       wrapper.classList.toggle("selected", this.editing && index === this.selected);
       // "This item carries conditions", not "it is hidden right now": there is
       // no probe in the editor, so there is no verdict to read — and a static
@@ -700,17 +717,27 @@ export class PictureStudioCard extends LitElement {
       // sees items that a viewing user will not, and nothing says which.
       const conditional = this.preview && hasVisibility(item);
       wrapper.classList.toggle("conditional", conditional);
+      // The marker's corner is guarded like a coordinate, because it is one:
+      // during a gesture the stored position is stale, and the drag controller
+      // is what keeps the corner honest, through onMove.
+      if (index === dragging) return;
+      this._applyMarkerCorner(wrapper, conditional ? item.position : undefined);
+    });
+  }
+
+  private _applyPositions(items: PictureItem[]): void {
+    this._applyMarks(items);
+    const dragging = this._drag.draggingIndex();
+    items.forEach((item, index) => {
+      const wrapper = this._wrappers[index];
+      if (!wrapper) return;
+      if (item.type === "unknown") return;
       // Leave the badge under the cursor alone: its styles are live pixels
       // managed by the drag controller. Writing the stored config position over
       // them would jump the badge back toward its pre-drag location on every
-      // hass tick. Once the drag ends, onPointerUp restores the derived style
-      // and the next _applyPositions then matches it exactly — no flash.
-      // The marker's corner sits below this guard for the same reason: during a
-      // gesture the stored coordinates are stale, and the drag controller is
-      // what keeps the corner honest.
+      // hass tick. Once the drag ends, the controller restores the derived
+      // style and the next _applyPositions then matches it exactly — no flash.
       if (index === dragging) return;
-
-      this._applyMarkerCorner(wrapper, conditional ? item.position : undefined);
 
       const style = positionStyle(item.position, item.anchor);
       wrapper.style.top = style.top;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.1 — unreleased
+
+### Fixed
+
+- On a phone, where the live preview sits above the settings instead of beside
+  them, picking an item up scrolled the picture off the screen — with the finger
+  still on it. An item's settings now open when it is dropped, not when it is
+  grabbed.
+- A touch that turns into a scroll of the edit dialog no longer changes which
+  item is selected, whether it began on an item or on the picture.
+
 ## 1.5.0 — 2026-08-21
 
 ### Added
