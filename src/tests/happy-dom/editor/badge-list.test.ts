@@ -641,7 +641,7 @@ describe("the secondary line of a probe-missing badge carries the type", () => {
   });
 });
 
-describe("selectedIndex scrolls the row at the flipped display position", () => {
+describe("rowFor", () => {
   if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 
   const item = (entity: string): PictureItem =>
@@ -654,76 +654,43 @@ describe("selectedIndex scrolls the row at the flipped display position", () => 
 
   afterEach(() => document.body.replaceChildren());
 
-  it("scrolls the row at the flipped position, not the raw index position", async () => {
+  it("returns the row at the flipped display position, not the raw index", async () => {
     // Three items: array [light.0, light.1, light.2], displayed [light.2, light.1, light.0].
-    // selectedIndex = 0 (array) → display position _flip(0) = 2.
+    // rowFor(0) → _flip(0) = 2, so display row 2 is light.0's.
     const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
     el.items = [item("light.0"), item("light.1"), item("light.2")];
     document.body.append(el);
     await el.updateComplete;
 
     const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
-    // Spy on the row that SHOULD be scrolled (display 2 = array index 0).
-    const expected = rows[2] as HTMLElement;
-    const spyExpected = rstest.spyOn(expected, "scrollIntoView");
-    // Spy on the row that should NOT be scrolled (display 0 = array index 2).
-    const unexpected = rows[0] as HTMLElement;
-    const spyUnexpected = rstest.spyOn(unexpected, "scrollIntoView");
-
-    el.selectedIndex = 0;
-    await el.updateComplete;
-    expect(spyExpected).toHaveBeenCalledTimes(1);
-    expect(spyUnexpected).toHaveBeenCalledTimes(0);
+    expect(el.rowFor(0)).toBe(rows[2]);
+    expect(el.rowFor(2)).toBe(rows[0]);
   });
 
-  it("does not scroll on deselection", async () => {
+  it("is undefined for an index with no row", async () => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [item("light.0")];
+    document.body.append(el);
+    await el.updateComplete;
+    expect(el.rowFor(7)).toBeUndefined();
+  });
+
+  it("never scrolls anything of its own", async () => {
+    // The list maps an index to a row and stops there. Which container moves is
+    // the editor's decision, because only the editor can tell the form's
+    // container from the dialog's — and `scrollIntoView` could not: it scrolls
+    // every ancestor, which is precisely the defect this work removes.
     const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
     el.items = [item("light.0"), item("light.1"), item("light.2")];
     document.body.append(el);
-    await el.updateComplete;
-
-    el.selectedIndex = 1;
     await el.updateComplete;
 
     const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
     const spies = rows.map((r) => rstest.spyOn(r, "scrollIntoView"));
 
-    el.selectedIndex = undefined;
+    el.selectedIndex = 0;
     await el.updateComplete;
     for (const spy of spies) expect(spy).toHaveBeenCalledTimes(0);
-  });
-});
-
-describe("scrollToItem", () => {
-  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
-
-  const item = (entity: string): PictureItem =>
-    ({
-      type: "badge",
-      position: { top: 0, left: 0 },
-      anchor: "auto",
-      config: { type: "entity", entity },
-    }) as unknown as PictureItem;
-
-  afterEach(() => document.body.replaceChildren());
-
-  it("scrolls the row at the flipped display position, not the raw index", async () => {
-    // Three items: array [light.0, light.1, light.2], displayed [light.2, light.1, light.0].
-    // scrollToItem(0) → _flip(0) = 2, so display row 2 (light.0) scrolls into view.
-    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
-    el.items = [item("light.0"), item("light.1"), item("light.2")];
-    document.body.append(el);
-    await el.updateComplete;
-
-    const rows = [...(el.shadowRoot?.querySelectorAll(".item") ?? [])] as HTMLElement[];
-    const expected = rows[2] as HTMLElement; // display 2 = array 0
-    const spyExpected = rstest.spyOn(expected, "scrollIntoView");
-    const unexpected = rows[0] as HTMLElement; // display 0 = array 2
-    const spyUnexpected = rstest.spyOn(unexpected, "scrollIntoView");
-
-    el.scrollToItem(0);
-    expect(spyExpected).toHaveBeenCalledTimes(1);
-    expect(spyUnexpected).toHaveBeenCalledTimes(0);
   });
 });
 
