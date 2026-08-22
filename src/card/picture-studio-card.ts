@@ -143,7 +143,7 @@ export class PictureStudioCard extends LitElement {
         this._applyMarkerCorner(wrapper, position);
       }
     },
-    onSelect: (index) => activeEditor()?.select(index),
+    onSelect: (index) => activeEditor()?.select(index, "picture"),
   });
 
   constructor() {

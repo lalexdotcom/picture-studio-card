@@ -1,6 +1,12 @@
 import { css, html, LitElement, nothing } from "lit";
 import { cache } from "lit/directives/cache.js";
-import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
+import {
+  activeCard,
+  type EditorChannel,
+  notifyEditors,
+  registerEditor,
+  type SelectOrigin,
+} from "../broker";
 import {
   type BadgeItem,
   CARD_TYPE,
@@ -108,6 +114,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _unregister?: () => void;
   /** Guards against a native child's config-changed echoing our own push. */
   private _applying = false;
+  /** Where the last selection came from. See `updated`, which scrolls on it. */
+  // @ts-expect-error TS6133 — read by updated() once Task 4 lands; remove this line then
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read by updated() once Task 4 lands
+  private _selectOrigin: SelectOrigin = "list";
   constructor() {
     super();
     this._editingIndex = undefined;
@@ -292,8 +302,9 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * so every change has to be announced, and routing them all through here is
    * what keeps that true.
    */
-  select(index: number | undefined): void {
+  select(index: number | undefined, origin: SelectOrigin): void {
     if (this._editingIndex === index) return;
+    this._selectOrigin = origin;
     this._editingIndex = index;
     notifyEditors();
   }
@@ -360,7 +371,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     // Home Assistant ever moved the fireEvent call from _toggleContainer into
     // willUpdate, our own "expand because an item was selected" would
     // immediately deselect that item and the feature would silently stop working.
-    if (!ev.detail.expanded) this.select(undefined);
+    if (!ev.detail.expanded) this.select(undefined, "list");
   };
 
   private _addItem = async (
@@ -380,11 +391,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit({ ...config, items: addItem(config.items, item) });
     // Open the new item's form straight away: a stub is rarely usable as-is —
     // an element's has no entity at all — and this is what the native picker does.
-    this.select(config.items.length);
+    this.select(config.items.length, "list");
   };
 
   private _editBadge = (ev: CustomEvent<{ index: number }>): void => {
-    this.select(ev.detail.index);
+    this.select(ev.detail.index, "list");
   };
 
   private _badgeChanged = (ev: CustomEvent<{ badge: BadgeConfig }>): void => {
@@ -437,11 +448,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const sel = this._editingIndex;
     if (sel === undefined) return;
     if (sel === from) {
-      this.select(to);
+      this.select(to, "list");
     } else if (from < sel && sel <= to) {
-      this.select(sel - 1); // the moved item shifted everything between down
+      this.select(sel - 1, "list"); // the moved item shifted everything between down
     } else if (to <= sel && sel < from) {
-      this.select(sel + 1); // the moved item shifted everything between up
+      this.select(sel + 1, "list"); // the moved item shifted everything between up
     }
     // Otherwise the selected item is outside the moved range — unchanged.
   };
@@ -450,7 +461,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config) return;
     this._commit({ ...config, items: removeItem(config.items, ev.detail.index) });
-    this.select(undefined);
+    this.select(undefined, "list");
   };
 
   /**
@@ -527,7 +538,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
                 @badge-changed=${this._badgeChanged}
                 @anchor-changed=${this._anchorChanged}
                 @visibility-changed=${this._visibilityChanged}
-                @go-back=${() => this.select(undefined)}
+                @go-back=${() => this.select(undefined, "list")}
               ></picture-studio-badge-form>
             `
           : html`
@@ -539,7 +550,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
                 @element-changed=${this._elementChanged}
                 @anchor-changed=${this._anchorChanged}
                 @visibility-changed=${this._visibilityChanged}
-                @go-back=${() => this.select(undefined)}
+                @go-back=${() => this.select(undefined, "list")}
               ></picture-studio-element-form>
             `,
       );

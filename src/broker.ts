@@ -5,6 +5,26 @@ import type { Anchor, Position } from "./position";
  * through Home Assistant; only the selection, which is editor state and never
  * reaches the config, is read straight off the channel.
  */
+/**
+ * Which surface a selection was made on.
+ *
+ * - `list` — a row was clicked, or Add, or Back, or the ✕, or a row was dragged
+ *   to a new position. All of those are gestures in the editor's own list.
+ * - `picture` — the preview was tapped, on an item or on its background.
+ *
+ * The distinction is already material at the source — the card reaches the
+ * editor through this channel, the list through a DOM event — so it is declared
+ * rather than inferred.
+ *
+ * It decides one thing and one only: whether the **dialog's** scroll container
+ * follows a form that is opening. A list origin means the reader asked to be
+ * taken to that form, so it does; a picture origin means they are looking at the
+ * picture, which must not move. Every other trigger — including a deletion or a
+ * reorder, which carry a list origin because that is where they happen — opens
+ * no form, and there the dialog never follows whatever the origin says.
+ */
+export type SelectOrigin = "list" | "picture";
+
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
   patchAnchor(index: number, anchor: Anchor): void;
@@ -12,7 +32,7 @@ export interface EditorChannel {
    * Open a badge's own form, the same way the pencil in the list does, or clear
    * the selection with undefined and fall back to the card's own form.
    */
-  select(index: number | undefined): void;
+  select(index: number | undefined, origin: SelectOrigin): void;
   /** The badge whose form is open, if any. */
   selectedIndex(): number | undefined;
 }

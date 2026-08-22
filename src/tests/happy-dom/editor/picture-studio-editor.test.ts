@@ -51,23 +51,23 @@ afterEach(() => {
 describe("a form opens at its own top", () => {
   it("scrolls when an item's form opens", async () => {
     const { el, calls } = await mount();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
     expect(calls()).toBe(1);
   });
 
   it("scrolls again when a second item's form replaces the first", async () => {
     const { el, calls } = await mount();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
-    el.select(1);
+    el.select(1, "list");
     await el.updateComplete;
     expect(calls()).toBe(2);
   });
 
   it("does not scroll on a re-render of the form already open", async () => {
     const { el, calls } = await mount();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
     // What a keystroke or a hass tick produces: an update that leaves the
     // selection alone. Scrolling here would fight the user's own scrolling.
@@ -78,9 +78,9 @@ describe("a form opens at its own top", () => {
 
   it("does not scroll on the way back to the list", async () => {
     const { el, calls } = await mount();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
-    el.select(undefined);
+    el.select(undefined, "list");
     await el.updateComplete;
     expect(calls()).toBe(1);
   });
@@ -169,7 +169,7 @@ describe("a position commit must not move the view", () => {
 
   it("puts the scroll position back after the card is rebuilt", async () => {
     const { el, at, put } = await mountInScroller();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
 
     put(300); // where the user was reading
@@ -184,12 +184,12 @@ describe("a position commit must not move the view", () => {
     // A selection change is *meant* to move the view — that is the existing
     // scrollIntoView, and holding the old position would fight it.
     const { el, at, put } = await mountInScroller();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
 
     put(300);
     el.patchPosition(0, { left: 30, top: 30 });
-    el.select(1);
+    el.select(1, "list");
     put(0);
     await settle();
 
@@ -209,7 +209,7 @@ describe("a position commit must not move the view", () => {
     // moves the document again, and *that* is when WebKit re-clamps. A hold
     // that let go at registration is no longer there to answer for it.
     const { el, at, put, setHeight } = await mountInScroller();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
     const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 
@@ -244,7 +244,7 @@ describe("a position commit must not move the view", () => {
     // somewhere else. So the height has to stop moving too. After that the
     // position belongs to the user again.
     const { el, at, put } = await mountInScroller();
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
 
     const releaseOld = registerCard({ reanchor: () => undefined });
@@ -300,7 +300,7 @@ describe("a position commit must not move the view", () => {
         height: 0,
         toJSON: () => ({}),
       }) as DOMRect;
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
 
     top = 412;
@@ -366,7 +366,7 @@ describe("a missing badge refuses the form and does not scroll the editor", () =
 
   it("renders the list, not a badge-form, for a badge whose verdict is missing", async () => {
     const { el } = await mountMissing();
-    el.select(0); // select the missing badge
+    el.select(0, "list"); // select the missing badge
     await el.updateComplete;
     expect(el.shadowRoot?.querySelector("picture-studio-badge-form")).toBeNull();
     expect(el.shadowRoot?.querySelector("picture-studio-badge-list")).not.toBeNull();
@@ -374,14 +374,14 @@ describe("a missing badge refuses the form and does not scroll the editor", () =
 
   it("does not scroll the editor when the form is refused", async () => {
     const { el, calls } = await mountMissing();
-    el.select(0); // missing badge — form refused
+    el.select(0, "list"); // missing badge — form refused
     await el.updateComplete;
     expect(calls()).toBe(0);
   });
 
   it("still scrolls when a valid item's form opens", async () => {
     const { el, calls } = await mountMissing();
-    el.select(1); // valid badge — form opens
+    el.select(1, "list"); // valid badge — form opens
     await el.updateComplete;
     expect(calls()).toBe(1);
   });
@@ -431,7 +431,7 @@ describe("_moveBadge remaps the selection through the move", () => {
     document.body.append(el);
     await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
     await el.updateComplete;
-    el.select(0); // broken item — form refused, list stays in DOM
+    el.select(0, "list"); // broken item — form refused, list stays in DOM
     await el.updateComplete;
     return el;
   };
@@ -446,7 +446,7 @@ describe("_moveBadge remaps the selection through the move", () => {
     document.body.append(el);
     await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
     await el.updateComplete;
-    el.select(2); // broken item at index 2 — form refused, list stays in DOM
+    el.select(2, "list"); // broken item at index 2 — form refused, list stays in DOM
     await el.updateComplete;
     return el;
   };
@@ -668,9 +668,9 @@ describe("_showListAt scroll timing", () => {
     const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
     rstest.useFakeTimers();
-    el.select(1);
+    el.select(1, "list");
     await el.updateComplete;
-    el.select(undefined); // return from form → _showListAt(1), opened=false
+    el.select(undefined, "list"); // return from form → _showListAt(1), opened=false
     await el.updateComplete;
 
     // No timer advance needed — scroll must have happened immediately.
@@ -694,9 +694,9 @@ describe("_showListAt scroll timing", () => {
     const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
     rstest.useFakeTimers();
-    el.select(1);
+    el.select(1, "list");
     await el.updateComplete;
-    el.select(undefined); // return from form → _showListAt(1), opened=true
+    el.select(undefined, "list"); // return from form → _showListAt(1), opened=true
     await el.updateComplete;
 
     // Scroll must not have happened yet — the timer is still pending.
@@ -733,9 +733,9 @@ describe("_showListAt scroll timing", () => {
       const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
       rstest.useFakeTimers();
-      el.select(1);
+      el.select(1, "list");
       await el.updateComplete;
-      el.select(undefined); // return from form → _showListAt(1), opened=true but no CSS support
+      el.select(undefined, "list"); // return from form → _showListAt(1), opened=true but no CSS support
       await el.updateComplete;
 
       // No timer advance needed — without interpolate-size support there is no
@@ -790,7 +790,7 @@ describe("Items section follows the work", () => {
     const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
     rstest.useFakeTimers();
-    el.select(0); // missing badge — no form opens
+    el.select(0, "list"); // missing badge — no form opens
     await el.updateComplete;
 
     expect(expandSpy).toHaveBeenCalledTimes(1);
@@ -831,7 +831,7 @@ describe("Items section follows the work", () => {
     const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
     rstest.useFakeTimers();
-    el.select(0); // state-label badge — should refuse form immediately (no probe needed)
+    el.select(0, "list"); // state-label badge — should refuse form immediately (no probe needed)
     await el.updateComplete;
 
     expect(expandSpy).toHaveBeenCalledTimes(1);
@@ -854,11 +854,11 @@ describe("Items section follows the work", () => {
     const expandSpy = rstest.spyOn(section, "expand");
     const scrollSpy = rstest.spyOn(list, "scrollToItem");
 
-    el.select(1); // valid badge — form opens, sections cached
+    el.select(1, "list"); // valid badge — form opens, sections cached
     await el.updateComplete;
 
     rstest.useFakeTimers();
-    el.select(undefined); // go back — sections restored, _showListAt(1) fires
+    el.select(undefined, "list"); // go back — sections restored, _showListAt(1) fires
     await el.updateComplete;
 
     expect(expandSpy).toHaveBeenCalledTimes(1);
@@ -884,7 +884,7 @@ describe("folding the Items section clears the selection", () => {
 
   it("clears the selection when the Items section is collapsed", async () => {
     const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
     expect(el.selectedIndex()).toBe(0);
 
@@ -907,7 +907,7 @@ describe("folding the Items section clears the selection", () => {
     // this event, and deselecting on true would undo the selection that triggered
     // the expand.
     const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
     expect(el.selectedIndex()).toBe(0);
 
@@ -927,7 +927,7 @@ describe("folding the Items section clears the selection", () => {
   it("does not clear the selection when a different section (Background) is collapsed", async () => {
     // Verifies the listener is scoped to the Items section, not the editor host.
     const el = await mountEditor(CONFIG_UNKNOWN_ITEM);
-    el.select(0);
+    el.select(0, "list");
     await el.updateComplete;
     expect(el.selectedIndex()).toBe(0);
 
@@ -1007,5 +1007,35 @@ describe("adding a badge does not undo what landed while its stub loaded", () =>
     // would mean the pre-await snapshot won and the third item was dropped.
     expect(commits).toHaveLength(1);
     expect(commits[0]?.items).toHaveLength(4);
+  });
+});
+
+describe("the selection carries its origin", () => {
+  it("records the origin the caller declared", async () => {
+    // The distinction is already material at the source: the card reaches the
+    // editor through the broker, the list through a DOM event. Declaring it
+    // beats inferring it, and Task 4 turns it into two different scrolls.
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    el.select(0, "picture");
+    expect((el as unknown as { _selectOrigin: string })._selectOrigin).toBe("picture");
+    el.select(1, "list");
+    expect((el as unknown as { _selectOrigin: string })._selectOrigin).toBe("list");
+  });
+
+  it("leaves the origin alone when the selection did not change", async () => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+
+    el.select(0, "picture");
+    el.select(0, "list"); // same index — an early return, nothing to re-decide
+    expect((el as unknown as { _selectOrigin: string })._selectOrigin).toBe("picture");
   });
 });
