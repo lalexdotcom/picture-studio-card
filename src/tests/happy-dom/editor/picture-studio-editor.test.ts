@@ -85,6 +85,97 @@ describe("a form opens at its own top", () => {
   });
 });
 
+/**
+ * Blink keeps the scroll position when content above the viewport is replaced —
+ * that is CSS scroll anchoring, and WebKit does not implement it. Home Assistant
+ * rebuilds the card element on every config change (measured), so on an iPhone a
+ * drag that commits a position drops the user back at the top of the dialog.
+ * These tests pin the hand-rolled equivalent.
+ *
+ * happy-dom has no layout, so a scroll container cannot be laid out — it is
+ * declared: the overflow comes from the inline style, and the two heights that
+ * make it scrollable are defined by hand. What is guarded here is therefore the
+ * mechanism, not the pixels; only a real WebKit can answer for those.
+ */
+describe("a position commit must not move the view", () => {
+  const mountInScroller = async () => {
+    const scroller = document.createElement("div");
+    scroller.style.overflowY = "auto";
+    Object.defineProperty(scroller, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
+    let top = 0;
+    Object.defineProperty(scroller, "scrollTop", {
+      get: () => top,
+      set: (v: number) => {
+        top = v;
+      },
+      configurable: true,
+    });
+    document.body.append(scroller);
+
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    scroller.append(el);
+    await el.updateComplete;
+    el.scrollIntoView = () => {};
+    return {
+      el,
+      at: () => top,
+      put: (v: number) => {
+        top = v;
+      },
+    };
+  };
+
+  /** The window the restore runs in; long enough for Home Assistant's round trip. */
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    }
+  };
+
+  it("puts the scroll position back after the card is rebuilt", async () => {
+    const { el, at, put } = await mountInScroller();
+    el.select(0);
+    await el.updateComplete;
+
+    put(300); // where the user was reading
+    el.patchPosition(0, { left: 30, top: 30 });
+    put(0); // what WebKit does when the element above is replaced
+    await settle();
+
+    expect(at()).toBe(300);
+  });
+
+  it("leaves the view where the rebuild put it when the selection changed", async () => {
+    // A selection change is *meant* to move the view — that is the existing
+    // scrollIntoView, and holding the old position would fight it.
+    const { el, at, put } = await mountInScroller();
+    el.select(0);
+    await el.updateComplete;
+
+    put(300);
+    el.patchPosition(0, { left: 30, top: 30 });
+    el.select(1);
+    put(0);
+    await settle();
+
+    expect(at()).toBe(0);
+  });
+
+  it("commits without a scrollable ancestor just the same", async () => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+    el.scrollIntoView = () => {};
+
+    expect(() => el.patchPosition(0, { left: 30, top: 30 })).not.toThrow();
+  });
+});
+
 describe("a missing badge refuses the form and does not scroll the editor", () => {
   const probeHelpers = {
     createBadgeElement: (c: { type?: string }) =>

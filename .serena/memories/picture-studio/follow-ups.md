@@ -847,3 +847,38 @@ directions:** it is why the phone-bound blocker could be cleared remotely, and i
 is why writing to the user's GitHub account must be asked for each time rather
 than assumed. It was asked, refused once, and granted only when the user found
 the GitHub mobile app cannot edit topics at all.
+
+## 14. Two WebKit defects, one lesson — the editor on an iPhone
+
+**Both were invisible to every local instrument, and both cost a session to
+learn that.** Chrome's Device mode emulates touch and viewport; it does not
+emulate another engine. Anything that behaves differently on a phone and not in
+Device mode is a WebKit story, and the phone is the only instrument.
+
+1. **The drag snap-back — shipped in 1.5.2.** `touch-action: none` does not hold
+   a gesture in WKWebView; only a non-passive `touchmove` calling
+   `preventDefault` does. See trap 10 of `mem:picture-studio/state`.
+2. **The editor jumping to the top on a committed drag — fixed 2026-08-22, not
+   yet released.** WebKit implements no CSS scroll anchoring, Blink does. Home
+   Assistant replaces the card element on every config change — **measured**, by
+   marking the instance and finding it gone — so on an iPhone every commit drops
+   the reader back to the top of the dialog. `_holdScroll` in the editor is that
+   anchoring by hand: capture the scroll container's position before a commit,
+   hold it for four frames, and stand aside when the selection changed, because
+   moving the view *is* the point there.
+
+**What ruled the alternatives out, so nobody re-derives it:** the editor's own
+`scrollIntoView` was instrumented in a real browser against the local HA — one
+call on the tap that selects, **zero** on a re-drag, with the stack to prove it.
+`select()` already refuses an unchanged index. So the code was never the mover.
+
+**The local harness could not reproduce it, and the reason matters:** at a phone
+viewport the test dashboard's dialog does not overflow at all, so there is no
+scroll position to lose. Reproducing it locally would need a card tall enough to
+make the dialog scroll. `captures/scroll-probe.mjs` and `rebuild-probe.mjs` are
+the instruments, and they work — it is the fixture that is wrong.
+
+**Still owed:** confirmation on a real iPhone, and a CHANGELOG entry, which
+cannot be written until the user opens a version. The fix is inert where the
+defect does not exist — on Blink the position never moved, so restoring it is a
+no-op — which is why it was written before the on-device confirmation.

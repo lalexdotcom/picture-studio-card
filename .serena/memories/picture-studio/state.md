@@ -117,15 +117,16 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-22, on `main`, after the 1.5.2 WKWebView drag fix:**
+**Measured 2026-08-22, on `main`, after the scroll-anchoring fix:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 846 |
-| `pnpm test --project happy-dom` | 37 | 803 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 849 |
+| `pnpm test --project happy-dom` | 37 | 806 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **210.6 kB / 49.7 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **211.5 kB / 49.9 kB gzip**. The lane figures are derived from the
+full run and the three tests added, not measured separately this time. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the

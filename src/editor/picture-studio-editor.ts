@@ -54,6 +54,13 @@ import "./section-panel";
  */
 const EXPAND_MS = 300;
 
+/**
+ * How many frames `_holdScroll` keeps the scroll position after a commit. Four
+ * covers Home Assistant's config round trip and the rebuild that follows it,
+ * without lasting long enough to fight a scroll the user meant.
+ */
+const HOLD_FRAMES = 4;
+
 export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
     hass: { attribute: false },
@@ -143,8 +150,61 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   /** Convergence point: drag, dialogs and forms all end here. */
   protected _commit(next: PictureStudioConfig): void {
+    this._holdScroll();
     this._config = next;
     this._reemit(next);
+  }
+
+  /**
+   * The scroll container the dialog owns, several shadow roots above us.
+   * `parentNode` alone would stop at the first shadow boundary, so the walk
+   * hops through hosts. Only a container that can actually move counts: an
+   * `overflow: auto` that fits its content has no position to lose.
+   */
+  private _scrollContainer(): HTMLElement | undefined {
+    let node: Node | null = this;
+    while (node) {
+      if (node instanceof HTMLElement) {
+        const style = getComputedStyle(node);
+        if (/auto|scroll/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+          return node;
+        }
+      }
+      const parent: Node | null = node.parentNode;
+      node = parent instanceof ShadowRoot ? parent.host : parent;
+    }
+    return undefined;
+  }
+
+  /**
+   * Blink keeps the scroll position when content above the viewport is replaced
+   * — CSS scroll anchoring — and WebKit implements none of it. Home Assistant
+   * rebuilds the card element on every config change, measured by marking the
+   * instance and finding it gone, so on an iPhone every committed drag drops the
+   * reader back at the top of the dialog. This is that anchoring, by hand.
+   *
+   * Held across several frames rather than restored once, because the rebuild
+   * arrives after Home Assistant's round trip rather than on the next frame. The
+   * window is deliberately short: past it, the position belongs to the user
+   * again, and holding it longer would fight a deliberate scroll.
+   *
+   * It gets out of the way of a selection change, which is the one case where
+   * moving the view is the point — see `updated`, which scrolls a newly opened
+   * form to its own top. That is the whole rule: a commit must not move the
+   * view, a selection may.
+   */
+  private _holdScroll(): void {
+    const scroller = this._scrollContainer();
+    if (!scroller) return;
+    const top = scroller.scrollTop;
+    const selection = this._editingIndex;
+    let frames = 0;
+    const hold = (): void => {
+      if (this._editingIndex !== selection) return;
+      if (scroller.scrollTop !== top) scroller.scrollTop = top;
+      if (++frames < HOLD_FRAMES) requestAnimationFrame(hold);
+    };
+    requestAnimationFrame(hold);
   }
 
   /** Sole exit toward Home Assistant. */
