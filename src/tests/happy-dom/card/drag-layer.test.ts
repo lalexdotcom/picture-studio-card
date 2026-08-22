@@ -119,6 +119,21 @@ const setup = () => {
   root.append(surface, item);
   document.body.append(root);
 
+  // happy-dom honours neither passivity nor its absence, so how a listener is
+  // registered has to be observed rather than inferred from its effect.
+  const options: Record<string, unknown> = {};
+  const removed: string[] = [];
+  const add = root.addEventListener.bind(root);
+  const remove = root.removeEventListener.bind(root);
+  root.addEventListener = ((type: string, listener: EventListener, opts?: unknown) => {
+    options[type] = opts;
+    add(type, listener, opts as AddEventListenerOptions);
+  }) as typeof root.addEventListener;
+  root.removeEventListener = ((type: string, listener: EventListener, opts?: unknown) => {
+    removed.push(type);
+    remove(type, listener, opts as EventListenerOptions);
+  }) as typeof root.removeEventListener;
+
   boxed(surface, 0, 0, 200, 100);
   boxed(item, 20, 10, 20, 20);
 
@@ -158,6 +173,8 @@ const setup = () => {
     selections,
     controller,
     send,
+    options,
+    removed,
     advance: (ms: number) => {
       clock += ms;
     },
@@ -166,6 +183,85 @@ const setup = () => {
 
 afterEach(() => {
   document.body.replaceChildren();
+});
+
+/**
+ * iOS is the whole reason this listener exists. `touch-action: none` is declared
+ * on the badge and, measured on a real iPhone in the companion app, it IS
+ * applied — and WebKit took the gesture for a scroll of the document a dozen
+ * frames in anyway, firing pointercancel and snapping the badge back to where
+ * the drag began. To WebKit the property is advisory in a way preventDefault is
+ * not, so a non-passive touchmove is the only thing that holds a drag.
+ *
+ * The two halves are equally load-bearing: it must hold the page while a badge
+ * is under the finger, and it must NOT while one is not, or the preview stops
+ * scrolling for everyone.
+ */
+describe("holding the page against WebKit", () => {
+  const FAR = DRAG_THRESHOLD_PX * 4;
+  const touchmove = (target: HTMLElement, cancelable = true): Event => {
+    const ev = new Event("touchmove", { bubbles: true, cancelable });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  it("registers the listener non-passively", () => {
+    // Asserted on the registration and not only on its effect: a passive
+    // listener has its preventDefault ignored by the browser and by nothing in
+    // this test environment, so dropping the option would break the fix on a
+    // phone while every behavioural test here went on passing.
+    const { options } = setup();
+
+    expect(options.touchmove).toEqual({ passive: false });
+  });
+
+  it("holds the page while a badge is being dragged", () => {
+    const { item, send } = setup();
+    send("pointerdown", 25, 15);
+    send("pointermove", 25 + FAR, 15);
+
+    expect(touchmove(item).defaultPrevented).toBe(true);
+  });
+
+  it("lets the page scroll when no gesture is under way", () => {
+    const { item } = setup();
+
+    expect(touchmove(item).defaultPrevented).toBe(false);
+  });
+
+  it("lets the page scroll when the press landed on the picture", () => {
+    // The deselect path holds no state, and it is the common case: a finger on
+    // the image is someone scrolling the editor, not someone moving a badge.
+    const { surface, send } = setup();
+    send("pointerdown", 5, 5, surface);
+
+    expect(touchmove(surface).defaultPrevented).toBe(false);
+  });
+
+  it("lets go of the page once the gesture ends", () => {
+    const { item, send } = setup();
+    send("pointerdown", 25, 15);
+    send("pointermove", 25 + FAR, 15);
+    send("pointerup", 25 + FAR, 15);
+
+    expect(touchmove(item).defaultPrevented).toBe(false);
+  });
+
+  it("leaves a touchmove the browser has already committed alone", () => {
+    // Once the scroll is under way the event arrives non-cancellable, and
+    // preventDefault on it buys a console warning and nothing else.
+    const { item, send } = setup();
+    send("pointerdown", 25, 15);
+
+    expect(touchmove(item, false).defaultPrevented).toBe(false);
+  });
+
+  it("takes the listener back down with the layer", () => {
+    const { controller, removed } = setup();
+    controller.detach();
+
+    expect(removed).toContain("touchmove");
+  });
 });
 
 /**

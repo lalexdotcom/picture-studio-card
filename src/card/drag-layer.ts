@@ -334,6 +334,35 @@ export const createDragController = (options: DragOptions) => {
     endGesture(ev, true);
   };
 
+  /**
+   * What actually holds a gesture on iOS. `touch-action: none` is declared on
+   * `.editing .item` and, measured on a real iPhone, it is applied — and WebKit
+   * takes the gesture for a scroll of the document anyway, a dozen frames in,
+   * firing pointercancel. The badge then snapped back to where the drag began.
+   * To WebKit the property is advisory in a way `preventDefault` is not, so
+   * this listener is the only thing standing between a drag and the page.
+   *
+   * Three properties, none of them incidental:
+   *
+   * - **Non-passive**, or `preventDefault` is ignored outright.
+   * - **Registered for the whole editing session, not for the gesture.** WebKit
+   *   decides whether a touch region is blocking when the touch BEGINS; a
+   *   listener added at pointerdown arrives after that decision and prevents
+   *   nothing. This is why it lives in attach() and not in onPointerDown.
+   * - **It only ever prevents while a gesture is live.** A press that landed on
+   *   the image rather than a badge sets no state, so the preview still scrolls
+   *   under a finger that was not dragging anything.
+   *
+   * The `cancelable` guard is not defensive dressing: a touchmove the browser
+   * has already committed to a scroll arrives non-cancellable, and calling
+   * preventDefault on it only earns a console warning.
+   */
+  const onTouchMove = (ev: TouchEvent): void => {
+    if (!state) return;
+    if (!ev.cancelable) return;
+    ev.preventDefault();
+  };
+
   return {
     attach(element: HTMLElement): void {
       if (root) return;
@@ -342,12 +371,14 @@ export const createDragController = (options: DragOptions) => {
       root.addEventListener("pointermove", onPointerMove);
       root.addEventListener("pointerup", onPointerUp);
       root.addEventListener("pointercancel", onPointerCancel);
+      root.addEventListener("touchmove", onTouchMove, { passive: false });
     },
     detach(): void {
       root?.removeEventListener("pointerdown", onPointerDown);
       root?.removeEventListener("pointermove", onPointerMove);
       root?.removeEventListener("pointerup", onPointerUp);
       root?.removeEventListener("pointercancel", onPointerCancel);
+      root?.removeEventListener("touchmove", onTouchMove);
       root = undefined;
       state = undefined;
       emptyPress = undefined;

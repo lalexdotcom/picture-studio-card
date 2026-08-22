@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.2 — 2026-08-22
+
+### Fixed
+
+- On an iPhone or iPad, dragging an item in the editor's preview snapped it back
+  to where the drag started after a fraction of a second. The page was taking the
+  gesture away mid-drag; it no longer can while an item is being moved. Dragging
+  the picture itself still scrolls the editor as before.
+
 ## 1.5.1 — 2026-08-22
 
 ### Fixed

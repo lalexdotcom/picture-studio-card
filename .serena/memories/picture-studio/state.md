@@ -54,18 +54,21 @@ done. Written into `AGENTS.md` rules 4 to 7.
 The older text here said "then the bump, then the push", which was the previous
 workflow and is no longer true.
 
-### 1.5.1 is published and has a known defect — read this before anything
+### 1.5.2 fixes a defect that 1.5.1 shipped to users
 
-A drag on a real phone puts the item back where it started, in the **panel** view
-only. Not reproducible on the desktop, instrumentation in flight, working tree
-deliberately dirty. `mem:picture-studio/1.5.2-mobile-snapback` carries all of it;
-entry 12 of `mem:picture-studio/follow-ups` is the pointer. **Do not clean the
-working tree and do not commit it** without reading that file first.
+A drag on a real iPhone put the item back where it started, in the **panel** view
+only, and never reproduced on the desktop. The cause was WebKit taking the
+gesture despite `touch-action: none` — trap 10 below has the mechanism and the
+constraint it puts on the fix. Entry 12 of `mem:picture-studio/follow-ups` is
+retired, and entry 11 keeps what the investigation taught about reaching a real
+phone at all.
 
 ### What the open version still needs
 
-**Nothing but the user's decision to release it, and the date that replaces
-`unreleased`.** The 2026-08-21 review branch is merged and deleted; the doc pass
+**Nothing. 1.5.2 is written, dated and committed; the push is the user's.**
+Earlier versions were left with `unreleased` in the heading; this one carries its
+date because the user delegated everything but the push, and the release workflow
+refuses to publish a heading that still says `unreleased`. The 2026-08-21 review branch is merged and deleted; the doc pass
 and the screenshots were done before it. Anything else is in
 `mem:picture-studio/follow-ups` as an open entry — the struck ones are done. If
 an entry there says something is owed, **check the repo before repeating it**;
@@ -114,15 +117,15 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-22, on `main`, after the 1.5.1 selection-on-release fix:**
+**Measured 2026-08-22, on `main`, after the 1.5.2 WKWebView drag fix:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 839 |
-| `pnpm test --project happy-dom` | 37 | 796 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 846 |
+| `pnpm test --project happy-dom` | 37 | 803 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **210.3 kB / 49.6 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **210.6 kB / 49.7 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -741,7 +744,11 @@ holding.
    red. What it still cannot cover: Home Assistant's own components (they are
    stubbed, so the lane tests *our* layout around children of known size), the
    panel-versus-sections view difference, themes, and anything that needs a real
-   input device — pointer capture is neutralised in the harness. **So the walk is
+   input device — pointer capture is neutralised in the harness. **And, learned
+   the expensive way on 2026-08-22, it cannot see WebKit either**: the 1.5.2
+   snap-back reproduced on an iPhone every time and never once under Chrome's
+   Device mode, which emulates touch input but not another engine's gesture
+   handling. A Chromium lane would have reported the card healthy. **So the walk is
    shorter, not gone.** Ask which of the two lanes can answer a question before
    writing a test, and put it in the fast one whenever the answer is "either".
 4. **A test that restates a constant stops guarding it.** Assert literals — which
@@ -782,6 +789,19 @@ holding.
    are still owed" from a follow-up entry that had been settled hours earlier by a
    commit sitting in the log. Confront a memory with the repo before acting on it,
    especially any memory that says something is *owed*.
+
+10. **`touch-action: none` does not hold a gesture in WKWebView.** Measured on a
+   real iPhone in the companion app: the property was computed as applied on the
+   very node under the finger, and WebKit took the gesture for a scroll of the
+   document a dozen frames in anyway, firing `pointercancel`. To WebKit the
+   declaration is advisory in a way `preventDefault` is not. **Only a
+   non-passive `touchmove` calling `preventDefault` holds a drag** — and it must
+   be registered *before the touch begins*, because WebKit decides whether a
+   region is blocking at `touchstart`; a listener added in `pointerdown` arrives
+   after that decision and prevents nothing. That is why the listener in
+   `drag-layer.ts` lives in `attach()` and guards on gesture state rather than
+   being added and removed per gesture. Keep `touch-action: none` as well: it is
+   what works everywhere else, and it states the intent.
 
 ## How we work (project rules, see AGENTS.md)
 

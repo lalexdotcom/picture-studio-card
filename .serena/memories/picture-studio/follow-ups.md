@@ -622,22 +622,61 @@ leave an existing one untouched without `--force`.
 should hold the **same card config**, so that the only difference measured
 between panel and sections is the view type itself.
 
-## 12. The mobile snap-back found on 1.5.1 — OPEN, and it is live
+### Reaching a real phone, which the panel-only defect of 1.5.2 had to do
 
-An item returns to its pre-drag position after a very short time of dragging, on
-a real phone, in the **panel** view only. 1.5.1 is **already published**, so this
-is in users' hands. Everything known — the symptom's five discriminators, the
-three places that can write a pre-drag position, the two hypotheses, what was
-ruled out and why, and the state of the instrumented build sitting uncommitted
-in the working tree — is in `mem:picture-studio/1.5.2-mobile-snapback`.
+Not part of the lane's design, but the same instance and the same traps, and all
+of it cost a session to establish. `.ha/` is git-ignored, so nothing in the
+repository records any of this.
 
-**Read that file before touching anything in `drag-layer.ts` or the card**, and
-above all before "cleaning up" a dirty working tree: the diff is the measuring
-device, not leftovers.
+- **The devcontainer publishes 8123, it does not forward it.** VS Code binds a
+  forwarded port to the loopback only, so a phone on the LAN cannot reach it.
+  `.devcontainer/devcontainer.json` carries `"appPort": ["8123:8123"]` and no
+  `forwardPorts` — the two would fight over the same host port. The reasoning is
+  written at the edit; putting `forwardPorts` back rebuilds the wall.
+- **Home Assistant runs in a nested Docker inside the devcontainer.** After a
+  container rebuild, check `docker ps` for `picture-studio-ha` and bring it back
+  with `docker compose up -d`. `.ha/config` is a bind mount, so nothing is lost.
+- **`/local/` is served with `Cache-Control: max-age=2678400` — 31 days.**
+  Measured. `dist/` is mounted there, so **a rebuilt bundle does not reach a
+  phone that has already loaded it** unless the `?v=` in
+  `.ha/config/.storage/lovelace_resources` is bumped and the container
+  restarted. The failure is silent and misleading: everything renders, from the
+  previous build.
+- **The dashboard's `url_path` is `dashboard-test`, with a hyphen**, while its
+  storage file is `.storage/lovelace.dashboard_test` with an underscore. Using
+  the file name in a URL gives a page that loads, answers 200 and renders
+  nothing, with no error worth the name. The truth is in `.storage/lovelace_dashboards`.
 
-This entry meets entry 11 head on. That entry wants a real-Home-Assistant lane
-whose panel and sections views carry the **same card config**, so the only thing
-measured between them is the view type. This defect is the first concrete demand
-for exactly that, and it also shows the lane's limit: the user established that
-the defect does **not** appear under Chrome's Device mode, so a lane driving
-desktop Chromium would have reported the card healthy.
+**And the technique, which is the part worth reusing.** The companion app gives
+no console, so the trace was drawn **on the card itself**, in a strip over the
+preview in editing mode. It did not infer from events: every place that could
+write an item's position was made to announce itself, so one line named the
+writer. Two things to know before doing it again — a probe's own passive
+listeners make `TouchEvent.cancelable` read `false` and can be mistaken for a
+verdict from the browser, and a gesture that *succeeds* re-renders the card and
+therefore erases its own strip, so a successful run has to be captured **during**
+the gesture, never after it.
+
+## ~~12. The mobile snap-back found on 1.5.1~~ — DONE 2026-08-22, shipped in 1.5.2
+
+An item returned to its pre-drag position after a fraction of a second of
+dragging, on a real iPhone in the companion app, in the **panel** view only.
+Closed by the non-passive `touchmove` in `drag-layer.ts` — the root cause and
+the reason the listener is shaped the way it is are written at the code and
+summarised in trap 10 of `mem:picture-studio/state`. The blow-by-blow of the
+investigation is deliberately not kept: it is in the git history, and what it
+taught outlives it in the two places just named.
+
+Three things it settled that are not about this defect:
+
+- **It met entry 11 head on.** That entry wants the panel and sections views to
+  carry the **same card config**, so the only thing measured between them is the
+  view type. This defect was the first concrete demand for exactly that — the
+  panel-only symptom was the whole mystery, and the answer turned out to be that
+  a panel view makes the document scrollable where a sections view does not.
+- **It also showed that lane's limit.** The defect does not appear under Chrome's
+  Device mode, so a lane driving desktop Chromium would have reported the card
+  healthy. See trap 3.
+- **The measuring technique is reusable and the plumbing is fragile.** Both are
+  recorded under entry 11's "Reaching a real phone" above.
+
