@@ -48,44 +48,6 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-describe("a form opens at its own top", () => {
-  it("scrolls when an item's form opens", async () => {
-    const { el, calls } = await mount();
-    el.select(0, "list");
-    await el.updateComplete;
-    expect(calls()).toBe(1);
-  });
-
-  it("scrolls again when a second item's form replaces the first", async () => {
-    const { el, calls } = await mount();
-    el.select(0, "list");
-    await el.updateComplete;
-    el.select(1, "list");
-    await el.updateComplete;
-    expect(calls()).toBe(2);
-  });
-
-  it("does not scroll on a re-render of the form already open", async () => {
-    const { el, calls } = await mount();
-    el.select(0, "list");
-    await el.updateComplete;
-    // What a keystroke or a hass tick produces: an update that leaves the
-    // selection alone. Scrolling here would fight the user's own scrolling.
-    el.hass = { localize: () => "", states: {} } as never;
-    await el.updateComplete;
-    expect(calls()).toBe(1);
-  });
-
-  it("does not scroll on the way back to the list", async () => {
-    const { el, calls } = await mount();
-    el.select(0, "list");
-    await el.updateComplete;
-    el.select(undefined, "list");
-    await el.updateComplete;
-    expect(calls()).toBe(1);
-  });
-});
-
 /**
  * Blink keeps the scroll position when content above the viewport is replaced —
  * that is CSS scroll anchoring, and WebKit does not implement it. Home Assistant
@@ -372,18 +334,13 @@ describe("a missing badge refuses the form and does not scroll the editor", () =
     expect(el.shadowRoot?.querySelector("picture-studio-badge-list")).not.toBeNull();
   });
 
-  it("does not scroll the editor when the form is refused", async () => {
-    const { el, calls } = await mountMissing();
-    el.select(0, "list"); // missing badge — form refused
+  it("does not move either container when the form is refused", async () => {
+    const { el } = await mountMissing();
+    // The editor has no scrollable ancestor here, so the only thing to prove is
+    // that the refused form takes the list path rather than the form path.
+    el.select(0, "list");
     await el.updateComplete;
-    expect(calls()).toBe(0);
-  });
-
-  it("still scrolls when a valid item's form opens", async () => {
-    const { el, calls } = await mountMissing();
-    el.select(1, "list"); // valid badge — form opens
-    await el.updateComplete;
-    expect(calls()).toBe(1);
+    expect(el.shadowRoot?.querySelector("picture-studio-badge-form")).toBeNull();
   });
 });
 
@@ -665,7 +622,7 @@ describe("_showListAt scroll timing", () => {
       "picture-studio-badge-list",
     ) as PictureStudioBadgeList;
     rstest.spyOn(section, "expand").mockResolvedValue(false); // already open: nothing will animate
-    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+    const scrollSpy = rstest.spyOn(list, "rowFor");
 
     rstest.useFakeTimers();
     el.select(1, "list");
@@ -691,7 +648,7 @@ describe("_showListAt scroll timing", () => {
       "picture-studio-badge-list",
     ) as PictureStudioBadgeList;
     rstest.spyOn(section, "expand").mockResolvedValue(true); // transition started
-    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+    const scrollSpy = rstest.spyOn(list, "rowFor");
 
     rstest.useFakeTimers();
     el.select(1, "list");
@@ -730,7 +687,7 @@ describe("_showListAt scroll timing", () => {
         "picture-studio-badge-list",
       ) as PictureStudioBadgeList;
       rstest.spyOn(section, "expand").mockResolvedValue(true); // transition started
-      const scrollSpy = rstest.spyOn(list, "scrollToItem");
+      const scrollSpy = rstest.spyOn(list, "rowFor");
 
       rstest.useFakeTimers();
       el.select(1, "list");
@@ -787,7 +744,7 @@ describe("Items section follows the work", () => {
       "picture-studio-badge-list",
     ) as PictureStudioBadgeList;
     const expandSpy = rstest.spyOn(section, "expand");
-    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+    const scrollSpy = rstest.spyOn(list, "rowFor");
 
     rstest.useFakeTimers();
     el.select(0, "list"); // missing badge — no form opens
@@ -828,7 +785,7 @@ describe("Items section follows the work", () => {
       "picture-studio-badge-list",
     ) as PictureStudioBadgeList;
     const expandSpy = rstest.spyOn(section, "expand");
-    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+    const scrollSpy = rstest.spyOn(list, "rowFor");
 
     rstest.useFakeTimers();
     el.select(0, "list"); // state-label badge — should refuse form immediately (no probe needed)
@@ -852,7 +809,7 @@ describe("Items section follows the work", () => {
       "picture-studio-badge-list",
     ) as PictureStudioBadgeList;
     const expandSpy = rstest.spyOn(section, "expand");
-    const scrollSpy = rstest.spyOn(list, "scrollToItem");
+    const scrollSpy = rstest.spyOn(list, "rowFor");
 
     el.select(1, "list"); // valid badge — form opens, sections cached
     await el.updateComplete;
@@ -1037,5 +994,175 @@ describe("the selection carries its origin", () => {
     el.select(0, "picture");
     el.select(0, "list"); // same index — an early return, nothing to re-decide
     expect((el as unknown as { _selectOrigin: string })._selectOrigin).toBe("picture");
+  });
+});
+
+describe("which container moves, and on which trigger", () => {
+  /**
+   * The real dialog below 1000px: an inert `.element-editor` (declares
+   * overflow-y:auto, never overflows) inside a dialog box that actually
+   * scrolls. Above 1000px the inner one overflows instead and the outer does
+   * not — the second mount below.
+   */
+  const rect = (top: number, height: number): DOMRect =>
+    ({
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 0,
+      x: 0,
+      y: top,
+      width: 0,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  const box = (content: number, client: number): HTMLElement => {
+    const el = document.createElement("div");
+    el.style.overflowY = "auto";
+    Object.defineProperty(el, "scrollHeight", { value: content, configurable: true });
+    Object.defineProperty(el, "clientHeight", { value: client, configurable: true });
+    let top = 0;
+    Object.defineProperty(el, "scrollTop", {
+      get: () => top,
+      set: (v: number) => {
+        top = v;
+      },
+      configurable: true,
+    });
+    el.getBoundingClientRect = () => rect(0, client);
+    return el;
+  };
+
+  /** `phone` → the dialog scrolls; otherwise the form's own container does. */
+  const mountTwoContainers = async (phone: boolean) => {
+    const dialog = box(phone ? 2000 : 400, 400);
+    const form = box(phone ? 549 : 1000, 549);
+    dialog.append(form);
+    document.body.append(dialog);
+
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    form.append(el);
+    await el.updateComplete;
+    // The editor starts 800px into whatever scrolls it.
+    el.getBoundingClientRect = () => rect(800, 600);
+    // `_showListAt` waits out EXPAND_MS only when expand() actually opened
+    // something. happy-dom's CSS.supports answers true to everything, so an
+    // unstubbed expand() here would arm a real 300ms timer that this file's
+    // `listSettled()` cannot cover. The section's state is not what these
+    // tests are about — which container gets written is.
+    const section = el.shadowRoot?.querySelector("#items-section") as
+      | (HTMLElement & { expand(): Promise<boolean> })
+      | null;
+    if (section) section.expand = async () => false;
+    return { el, dialog, form };
+  };
+
+  afterEach(() => document.body.replaceChildren());
+
+  it("takes both containers to the start when the form opens from the list", async () => {
+    // Only one of them is real at a time, so writing both always yields exactly
+    // one visible effect and the code never has to know which mode it is in.
+    const { el, dialog, form } = await mountTwoContainers(true);
+    el.select(0, "list");
+    await el.updateComplete;
+    expect(dialog.scrollTop).toBe(800);
+    expect(form.scrollTop).toBe(800);
+  });
+
+  it("leaves the dialog alone when the form opens from the picture", async () => {
+    // The whole point: the picture must not be thrown off the screen. The form's
+    // container is still taken to the start, unconditionally — below 1000px that
+    // write is inert, and above it that container is the one that moves while
+    // the picture sits beside it and never moves at all.
+    const { el, dialog, form } = await mountTwoContainers(true);
+    dialog.scrollTop = 300;
+    el.select(0, "picture");
+    await el.updateComplete;
+    expect(dialog.scrollTop).toBe(300);
+    expect(form.scrollTop).toBe(800);
+  });
+
+  /**
+   * `_showListAt` awaits the section's expansion before it scrolls, and the row
+   * it then asks for has no rect under happy-dom. Stub `rowFor` on the rendered
+   * list with a row whose geometry is declared: what this describe is about is
+   * *which container the editor writes*, not how the list finds its row — Task 2
+   * owns that, and tests it there.
+   *
+   * **Stub before the first `select`, never after.** The list is rendered at
+   * mount, `cache()` restores that same element when the form closes, and the
+   * expansion `_showListAt` awaits may resolve in fewer microtasks than it takes
+   * to stub afterwards — in which case `rowFor` returns a real row with a zero
+   * rect, nothing moves, and the test fails for a reason that has nothing to do
+   * with what it is guarding.
+   */
+  const stubRow = (el: PictureStudioEditor, top: number, height: number): void => {
+    const list = el.shadowRoot?.querySelector(LIST_TAG) as PictureStudioBadgeList | null;
+    if (!list) throw new Error("the list is not rendered");
+    const row = document.createElement("div");
+    row.getBoundingClientRect = () => rect(top, height);
+    (list as unknown as { rowFor: () => HTMLElement }).rowFor = () => row;
+  };
+
+  /** Long enough for expand() to resolve and `_showListAt` to run its course. */
+  const listSettled = () => new Promise((r) => setTimeout(r, 0));
+
+  it("never moves the dialog when no form opens, whatever the origin", async () => {
+    // Leaving a form by Back, by the ✕, or by tapping the background of the
+    // picture: no form opens, so the dialog is held in all three. The row is
+    // brought into view in the form's container instead — inert below 1000px,
+    // which is exactly why the picture stays put there.
+    for (const origin of ["list", "picture"] as const) {
+      const { el, dialog, form } = await mountTwoContainers(true);
+      stubRow(el, 430, 30); // bottom 460; the dialog's box ends at 400
+      el.select(0, "list");
+      await el.updateComplete;
+
+      // Set BEFORE the select, never after: Task 5 starts a hold on a picture
+      // origin, and a hold captures the position at the moment of the call. A
+      // position written afterwards would be one the hold then undoes, and the
+      // test would fail for a reason that has nothing to do with `updated`.
+      dialog.scrollTop = 275;
+      form.scrollTop = 88;
+      el.select(undefined, origin);
+      await el.updateComplete;
+      await listSettled();
+
+      expect(dialog.scrollTop).toBe(275);
+      // The form's box is 549 tall and the row sits inside it: nothing to do.
+      expect(form.scrollTop).toBe(88);
+      document.body.replaceChildren();
+    }
+  });
+
+  it("brings the row into view in the form's container, above 1000px", async () => {
+    // The other mode, where that container is the one that actually moves. The
+    // row sits below its box, so it is lifted into it — and the dialog, which
+    // does not overflow here, has nothing to do either way.
+    const { el, dialog, form } = await mountTwoContainers(false);
+    stubRow(el, 600, 30); // bottom 630; the form's box ends at 549
+    el.select(0, "list");
+    await el.updateComplete;
+
+    form.scrollTop = 40; // before the select — see the note above
+    el.select(undefined, "picture");
+    await el.updateComplete;
+    await listSettled();
+
+    expect(form.scrollTop).toBe(121); // 40 + (630 - 549)
+    expect(dialog.scrollTop).toBe(0);
+  });
+
+  it("moves only the form's container above 1000px", async () => {
+    // The inner container overflows and the outer does not — so `dialogScroller`
+    // finds nothing above the form's and there is nothing to hold.
+    const { el, dialog, form } = await mountTwoContainers(false);
+    el.select(0, "list");
+    await el.updateComplete;
+    expect(form.scrollTop).toBe(800);
+    expect(dialog.scrollTop).toBe(0);
   });
 });

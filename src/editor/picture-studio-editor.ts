@@ -44,6 +44,7 @@ import {
   setAnchor,
   setVisibility,
 } from "./items";
+import { dialogScroller, formScroller, scrollIntoNearest, scrollToStart } from "./scroll";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
@@ -115,8 +116,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   /** Guards against a native child's config-changed echoing our own push. */
   private _applying = false;
   /** Where the last selection came from. See `updated`, which scrolls on it. */
-  // @ts-expect-error TS6133 — read by updated() once Task 4 lands; remove this line then
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read by updated() once Task 4 lands
   private _selectOrigin: SelectOrigin = "list";
   constructor() {
     super();
@@ -190,35 +189,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * the shadow boundary. Measured the hard way — a walk without it found only
    * `html`, which never moved while the view plainly did.
    */
-  private *_layoutAncestors(): Generator<HTMLElement> {
-    let node: Node | null = this;
-    while (node) {
-      if (node instanceof HTMLElement) yield node;
-      const slot: HTMLSlotElement | null = node instanceof Element ? node.assignedSlot : null;
-      const parent: Node | null = slot ?? node.parentNode;
-      node = parent instanceof ShadowRoot ? parent.host : parent;
-    }
-  }
-
-  private _scrollContainer(): HTMLElement | undefined {
-    for (const node of this._layoutAncestors()) {
-      if (node.scrollHeight > node.clientHeight) {
-        // The page scrolls without declaring it: its computed `overflow-y` is
-        // `visible`, and on a phone Home Assistant's dialog *is* the page —
-        // measured, `html[visible;2447/874]`. Requiring auto|scroll here found
-        // nothing at all and the hold never ran.
-        if (node === document.scrollingElement) return node;
-        // `body` is skipped on purpose: it reports the same overflow as the
-        // document while its own `overflow: hidden` makes writing to its
-        // scrollTop a no-op.
-        if (node !== document.body && /auto|scroll/.test(getComputedStyle(node).overflowY)) {
-          return node;
-        }
-      }
-    }
-    return undefined;
-  }
-
   /**
    * Blink keeps the scroll position when content above the viewport is replaced
    * — CSS scroll anchoring — and WebKit implements none of it. Home Assistant
@@ -240,7 +210,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * view, a selection may.
    */
   private _holdScroll(): void {
-    const scroller = this._scrollContainer();
+    const scroller = dialogScroller(this);
     if (!scroller) return;
     const top = scroller.scrollTop;
     const selection = this._editingIndex;
@@ -466,32 +436,44 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   /**
    * A form opens at the top of itself, not at the scroll position of whatever
-   * was showing before — the list, or the previous item's form. The dialog owns
-   * the scroll container, several shadow roots above us, so nothing of ours can
-   * address it: `scrollIntoView` is the one call that reaches it, because the
-   * browser scrolls every ancestor container whatever tree it lives in.
+   * was showing before. Which container that means is not ours to guess: below
+   * 1000px the dialog carries the scroll and the form's own container is inert,
+   * above 1000px it is the other way round — so both are written and exactly one
+   * of them answers. See `scroll.ts`.
    *
-   * Guarded on the transition rather than on the value: an item's form re-renders
-   * on every keystroke and every hass tick, and scrolling on each of them would
-   * fight the user's own scrolling.
+   * The one container that is *not* always written is the dialog's, and the
+   * origin is what decides: a selection made on the picture must leave the
+   * picture where it is, which is the whole reason `select` carries an origin.
+   *
+   * Guarded on the transition rather than on the value: an item's form
+   * re-renders on every keystroke and every hass tick, and scrolling on each of
+   * them would fight the user's own scrolling.
    */
   protected updated(changed: Map<string, unknown>): void {
     if (!changed.has("_editingIndex")) return;
     const prev = changed.get("_editingIndex") as number | undefined;
     const curr = this._editingIndex;
-
-    // Three mutually exclusive branches of one decision — scroll the editor to
-    // its top only when a form actually opens; show the Items section and bring
-    // the row into view in the other two cases.
+    // Three mutually exclusive branches of one decision. The form's container is
+    // written in all three, unconditionally: below 1000px the write is inert, and
+    // above it that container is the only one that moves.
     if (curr !== undefined && this._formTarget()) {
-      this.scrollIntoView({ block: "start" });
+      const form = formScroller(this);
+      if (form) scrollToStart(form, this);
+      // The one place the origin is consulted, and the only trigger on which the
+      // dialog's container moves at all: the reader clicked a row and asked to be
+      // taken to its form. A picture origin means they are looking at the
+      // picture, which must not be thrown off the screen to show them a form.
+      if (this._selectOrigin === "list") {
+        const dialog = dialogScroller(this);
+        if (dialog) scrollToStart(dialog, this);
+      }
     } else if (curr !== undefined) {
       // An item was selected but no form opened (unreadable item, or a badge
-      // whose type is missing): expand the Items section and scroll to the row.
+      // whose type is missing): expand the Items section and show the row.
       void this._showListAt(curr);
     } else if (prev !== undefined) {
-      // The user came back from a form: expand the Items section and bring the
-      // row that was just edited into view.
+      // The reader came back from a form, or deleted an item: expand the Items
+      // section and bring the row into view.
       void this._showListAt(prev);
     }
   }
@@ -514,9 +496,17 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       await new Promise<void>((resolve) => setTimeout(resolve, EXPAND_MS));
     }
     const list = this.shadowRoot?.querySelector("picture-studio-badge-list") as
-      | (HTMLElement & { scrollToItem(i: number): void })
+      | (HTMLElement & { rowFor(i: number): HTMLElement | undefined })
       | null;
-    list?.scrollToItem(index);
+    const row = list?.rowFor(index);
+    if (!row) return;
+    // The form's container, and no other. `scrollIntoView` stood here and could
+    // not make that distinction: it scrolls *every* ancestor container, so
+    // showing the row in the list always dragged the picture along with it.
+    // Below 1000px this write is inert and the picture stays put; above 1000px
+    // it is the pane the reader is looking at and the picture never moves anyway.
+    const form = formScroller(this);
+    if (form) scrollIntoNearest(form, row);
   }
 
   protected render() {
