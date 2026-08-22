@@ -1,0 +1,37 @@
+name: HACS
+
+# Inclusion in the default HACS catalog requires this validation to pass, and it
+# is also the only authority on requirements the documentation leaves vague. The
+# schedule is not decorative: HACS's rules move on their own, so a card that
+# validates today can stop validating without a single commit here. A nightly
+# run is how that gets noticed before a user does.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Not pinned to a SHA, unlike the release job's third-party action, and
+      # deliberately: `hacs/action` is a thin wrapper whose `runs.image` is
+      # `docker://ghcr.io/hacs/action:main`, so the code that actually executes
+      # is a moving tag whatever ref is written here. Pinning would buy the
+      # appearance of immutability and none of it. What makes that acceptable is
+      # the permission set above — this job can read the repository and nothing
+      # else, where the release job holds `contents: write`.
+      - uses: hacs/action@main
+        with:
+          category: plugin
+          # The action's own default is to comment on the pull request, which
+          # needs `pull-requests: write`. The verdict is in the job log either
+          # way, so the narrower permission is worth more than the comment.
+          comment: "false"
