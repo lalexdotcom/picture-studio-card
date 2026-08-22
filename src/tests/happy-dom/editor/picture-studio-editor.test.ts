@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, rstest } from "@rstest/core";
+import { registerCard } from "../../../broker";
 import {
   CARD_TYPE,
   EDITOR_TAG,
@@ -101,7 +102,8 @@ describe("a position commit must not move the view", () => {
   const mountInScroller = async () => {
     const scroller = document.createElement("div");
     scroller.style.overflowY = "auto";
-    Object.defineProperty(scroller, "scrollHeight", { value: 2000, configurable: true });
+    let height = 2000;
+    Object.defineProperty(scroller, "scrollHeight", { get: () => height, configurable: true });
     Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
     let top = 0;
     Object.defineProperty(scroller, "scrollTop", {
@@ -119,18 +121,48 @@ describe("a position commit must not move the view", () => {
     scroller.append(el);
     await el.updateComplete;
     el.scrollIntoView = () => {};
+
+    // The anchor is measured, so geometry has to be declared as well: `above`
+    // is how far into the scrolled content the editor starts — in other words
+    // the height of the preview sitting on top of it, which a rebuild may
+    // change.
+    let above = 800;
+    const rect = (t: number) =>
+      ({
+        top: t,
+        bottom: t,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: t,
+        width: 0,
+        height: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    scroller.getBoundingClientRect = () => rect(0);
+    el.getBoundingClientRect = () => rect(above - top);
+
     return {
       el,
       at: () => top,
       put: (v: number) => {
         top = v;
       },
+      grow: (by: number) => {
+        above += by;
+      },
+      setHeight: (v: number) => {
+        height = v;
+      },
     };
   };
 
-  /** The window the restore runs in; long enough for Home Assistant's round trip. */
+  /**
+   * Long enough for the hold to run its course: the rebuild has to be seen and
+   * the container's height has to stay put for STABLE_FRAMES on top of that.
+   */
   const settle = async () => {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 12; i++) {
       await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
     }
   };
@@ -162,6 +194,121 @@ describe("a position commit must not move the view", () => {
     await settle();
 
     expect(at()).toBe(0);
+  });
+
+  // A test for anchoring — restoring the framing rather than the offset — lived
+  // here and was removed on 2026-08-22, not because the idea is wrong but
+  // because measurement on a real iPhone showed it doing harm: the rebuild is
+  // detected on the first frame, while the old card is gone and the new one has
+  // not laid out, so the drift is nonsense. The drift is still reported by the
+  // temporary trace; restore this test the day it is worth applying.
+
+  it("is still holding when the rebuilt image moves the document a second time", async () => {
+    // The reason the exit condition is not registration alone. The card
+    // registers within a frame; its image lays out several frames later and
+    // moves the document again, and *that* is when WebKit re-clamps. A hold
+    // that let go at registration is no longer there to answer for it.
+    const { el, at, put, setHeight } = await mountInScroller();
+    el.select(0);
+    await el.updateComplete;
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+    const releaseOld = registerCard({ reanchor: () => undefined });
+    put(300);
+    el.patchPosition(0, { left: 30, top: 30 });
+    releaseOld();
+    const releaseNew = registerCard({ reanchor: () => undefined });
+
+    // The document keeps moving while the new preview lays out...
+    await frame();
+    setHeight(1900);
+    await frame();
+    setHeight(1800);
+    await frame();
+    setHeight(1700);
+    // ...and only then does the clamp land.
+    await frame();
+    put(0);
+    await settle();
+
+    expect(at()).toBe(300);
+    releaseNew();
+  });
+
+  it("lets go once the rebuild has landed and the height has settled", async () => {
+    // Two signals, not one. The broker says the card was replaced — Home
+    // Assistant destroys the old element and creates a new one, so a different
+    // instance registering *is* the rebuild. But registering is not laying out:
+    // on a real iPhone the card registered within a frame, then its image moved
+    // the document again, and a hold that had already let go left the reader
+    // somewhere else. So the height has to stop moving too. After that the
+    // position belongs to the user again.
+    const { el, at, put } = await mountInScroller();
+    el.select(0);
+    await el.updateComplete;
+
+    const releaseOld = registerCard({ reanchor: () => undefined });
+    put(300);
+    el.patchPosition(0, { left: 30, top: 30 });
+    put(0);
+    releaseOld();
+    const releaseNew = registerCard({ reanchor: () => undefined });
+    await settle();
+    expect(at()).toBe(300);
+
+    // The user scrolls afterwards, and is left alone.
+    put(120);
+    await settle();
+    expect(at()).toBe(120);
+    releaseNew();
+  });
+
+  it("holds the page itself, which scrolls without declaring an overflow", async () => {
+    // On a phone the dialog is the page: measured on a real iPhone, the only
+    // thing that scrolls is `html`, whose computed overflow-y is `visible`.
+    // Requiring auto|scroll found nothing and the hold never ran.
+    const root = document.scrollingElement as HTMLElement;
+    Object.defineProperty(root, "scrollHeight", { value: 2447, configurable: true });
+    Object.defineProperty(root, "clientHeight", { value: 874, configurable: true });
+    let top = 0;
+    Object.defineProperty(root, "scrollTop", {
+      get: () => top,
+      set: (v: number) => {
+        top = v;
+      },
+      configurable: true,
+    });
+
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CONFIG);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+    el.scrollIntoView = () => {};
+    // Geometry has to be declared here too: happy-dom lays nothing out, and the
+    // anchor is measured. The editor starts 1200px into the document.
+    const above = 1200;
+    el.getBoundingClientRect = () =>
+      ({
+        top: above - top,
+        bottom: above - top,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: above - top,
+        width: 0,
+        height: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    el.select(0);
+    await el.updateComplete;
+
+    top = 412;
+    el.patchPosition(0, { left: 30, top: 30 });
+    top = 0;
+    await settle();
+
+    expect(top).toBe(412);
   });
 
   it("commits without a scrollable ancestor just the same", async () => {

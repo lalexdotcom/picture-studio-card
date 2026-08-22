@@ -60,6 +60,27 @@ const ERROR_BADGE_TAG = "hui-error-badge";
  */
 const PRIMING_TYPE = "picture-studio-priming";
 
+/**
+ * The height the editor's preview last occupied, kept across the rebuild that
+ * every commit triggers.
+ *
+ * Home Assistant destroys the card element and creates another one on each
+ * config change. The newcomer has no height until its picture has laid out, so
+ * for one frame the dialog's scroll container loses ~240px — measured on an
+ * iPhone: 1100 → 862 → 1087 — and the browser clamps the scroll position to fit
+ * what is left. Reserving the outgoing height means nothing collapses and there
+ * is nothing to clamp.
+ *
+ * A single value rather than a map: exactly one preview exists at a time, which
+ * is what `activeCard()` already relies on.
+ */
+let lastPreviewHeight = 0;
+
+/** Frames the reservation survives — long enough to cover the layout, short
+ * enough that a genuinely different height is not pinned for anything a reader
+ * would notice. */
+const RESERVE_FRAMES = 3;
+
 export class PictureStudioCard extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -292,6 +313,20 @@ export class PictureStudioCard extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    // Only in the edit dialog: an editor is mounted there and nowhere else, and
+    // a dashboard card must never be pinned to a height it did not choose.
+    if (lastPreviewHeight > 0 && activeEditor() !== undefined) {
+      this.style.minHeight = `${lastPreviewHeight}px`;
+      let frames = 0;
+      const release = (): void => {
+        if (++frames < RESERVE_FRAMES) {
+          requestAnimationFrame(release);
+          return;
+        }
+        this.style.removeProperty("min-height");
+      };
+      requestAnimationFrame(release);
+    }
     this._unsubscribe = subscribeEditors(() => this._syncEditingAndDrag());
   }
 
@@ -305,6 +340,27 @@ export class PictureStudioCard extends LitElement {
   }
 
   protected updated(changed: PropertyValues): void {
+    // Recorded on every render rather than on the way out: by the time
+    // disconnectedCallback runs the element is already detached and its
+    // offsetHeight is 0 — measured, the reservation was reading zero and doing
+    // nothing at all. Registration is the precise signal for "this is the
+    // editor's preview": cards register only then.
+    //
+    // The *outer* height, margins included. `offsetHeight` counts padding and
+    // borders but not margins, and reserving that much left the successor short
+    // by exactly the missing gap — measured, 26px, which the layout then
+    // reclaimed a frame later by pushing everything below back down. That was
+    // the remaining flicker.
+    if (this._unregisterCard) {
+      const box = this.getBoundingClientRect().height;
+      if (box > 0) {
+        const style = getComputedStyle(this);
+        const margins =
+          (Number.parseFloat(style.marginTop) || 0) + (Number.parseFloat(style.marginBottom) || 0);
+        lastPreviewHeight = Math.ceil(box + margins);
+      }
+    }
+
     const configChanged = changed.has("_config");
 
     // preview is in the gate because editing DERIVES from it: _syncEditingAndDrag

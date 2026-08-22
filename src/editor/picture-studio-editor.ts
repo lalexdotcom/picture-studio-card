@@ -55,11 +55,21 @@ import "./section-panel";
 const EXPAND_MS = 300;
 
 /**
- * How many frames `_holdScroll` keeps the scroll position after a commit. Four
- * covers Home Assistant's config round trip and the rebuild that follows it,
- * without lasting long enough to fight a scroll the user meant.
+ * The ceiling on `_holdScroll`, in frames — a safety net, not the mechanism.
+ * The hold normally ends when the rebuilt preview registers itself; this only
+ * bounds the case where no rebuild ever comes, because Home Assistant declined
+ * the config or the card is not the one in the dialog. About a second.
  */
-const HOLD_FRAMES = 4;
+const HOLD_MAX_FRAMES = 60;
+
+/**
+ * How many consecutive frames the scroll container's height must stay put
+ * before `_holdScroll` lets go. Registration is not the end of the story: the
+ * rebuilt card registers within a frame, then its image lays out and moves the
+ * document a second time — measured, and that second move is what was landing
+ * the reader elsewhere with the hold already over.
+ */
+const STABLE_FRAMES = 5;
 
 export class PictureStudioEditor extends LitElement implements EditorChannel {
   static properties = {
@@ -161,17 +171,40 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * hops through hosts. Only a container that can actually move counts: an
    * `overflow: auto` that fits its content has no position to lose.
    */
-  private _scrollContainer(): HTMLElement | undefined {
+  /**
+   * The flattened-tree ancestors, which is what layout — and therefore
+   * scrolling — actually follows. `parentNode` alone walks the *logical* tree:
+   * this editor is distributed into a slot by Home Assistant's dialog, so its
+   * light-DOM parent is not the box that contains it on screen. Following
+   * `assignedSlot` first is what crosses that hop; the host jump then crosses
+   * the shadow boundary. Measured the hard way — a walk without it found only
+   * `html`, which never moved while the view plainly did.
+   */
+  private *_layoutAncestors(): Generator<HTMLElement> {
     let node: Node | null = this;
     while (node) {
-      if (node instanceof HTMLElement) {
-        const style = getComputedStyle(node);
-        if (/auto|scroll/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+      if (node instanceof HTMLElement) yield node;
+      const slot: HTMLSlotElement | null = node instanceof Element ? node.assignedSlot : null;
+      const parent: Node | null = slot ?? node.parentNode;
+      node = parent instanceof ShadowRoot ? parent.host : parent;
+    }
+  }
+
+  private _scrollContainer(): HTMLElement | undefined {
+    for (const node of this._layoutAncestors()) {
+      if (node.scrollHeight > node.clientHeight) {
+        // The page scrolls without declaring it: its computed `overflow-y` is
+        // `visible`, and on a phone Home Assistant's dialog *is* the page —
+        // measured, `html[visible;2447/874]`. Requiring auto|scroll here found
+        // nothing at all and the hold never ran.
+        if (node === document.scrollingElement) return node;
+        // `body` is skipped on purpose: it reports the same overflow as the
+        // document while its own `overflow: hidden` makes writing to its
+        // scrollTop a no-op.
+        if (node !== document.body && /auto|scroll/.test(getComputedStyle(node).overflowY)) {
           return node;
         }
       }
-      const parent: Node | null = node.parentNode;
-      node = parent instanceof ShadowRoot ? parent.host : parent;
     }
     return undefined;
   }
@@ -183,10 +216,13 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * instance and finding it gone, so on an iPhone every committed drag drops the
    * reader back at the top of the dialog. This is that anchoring, by hand.
    *
-   * Held across several frames rather than restored once, because the rebuild
-   * arrives after Home Assistant's round trip rather than on the next frame. The
-   * window is deliberately short: past it, the position belongs to the user
-   * again, and holding it longer would fight a deliberate scroll.
+   * Held until the rebuild actually happens rather than for a fixed number of
+   * frames: the preview announces itself to the broker, so the old instance
+   * unregistering and a new one taking its place *is* the event. One further
+   * frame lets the newcomer lay out before the hold lets go — after that the
+   * position belongs to the user again, and holding it longer would fight a
+   * deliberate scroll. `HOLD_MAX_FRAMES` only bounds the case where no rebuild
+   * ever comes.
    *
    * It gets out of the way of a selection change, which is the one case where
    * moving the view is the point — see `updated`, which scrolls a newly opened
@@ -198,11 +234,41 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (!scroller) return;
     const top = scroller.scrollTop;
     const selection = this._editingIndex;
+    const before = activeCard();
     let frames = 0;
+    let rebuilt = false;
+    let stable = 0;
+    let lastHeight = scroller.scrollHeight;
     const hold = (): void => {
-      if (this._editingIndex !== selection) return;
+      if (this._editingIndex !== selection) {
+        return;
+      }
+      // Absolute, deliberately. Restoring the *framing* rather than the offset
+      // is the better idea in principle and was measured doing active harm on a
+      // real iPhone: the rebuild is detected on the first frame, while the old
+      // card is gone and the new one has not laid out, so the drift computed
+      // then is meaningless — +838px, landing the reader at 995 instead of 157.
+      // It would only ever matter if the preview's height changed, which a
+      // position commit does not: same card, same image, same box.
       if (scroller.scrollTop !== top) scroller.scrollTop = top;
-      if (++frames < HOLD_FRAMES) requestAnimationFrame(hold);
+      const height = scroller.scrollHeight;
+      if (height !== lastHeight) {
+        lastHeight = height;
+        stable = 0;
+      } else {
+        stable += 1;
+      }
+
+      if (!rebuilt) {
+        const now = activeCard();
+        rebuilt = now !== undefined && now !== before;
+      }
+      // Both conditions, and the height one is the load-bearing half: the card
+      // registers within a frame, then lays out and moves the document again.
+      if (rebuilt && stable >= STABLE_FRAMES) {
+        return;
+      }
+      if (++frames < HOLD_MAX_FRAMES) requestAnimationFrame(hold);
     };
     requestAnimationFrame(hold);
   }

@@ -1152,3 +1152,83 @@ describe("the header", () => {
     expect(haCard?.header).toBeUndefined();
   });
 });
+
+/**
+ * Home Assistant destroys the card element and creates another one on every
+ * config change, so a committed drag replaces the editor's preview. Measured on
+ * an iPhone, the newcomer has no height until its picture lays out and the
+ * dialog's scroll container loses ~240px for one frame — 1100 → 862 → 1087 —
+ * which is enough for the browser to clamp the scroll position. Reserving the
+ * outgoing height means nothing collapses and nothing is clamped.
+ */
+describe("the preview reserves the height of the one it replaces", () => {
+  const editorChannel = (): EditorChannel => ({
+    patchPosition: () => {},
+    patchAnchor: () => {},
+    select: () => {},
+    selectedIndex: () => undefined,
+  });
+
+  it("pins the outgoing height on its successor, then lets go", async () => {
+    releaseEditor = registerEditor(editorChannel());
+    const first = await mountCard(CONFIG_3);
+    first.preview = true;
+    notifyEditors();
+    await first.updateComplete;
+    // The outer box, margins included — `offsetHeight` would miss them, which
+    // left the successor short by the gap and produced the residual flicker.
+    first.getBoundingClientRect = () =>
+      ({
+        height: 617,
+        top: 0,
+        bottom: 617,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: 0,
+        width: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    // The height is recorded on render, not on the way out: by the time
+    // disconnectedCallback runs the element is detached and measures 0.
+    first.requestUpdate();
+    await first.updateComplete;
+    first.remove();
+
+    // Observed at connection, not after a flush: the reservation is meant to
+    // last a few frames and mountCard's flush already outlives it.
+    const second = document.createElement(CARD_TAG) as PictureStudioCard;
+    second.setConfig(CONFIG_3);
+    document.body.append(second);
+    expect(second.style.minHeight).toBe("617px");
+
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    }
+    expect(second.style.minHeight).toBe("");
+  });
+
+  it("never pins a dashboard card, which has no editor above it", async () => {
+    const first = await mountCard(CONFIG_3);
+    first.getBoundingClientRect = () =>
+      ({
+        height: 617,
+        top: 0,
+        bottom: 617,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: 0,
+        width: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    first.remove();
+
+    // No editor registered: this is a dashboard, and a card there must keep the
+    // height it computes for itself.
+    const second = document.createElement(CARD_TAG) as PictureStudioCard;
+    second.setConfig(CONFIG_3);
+    document.body.append(second);
+    expect(second.style.minHeight).toBe("");
+  });
+});

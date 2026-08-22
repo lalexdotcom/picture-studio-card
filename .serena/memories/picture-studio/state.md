@@ -117,16 +117,14 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-22, on `main`, after the scroll-anchoring fix:**
+**Measured 2026-08-22, on `main`, after the editor-jump fix:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 849 |
-| `pnpm test --project happy-dom` | 37 | 806 |
-| `pnpm test --project playwright` | 3 | 43 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 854 |
 
-`pnpm build`: **211.5 kB / 49.9 kB gzip**. The lane figures are derived from the
-full run and the three tests added, not measured separately this time. No scoped variant — a build is always
+`pnpm build`: **213.2 kB / 50.4 kB gzip**. The per-lane figures were not measured
+this round; run them if you need them rather than trusting a derivation. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -803,6 +801,32 @@ holding.
    `drag-layer.ts` lives in `attach()` and guards on gesture state rather than
    being added and removed per gesture. Keep `touch-action: none` as well: it is
    what works everywhere else, and it states the intent.
+
+11. **A probe must never occupy the layout it measures.** Chasing the editor's
+   jump on an iPhone, the diagnostic strip was `position: sticky` — in flow — and
+   gained a line as its own text grew, producing ~12px of the very movement being
+   hunted. The same session had already got this right for the touch listeners,
+   which are `passive` precisely so they cannot change what they observe. State
+   it once, generally: **out of the flow, out of the scroll, out of the event
+   path**, or the reading is of the instrument.
+12. **`parentNode` walks the logical tree; layout follows the flattened one.**
+   The editor is distributed into a slot by Home Assistant's dialog, so its
+   light-DOM parent is not the box that contains it on screen. A walk without
+   `assignedSlot` found only `html` — which never moved while the view plainly
+   did — and two full rounds of measurement were spent proving the instrument
+   was looking at the wrong element. Any ancestor walk that matters for layout,
+   scrolling or hit-testing has to follow `assignedSlot ?? parentNode`.
+13. **Prove the fix is even running before believing a negative result.** The
+   height reservation was delivered twice, and both times it was inert:
+   `disconnectedCallback` fires after the element is detached, so `offsetHeight`
+   reads 0. Two rounds were spent concluding "the remedy does not work" when the
+   truth was "the remedy never ran". A one-token diagnostic saying what the fix
+   *did* would have cost nothing and saved both. **A build marker proves which
+   version is loaded; it says nothing about whether the code did anything.**
+14. **`offsetHeight` does not include margins.** Reserving it left the successor
+   short by exactly the missing gap — 26px, which the layout reclaimed a frame
+   later by pushing everything below back down. `getBoundingClientRect().height`
+   plus the computed margins is what reserves the space actually occupied.
 
 ## How we work (project rules, see AGENTS.md)
 
