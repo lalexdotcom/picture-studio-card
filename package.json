@@ -15,7 +15,10 @@
     "ha:logs": "docker compose logs -f homeassistant"
   },
   "keywords": [],
-  "author": "Alexandre LEGOUT (@lalexdotcom)",
+  "author": {
+    "name": "Alexandre LEGOUT",
+    "url": "https://github.com/lalexdotcom"
+  },
   "license": "MIT",
   "packageManager": "pnpm@10.28.2",
   "type": "module",

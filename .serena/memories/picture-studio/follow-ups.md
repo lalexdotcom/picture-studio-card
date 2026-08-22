@@ -685,17 +685,37 @@ Three things it settled that are not about this defect:
 Started 2026-08-22, after 1.5.2 was published. Everything doable from the
 repository is committed; what remains needs the GitHub account.
 
-**Already met, verified against the live repo and not from memory:** public,
-not archived, not a fork, issues enabled, description set, nine releases each
-carrying `picture-studio.js` as an asset, a README documenting installation, an
-MIT licence, and `hacs.json` with `name` and `filename`. `.github/workflows/hacs.yml`
-runs the HACS Action, which is what actually gates inclusion.
+**The action has been run, so this is a measurement and not a reading of the
+documentation.** Run on 2026-08-22 against `c7d9aef`: **7 of 8 checks pass**.
 
-**The two that are left, and only the owner can do them:**
+```
+##[error] <Validation topics> failed: The repository has no valid topics
+::INFO:: <Validation description> completed
+::INFO:: <Validation license>     completed
+::INFO:: <Validation archived>    completed
+::INFO:: <Validation issues>      completed
+::INFO:: <Validation information> completed
+::INFO:: <Validation hacsjson>    completed
+::INFO:: <Validation images>      completed
+```
 
-1. **GitHub topics are empty, and they are a hard requirement.** Set them on the
-   repository's About panel — `home-assistant`, `hacs`, `lovelace`,
-   `custom-card`, `picture-elements` or similar.
+**Two things that reading the documentation got wrong, and the run corrected:**
+
+- **The licence IS checked.** hacs.xyz does not list it among the requirements,
+  and there is a `license` check all the same. It passes only because `LICENSE`
+  was added the same day; before that the submission would have failed on two
+  counts, not one.
+- **`hacs.json` was never at risk.** The `hacsjson` check passes, and would have
+  passed with `render_readme` in it too. Removing that key was right for the
+  reason established later — it is dead — not for the schema worry raised first.
+
+**The two steps left, and only the owner can do them** (offered and declined on
+2026-08-22: the user will do both):
+
+1. **GitHub topics are empty, and that is the one failing check.** Set them on
+   the repository's About panel — `home-assistant`, `hacs`, `lovelace`,
+   `custom-card`, `picture-elements` or similar. The workflow will keep going red
+   nightly until they exist, which is the point of the schedule.
 2. **The pull request to `hacs/default`.** Add `"lalexdotcom/picture-studio-card"`
    at its alphabetical place in the `plugin` file — a JSON array, ~754 entries.
    Only the owner or a major contributor may submit. HACS also expects the
