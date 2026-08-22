@@ -680,24 +680,21 @@ Three things it settled that are not about this defect:
 - **The measuring technique is reusable and the plumbing is fragile.** Both are
   recorded under entry 11's "Reaching a real phone" above.
 
-## 13. Getting the card into the default HACS catalog — OPEN, two steps left
+## 13. Getting the card into the default HACS catalog — OPEN, one step left
 
 Started 2026-08-22, after 1.5.2 was published. Everything doable from the
 repository is committed; what remains needs the GitHub account.
 
 **The action has been run, so this is a measurement and not a reading of the
-documentation.** Run on 2026-08-22 against `c7d9aef`: **7 of 8 checks pass**.
+documentation. On 2026-08-22, after the topics were set, it reports
+`All (8) checks passed`** — topics, description, license, archived, issues,
+information, images, hacsjson. The first run had failed on topics alone.
 
-```
-##[error] <Validation topics> failed: The repository has no valid topics
-::INFO:: <Validation description> completed
-::INFO:: <Validation license>     completed
-::INFO:: <Validation archived>    completed
-::INFO:: <Validation issues>      completed
-::INFO:: <Validation information> completed
-::INFO:: <Validation hacsjson>    completed
-::INFO:: <Validation images>      completed
-```
+**The topics are set**, and they are the ones the HACS store search will use:
+`custom-card dashboard floorplan hacs home-assistant homeassistant lovelace
+lovelace-card picture-elements`. Only `hacs` matters to the check itself, which
+asks for valid topics and not for particular ones; the rest are the words a user
+would type.
 
 **Two things that reading the documentation got wrong, and the run corrected:**
 
@@ -709,18 +706,13 @@ documentation.** Run on 2026-08-22 against `c7d9aef`: **7 of 8 checks pass**.
   passed with `render_readme` in it too. Removing that key was right for the
   reason established later — it is dead — not for the schema worry raised first.
 
-**The two steps left, and only the owner can do them** (offered and declined on
-2026-08-22: the user will do both):
+**The one step left:**
 
-1. **GitHub topics are empty, and that is the one failing check.** Set them on
-   the repository's About panel — `home-assistant`, `hacs`, `lovelace`,
-   `custom-card`, `picture-elements` or similar. The workflow will keep going red
-   nightly until they exist, which is the point of the schedule.
-2. **The pull request to `hacs/default`.** Add `"lalexdotcom/picture-studio-card"`
-   at its alphabetical place in the `plugin` file — a JSON array, ~754 entries.
-   Only the owner or a major contributor may submit. HACS also expects the
-   repository to have been added as a custom repository and installed once
-   before the submission.
+- **The pull request to `hacs/default`.** Add `"lalexdotcom/picture-studio-card"`
+  at its alphabetical place in the `plugin` file — a JSON array, ~754 entries.
+  Only the owner or a major contributor may submit. HACS also expects the
+  repository to have been added as a custom repository and installed once
+  before the submission.
 
 **When it lands, the README's "Picture Studio is **not** in the default HACS
 catalog" paragraph and its custom-repository instructions become wrong.** That
@@ -738,11 +730,12 @@ is the easiest thing in this entry to forget.
   `async_get_info_file_contents` hardcodes the README. It used to mean "render
   README.md rather than info.md"; today it restates the default.
 
-### `gh` in the container, considered and declined
+### `gh` in the container, declined — but the token route is proven
 
-The user judged the setup not worth it on 2026-08-22. If it is ever revisited,
-the expensive part is already established: **no personal access token is
-needed.** `git` reaches GitHub from the container through a credential helper
+The user judged the `gh` setup not worth it on 2026-08-22. It turned out not to
+matter: everything needed that day was done with `curl` and the same token,
+including reading a failed run's log, setting the topics and re-running a
+workflow. **No personal access token is needed.** `git` reaches GitHub from the container through a credential helper
 VS Code proxies to the host, and
 
 ```
@@ -753,4 +746,10 @@ returns a `gho_` OAuth token from the host's VS Code GitHub session. `gh` cannot
 read git's credential helper on its own, so the shape that works is a wrapper on
 `PATH` that fetches the token and execs the real binary — never an environment
 variable set at container start, which would go stale when the session rotates.
-Note that the scopes are whatever VS Code asked for, not what a task needs.
+The scopes are whatever VS Code asked for, not what a task needs — measured on
+2026-08-22 they were `gist, read:org, repo, workflow`, which is enough to write
+repository metadata and to re-run a workflow. **That is worth knowing in both
+directions:** it is why the phone-bound blocker could be cleared remotely, and it
+is why writing to the user's GitHub account must be asked for each time rather
+than assumed. It was asked, refused once, and granted only when the user found
+the GitHub mobile app cannot edit topics at all.
