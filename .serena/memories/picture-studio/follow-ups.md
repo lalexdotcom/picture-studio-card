@@ -717,6 +717,14 @@ would type.
   `lalexdotcom/ha-vacances-fr` from `integration`. Checks green, **but a stale
   `hacs-bot[bot]` CHANGES_REQUESTED review from before the fix still blocks it**,
   and only someone with write access to `hacs/default` can dismiss it.
+- **[#10238](https://github.com/hacs/default/pull/10238)** carries the matching
+  `removed` entry, split out because of the one-file rule. **Its odds are the
+  worst of the three**: every one of the last fifteen commits touching `removed`
+  is by `ludeeus`, the maintainer, and each touches several files at once — the
+  file looks maintainer-owned and the one-file rule evidently applies only to
+  community PRs. The PR says so itself and invites closing. If it is refused,
+  #10236 still removes the integration, only without telling anyone who has it
+  installed.
 
 ### The bot's rules, learned by having three PRs closed in five seconds each
 
