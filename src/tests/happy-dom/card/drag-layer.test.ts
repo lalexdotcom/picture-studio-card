@@ -144,9 +144,10 @@ const setup = () => {
     clientX: number,
     clientY: number,
     target: HTMLElement = item,
+    button = 0,
   ): void => {
     target.dispatchEvent(
-      new PointerEvent(type, { pointerId: 1, clientX, clientY, button: 0, bubbles: true }),
+      new PointerEvent(type, { pointerId: 1, clientX, clientY, button, bubbles: true }),
     );
   };
 
@@ -315,5 +316,21 @@ describe("a press on the picture", () => {
     send("pointerup", 25, 15);
 
     expect(selections).toEqual([0]);
+  });
+
+  it("is not ended by a second button released over it", async () => {
+    // A pointer carries every button on one id, so the right button released
+    // while the left is still down arrives as a pointerup for the same press.
+    // It is not the release the deselect is waiting for.
+    const RIGHT = 2;
+    const { selections, send, surface } = setup();
+    send("pointerdown", 5, 5, surface);
+    send("pointerup", 5, 5, surface, RIGHT);
+
+    expect(selections).toEqual([]);
+
+    send("pointerup", 5, 5, surface);
+
+    expect(selections).toEqual([undefined]);
   });
 });

@@ -110,11 +110,11 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 838 |
-| `pnpm test --project happy-dom` | 37 | 795 |
+| `pnpm test` — both lanes, **this is the baseline** | 40 | 839 |
+| `pnpm test --project happy-dom` | 37 | 796 |
 | `pnpm test --project playwright` | 3 | 43 |
 
-`pnpm build`: **210.2 kB / 49.6 kB gzip**. No scoped variant — a build is always
+`pnpm build`: **210.3 kB / 49.6 kB gzip**. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
 A single lane is a scoped run, so it does not update the baseline either — the
@@ -350,6 +350,13 @@ In memory only, never in YAML, a third variant holds what we could not read:
   Nothing was needed for the visuals: `.dragging` already carried the ring and
   the `z-index` in its own right, precisely because the selection used to arrive
   a frame late through a re-render.
+  **`onPointerUp` asks about `ev.button` on the `emptyPress` path and nowhere
+  else on that side**, and the asymmetry is deliberate: a pointer carries all
+  its buttons on one id, so a right button released while the left is still
+  down arrives as a pointerup for the same press. Guarding `endGesture` the same
+  way was declined — a browser that reported a release with any other `button`
+  would then swallow every drag, and that risk is worse than a two-button mouse
+  gesture inside a card editor.
 - **`_applyMarks` exists because a selection change must not write a
   coordinate** (1.5.1), and this is the trap the change above sprang. The card's
   `updated()` re-ran `_applyPositions` on any `editing` / `selected` / `preview`

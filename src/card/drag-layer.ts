@@ -312,7 +312,11 @@ export const createDragController = (options: DragOptions) => {
   };
 
   const onPointerUp = (ev: PointerEvent): void => {
-    if (emptyPress === ev.pointerId) {
+    // The button is asked about here and nowhere else on this side: a pointer
+    // carries all its buttons on one id, so a right button released while the
+    // left is still pressed arrives as a pointerup for that same press. The
+    // press has not ended, and neither has anything the user meant by it.
+    if (emptyPress === ev.pointerId && ev.button === 0) {
       emptyPress = undefined;
       options.onSelect(undefined);
       return;
