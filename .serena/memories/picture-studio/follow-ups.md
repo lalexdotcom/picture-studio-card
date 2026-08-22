@@ -718,6 +718,23 @@ would type.
 catalog" paragraph and its custom-repository instructions become wrong.** That
 is the easiest thing in this entry to forget.
 
+**And the transition costs existing users nothing — read before promising them
+anything else.** HACS does not deduplicate because it never creates a duplicate.
+On every catalog refresh, `async_get_category_repositories_experimental` in
+`custom_components/hacs/base.py` looks each default entry up **by `full_name`**,
+and when it finds the one the user added by hand it calls `set_repository_id`
+then `mark_default` on that same object. The installed version and the
+downloaded files are untouched. "Custom" is not stored either — the websocket
+API computes it as `not hacs.repositories.is_default(repo.data.id)` — so the
+label simply stops being true at the first sync after the PR merges. No
+reinstall, no user action.
+
+Two edges: at startup HACS unregisters custom repositories that are **not
+installed** and not default, so someone who added the repo without installing
+loses the entry and gets it back from the catalogue; and the reconciliation is
+keyed on GitHub's numeric repository id, so deleting and recreating the GitHub
+repository would break it. A rename is handled (`renamed_repositories`).
+
 ### Two findings worth not re-deriving
 
 - **`filename` in `hacs.json` is what excuses the name mismatch.** The repository
