@@ -885,3 +885,24 @@ element swap, not ours, and it costs nothing but a blink.
 
 **Still owed:** a CHANGELOG entry, which cannot be written until a version is
 opened. Both fixes are committed and unreleased.
+
+## 15. Where the editor scrolls, and when it must not — SPECIFIED, not built
+
+Designed with the user on 2026-08-22, at the end of the session that fixed the
+drag jump. **The spec is the deliverable and it is self-contained**:
+[`docs/superpowers/specs/2026-08-22-editor-scroll-design.md`](../../docs/superpowers/specs/2026-08-22-editor-scroll-design.md).
+Read it before touching any scrolling in the editor; everything below is only a
+pointer, and re-deriving what it holds costs a full session of phone round trips.
+
+**In one line:** tapping an item on the picture must not throw the picture off
+the screen, while tapping one in the list must still open its form at the top —
+which means the two scroll containers have to be told apart and written to
+explicitly, instead of the single `scrollIntoView` that serves both by accident.
+
+**The state it starts from.** The drag jump is fixed and committed; 1.5.3 is
+open with its `Fixed` entry, dated `unreleased`. The spec builds on `_holdScroll`,
+`_layoutAncestors` and the card's height reservation rather than replacing them.
+
+**The one thing a reader will be tempted to skip and should not:** §7, what must
+not be retried. Four hypotheses died on measurement to produce this design, and
+each one looked obviously right beforehand.
