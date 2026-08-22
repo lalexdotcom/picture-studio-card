@@ -714,6 +714,32 @@ would type.
   repository to have been added as a custom repository and installed once
   before the submission.
 
+  **One repository per pull request, and the constraint is the labels, not the
+  JSON.** `scripts/changed/repo.py` wants exactly one *added* entry and
+  `changed/category.py` exactly one category with additions — a deletion adds
+  nothing, so both would tolerate a mixed PR. What does not is `checks.yml`,
+  which derives its run type from the PR label (`New default repository` /
+  `remove-repositories` / `renamed-repositories`): only one applies, so the
+  other half of a mixed PR would merge unvalidated.
+
+  **`scripts/check/edits.py` fails any PR without "Allow edits by maintainers".**
+  Unrelated to the content, and the error says little.
+
+  **The template asks for a release created *after* the green validation run,
+  which is not the case here** — v1.5.2 predates it, and `LICENSE` and
+  `hacs.yml` landed after the tag. The automated check only asserts that the
+  repository has at least one release, and neither file travels in the artefact,
+  so it should pass; if a maintainer applies the letter, cut a patch release
+  then rather than pre-emptively.
+
+  **A second, unrelated errand the user wants in the same trip:** removing
+  `lalexdotcom/ha-vacances-fr` from the `integration` file. That is its own PR —
+  delete the line, and add to `removed` an object whose only required fields are
+  `removal_type` and `repository`. Use `"remove"` (330 uses), never
+  `"blacklist"` (70), which marks a repository removed for cause. The `removed`
+  entry is what tells existing users; deleting the line alone makes the
+  integration vanish from the store in silence.
+
 **When it lands, the README's "Picture Studio is **not** in the default HACS
 catalog" paragraph and its custom-repository instructions become wrong.** That
 is the easiest thing in this entry to forget. **And fixing it on `main` changes nothing
