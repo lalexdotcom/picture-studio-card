@@ -706,6 +706,40 @@ would type.
   passed with `render_readme` in it too. Removing that key was right for the
   reason established later — it is dead — not for the schema worry raised first.
 
+**Both pull requests are open and waiting on a human** (2026-08-22):
+
+- **[#10237](https://github.com/hacs/default/pull/10237)** adds
+  `lalexdotcom/picture-studio-card` to `plugin`. Every check green — Owner,
+  Releases, Existing, Removed, Editable PR, HACS action; Hassfest skipped, which
+  is correct for a plugin. `mergeable_state: blocked` simply means it awaits a
+  maintainer's approval.
+- **[#10236](https://github.com/hacs/default/pull/10236)** removes
+  `lalexdotcom/ha-vacances-fr` from `integration`. Checks green, **but a stale
+  `hacs-bot[bot]` CHANGES_REQUESTED review from before the fix still blocks it**,
+  and only someone with write access to `hacs/default` can dismiss it.
+
+### The bot's rules, learned by having three PRs closed in five seconds each
+
+`hacs-bot` judges the body **at creation** and closes silently — no comment, no
+label. Correcting the body afterwards does not bring it back. What it actually
+rejects, established by comparing closed PRs against merged ones:
+
+- **A `Link to ...` line that is not a URL.** #10228 had all six boxes ticked and
+  died on `<>` placeholders; our #10235 died on `n/a - this is a plugin` in the
+  hassfest slot. **For a plugin, delete the hassfest link line and leave its
+  checkbox unticked** — that is what the merged #9048 does. Put URLs inside the
+  template's `<>` brackets.
+- **Replacing the template wholesale.** #10203 did and was closed. Fill it in
+  place, keep the HTML comments and the trailing `tid` marker.
+- **More than one file.** #10236's first shape removed the line from
+  `integration` *and* added an entry to `removed`; the bot asked for one file per
+  PR. The merged removal #8900 touches one file and nothing else.
+
+**A consequence worth weighing rather than forgetting:** dropping the `removed`
+entry is what costs existing users the repair issue naming the replacement. It
+was offered to the maintainers as a separate PR in a comment on #10236; nobody
+has answered yet. Without it the integration just leaves the store in silence.
+
 **The one step left:**
 
 - **The pull request to `hacs/default`.** Add `"lalexdotcom/picture-studio-card"`

@@ -11,3 +11,7 @@ dist/
 
 # Raw screen recordings, converted before anything is committed.
 captures/
+
+# Checkouts of other people's repositories, kept here rather than in /tmp so
+# they survive a shell and stay visible in the editor. Never part of this repo.
+.work/
