@@ -716,7 +716,16 @@ would type.
 
 **When it lands, the README's "Picture Studio is **not** in the default HACS
 catalog" paragraph and its custom-repository instructions become wrong.** That
-is the easiest thing in this entry to forget.
+is the easiest thing in this entry to forget. **And fixing it on `main` changes nothing
+in HACS.** `get_documentation` renders the README from a *tag*: the installed
+version for someone who has the card, the latest release for anyone else, and
+the default branch only when a repository has no releases at all. So the
+correction has to ride on a release to be seen — and users already on an older
+version keep reading that version's README until they update, which is arguably
+correct rather than a bug. There is no hurry either way: stale "add it as a
+custom repository" instructions still work once the card is in the catalogue.
+(The one place HACS does read the branch is the action's `images` check, which
+passes `version=self.repository.ref` explicitly.)
 
 **And the transition costs existing users nothing — read before promising them
 anything else.** HACS does not deduplicate because it never creates a duplicate.
