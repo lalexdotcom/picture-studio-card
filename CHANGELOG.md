@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.3 — unreleased
+
+### Fixed
+
+- On an iPhone or iPad, dragging an item that was already selected threw the
+  editor back up to the top of the settings dialog, losing your place every
+  time. The dialog now stays where you left it.
+
 ## 1.5.2 — 2026-08-22
 
 ### Fixed
