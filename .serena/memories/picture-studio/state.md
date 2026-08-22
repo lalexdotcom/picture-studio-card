@@ -54,6 +54,14 @@ done. Written into `AGENTS.md` rules 4 to 7.
 The older text here said "then the bump, then the push", which was the previous
 workflow and is no longer true.
 
+### 1.5.1 is published and has a known defect — read this before anything
+
+A drag on a real phone puts the item back where it started, in the **panel** view
+only. Not reproducible on the desktop, instrumentation in flight, working tree
+deliberately dirty. `mem:picture-studio/1.5.2-mobile-snapback` carries all of it;
+entry 12 of `mem:picture-studio/follow-ups` is the pointer. **Do not clean the
+working tree and do not commit it** without reading that file first.
+
 ### What the open version still needs
 
 **Nothing but the user's decision to release it, and the date that replaces

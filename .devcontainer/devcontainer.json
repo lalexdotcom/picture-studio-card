@@ -14,8 +14,18 @@
 			"version": "latest"
 		}
 	},
-	"forwardPorts": [
-		8123
+	// Docker publishes the port, rather than VS Code forwarding it. The two do
+	// the same job on the machine running VS Code, and the difference only shows
+	// on the rest of the network: a forwarded port is bound to the loopback, so
+	// nothing else can reach it — the local Home Assistant was unreachable from
+	// a phone, which is the only way to test the drag on a real touch screen.
+	// Undoing this by going back to `forwardPorts` puts that wall back up.
+	//
+	// `appPort` replaces `forwardPorts` here rather than joining it: both would
+	// want the same port on the host, and the loser silently lands on another
+	// one. Nothing is lost, since a published port answers on the loopback too.
+	"appPort": [
+		"8123:8123"
 	],
 	"mounts": [
 		"source=ai-tools-config-${devcontainerId},target=/ai-tools,type=volume",

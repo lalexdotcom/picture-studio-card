@@ -621,3 +621,23 @@ leave an existing one untouched without `--force`.
 **One thing section 3 must decide, and it was already visible:** the two views
 should hold the **same card config**, so that the only difference measured
 between panel and sections is the view type itself.
+
+## 12. The mobile snap-back found on 1.5.1 — OPEN, and it is live
+
+An item returns to its pre-drag position after a very short time of dragging, on
+a real phone, in the **panel** view only. 1.5.1 is **already published**, so this
+is in users' hands. Everything known — the symptom's five discriminators, the
+three places that can write a pre-drag position, the two hypotheses, what was
+ruled out and why, and the state of the instrumented build sitting uncommitted
+in the working tree — is in `mem:picture-studio/1.5.2-mobile-snapback`.
+
+**Read that file before touching anything in `drag-layer.ts` or the card**, and
+above all before "cleaning up" a dirty working tree: the diff is the measuring
+device, not leftovers.
+
+This entry meets entry 11 head on. That entry wants a real-Home-Assistant lane
+whose panel and sections views carry the **same card config**, so the only thing
+measured between them is the view type. This defect is the first concrete demand
+for exactly that, and it also shows the lane's limit: the user established that
+the defect does **not** appear under Chrome's Device mode, so a lane driving
+desktop Chromium would have reported the card healthy.
