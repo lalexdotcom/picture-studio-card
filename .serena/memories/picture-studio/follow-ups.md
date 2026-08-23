@@ -906,3 +906,9 @@ open with its `Fixed` entry, dated `unreleased`. The spec builds on `_holdScroll
 **The one thing a reader will be tempted to skip and should not:** §7, what must
 not be retried. Four hypotheses died on measurement to produce this design, and
 each one looked obviously right beforehand.
+
+**Task 5 — DONE 2026-08-23.** `cbd56db`. `_holdScroll` replaced by `_holdPreview`,
+anchored on `activeCard()?.viewportTop()` (not the editor). `CardChannel` gains
+`viewportTop()`, implemented on the card. `_holdRelease`, `_reserveHeight` stub,
+and calls from `_commit` and `select` are in. 874 tests, 0 failures. Task 6
+(`_reserveHeight`) is the next step per the spec.
