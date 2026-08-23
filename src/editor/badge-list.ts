@@ -307,12 +307,8 @@ export class PictureStudioBadgeList extends LitElement {
     `;
   }
 
-  protected updated(changedProperties: Map<string, unknown>): void {
+  protected updated(_changedProperties: Map<string, unknown>): void {
     this._probeRows();
-    if (!changedProperties.has("selectedIndex") || this.selectedIndex === undefined) return;
-    // selectedIndex is an array index; the list renders top-down, so flip it to
-    // a display position before querying the DOM.
-    this.scrollToItem(this.selectedIndex);
   }
 
   /**
@@ -343,11 +339,21 @@ export class PictureStudioBadgeList extends LitElement {
     }
   }
 
-  public scrollToItem(index: number): void {
-    const displayIndex = this._flip(index);
+  /**
+   * The rendered row for an **array** index, or undefined when there is none.
+   *
+   * `selectedIndex` and every event this list fires speak array indices; the
+   * list renders top-down, so the display position is the mirror. `_flip` is
+   * applied exactly here, where one leaves this element.
+   *
+   * The list deliberately does not scroll: only the editor can tell the form's
+   * container from the dialog's, and `scrollIntoView` — which is what stood
+   * here — scrolls every ancestor container at once, which is the defect the
+   * two-container work exists to remove.
+   */
+  public rowFor(index: number): HTMLElement | undefined {
     const itemRows = this.shadowRoot?.querySelectorAll(".item");
-    const row = itemRows?.[displayIndex] as HTMLElement | undefined;
-    row?.scrollIntoView({ block: "nearest" });
+    return itemRows?.[this._flip(index)] as HTMLElement | undefined;
   }
 
   static styles = css`

@@ -1,6 +1,26 @@
 import type { Anchor, Position } from "./position";
 
 /**
+ * Which surface a selection was made on.
+ *
+ * - `list` — a row was clicked, or Add, or Back, or the ✕, or a row was dragged
+ *   to a new position. All of those are gestures in the editor's own list.
+ * - `picture` — the preview was tapped, on an item or on its background.
+ *
+ * The distinction is already material at the source — the card reaches the
+ * editor through this channel, the list through a DOM event — so it is declared
+ * rather than inferred.
+ *
+ * It decides one thing and one only: whether the **dialog's** scroll container
+ * follows a form that is opening. A list origin means the reader asked to be
+ * taken to that form, so it does; a picture origin means they are looking at the
+ * picture, which must not move. Every other trigger — including a deletion or a
+ * reorder, which carry a list origin because that is where they happen — opens
+ * no form, and there the dialog never follows whatever the origin says.
+ */
+export type SelectOrigin = "list" | "picture";
+
+/**
  * The single card → editor hop. Everything that changes the *config* comes back
  * through Home Assistant; only the selection, which is editor state and never
  * reaches the config, is read straight off the channel.
@@ -12,7 +32,7 @@ export interface EditorChannel {
    * Open a badge's own form, the same way the pencil in the list does, or clear
    * the selection with undefined and fall back to the card's own form.
    */
-  select(index: number | undefined): void;
+  select(index: number | undefined, origin: SelectOrigin): void;
   /** The badge whose form is open, if any. */
   selectedIndex(): number | undefined;
 }
@@ -31,6 +51,19 @@ export interface CardChannel {
    * the caller then keeps the coordinates it has.
    */
   reanchor(index: number, anchor: Anchor): Position | undefined;
+  /**
+   * The preview's top edge in viewport coordinates, or undefined while it
+   * cannot be measured.
+   *
+   * The editor holds the reader's framing across a commit by keeping this
+   * anchor at the same place on screen. Undefined is not a failure: Home
+   * Assistant destroys the card element and builds another on every config
+   * change, and during that gap there is no preview at all. Its absence is
+   * precisely the signal that the layout is not ready — an earlier attempt
+   * anchored on the editor, which *does* survive the rebuild, and got a number
+   * that was wrong by 838px.
+   */
+  viewportTop(): number | undefined;
 }
 
 const editors = new Set<EditorChannel>();

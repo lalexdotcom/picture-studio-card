@@ -143,7 +143,7 @@ export class PictureStudioCard extends LitElement {
         this._applyMarkerCorner(wrapper, position);
       }
     },
-    onSelect: (index) => activeEditor()?.select(index),
+    onSelect: (index) => activeEditor()?.select(index, "picture"),
   });
 
   constructor() {
@@ -841,6 +841,13 @@ export class PictureStudioCard extends LitElement {
       layer.getBoundingClientRect(),
       wrapper.getBoundingClientRect(),
     );
+  }
+
+  viewportTop(): number | undefined {
+    const rect = this.getBoundingClientRect();
+    // A height of zero means the picture has not laid out. Reporting a top then
+    // hands the editor a number it would trust.
+    return rect.height > 0 ? rect.top : undefined;
   }
 
   protected render() {

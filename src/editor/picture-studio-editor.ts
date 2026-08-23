@@ -1,6 +1,12 @@
 import { css, html, LitElement, nothing } from "lit";
 import { cache } from "lit/directives/cache.js";
-import { activeCard, type EditorChannel, notifyEditors, registerEditor } from "../broker";
+import {
+  activeCard,
+  type EditorChannel,
+  notifyEditors,
+  registerEditor,
+  type SelectOrigin,
+} from "../broker";
 import {
   type BadgeItem,
   CARD_TYPE,
@@ -38,6 +44,7 @@ import {
   setAnchor,
   setVisibility,
 } from "./items";
+import { boxTop, dialogScroller, formScroller, scrollIntoNearest, scrollToStart } from "./scroll";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
@@ -55,7 +62,7 @@ import "./section-panel";
 const EXPAND_MS = 300;
 
 /**
- * The ceiling on `_holdScroll`, in frames — a safety net, not the mechanism.
+ * The ceiling on `_holdPreview`, in frames — a safety net, not the mechanism.
  * The hold normally ends when the rebuilt preview registers itself; this only
  * bounds the case where no rebuild ever comes, because Home Assistant declined
  * the config or the card is not the one in the dialog. About a second.
@@ -64,7 +71,7 @@ const HOLD_MAX_FRAMES = 60;
 
 /**
  * How many consecutive frames the scroll container's height must stay put
- * before `_holdScroll` lets go. Registration is not the end of the story: the
+ * before `_holdPreview` lets go. Registration is not the end of the story: the
  * rebuilt card registers within a frame, then its image lays out and moves the
  * document a second time — measured, and that second move is what was landing
  * the reader elsewhere with the hold already over.
@@ -108,6 +115,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _unregister?: () => void;
   /** Guards against a native child's config-changed echoing our own push. */
   private _applying = false;
+  /** Where the last selection came from. See `updated`, which scrolls on it. */
+  private _selectOrigin: SelectOrigin = "list";
+  /** Stops the running hold, if any. Set by `_holdPreview`, cleared on exit. */
+  private _holdRelease?: () => void;
   constructor() {
     super();
     this._editingIndex = undefined;
@@ -160,97 +171,107 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   /** Convergence point: drag, dialogs and forms all end here. */
   protected _commit(next: PictureStudioConfig): void {
-    this._holdScroll();
+    this._holdPreview(this._editingIndex, true);
     this._config = next;
     this._reemit(next);
   }
 
   /**
-   * The scroll container the dialog owns, several shadow roots above us.
-   * `parentNode` alone would stop at the first shadow boundary, so the walk
-   * hops through hosts. Only a container that can actually move counts: an
-   * `overflow: auto` that fits its content has no position to lose.
-   */
-  /**
-   * The flattened-tree ancestors, which is what layout — and therefore
-   * scrolling — actually follows. `parentNode` alone walks the *logical* tree:
-   * this editor is distributed into a slot by Home Assistant's dialog, so its
-   * light-DOM parent is not the box that contains it on screen. Following
-   * `assignedSlot` first is what crosses that hop; the host jump then crosses
-   * the shadow boundary. Measured the hard way — a walk without it found only
-   * `html`, which never moved while the view plainly did.
-   */
-  private *_layoutAncestors(): Generator<HTMLElement> {
-    let node: Node | null = this;
-    while (node) {
-      if (node instanceof HTMLElement) yield node;
-      const slot: HTMLSlotElement | null = node instanceof Element ? node.assignedSlot : null;
-      const parent: Node | null = slot ?? node.parentNode;
-      node = parent instanceof ShadowRoot ? parent.host : parent;
-    }
-  }
-
-  private _scrollContainer(): HTMLElement | undefined {
-    for (const node of this._layoutAncestors()) {
-      if (node.scrollHeight > node.clientHeight) {
-        // The page scrolls without declaring it: its computed `overflow-y` is
-        // `visible`, and on a phone Home Assistant's dialog *is* the page —
-        // measured, `html[visible;2447/874]`. Requiring auto|scroll here found
-        // nothing at all and the hold never ran.
-        if (node === document.scrollingElement) return node;
-        // `body` is skipped on purpose: it reports the same overflow as the
-        // document while its own `overflow: hidden` makes writing to its
-        // scrollTop a no-op.
-        if (node !== document.body && /auto|scroll/.test(getComputedStyle(node).overflowY)) {
-          return node;
-        }
-      }
-    }
-    return undefined;
-  }
-
-  /**
+   * Keep the preview where the reader put it, across a change that moves the
+   * content around it.
+   *
    * Blink keeps the scroll position when content above the viewport is replaced
    * — CSS scroll anchoring — and WebKit implements none of it. Home Assistant
-   * rebuilds the card element on every config change, measured by marking the
-   * instance and finding it gone, so on an iPhone every committed drag drops the
-   * reader back at the top of the dialog. This is that anchoring, by hand.
+   * rebuilds the card element on every config change, so on an iPhone every
+   * committed drag drops the reader back at the top of the dialog. This is that
+   * anchoring, by hand.
    *
-   * Held until the rebuild actually happens rather than for a fixed number of
-   * frames: the preview announces itself to the broker, so the old instance
-   * unregistering and a new one taking its place *is* the event. One further
-   * frame lets the newcomer lay out before the hold lets go — after that the
-   * position belongs to the user again, and holding it longer would fight a
-   * deliberate scroll. `HOLD_MAX_FRAMES` only bounds the case where no rebuild
-   * ever comes.
+   * **One mechanism, not two.** A drag is the case where the delta is zero: the
+   * content is not supposed to change, so the correction computes to nothing. A
+   * selection made on the picture is the case where it is not: one form is
+   * replaced by another of a different height, and keeping the same `scrollTop`
+   * would *not* keep the same framing — if the form above grows by 200px, an
+   * unchanged offset pushes the picture 200px down the screen. What is
+   * preserved is the preview's position on screen.
    *
-   * It gets out of the way of a selection change, which is the one case where
-   * moving the view is the point — see `updated`, which scrolls a newly opened
-   * form to its own top. That is the whole rule: a commit must not move the
-   * view, a selection may.
+   * **The anchor is the preview, and that is load-bearing.** While it cannot be
+   * measured, hold the absolute value; as soon as it can, correct by the delta.
+   * No detection of the rebuild is needed for that — it falls out of the
+   * anchor's own availability.
+   *
+   * @param selection the selection this hold belongs to; it lets go if the
+   *   reader picks something else, because moving the view is then the point.
+   * @param rebuild whether a card rebuild is expected. A commit triggers one; a
+   *   selection does not, and waiting for one that never comes would keep the
+   *   hold fighting the reader for `HOLD_MAX_FRAMES`.
    */
-  private _holdScroll(): void {
-    const scroller = this._scrollContainer();
+  private _holdPreview(selection: number | undefined, rebuild: boolean): void {
+    const scroller = dialogScroller(this);
     if (!scroller) return;
-    const top = scroller.scrollTop;
-    const selection = this._editingIndex;
+    const reserved = this._reserveHeight();
+    const release = (): void => {
+      // Only if it is still ours. `_commit` fires on every field change, so a
+      // second hold can start while this one is still running — and clearing a
+      // successor's registration would both free `select()` to start a third
+      // and strip the min-height that successor is still relying on.
+      if (this._holdRelease === release) {
+        this._holdRelease = undefined;
+        reserved();
+      }
+    };
+    this._holdRelease = release;
+
+    /** The preview's top, measured against the dialog container's own box. */
+    const screenTop = (): number | undefined => {
+      const t = activeCard()?.viewportTop();
+      return t === undefined ? undefined : t - boxTop(scroller);
+    };
+
+    const desired = screenTop();
+    let top = scroller.scrollTop;
     const before = activeCard();
     let frames = 0;
-    let rebuilt = false;
+    let rebuilt = !rebuild;
+    let measured = false;
     let stable = 0;
     let lastHeight = scroller.scrollHeight;
+
     const hold = (): void => {
-      if (this._editingIndex !== selection) {
+      // Stand aside for the one trigger that is *meant* to move the dialog: a
+      // form opening because the reader clicked a row. Holding through that
+      // would fight `updated`, which is about to scroll to the form's top.
+      //
+      // Every other selection change keeps the hold. Deleting an item and
+      // reordering the list both come from the list and both change the
+      // selection, but no form opens and nothing is supposed to move — bailing
+      // there would abandon the hold in the middle of the very rebuild it exists
+      // to survive. A drag is the same shape: `drag-layer` fires `onCommit` and
+      // then `onSelect(hit.index)`, so the selection changes right after the
+      // commit, on a picture origin.
+      const deliberate =
+        this._editingIndex !== selection &&
+        this._selectOrigin === "list" &&
+        this._formTarget() !== undefined;
+      if (deliberate) {
+        release();
         return;
       }
-      // Absolute, deliberately. Restoring the *framing* rather than the offset
-      // is the better idea in principle and was measured doing active harm on a
-      // real iPhone: the rebuild is detected on the first frame, while the old
-      // card is gone and the new one has not laid out, so the drift computed
-      // then is meaningless — +838px, landing the reader at 995 instead of 157.
-      // It would only ever matter if the preview's height changed, which a
-      // position commit does not: same card, same image, same box.
-      if (scroller.scrollTop !== top) scroller.scrollTop = top;
+
+      const now = screenTop();
+      if (now === undefined || desired === undefined) {
+        // Nothing to measure against — hold the absolute value.
+        if (scroller.scrollTop !== top) scroller.scrollTop = top;
+      } else {
+        measured = true;
+        // Read from the *live* scrollTop, never from the recorded one: WebKit
+        // may have clamped it between two frames, and `now` was measured under
+        // whatever it left. Mixing the two scroll states is how a correction
+        // computes nonsense.
+        const want = scroller.scrollTop + (now - desired);
+        if (scroller.scrollTop !== want) scroller.scrollTop = want;
+        top = scroller.scrollTop;
+      }
+
       const height = scroller.scrollHeight;
       if (height !== lastHeight) {
         lastHeight = height;
@@ -260,17 +281,59 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       }
 
       if (!rebuilt) {
-        const now = activeCard();
-        rebuilt = now !== undefined && now !== before;
+        const nowCard = activeCard();
+        rebuilt = nowCard !== undefined && nowCard !== before;
       }
-      // Both conditions, and the height one is the load-bearing half: the card
+      // Three conditions, and the height one is the load-bearing part: the card
       // registers within a frame, then lays out and moves the document again.
-      if (rebuilt && stable >= STABLE_FRAMES) {
+      // `measured` is what says the correction was actually applied rather than
+      // merely attempted.
+      if (rebuilt && measured && stable >= STABLE_FRAMES) {
+        release();
         return;
       }
-      if (++frames < HOLD_MAX_FRAMES) requestAnimationFrame(hold);
+      if (++frames < HOLD_MAX_FRAMES) {
+        requestAnimationFrame(hold);
+      } else {
+        release();
+      }
     };
     requestAnimationFrame(hold);
+  }
+
+  /**
+   * Reserve the outgoing form's height on the host while the next one renders,
+   * and return the release.
+   *
+   * Symmetric with the card's reservation of the outgoing preview's height, and
+   * for the same reason: without it the browser clamps the scroll before the
+   * hold can correct anything, and the correction then has nothing left to
+   * restore. The exact condition is that the target position must stay
+   * reachable — the container at least `target scrollTop + visible height` tall
+   * — and reserving the outgoing height covers it in the only problematic case,
+   * a shorter successor.
+   *
+   * The **outer** box, margins included. `offsetHeight` counts padding and
+   * borders and not margins, and reserving that much left the successor short
+   * by exactly the missing gap — measured, 26px, which the layout then
+   * reclaimed a frame later by pushing everything below back down.
+   *
+   * Released by the hold on every one of its exits, so the reservation lasts
+   * exactly as long as the position it protects is still being corrected.
+   */
+  private _reserveHeight(): () => void {
+    const box = this.getBoundingClientRect().height;
+    if (box <= 0) return () => {};
+    const style = getComputedStyle(this);
+    const margins =
+      (Number.parseFloat(style.marginTop) || 0) + (Number.parseFloat(style.marginBottom) || 0);
+    this.style.minHeight = `${Math.ceil(box + margins)}px`;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.style.removeProperty("min-height");
+    };
   }
 
   /** Sole exit toward Home Assistant. */
@@ -292,8 +355,22 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * so every change has to be announced, and routing them all through here is
    * what keeps that true.
    */
-  select(index: number | undefined): void {
+  select(index: number | undefined, origin: SelectOrigin): void {
+    // Selecting what is already selected is a no-op, and it is load-bearing:
+    // `drag-layer` fires `onSelect(hit.index)` at the end of every gesture, so
+    // dragging an item that was already selected must not disturb the hold the
+    // commit just started. That is what `b55388c` fixed.
     if (this._editingIndex === index) return;
+    this._selectOrigin = origin;
+    // A picture selection changes the form's height with no config change, so
+    // nothing else is going to start a hold — except when a commit already did,
+    // which is the *other* end of a drag: `onCommit` runs first and its hold is
+    // the one that should see the gesture through, with the rebuild it is
+    // waiting for. Measured before `_editingIndex` moves, because the anchor is
+    // where the preview sits now.
+    if (origin === "picture" && this._holdRelease === undefined) {
+      this._holdPreview(index, false);
+    }
     this._editingIndex = index;
     notifyEditors();
   }
@@ -360,7 +437,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     // Home Assistant ever moved the fireEvent call from _toggleContainer into
     // willUpdate, our own "expand because an item was selected" would
     // immediately deselect that item and the feature would silently stop working.
-    if (!ev.detail.expanded) this.select(undefined);
+    if (!ev.detail.expanded) this.select(undefined, "list");
   };
 
   private _addItem = async (
@@ -380,11 +457,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._commit({ ...config, items: addItem(config.items, item) });
     // Open the new item's form straight away: a stub is rarely usable as-is —
     // an element's has no entity at all — and this is what the native picker does.
-    this.select(config.items.length);
+    this.select(config.items.length, "list");
   };
 
   private _editBadge = (ev: CustomEvent<{ index: number }>): void => {
-    this.select(ev.detail.index);
+    this.select(ev.detail.index, "list");
   };
 
   private _badgeChanged = (ev: CustomEvent<{ badge: BadgeConfig }>): void => {
@@ -437,11 +514,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const sel = this._editingIndex;
     if (sel === undefined) return;
     if (sel === from) {
-      this.select(to);
+      this.select(to, "list");
     } else if (from < sel && sel <= to) {
-      this.select(sel - 1); // the moved item shifted everything between down
+      this.select(sel - 1, "list"); // the moved item shifted everything between down
     } else if (to <= sel && sel < from) {
-      this.select(sel + 1); // the moved item shifted everything between up
+      this.select(sel + 1, "list"); // the moved item shifted everything between up
     }
     // Otherwise the selected item is outside the moved range — unchanged.
   };
@@ -450,37 +527,49 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     const config = this._config;
     if (!config) return;
     this._commit({ ...config, items: removeItem(config.items, ev.detail.index) });
-    this.select(undefined);
+    this.select(undefined, "list");
   };
 
   /**
    * A form opens at the top of itself, not at the scroll position of whatever
-   * was showing before — the list, or the previous item's form. The dialog owns
-   * the scroll container, several shadow roots above us, so nothing of ours can
-   * address it: `scrollIntoView` is the one call that reaches it, because the
-   * browser scrolls every ancestor container whatever tree it lives in.
+   * was showing before. Which container that means is not ours to guess: below
+   * 1000px the dialog carries the scroll and the form's own container is inert,
+   * above 1000px it is the other way round — so both are written and exactly one
+   * of them answers. See `scroll.ts`.
    *
-   * Guarded on the transition rather than on the value: an item's form re-renders
-   * on every keystroke and every hass tick, and scrolling on each of them would
-   * fight the user's own scrolling.
+   * The one container that is *not* always written is the dialog's, and the
+   * origin is what decides: a selection made on the picture must leave the
+   * picture where it is, which is the whole reason `select` carries an origin.
+   *
+   * Guarded on the transition rather than on the value: an item's form
+   * re-renders on every keystroke and every hass tick, and scrolling on each of
+   * them would fight the user's own scrolling.
    */
   protected updated(changed: Map<string, unknown>): void {
     if (!changed.has("_editingIndex")) return;
     const prev = changed.get("_editingIndex") as number | undefined;
     const curr = this._editingIndex;
-
-    // Three mutually exclusive branches of one decision — scroll the editor to
-    // its top only when a form actually opens; show the Items section and bring
-    // the row into view in the other two cases.
+    // Three mutually exclusive branches of one decision. The form's container is
+    // written in all three, unconditionally: below 1000px the write is inert, and
+    // above it that container is the only one that moves.
     if (curr !== undefined && this._formTarget()) {
-      this.scrollIntoView({ block: "start" });
+      const form = formScroller(this);
+      if (form) scrollToStart(form, this);
+      // The one place the origin is consulted, and the only trigger on which the
+      // dialog's container moves at all: the reader clicked a row and asked to be
+      // taken to its form. A picture origin means they are looking at the
+      // picture, which must not be thrown off the screen to show them a form.
+      if (this._selectOrigin === "list") {
+        const dialog = dialogScroller(this);
+        if (dialog) scrollToStart(dialog, this);
+      }
     } else if (curr !== undefined) {
       // An item was selected but no form opened (unreadable item, or a badge
-      // whose type is missing): expand the Items section and scroll to the row.
+      // whose type is missing): expand the Items section and show the row.
       void this._showListAt(curr);
     } else if (prev !== undefined) {
-      // The user came back from a form: expand the Items section and bring the
-      // row that was just edited into view.
+      // The reader came back from a form, or deleted an item: expand the Items
+      // section and bring the row into view.
       void this._showListAt(prev);
     }
   }
@@ -503,9 +592,17 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       await new Promise<void>((resolve) => setTimeout(resolve, EXPAND_MS));
     }
     const list = this.shadowRoot?.querySelector("picture-studio-badge-list") as
-      | (HTMLElement & { scrollToItem(i: number): void })
+      | (HTMLElement & { rowFor(i: number): HTMLElement | undefined })
       | null;
-    list?.scrollToItem(index);
+    const row = list?.rowFor(index);
+    if (!row) return;
+    // The form's container, and no other. `scrollIntoView` stood here and could
+    // not make that distinction: it scrolls *every* ancestor container, so
+    // showing the row in the list always dragged the picture along with it.
+    // Below 1000px this write is inert and the picture stays put; above 1000px
+    // it is the pane the reader is looking at and the picture never moves anyway.
+    const form = formScroller(this);
+    if (form) scrollIntoNearest(form, row);
   }
 
   protected render() {
@@ -527,7 +624,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
                 @badge-changed=${this._badgeChanged}
                 @anchor-changed=${this._anchorChanged}
                 @visibility-changed=${this._visibilityChanged}
-                @go-back=${() => this.select(undefined)}
+                @go-back=${() => this.select(undefined, "list")}
               ></picture-studio-badge-form>
             `
           : html`
@@ -539,7 +636,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
                 @element-changed=${this._elementChanged}
                 @anchor-changed=${this._anchorChanged}
                 @visibility-changed=${this._visibilityChanged}
-                @go-back=${() => this.select(undefined)}
+                @go-back=${() => this.select(undefined, "list")}
               ></picture-studio-element-form>
             `,
       );

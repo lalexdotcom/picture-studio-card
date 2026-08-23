@@ -883,5 +883,65 @@ harm), and a reservation that never ran. Traps 11 to 14 of
 Home Assistant swaps the element. The user judged it out of scope — it is HA's
 element swap, not ours, and it costs nothing but a blink.
 
-**Still owed:** a CHANGELOG entry, which cannot be written until a version is
-opened. Both fixes are committed and unreleased.
+~~**Still owed:** a CHANGELOG entry, which cannot be written until a version is
+opened. Both fixes are committed and unreleased.~~ — DONE 2026-08-23. `12fd441`
+opened 1.5.3 and wrote the entry in the same commit.
+
+## ~~15. Where the editor scrolls, and when it must not~~ — DONE 2026-08-23
+
+Closed by tasks 1–6 of the `editor-scroll` plan. §2 of the
+spec was amended in the same breath — the table is shorter and final.
+
+Designed with the user on 2026-08-22, at the end of the session that fixed the
+drag jump. **The spec is the deliverable and it is self-contained**:
+[`docs/superpowers/specs/2026-08-22-editor-scroll-design.md`](../../docs/superpowers/specs/2026-08-22-editor-scroll-design.md).
+Read it before touching any scrolling in the editor; everything below is only a
+pointer, and re-deriving what it holds costs a full session of phone round trips.
+
+**In one line:** tapping an item on the picture must not throw the picture off
+the screen, while tapping one in the list must still open its form at the top —
+which means the two scroll containers have to be told apart and written to
+explicitly, instead of the single `scrollIntoView` that serves both by accident.
+
+**The state it starts from.** The drag jump is fixed and committed; 1.5.3 is
+open with its `Fixed` entry, dated `unreleased`. The spec builds on `_holdScroll`,
+`_layoutAncestors` and the card's height reservation rather than replacing them.
+
+**The one thing a reader will be tempted to skip and should not:** §7, what must
+not be retried. Four hypotheses died on measurement to produce this design, and
+each one looked obviously right beforehand.
+
+## 16. The editor's scroll above 1000px — never confirmed on hardware
+
+**Opened 2026-08-23, as the one loose end of entry 15.** Not a bug report: a
+measurement nobody has taken.
+
+The shipped design holds the **dialog's** scroll container and only that. Above
+1000px there is no dialog container to hold — `.element-editor` overflows and
+becomes the form's own scroller, and nothing above it overflows — so
+`_holdPreview` returns immediately and no anchoring happens at all in that mode.
+
+Before this branch, `_holdScroll` *did* anchor `.element-editor` there. So this
+is a real behaviour change, deliberate, and it rests on one argument: above
+1000px the picture sits *beside* the form in its own column, the layout never
+moves it, and Home Assistant rebuilds the card in the other pane — so
+`.element-editor` has nothing to be clamped by and nothing to restore.
+
+**Why it is parked rather than settled.** Three instruments were available and
+none of them can falsify it. happy-dom lays nothing out. The browser lane is
+Chromium, which never reproduced any of this family of defects. And the iPhone
+walk that confirmed everything else ran below 1000px by definition. The
+whole-branch reviewer judged the argument sound and flagged it as the one
+decision on the branch that no test can reach.
+
+**What would close this:** open the card editor on a wide screen — a desktop
+browser at ≥1000px, or an iPad in landscape — commit a drag, and watch whether
+the form pane keeps its scroll position. If it does, the argument holds and this
+entry is struck. If it jumps, the hold needs to cover the form's container too,
+and `_holdPreview` already takes a container: it would be a one-line change at
+its head, not a redesign.
+
+**Do not "fix" it pre-emptively.** Adding `formScroller(this) ?? dialogScroller(this)`
+without a measurement would reintroduce anchoring in a mode where it may be
+unnecessary, and this project has already spent rounds on remedies that were
+inert because nobody proved they ran.
