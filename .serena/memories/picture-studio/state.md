@@ -827,6 +827,32 @@ holding.
    short by exactly the missing gap — 26px, which the layout reclaimed a frame
    later by pushing everything below back down. `getBoundingClientRect().height`
    plus the computed margins is what reserves the space actually occupied.
+15. **Home Assistant's card-edit dialog sits in the browser's native top layer,
+   and an on-card instrument must be mounted *inside* it.** Chasing the scroll
+   design on an iPhone, the diagnostic overlay was written three ways before it
+   could be read. `position: fixed` inside the card is *demoted*: something in
+   HA's own dialog chrome creates a containing block — neither `:host` nor
+   `ha-card` declares a transform, a filter or containment, so it is above us —
+   and the strip pinned itself to the card's box instead of the viewport,
+   appearing only when the reader scrolled to the bottom. Moving it to
+   `document.body` fixed the positioning and broke the visibility: a top-layer
+   dialog paints over everything in the normal layer, so the overlay was
+   readable only with the dialog closed. **What worked in the end** was that the
+   trace buffer is a module-level singleton, so it survives the dialog closing —
+   walk the gestures, close the dialog, read the strip. Next time, mount the
+   overlay inside the dialog element itself and skip two builds.
+16. **The design was confirmed on a real iPhone on 2026-08-23, and the trace is
+   worth keeping.** All four gestures behaved, and the numbers answered the three
+   questions no local instrument can: `dialog=yes sh=1026 ch=641` next to
+   `form=yes sh=488 ch=488` — the dialog's container genuinely overflows while
+   the form's is inert at exactly its own height, which is §1 of the spec
+   measured rather than argued. Every hold ended `measured=true stable=5` in 4 to
+   8 frames, so the correction ran and the hold exited on the settled condition,
+   never on `HOLD_MAX_FRAMES`. And `sel: index=7 origin=picture holdActive=true`
+   caught the drag's second half on hardware: `onCommit` starts the hold,
+   `onSelect` follows, and `select()` correctly declines to start a second one
+   over it. That last line is the one defect a reviewer found and a test pins;
+   this is it happening for real.
 
 ## How we work (project rules, see AGENTS.md)
 
