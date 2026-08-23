@@ -7,6 +7,10 @@
 - On an iPhone or iPad, dragging an item that was already selected threw the
   editor back up to the top of the settings dialog, losing your place every
   time. The dialog now stays where you left it.
+- On an iPhone or iPad, tapping an item on the picture scrolled the picture off
+  the screen as the item's form opened in its place. The picture now stays where
+  it is; only the form beside or under it changes. Tapping an item in the list
+  still opens its form at the top, as before.
 
 ## 1.5.2 — 2026-08-22
 

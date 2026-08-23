@@ -883,10 +883,14 @@ harm), and a reservation that never ran. Traps 11 to 14 of
 Home Assistant swaps the element. The user judged it out of scope — it is HA's
 element swap, not ours, and it costs nothing but a blink.
 
-**Still owed:** a CHANGELOG entry, which cannot be written until a version is
-opened. Both fixes are committed and unreleased.
+~~**Still owed:** a CHANGELOG entry, which cannot be written until a version is
+opened. Both fixes are committed and unreleased.~~ — DONE 2026-08-23. `12fd441`
+opened 1.5.3 and wrote the entry in the same commit.
 
-## 15. Where the editor scrolls, and when it must not — SPECIFIED, not built
+## ~~15. Where the editor scrolls, and when it must not~~ — DONE 2026-08-23
+
+Closed by tasks 1–6 of the `editor-scroll` plan. §2 of the
+spec was amended in the same breath — the table is shorter and final.
 
 Designed with the user on 2026-08-22, at the end of the session that fixed the
 drag jump. **The spec is the deliverable and it is self-contained**:
@@ -906,9 +910,3 @@ open with its `Fixed` entry, dated `unreleased`. The spec builds on `_holdScroll
 **The one thing a reader will be tempted to skip and should not:** §7, what must
 not be retried. Four hypotheses died on measurement to produce this design, and
 each one looked obviously right beforehand.
-
-**Task 5 — DONE 2026-08-23.** `cbd56db`. `_holdScroll` replaced by `_holdPreview`,
-anchored on `activeCard()?.viewportTop()` (not the editor). `CardChannel` gains
-`viewportTop()`, implemented on the card. `_holdRelease`, `_reserveHeight` stub,
-and calls from `_commit` and `select` are in. 874 tests, 0 failures. Task 6
-(`_reserveHeight`) is the next step per the spec.

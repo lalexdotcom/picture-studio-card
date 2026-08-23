@@ -117,13 +117,13 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-22, on `main`, after the editor-jump fix:**
+**Measured 2026-08-23, after the two-container scroll fix:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 40 | 854 |
+| `pnpm test` — both lanes, **this is the baseline** | 41 | 876 |
 
-`pnpm build`: **213.2 kB / 50.4 kB gzip**. The per-lane figures were not measured
+`pnpm build`: **216.3 kB / 51.2 kB gzip**. The per-lane figures were not measured
 this round; run them if you need them rather than trusting a derivation. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 

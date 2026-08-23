@@ -1,8 +1,8 @@
 # Where the editor scrolls, and when it must not — design
 
-Status: **specified, not built.** Designed with the user on 2026-08-22, at the
-end of the session that fixed the drag jump. **Part of it is already written and
-committed** (see §6); the rest is this spec.
+Status: **built**, 2026-08-22/23, on the `editor-scroll` branch — `git log main..editor-scroll`
+is the record. Delivered under 1.5.3, which is open and unreleased. Designed with
+the user on 2026-08-22, at the end of the session that fixed the drag jump.
 
 The card's editor moves the reader's view at several moments. Some of those
 moves are wanted and some are not, and until now the difference was decided by
@@ -75,26 +75,34 @@ does it.
 
 | Trigger | Form's container | Dialog's container |
 |---|---|---|
-| Selection from **the list** | to the start | to the start |
-| Selection from **the picture** | to the start | **held** |
-| Item in error, or selection cleared | its row brought into view **within this container only** | per the origin, above |
-| A drag committing a position | nothing | nothing |
+| A form **opens from the list** — a row clicked, Add | to the start | to the start |
+| A form **opens from the picture** | to the start | **held** |
+| **No form opens** — item in error, back, a deletion, a reorder | its row into view | **held** |
+| **No selection change** — a field edit, a drag committing | — | **held** |
 
-Setting *both* containers to the start on a list selection is deliberate: only
-one of them is real at a time, so acting on both always yields exactly one
-visible effect and the code never has to know which mode it is in.
+**This table replaces the one written above, and it is shorter for a reason.**
+Settled with the user on 2026-08-22, before the build.
 
-**"Nothing" and "held" are not the same thing**, and they need different
-mechanisms:
+The third row said "per the origin", which was under-specified, and two further
+rows were then tried, giving a deletion and a drag behaviours of their own. Both
+were symptoms of asking the wrong question. The right one is not *where did the
+call come from* but **does a form open because the reader asked for it in the
+list?** — and it is asked in one branch only.
 
-- **Nothing** — the content is not supposed to change. A drag alters coordinates
-  only: same card, same picture, same form, same heights. Preserving the view is
-  a matter of *not perturbing* it — remove the cause, keep the same `scrollTop`.
-- **Held** — the content genuinely changes. One form is replaced by another of a
-  different height. Keeping the same `scrollTop` would *not* keep the same
-  framing: if the form above the picture grows by 200px, an unchanged offset
-  pushes the picture 200px down the screen. What must be preserved is **the
-  picture's position on screen**, so `scrollTop` has to move to compensate.
+Everything follows from that:
+
+- **The form's container is written unconditionally**, its target set by the
+  trigger alone. Below 1000px the write is inert, so it costs nothing; above it,
+  that container is the only one that moves.
+- **The dialog's container is held unconditionally**, with that single exception.
+  Above 1000px holding is inert, so it costs nothing there either. Neither side
+  ever asks which mode it is in.
+- **Deleting an item and reordering the list carry a *list* origin** — the ✕ and
+  the drag handle are in the list — but no form opens, so nothing follows, and
+  "delete an item and nothing scrolls" falls out rather than needing a case.
+- **"Nothing" is not a behaviour**, it is "held" with a delta of zero. A drag
+  alters coordinates only, so the correction computes to 0 at runtime. §3 already
+  said this of the mechanism; the table now says it too.
 
 ## 3. One mechanism, not two
 
@@ -133,7 +141,7 @@ can be corrected, and the correction then has nothing left to restore.
 - **The card reserves the outgoing preview's height on its successor.**
   *Already written and committed* — §6.
 - **The editor reserves its outgoing form's height while the next one renders.**
-  To be written, and it is the user's "placeholder".
+  Written in `_reserveHeight`, committed in the `editor-scroll` branch.
 
 Sizing: "taller than the viewport" is a generous approximation that works. The
 exact condition is narrower and easier to hold — the target position must remain
@@ -172,9 +180,7 @@ Committed on 2026-08-22, and this spec builds on them rather than replacing them
 - `HOLD_MAX_FRAMES`, `STABLE_FRAMES`, `RESERVE_FRAMES`.
 - Their tests, each confronted with the defect it names.
 
-1.5.3 is open with a `Fixed` entry for the drag jump. **This spec's work belongs
-to the same version or a later one — that is the user's call, not the
-implementer's.**
+The work went into 1.5.3, which remains open (unreleased) as of 2026-08-23.
 
 ## 7. What must not be retried
 
