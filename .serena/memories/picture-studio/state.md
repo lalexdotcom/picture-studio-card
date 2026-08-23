@@ -852,7 +852,12 @@ holding.
    caught the drag's second half on hardware: `onCommit` starts the hold,
    `onSelect` follows, and `select()` correctly declines to start a second one
    over it. That last line is the one defect a reviewer found and a test pins;
-   this is it happening for real.
+   this is it happening for real. **Confirmed at >=1000px the same day**, on
+   Safari: the form pane keeps its scroll across a commit that leaves the
+   selection alone, so the design's claim that nothing needs anchoring in row
+   mode holds. Both halves of the layout are now measured, not argued — see
+   follow-up 16 for the cheap way to force row mode (shrink the window's
+   *height*; the cap is `calc(100vh - 209px)`) and for why Chrome cannot answer.
 
 ## How we work (project rules, see AGENTS.md)
 

@@ -911,7 +911,29 @@ open with its `Fixed` entry, dated `unreleased`. The spec builds on `_holdScroll
 not be retried. Four hypotheses died on measurement to produce this design, and
 each one looked obviously right beforehand.
 
-## 16. The editor's scroll above 1000px — never confirmed on hardware
+## ~~16. The editor's scroll above 1000px — never confirmed on hardware~~ — DONE 2026-08-23
+
+**Closed the day it was opened, by the user, on Safari.** The form pane keeps its
+scroll position across a commit that does not change the selection. The argument
+below holds and no change is needed: above 1000px nothing needs anchoring.
+
+**The trick that made it testable, and it is worth reusing.** The obvious way to
+make `.element-editor` overflow in row mode is to add items until the form is
+tall enough. There is a cheaper one: the cap is `max-height: calc(100vh - 209px)`,
+so **shrinking the browser window's height** makes the form overflow with the
+card exactly as it is. Keep the window **wide** while doing it — the media query
+reads the *viewport* width, and pinching the width drops you back to column mode
+without any visible warning. The tell is the layout itself: form and picture
+side by side.
+
+**And it had to be Safari.** Blink implements CSS scroll anchoring, so Chrome
+keeps the position whether or not our code does anything — a pass there would
+have proved nothing.
+
+**What the test had to avoid.** Only a commit that leaves the selection alone
+measures this: dragging an item that is *already* selected, or editing a field.
+Dragging an unselected item opens its form, and a form opening is *meant* to take
+the pane to its top — a legitimate move that would read as a failure.
 
 **Opened 2026-08-23, as the one loose end of entry 15.** Not a bug report: a
 measurement nobody has taken.
