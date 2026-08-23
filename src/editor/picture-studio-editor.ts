@@ -245,8 +245,14 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     if (!scroller) return;
     const reserved = this._reserveHeight();
     const release = (): void => {
-      this._holdRelease = undefined;
-      reserved();
+      // Only if it is still ours. `_commit` fires on every field change, so a
+      // second hold can start while this one is still running — and clearing a
+      // successor's registration would both free `select()` to start a third
+      // and strip the min-height that successor is still relying on.
+      if (this._holdRelease === release) {
+        this._holdRelease = undefined;
+        reserved();
+      }
     };
     this._holdRelease = release;
 
@@ -330,9 +336,39 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     requestAnimationFrame(hold);
   }
 
-  /** Task 6 replaces this with the outgoing form's height reservation. */
+  /**
+   * Reserve the outgoing form's height on the host while the next one renders,
+   * and return the release.
+   *
+   * Symmetric with the card's reservation of the outgoing preview's height, and
+   * for the same reason: without it the browser clamps the scroll before the
+   * hold can correct anything, and the correction then has nothing left to
+   * restore. The exact condition is that the target position must stay
+   * reachable — the container at least `target scrollTop + visible height` tall
+   * — and reserving the outgoing height covers it in the only problematic case,
+   * a shorter successor.
+   *
+   * The **outer** box, margins included. `offsetHeight` counts padding and
+   * borders and not margins, and reserving that much left the successor short
+   * by exactly the missing gap — measured, 26px, which the layout then
+   * reclaimed a frame later by pushing everything below back down.
+   *
+   * Released by the hold on every one of its exits, so the reservation lasts
+   * exactly as long as the position it protects is still being corrected.
+   */
   private _reserveHeight(): () => void {
-    return () => {};
+    const box = this.getBoundingClientRect().height;
+    if (box <= 0) return () => {};
+    const style = getComputedStyle(this);
+    const margins =
+      (Number.parseFloat(style.marginTop) || 0) + (Number.parseFloat(style.marginBottom) || 0);
+    this.style.minHeight = `${Math.ceil(box + margins)}px`;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.style.removeProperty("min-height");
+    };
   }
 
   /** Sole exit toward Home Assistant. */

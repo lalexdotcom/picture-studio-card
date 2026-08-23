@@ -354,6 +354,73 @@ describe("a position commit must not move the view", () => {
 
     expect(() => el.patchPosition(0, { left: 30, top: 30 })).not.toThrow();
   });
+
+  it("reserves the outgoing form's height while the next one renders", async () => {
+    // Without it the browser clamps the scroll before anything can be corrected
+    // and the correction then has nothing left to restore. Symmetric with the
+    // card's own reservation of the outgoing preview's height.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+    // Outer box, margins included: `offsetHeight` counts padding and borders and
+    // NOT margins, and reserving that much left the successor short by exactly
+    // the missing gap — measured, 26px, which the layout reclaimed a frame later.
+    h.el.getBoundingClientRect = () => rect(0, 600);
+    const realComputed = window.getComputedStyle;
+    window.getComputedStyle = ((node: Element) =>
+      node === h.el
+        ? ({ marginTop: "13px", marginBottom: "13px", overflowY: "visible" } as CSSStyleDeclaration)
+        : realComputed(node)) as typeof window.getComputedStyle;
+
+    try {
+      h.el.select(1, "picture");
+      expect(h.el.style.minHeight).toBe("626px");
+
+      await settle();
+      // And it lets go: pinning a genuinely different height would be visible.
+      expect(h.el.style.minHeight).toBe("");
+    } finally {
+      window.getComputedStyle = realComputed;
+      h.cleanup();
+    }
+  });
+
+  it("a second hold's reservation is not released when the first ends", async () => {
+    // `_commit` fires on every field change, so two commits within HOLD_MAX_FRAMES
+    // is ordinary. When hold B starts while hold A is still running, B overwrites
+    // `_holdRelease`. Without the identity check, A's release sets `_holdRelease`
+    // to undefined — unregistering B — and strips the min-height B still needs.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+
+    const realComputed = window.getComputedStyle;
+    window.getComputedStyle = ((node: Element) =>
+      node === h.el
+        ? ({ marginTop: "0px", marginBottom: "0px", overflowY: "visible" } as CSSStyleDeclaration)
+        : realComputed(node)) as typeof window.getComputedStyle;
+
+    try {
+      // Hold A starts. mountInScroller already sets getBoundingClientRect to rect(0, 600).
+      h.el.patchPosition(0, { left: 10, top: 10 });
+      type Internal = { _holdRelease: (() => void) | undefined };
+      const releaseA = (h.el as unknown as Internal)._holdRelease;
+      if (!releaseA) throw new Error("hold A must have started");
+
+      // Hold B starts over A — _holdRelease is now B's.
+      h.el.patchPosition(0, { left: 20, top: 20 });
+      expect(h.el.style.minHeight).toBe("600px");
+
+      // A ends. Without the fix: _holdRelease is undefined and min-height is cleared.
+      releaseA();
+      expect(h.el.style.minHeight).toBe("600px"); // B's reservation survives
+      expect((h.el as unknown as Internal)._holdRelease).toBeDefined(); // B still registered
+    } finally {
+      window.getComputedStyle = realComputed;
+      await settle();
+      h.cleanup();
+    }
+  });
 });
 
 describe("a missing badge refuses the form and does not scroll the editor", () => {
