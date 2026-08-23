@@ -724,8 +724,6 @@ In `src/editor/picture-studio-editor.ts`, import `type SelectOrigin` from
 ```ts
   /** Where the last selection came from. See `updated`, which scrolls on it. */
   private _selectOrigin: SelectOrigin = "list";
-  /** Set while a hold is running, so a second one is never started over it. */
-  private _holdRelease?: () => void;
 ```
 
 and change `select`:
@@ -764,7 +762,14 @@ Run: `pnpm test`
 Expected: TypeScript errors at the 30 `select(` call sites in
 `src/tests/happy-dom/editor/picture-studio-editor.test.ts`. Give each the origin
 that names what it is standing in for — `"list"` for the existing ones, which all
-model a click in the list or a form. Re-run until green.
+model a click in the list or a form.
+
+**The suite does not reach fully green here, and must not be forced to.** Task 2
+removed `scrollToItem` while `_showListAt` still calls it, so
+`src/tests/happy-dom/editor/picture-studio-editor.test.ts` carries a known
+failure — `list.scrollToItem is not a function` — until Task 4. Re-run until the
+*only* remaining failures are that one, and every type error is gone. Any other
+failure is yours.
 
 - [ ] **Step 5: Commit**
 
@@ -913,10 +918,14 @@ describe("which container moves, and on which trigger", () => {
       el.select(0, "list");
       await el.updateComplete;
 
-      el.select(undefined, origin);
-      await el.updateComplete;
+      // Set BEFORE the select, never after: Task 5 starts a hold on a picture
+      // origin, and a hold captures the position at the moment of the call. A
+      // position written afterwards would be one the hold then undoes, and the
+      // test would fail for a reason that has nothing to do with `updated`.
       dialog.scrollTop = 275;
       form.scrollTop = 88;
+      el.select(undefined, origin);
+      await el.updateComplete;
       await listSettled();
 
       expect(dialog.scrollTop).toBe(275);
@@ -935,9 +944,9 @@ describe("which container moves, and on which trigger", () => {
     el.select(0, "list");
     await el.updateComplete;
 
+    form.scrollTop = 40; // before the select — see the note above
     el.select(undefined, "picture");
     await el.updateComplete;
-    form.scrollTop = 40;
     await listSettled();
 
     expect(form.scrollTop).toBe(121); // 40 + (630 - 549)
@@ -956,8 +965,13 @@ describe("which container moves, and on which trigger", () => {
 });
 ```
 
-Then **delete** the three `scrollIntoView`-counting tests in the describe *"a form
-opens at its own top"* and the *"does not scroll the editor when the form is
+Then **delete** the `scrollIntoView`-counting tests in the describe *"a form
+opens at its own top"* — there are **four**, not three, and the fourth
+(*"does not scroll on a re-render of the form already open"*) guards the
+`if (!changed.has("_editingIndex")) return` line at the top of `updated()`. That
+guard is what stops the editor scrolling on every keystroke and every hass tick,
+so its coverage must be **re-created in the new describe**, not merely dropped:
+see the extra test at the end of Step 1's code and the *"does not scroll the editor when the form is
 refused"* test's counter — replace the latter's assertion with the container
 check, since `scrollIntoView` no longer exists to count:
 
@@ -988,6 +1002,25 @@ import { dialogScroller, formScroller, scrollIntoNearest, scrollToStart } from "
 ```
 
 Delete `_layoutAncestors` and `_scrollContainer` — they now live in `scroll.ts`.
+`_holdScroll` is the only other caller of `_scrollContainer`, and Task 5 has not
+replaced it yet, so repoint its first line in the same edit or the build breaks:
+
+```ts
+    const scroller = dialogScroller(this);   // was: this._scrollContainer()
+```
+
+**This is not behaviour-neutral, and the earlier claim that it was is wrong.**
+Below 1000px the two walks converge — `.element-editor` does not overflow, so
+`dialogScroller` finds the same dialog `_scrollContainer` did. Above 1000px they
+do not: `.element-editor` overflows, `_scrollContainer` returned *it*, and
+`dialogScroller` skips it and finds nothing above. So `_holdScroll` stops
+anchoring anything in that mode.
+
+That is the settled design arriving one commit early, not a regression to
+repair. Above 1000px the picture sits *beside* the form and the layout never
+moves it; the card rebuilds in the other pane, so `.element-editor` has nothing
+to be clamped by. Task 5's `_holdPreview` holds the dialog's container and only
+that, for exactly this reason. Do not add `formScroller(this) ?? …`.
 
 Replace `updated`:
 
@@ -1103,7 +1136,11 @@ git commit -m "feat(editor): write the scroll containers by name, not by scrollI
   called from `_commit` and from `select`
 - Test: `src/tests/happy-dom/editor/picture-studio-editor.test.ts` (the describe
   *"a position commit must not move the view"*, and its 4 `registerCard({…})`
-  literals), `src/tests/happy-dom/card/picture-studio-card.test.ts`
+  literals), `src/tests/happy-dom/card/picture-studio-card.test.ts`, and
+  `src/tests/happy-dom/broker.test.ts` — its `card()` helper and the one inline
+  channel at line 54 also build `CardChannel` literals, and adding a member to
+  the interface breaks their typecheck. Give them
+  `viewportTop: () => undefined` unless the test is about the anchor.
 
 **Interfaces:**
 - Consumes: `dialogScroller`, `boxTop` from `./scroll`; `_selectOrigin` (Task 3).
