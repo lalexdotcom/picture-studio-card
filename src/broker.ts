@@ -1,11 +1,6 @@
 import type { Anchor, Position } from "./position";
 
 /**
- * The single card → editor hop. Everything that changes the *config* comes back
- * through Home Assistant; only the selection, which is editor state and never
- * reaches the config, is read straight off the channel.
- */
-/**
  * Which surface a selection was made on.
  *
  * - `list` — a row was clicked, or Add, or Back, or the ✕, or a row was dragged
@@ -25,6 +20,11 @@ import type { Anchor, Position } from "./position";
  */
 export type SelectOrigin = "list" | "picture";
 
+/**
+ * The single card → editor hop. Everything that changes the *config* comes back
+ * through Home Assistant; only the selection, which is editor state and never
+ * reaches the config, is read straight off the channel.
+ */
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
   patchAnchor(index: number, anchor: Anchor): void;
@@ -51,6 +51,19 @@ export interface CardChannel {
    * the caller then keeps the coordinates it has.
    */
   reanchor(index: number, anchor: Anchor): Position | undefined;
+  /**
+   * The preview's top edge in viewport coordinates, or undefined while it
+   * cannot be measured.
+   *
+   * The editor holds the reader's framing across a commit by keeping this
+   * anchor at the same place on screen. Undefined is not a failure: Home
+   * Assistant destroys the card element and builds another on every config
+   * change, and during that gap there is no preview at all. Its absence is
+   * precisely the signal that the layout is not ready — an earlier attempt
+   * anchored on the editor, which *does* survive the rebuild, and got a number
+   * that was wrong by 838px.
+   */
+  viewportTop(): number | undefined;
 }
 
 const editors = new Set<EditorChannel>();

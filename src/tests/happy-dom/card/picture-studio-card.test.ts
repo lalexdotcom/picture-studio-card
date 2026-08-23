@@ -1232,3 +1232,43 @@ describe("the preview reserves the height of the one it replaces", () => {
     expect(second.style.minHeight).toBe("");
   });
 });
+
+describe("viewportTop — the anchor the editor holds", () => {
+  it("is undefined while the card has no box", async () => {
+    // A freshly connected card has not laid out; reporting its rect.top then
+    // would be a number the hold would trust and act on. Undefined is the
+    // signal that the layout is not ready, and the hold falls back to the
+    // absolute position for exactly as long as that lasts.
+    const el = await mountCard(CONFIG_3);
+    el.getBoundingClientRect = () =>
+      ({
+        top: 120,
+        height: 0,
+        bottom: 120,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: 120,
+        width: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    expect((el as unknown as { viewportTop(): number | undefined }).viewportTop()).toBeUndefined();
+  });
+
+  it("is the rect's top once it has one", async () => {
+    const el = await mountCard(CONFIG_3);
+    el.getBoundingClientRect = () =>
+      ({
+        top: 120,
+        height: 240,
+        bottom: 360,
+        left: 0,
+        right: 0,
+        x: 0,
+        y: 120,
+        width: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    expect((el as unknown as { viewportTop(): number | undefined }).viewportTop()).toBe(120);
+  });
+});

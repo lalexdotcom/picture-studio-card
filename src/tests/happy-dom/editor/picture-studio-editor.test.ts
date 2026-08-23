@@ -61,48 +61,70 @@ afterEach(() => {
  * mechanism, not the pixels; only a real WebKit can answer for those.
  */
 describe("a position commit must not move the view", () => {
+  const rect = (top: number, height: number): DOMRect =>
+    ({
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 0,
+      x: 0,
+      y: top,
+      width: 0,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  /**
+   * The phone: an inert `.element-editor` inside a dialog box that scrolls.
+   * `previewTop` is where the preview sits in the scrolled content — the anchor
+   * the hold preserves. `present` is what the rebuild takes away: while Home
+   * Assistant destroys the card and builds another, no preview is registered
+   * and there is nothing to measure. That absence *is* the signal.
+   */
   const mountInScroller = async () => {
-    const scroller = document.createElement("div");
-    scroller.style.overflowY = "auto";
+    const dialog = document.createElement("div");
+    dialog.style.overflowY = "auto";
     let height = 2000;
-    Object.defineProperty(scroller, "scrollHeight", { get: () => height, configurable: true });
-    Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(dialog, "scrollHeight", { get: () => height, configurable: true });
+    Object.defineProperty(dialog, "clientHeight", { value: 400, configurable: true });
     let top = 0;
-    Object.defineProperty(scroller, "scrollTop", {
+    Object.defineProperty(dialog, "scrollTop", {
       get: () => top,
       set: (v: number) => {
         top = v;
       },
       configurable: true,
     });
-    document.body.append(scroller);
+    dialog.getBoundingClientRect = () => rect(0, 400);
+
+    const form = document.createElement("div");
+    form.style.overflowY = "auto";
+    Object.defineProperty(form, "scrollHeight", { value: 549, configurable: true });
+    Object.defineProperty(form, "clientHeight", { value: 549, configurable: true });
+    Object.defineProperty(form, "scrollTop", {
+      get: () => 0,
+      set: () => {},
+      configurable: true,
+    });
+    form.getBoundingClientRect = () => rect(0, 549);
+    dialog.append(form);
+    document.body.append(dialog);
 
     const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
     el.setConfig(CONFIG);
     el.hass = { localize: () => "", states: {} } as never;
-    scroller.append(el);
+    form.append(el);
     await el.updateComplete;
-    el.scrollIntoView = () => {};
+    el.getBoundingClientRect = () => rect(0, 600);
 
-    // The anchor is measured, so geometry has to be declared as well: `above`
-    // is how far into the scrolled content the editor starts — in other words
-    // the height of the preview sitting on top of it, which a rebuild may
-    // change.
-    let above = 800;
-    const rect = (t: number) =>
-      ({
-        top: t,
-        bottom: t,
-        left: 0,
-        right: 0,
-        x: 0,
-        y: t,
-        width: 0,
-        height: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
-    scroller.getBoundingClientRect = () => rect(0);
-    el.getBoundingClientRect = () => rect(above - top);
+    // The preview sits 1400px into the scrolled content, below the editor.
+    let previewTop = 1400;
+    let present = true;
+    const channel = {
+      reanchor: () => undefined,
+      viewportTop: () => (present ? previewTop - top : undefined),
+    };
+    let release = registerCard(channel);
 
     return {
       el,
@@ -111,166 +133,216 @@ describe("a position commit must not move the view", () => {
         top = v;
       },
       grow: (by: number) => {
-        above += by;
+        previewTop += by;
       },
       setHeight: (v: number) => {
         height = v;
       },
+      /** What Home Assistant does on every commit: destroy, then rebuild. */
+      rebuild: () => {
+        release();
+        present = false;
+        return () => {
+          present = true;
+          release = registerCard({ ...channel });
+        };
+      },
+      cleanup: () => release(),
     };
   };
 
-  /**
-   * Long enough for the hold to run its course: the rebuild has to be seen and
-   * the container's height has to stay put for STABLE_FRAMES on top of that.
-   */
   const settle = async () => {
     for (let i = 0; i < 12; i++) {
       await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
     }
   };
 
+  afterEach(() => document.body.replaceChildren());
+
   it("puts the scroll position back after the card is rebuilt", async () => {
-    const { el, at, put } = await mountInScroller();
-    el.select(0, "list");
-    await el.updateComplete;
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
 
-    put(300); // where the user was reading
-    el.patchPosition(0, { left: 30, top: 30 });
-    put(0); // what WebKit does when the element above is replaced
+    h.put(300); // where the user was reading
+    h.el.patchPosition(0, { left: 30, top: 30 });
+    const done = h.rebuild();
+    h.put(0); // what WebKit does when the element above is replaced
+    done();
     await settle();
 
-    expect(at()).toBe(300);
+    expect(h.at()).toBe(300);
+    h.cleanup();
   });
 
-  it("leaves the view where the rebuild put it when the selection changed", async () => {
-    // A selection change is *meant* to move the view — that is the existing
-    // scrollIntoView, and holding the old position would fight it.
-    const { el, at, put } = await mountInScroller();
-    el.select(0, "list");
-    await el.updateComplete;
+  it("holds the absolute position while the preview cannot be measured", async () => {
+    // The anchor is the preview, and it does not exist during the rebuild. An
+    // earlier attempt anchored on the *editor*, which still exists then, so it
+    // yielded a number — a wrong one, +838px, landing the reader at 995 instead
+    // of 157. While the anchor cannot be measured, hold the absolute value.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
 
-    put(300);
-    el.patchPosition(0, { left: 30, top: 30 });
-    el.select(1, "list");
-    put(0);
+    h.put(300);
+    h.el.patchPosition(0, { left: 30, top: 30 });
+    h.rebuild(); // and never finish it
+    h.put(0);
     await settle();
 
-    expect(at()).toBe(0);
+    expect(h.at()).toBe(300);
+    h.cleanup();
   });
 
-  // A test for anchoring — restoring the framing rather than the offset — lived
-  // here and was removed on 2026-08-22, not because the idea is wrong but
-  // because measurement on a real iPhone showed it doing harm: the rebuild is
-  // detected on the first frame, while the old card is gone and the new one has
-  // not laid out, so the drift is nonsense. The drift is still reported by the
-  // temporary trace; restore this test the day it is worth applying.
+  it("corrects by the delta once the preview can be measured again", async () => {
+    // A drag is the zero-delta case of one mechanism, not a case of its own.
+    // Here the content above the preview genuinely grew, so keeping the same
+    // scrollTop would NOT keep the same framing: the preview would be pushed
+    // 200px down the screen. What is preserved is the preview's position on
+    // screen, so scrollTop has to move to compensate.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+
+    h.put(300);
+    h.el.patchPosition(0, { left: 30, top: 30 });
+    const done = h.rebuild();
+    h.put(0);
+    h.grow(200); // the form above the preview came back 200px taller
+    done();
+    await settle();
+
+    expect(h.at()).toBe(500);
+    h.cleanup();
+  });
+
+  it("holds the picture in place when an item is selected on it", async () => {
+    // No commit, no rebuild — the form is simply replaced by a taller one. The
+    // termination condition cannot wait for a rebuild that never comes.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+
+    h.put(300);
+    h.el.select(1, "picture");
+    h.grow(160); // the incoming form is 160px taller than the outgoing one
+    await h.el.updateComplete;
+    await settle();
+
+    expect(h.at()).toBe(460);
+    h.cleanup();
+  });
+
+  it("keeps holding when a deletion clears the selection under it", async () => {
+    // Deleting an item commits *and* clears the selection, both from the list.
+    // The origin is therefore `list` — but no form opens, so this is not the
+    // trigger the hold stands aside for. Letting go here would abandon it in the
+    // middle of the rebuild it exists to survive. And the list loses a row, so
+    // an unchanged scrollTop would let the picture ride up by that row's
+    // height: held, not merely untouched.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+
+    h.put(300);
+    h.el.patchPosition(0, { left: 30, top: 30 }); // stands in for the removal's commit
+    const done = h.rebuild();
+    h.el.select(undefined, "list");
+    h.put(0);
+    h.grow(-48); // one list row gone: the picture would ride up by 48
+    done();
+    await settle();
+
+    expect(h.at()).toBe(252);
+    h.cleanup();
+  });
+
+  it("keeps holding when a drag selects the item it just moved", async () => {
+    // `drag-layer` fires `onCommit` and then `onSelect(hit.index)`, so dragging
+    // an item that was NOT already selected changes the selection right after
+    // the commit. On a picture origin, and no form the reader asked for — so the
+    // hold started by the commit sees the gesture through, and the second one
+    // `select` would otherwise start never happens.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+
+    h.put(300);
+    h.el.patchPosition(1, { left: 30, top: 30 }); // onCommit
+    const done = h.rebuild();
+    h.el.select(1, "picture"); // onSelect, same gesture
+    h.put(0);
+    done();
+    await settle();
+
+    expect(h.at()).toBe(300);
+    h.cleanup();
+  });
+
+  it("stands aside for a form the reader asked for", async () => {
+    // The other half of the same rule, and the one that was already true: a row
+    // clicked in the list is *meant* to move the view, and `updated` is about to
+    // take it to the form's top. Holding would fight it.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
+
+    h.put(300);
+    h.el.patchPosition(0, { left: 30, top: 30 });
+    h.el.select(1, "list"); // a second item's form opens
+    h.put(0);
+    await settle();
+
+    expect(h.at()).toBe(0);
+    h.cleanup();
+  });
 
   it("is still holding when the rebuilt image moves the document a second time", async () => {
     // The reason the exit condition is not registration alone. The card
     // registers within a frame; its image lays out several frames later and
-    // moves the document again, and *that* is when WebKit re-clamps. A hold
-    // that let go at registration is no longer there to answer for it.
-    const { el, at, put, setHeight } = await mountInScroller();
-    el.select(0, "list");
-    await el.updateComplete;
+    // moves the document again, and *that* is when WebKit re-clamps.
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
     const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 
-    const releaseOld = registerCard({ reanchor: () => undefined });
-    put(300);
-    el.patchPosition(0, { left: 30, top: 30 });
-    releaseOld();
-    const releaseNew = registerCard({ reanchor: () => undefined });
+    h.put(300);
+    h.el.patchPosition(0, { left: 30, top: 30 });
+    const done = h.rebuild();
+    done();
 
-    // The document keeps moving while the new preview lays out...
     await frame();
-    setHeight(1900);
+    h.setHeight(1900);
     await frame();
-    setHeight(1800);
+    h.setHeight(1800);
     await frame();
-    setHeight(1700);
-    // ...and only then does the clamp land.
+    h.setHeight(1700);
     await frame();
-    put(0);
+    h.put(0);
     await settle();
 
-    expect(at()).toBe(300);
-    releaseNew();
+    expect(h.at()).toBe(300);
+    h.cleanup();
   });
 
   it("lets go once the rebuild has landed and the height has settled", async () => {
-    // Two signals, not one. The broker says the card was replaced — Home
-    // Assistant destroys the old element and creates a new one, so a different
-    // instance registering *is* the rebuild. But registering is not laying out:
-    // on a real iPhone the card registered within a frame, then its image moved
-    // the document again, and a hold that had already let go left the reader
-    // somewhere else. So the height has to stop moving too. After that the
-    // position belongs to the user again.
-    const { el, at, put } = await mountInScroller();
-    el.select(0, "list");
-    await el.updateComplete;
+    const h = await mountInScroller();
+    h.el.select(0, "list");
+    await h.el.updateComplete;
 
-    const releaseOld = registerCard({ reanchor: () => undefined });
-    put(300);
-    el.patchPosition(0, { left: 30, top: 30 });
-    put(0);
-    releaseOld();
-    const releaseNew = registerCard({ reanchor: () => undefined });
+    h.put(300);
+    h.el.patchPosition(0, { left: 30, top: 30 });
+    const done = h.rebuild();
+    h.put(0);
+    done();
     await settle();
-    expect(at()).toBe(300);
+    expect(h.at()).toBe(300);
 
     // The user scrolls afterwards, and is left alone.
-    put(120);
+    h.put(120);
     await settle();
-    expect(at()).toBe(120);
-    releaseNew();
-  });
-
-  it("holds the page itself, which scrolls without declaring an overflow", async () => {
-    // On a phone the dialog is the page: measured on a real iPhone, the only
-    // thing that scrolls is `html`, whose computed overflow-y is `visible`.
-    // Requiring auto|scroll found nothing and the hold never ran.
-    const root = document.scrollingElement as HTMLElement;
-    Object.defineProperty(root, "scrollHeight", { value: 2447, configurable: true });
-    Object.defineProperty(root, "clientHeight", { value: 874, configurable: true });
-    let top = 0;
-    Object.defineProperty(root, "scrollTop", {
-      get: () => top,
-      set: (v: number) => {
-        top = v;
-      },
-      configurable: true,
-    });
-
-    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
-    el.setConfig(CONFIG);
-    el.hass = { localize: () => "", states: {} } as never;
-    document.body.append(el);
-    await el.updateComplete;
-    el.scrollIntoView = () => {};
-    // Geometry has to be declared here too: happy-dom lays nothing out, and the
-    // anchor is measured. The editor starts 1200px into the document.
-    const above = 1200;
-    el.getBoundingClientRect = () =>
-      ({
-        top: above - top,
-        bottom: above - top,
-        left: 0,
-        right: 0,
-        x: 0,
-        y: above - top,
-        width: 0,
-        height: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
-    el.select(0, "list");
-    await el.updateComplete;
-
-    top = 412;
-    el.patchPosition(0, { left: 30, top: 30 });
-    top = 0;
-    await settle();
-
-    expect(top).toBe(412);
+    expect(h.at()).toBe(120);
+    h.cleanup();
   });
 
   it("commits without a scrollable ancestor just the same", async () => {
@@ -279,7 +351,6 @@ describe("a position commit must not move the view", () => {
     el.hass = { localize: () => "", states: {} } as never;
     document.body.append(el);
     await el.updateComplete;
-    el.scrollIntoView = () => {};
 
     expect(() => el.patchPosition(0, { left: 30, top: 30 })).not.toThrow();
   });

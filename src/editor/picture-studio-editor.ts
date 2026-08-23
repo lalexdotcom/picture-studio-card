@@ -44,7 +44,7 @@ import {
   setAnchor,
   setVisibility,
 } from "./items";
-import { dialogScroller, formScroller, scrollIntoNearest, scrollToStart } from "./scroll";
+import { boxTop, dialogScroller, formScroller, scrollIntoNearest, scrollToStart } from "./scroll";
 import "./badge-form";
 import "./badge-list";
 import "./element-form";
@@ -117,6 +117,8 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _applying = false;
   /** Where the last selection came from. See `updated`, which scrolls on it. */
   private _selectOrigin: SelectOrigin = "list";
+  /** Stops the running hold, if any. Set by `_holdPreview`, cleared on exit. */
+  private _holdRelease?: () => void;
   constructor() {
     super();
     this._editingIndex = undefined;
@@ -169,7 +171,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   /** Convergence point: drag, dialogs and forms all end here. */
   protected _commit(next: PictureStudioConfig): void {
-    this._holdScroll();
+    this._holdPreview(this._editingIndex, true);
     this._config = next;
     this._reemit(next);
   }
@@ -209,28 +211,96 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * form to its own top. That is the whole rule: a commit must not move the
    * view, a selection may.
    */
-  private _holdScroll(): void {
+  /**
+   * Keep the preview where the reader put it, across a change that moves the
+   * content around it.
+   *
+   * Blink keeps the scroll position when content above the viewport is replaced
+   * — CSS scroll anchoring — and WebKit implements none of it. Home Assistant
+   * rebuilds the card element on every config change, so on an iPhone every
+   * committed drag drops the reader back at the top of the dialog. This is that
+   * anchoring, by hand.
+   *
+   * **One mechanism, not two.** A drag is the case where the delta is zero: the
+   * content is not supposed to change, so the correction computes to nothing. A
+   * selection made on the picture is the case where it is not: one form is
+   * replaced by another of a different height, and keeping the same `scrollTop`
+   * would *not* keep the same framing — if the form above grows by 200px, an
+   * unchanged offset pushes the picture 200px down the screen. What is
+   * preserved is the preview's position on screen.
+   *
+   * **The anchor is the preview, and that is load-bearing.** While it cannot be
+   * measured, hold the absolute value; as soon as it can, correct by the delta.
+   * No detection of the rebuild is needed for that — it falls out of the
+   * anchor's own availability.
+   *
+   * @param selection the selection this hold belongs to; it lets go if the
+   *   reader picks something else, because moving the view is then the point.
+   * @param rebuild whether a card rebuild is expected. A commit triggers one; a
+   *   selection does not, and waiting for one that never comes would keep the
+   *   hold fighting the reader for `HOLD_MAX_FRAMES`.
+   */
+  private _holdPreview(selection: number | undefined, rebuild: boolean): void {
     const scroller = dialogScroller(this);
     if (!scroller) return;
-    const top = scroller.scrollTop;
-    const selection = this._editingIndex;
+    const reserved = this._reserveHeight();
+    const release = (): void => {
+      this._holdRelease = undefined;
+      reserved();
+    };
+    this._holdRelease = release;
+
+    /** The preview's top, measured against the dialog container's own box. */
+    const screenTop = (): number | undefined => {
+      const t = activeCard()?.viewportTop();
+      return t === undefined ? undefined : t - boxTop(scroller);
+    };
+
+    const desired = screenTop();
+    let top = scroller.scrollTop;
     const before = activeCard();
     let frames = 0;
-    let rebuilt = false;
+    let rebuilt = !rebuild;
+    let measured = false;
     let stable = 0;
     let lastHeight = scroller.scrollHeight;
+
     const hold = (): void => {
-      if (this._editingIndex !== selection) {
+      // Stand aside for the one trigger that is *meant* to move the dialog: a
+      // form opening because the reader clicked a row. Holding through that
+      // would fight `updated`, which is about to scroll to the form's top.
+      //
+      // Every other selection change keeps the hold. Deleting an item and
+      // reordering the list both come from the list and both change the
+      // selection, but no form opens and nothing is supposed to move — bailing
+      // there would abandon the hold in the middle of the very rebuild it exists
+      // to survive. A drag is the same shape: `drag-layer` fires `onCommit` and
+      // then `onSelect(hit.index)`, so the selection changes right after the
+      // commit, on a picture origin.
+      const deliberate =
+        this._editingIndex !== selection &&
+        this._selectOrigin === "list" &&
+        this._formTarget() !== undefined;
+      if (deliberate) {
+        release();
         return;
       }
-      // Absolute, deliberately. Restoring the *framing* rather than the offset
-      // is the better idea in principle and was measured doing active harm on a
-      // real iPhone: the rebuild is detected on the first frame, while the old
-      // card is gone and the new one has not laid out, so the drift computed
-      // then is meaningless — +838px, landing the reader at 995 instead of 157.
-      // It would only ever matter if the preview's height changed, which a
-      // position commit does not: same card, same image, same box.
-      if (scroller.scrollTop !== top) scroller.scrollTop = top;
+
+      const now = screenTop();
+      if (now === undefined || desired === undefined) {
+        // Nothing to measure against — hold the absolute value.
+        if (scroller.scrollTop !== top) scroller.scrollTop = top;
+      } else {
+        measured = true;
+        // Read from the *live* scrollTop, never from the recorded one: WebKit
+        // may have clamped it between two frames, and `now` was measured under
+        // whatever it left. Mixing the two scroll states is how a correction
+        // computes nonsense.
+        const want = scroller.scrollTop + (now - desired);
+        if (scroller.scrollTop !== want) scroller.scrollTop = want;
+        top = scroller.scrollTop;
+      }
+
       const height = scroller.scrollHeight;
       if (height !== lastHeight) {
         lastHeight = height;
@@ -240,17 +310,29 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       }
 
       if (!rebuilt) {
-        const now = activeCard();
-        rebuilt = now !== undefined && now !== before;
+        const nowCard = activeCard();
+        rebuilt = nowCard !== undefined && nowCard !== before;
       }
-      // Both conditions, and the height one is the load-bearing half: the card
+      // Three conditions, and the height one is the load-bearing part: the card
       // registers within a frame, then lays out and moves the document again.
-      if (rebuilt && stable >= STABLE_FRAMES) {
+      // `measured` is what says the correction was actually applied rather than
+      // merely attempted.
+      if (rebuilt && measured && stable >= STABLE_FRAMES) {
+        release();
         return;
       }
-      if (++frames < HOLD_MAX_FRAMES) requestAnimationFrame(hold);
+      if (++frames < HOLD_MAX_FRAMES) {
+        requestAnimationFrame(hold);
+      } else {
+        release();
+      }
     };
     requestAnimationFrame(hold);
+  }
+
+  /** Task 6 replaces this with the outgoing form's height reservation. */
+  private _reserveHeight(): () => void {
+    return () => {};
   }
 
   /** Sole exit toward Home Assistant. */
@@ -273,8 +355,21 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
    * what keeps that true.
    */
   select(index: number | undefined, origin: SelectOrigin): void {
+    // Selecting what is already selected is a no-op, and it is load-bearing:
+    // `drag-layer` fires `onSelect(hit.index)` at the end of every gesture, so
+    // dragging an item that was already selected must not disturb the hold the
+    // commit just started. That is what `b55388c` fixed.
     if (this._editingIndex === index) return;
     this._selectOrigin = origin;
+    // A picture selection changes the form's height with no config change, so
+    // nothing else is going to start a hold — except when a commit already did,
+    // which is the *other* end of a drag: `onCommit` runs first and its hold is
+    // the one that should see the gesture through, with the rebuild it is
+    // waiting for. Measured before `_editingIndex` moves, because the anchor is
+    // where the preview sits now.
+    if (origin === "picture" && this._holdRelease === undefined) {
+      this._holdPreview(index, false);
+    }
     this._editingIndex = index;
     notifyEditors();
   }

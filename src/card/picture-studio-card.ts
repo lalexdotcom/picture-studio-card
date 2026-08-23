@@ -843,6 +843,13 @@ export class PictureStudioCard extends LitElement {
     );
   }
 
+  viewportTop(): number | undefined {
+    const rect = this.getBoundingClientRect();
+    // A height of zero means the picture has not laid out. Reporting a top then
+    // hands the editor a number it would trust.
+    return rect.height > 0 ? rect.top : undefined;
+  }
+
   protected render() {
     if (!this._config) return nothing;
 
