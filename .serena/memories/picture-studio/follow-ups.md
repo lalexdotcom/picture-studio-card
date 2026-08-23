@@ -910,3 +910,38 @@ open with its `Fixed` entry, dated `unreleased`. The spec builds on `_holdScroll
 **The one thing a reader will be tempted to skip and should not:** §7, what must
 not be retried. Four hypotheses died on measurement to produce this design, and
 each one looked obviously right beforehand.
+
+## 16. The editor's scroll above 1000px — never confirmed on hardware
+
+**Opened 2026-08-23, as the one loose end of entry 15.** Not a bug report: a
+measurement nobody has taken.
+
+The shipped design holds the **dialog's** scroll container and only that. Above
+1000px there is no dialog container to hold — `.element-editor` overflows and
+becomes the form's own scroller, and nothing above it overflows — so
+`_holdPreview` returns immediately and no anchoring happens at all in that mode.
+
+Before this branch, `_holdScroll` *did* anchor `.element-editor` there. So this
+is a real behaviour change, deliberate, and it rests on one argument: above
+1000px the picture sits *beside* the form in its own column, the layout never
+moves it, and Home Assistant rebuilds the card in the other pane — so
+`.element-editor` has nothing to be clamped by and nothing to restore.
+
+**Why it is parked rather than settled.** Three instruments were available and
+none of them can falsify it. happy-dom lays nothing out. The browser lane is
+Chromium, which never reproduced any of this family of defects. And the iPhone
+walk that confirmed everything else ran below 1000px by definition. The
+whole-branch reviewer judged the argument sound and flagged it as the one
+decision on the branch that no test can reach.
+
+**What would close this:** open the card editor on a wide screen — a desktop
+browser at ≥1000px, or an iPad in landscape — commit a drag, and watch whether
+the form pane keeps its scroll position. If it does, the argument holds and this
+entry is struck. If it jumps, the hold needs to cover the form's container too,
+and `_holdPreview` already takes a container: it would be a one-line change at
+its head, not a redesign.
+
+**Do not "fix" it pre-emptively.** Adding `formScroller(this) ?? dialogScroller(this)`
+without a measurement would reintroduce anchoring in a mode where it may be
+unnecessary, and this project has already spent rounds on remedies that were
+inert because nobody proved they ran.
