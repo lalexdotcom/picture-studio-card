@@ -1085,6 +1085,24 @@ describe("which container moves, and on which trigger", () => {
     expect(form.scrollTop).toBe(800);
   });
 
+  it("does not move anything when the open form merely re-renders", async () => {
+    // The guard at the top of `updated()`. An item's form re-renders on every
+    // keystroke and every hass tick, and scrolling on each of them would fight
+    // the reader's own scrolling — so the decision is guarded on the transition
+    // of `_editingIndex`, never on its value.
+    const { el, dialog, form } = await mountTwoContainers(true);
+    el.select(0, "list");
+    await el.updateComplete;
+    dialog.scrollTop = 250;
+    form.scrollTop = 120;
+
+    el.hass = { localize: () => "", states: {} } as never;
+    await el.updateComplete;
+
+    expect(dialog.scrollTop).toBe(250);
+    expect(form.scrollTop).toBe(120);
+  });
+
   /**
    * `_showListAt` awaits the section's expansion before it scrolls, and the row
    * it then asks for has no rect under happy-dom. Stub `rowFor` on the rendered
