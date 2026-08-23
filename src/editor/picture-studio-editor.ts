@@ -62,7 +62,7 @@ import "./section-panel";
 const EXPAND_MS = 300;
 
 /**
- * The ceiling on `_holdScroll`, in frames — a safety net, not the mechanism.
+ * The ceiling on `_holdPreview`, in frames — a safety net, not the mechanism.
  * The hold normally ends when the rebuilt preview registers itself; this only
  * bounds the case where no rebuild ever comes, because Home Assistant declined
  * the config or the card is not the one in the dialog. About a second.
@@ -71,7 +71,7 @@ const HOLD_MAX_FRAMES = 60;
 
 /**
  * How many consecutive frames the scroll container's height must stay put
- * before `_holdScroll` lets go. Registration is not the end of the story: the
+ * before `_holdPreview` lets go. Registration is not the end of the story: the
  * rebuilt card registers within a frame, then its image lays out and moves the
  * document a second time — measured, and that second move is what was landing
  * the reader elsewhere with the hold already over.
@@ -176,41 +176,6 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     this._reemit(next);
   }
 
-  /**
-   * The scroll container the dialog owns, several shadow roots above us.
-   * `parentNode` alone would stop at the first shadow boundary, so the walk
-   * hops through hosts. Only a container that can actually move counts: an
-   * `overflow: auto` that fits its content has no position to lose.
-   */
-  /**
-   * The flattened-tree ancestors, which is what layout — and therefore
-   * scrolling — actually follows. `parentNode` alone walks the *logical* tree:
-   * this editor is distributed into a slot by Home Assistant's dialog, so its
-   * light-DOM parent is not the box that contains it on screen. Following
-   * `assignedSlot` first is what crosses that hop; the host jump then crosses
-   * the shadow boundary. Measured the hard way — a walk without it found only
-   * `html`, which never moved while the view plainly did.
-   */
-  /**
-   * Blink keeps the scroll position when content above the viewport is replaced
-   * — CSS scroll anchoring — and WebKit implements none of it. Home Assistant
-   * rebuilds the card element on every config change, measured by marking the
-   * instance and finding it gone, so on an iPhone every committed drag drops the
-   * reader back at the top of the dialog. This is that anchoring, by hand.
-   *
-   * Held until the rebuild actually happens rather than for a fixed number of
-   * frames: the preview announces itself to the broker, so the old instance
-   * unregistering and a new one taking its place *is* the event. One further
-   * frame lets the newcomer lay out before the hold lets go — after that the
-   * position belongs to the user again, and holding it longer would fight a
-   * deliberate scroll. `HOLD_MAX_FRAMES` only bounds the case where no rebuild
-   * ever comes.
-   *
-   * It gets out of the way of a selection change, which is the one case where
-   * moving the view is the point — see `updated`, which scrolls a newly opened
-   * form to its own top. That is the whole rule: a commit must not move the
-   * view, a selection may.
-   */
   /**
    * Keep the preview where the reader put it, across a change that moves the
    * content around it.

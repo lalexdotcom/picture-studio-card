@@ -30,18 +30,13 @@ const CONFIG = {
   ],
 } as unknown as PictureStudioConfig;
 
-/** Counts the calls happy-dom would otherwise swallow: it has no layout. */
 const mount = async () => {
   const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
   el.setConfig(CONFIG);
   el.hass = { localize: () => "", states: {} } as never;
   document.body.append(el);
   await el.updateComplete;
-  let scrolls = 0;
-  el.scrollIntoView = () => {
-    scrolls++;
-  };
-  return { el, calls: () => scrolls };
+  return { el };
 };
 
 afterEach(() => {
@@ -451,11 +446,7 @@ describe("a missing badge refuses the form and does not scroll the editor", () =
     await new Promise<void>((resolve) => probeBadgeType("entty", resolve));
     await el.updateComplete;
 
-    let scrolls = 0;
-    el.scrollIntoView = () => {
-      scrolls++;
-    };
-    return { el, calls: () => scrolls };
+    return { el };
   };
 
   afterEach(() => {
