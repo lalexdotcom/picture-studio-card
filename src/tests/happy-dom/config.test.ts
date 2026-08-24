@@ -10,6 +10,8 @@ import {
   isSupportedBadgeType,
   normalizeConfig,
   normalizeElementConfig,
+  type PictureItem,
+  type PictureStudioConfig,
   type StateIconConfig,
   type StateLabelConfig,
   storedConfig,
@@ -17,6 +19,12 @@ import {
 } from "../../config";
 import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE, type ElementSize } from "../../element-size";
 import { DEFAULT_IMAGE_WIDTH } from "../../image-box";
+
+const itemAt = (config: PictureStudioConfig, index: number): PictureItem => {
+  const item = config.items[index];
+  if (!item) throw new Error(`expected an item at index ${index}`);
+  return item;
+};
 
 describe("imagePath", () => {
   it("keeps a hand-written path as-is", () => {
@@ -1103,7 +1111,7 @@ describe("image element", () => {
       type: CARD_TYPE,
       items: [item({ image: "/a.png", filter: "blur(2px)", state_image: { on: "/b.png" } })],
     });
-    const element = config.items[0]!;
+    const element = itemAt(config, 0);
     expect(element.type).toBe("element");
     if (element.type !== "element" || element.config.type !== "image") throw new Error("shape");
     expect(element.config.width).toBe(DEFAULT_IMAGE_WIDTH);
@@ -1117,17 +1125,16 @@ describe("image element", () => {
       type: CARD_TYPE,
       items: [{ type: "element", position: {}, config: { type: "picture" } }],
     });
-    expect(config.items[0]!.type).toBe("unknown");
+    expect(itemAt(config, 0).type).toBe("unknown");
   });
 
   test("round trips: the default width is omitted, an absent height stays absent", () => {
     const stored = storedConfig(
       normalizeConfig({ type: CARD_TYPE, items: [item({ image: "/a.png" })] }),
     );
-    const config = (stored.items as Record<string, unknown>[])[0]!.config as Record<
-      string,
-      unknown
-    >;
+    const raw = (stored.items as Record<string, unknown>[])[0];
+    if (!raw) throw new Error("expected an item at index 0");
+    const config = raw.config as Record<string, unknown>;
     expect(config).not.toHaveProperty("width");
     expect(config).not.toHaveProperty("height");
     expect(config.image).toBe("/a.png");
@@ -1137,10 +1144,9 @@ describe("image element", () => {
     const stored = storedConfig(
       normalizeConfig({ type: CARD_TYPE, items: [item({ width: 40, height: 25 })] }),
     );
-    const config = (stored.items as Record<string, unknown>[])[0]!.config as Record<
-      string,
-      unknown
-    >;
+    const raw = (stored.items as Record<string, unknown>[])[0];
+    if (!raw) throw new Error("expected an item at index 0");
+    const config = raw.config as Record<string, unknown>;
     expect(config.width).toBe(40);
     expect(config.height).toBe(25);
   });
@@ -1149,10 +1155,9 @@ describe("image element", () => {
     const stored = storedConfig(
       normalizeConfig({ type: CARD_TYPE, items: [item({ future_key: "kept" })] }),
     );
-    const config = (stored.items as Record<string, unknown>[])[0]!.config as Record<
-      string,
-      unknown
-    >;
+    const raw = (stored.items as Record<string, unknown>[])[0];
+    if (!raw) throw new Error("expected an item at index 0");
+    const config = raw.config as Record<string, unknown>;
     expect(config.future_key).toBe("kept");
   });
 });
