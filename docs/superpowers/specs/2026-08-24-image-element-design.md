@@ -44,20 +44,50 @@ card's name — `state-icon` and `state-label` already do.
 ### 2. Our own `<img>`, not `hui-image-element`
 
 The background renders through HA's `hui-image-element` (`_bgConfig`,
-`BACKGROUND_KEYS`), and reusing it for the item was the first instinct. It is
-wrong, for one measured reason:
+`BACKGROUND_KEYS`), and reusing it for the item was the first instinct.
 
-**`hui-image` sizes its `<img>` at `width: 100%` with height *auto*.** It only
-produces a box with an imposed height when `aspect_ratio` is given, and it then
-fills that box with `object-fit: cover`. Its single mechanism for honouring a
-height is precisely the property decision 3 removes from this model. Inside a
-box with an explicit height, its image would not fill — it would overflow or
-leave a gap.
+**Everything below was read out of the shipped bundle, frontend build
+`20260729.6`** — the same build `has-changed.ts` and the error-badge workaround
+are reconciled against. An earlier draft of this decision argued from memory and
+got the mechanism wrong; it claimed `hui-image` sizes its image at height *auto*
+and so could not fill a box with an imposed height. It can. What follows is what
+the code actually does.
 
-What reuse would have bought, once the surface is cut to light + dark, is **one
-thing**: the dark-mode swap. And `hass.themes.darkMode` is already in our
-`HomeAssistant` type (`types.ts`) — three lines. Inheriting a box model that
-fights ours to save three lines is a bad trade.
+First, confirming the premise: `create-hui-element` holds
+`Set(["conditional", "icon", "image", "service-button", "state-badge",
+"state-icon", "state-label"])` and builds the tag as `hui-<type>-element`. So
+picture-elements' `image` element **is** `hui-image-element`, which renders a
+`<hui-image>` inside itself.
+
+**`hui-image`'s `<img>` is `width: 100%; height: 100%; object-fit: contain`.**
+Given a box with a definite height it fills it perfectly well. The fit is driven
+by a `fitMode` property — `contain` / `fill` / `cover`, each selecting a class —
+and **`hui-image-element` never passes it.** Its render forwards exactly
+`entity`, `image`, `stateImage`, `cameraImage`, `cameraView`, `filter`,
+`stateFilter`, `title`, `aspectRatio`, `darkModeImage`, `darkModeFilter`. Nothing
+else.
+
+So the objection is not that it cannot be sized. It is that **the one thing it
+does with that size is the one thing decision 4 rejects, and the property that
+would change it is not on the public surface.** Through the only supported door,
+an image element would be locked to `contain` — the reading where a height that
+does not match the ratio changes nothing visible, which makes the height input
+look broken.
+
+Two smaller costs, also read from the bundle and also real:
+
+- `hui-image` applies its `.ratio` container while `_lastImageHeight` is still
+  undefined — a `height: 0` geometry on every mount, until the image has been
+  measured. A transient we neither control nor can predict, on a card Home
+  Assistant rebuilds at every config change.
+- `hui-image-element.setConfig` defaults **both** `tap_action` and `hold_action`
+  to `more-info` and toggles a `clickable` class. `_bgConfig` already pins the
+  two to `"none"` to suppress exactly that; we would be carrying the same
+  workaround a second time.
+
+And the original argument stands on its own: once the surface is cut to light +
+dark, reuse buys **one thing** — the dark-mode swap — and `hass.themes.darkMode`
+is already in our `HomeAssistant` type (`types.ts`). Three lines.
 
 **The cost, and it must be stated in the CHANGELOG:** `state_image`,
 `camera_image`, `camera_view`, `filter`, `dark_mode_filter`, `state_filter` and
