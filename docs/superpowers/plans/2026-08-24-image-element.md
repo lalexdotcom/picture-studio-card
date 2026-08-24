@@ -24,6 +24,50 @@
 
 ---
 
+## Known defects in this plan — fix these before executing
+
+Found on 2026-08-24, after the plan was committed. Neither is caught by the tests
+the plan itself writes, which is why they are here rather than left to be lived.
+
+**1. Task 2 step 3 reinvents `relayActions`, and the result does nothing.**
+
+The constructor there hand-rolls an `action` listener that dispatches a
+`picture-studio-action` event. **Nothing listens for that name.** A `tap_action`
+on an image element would silently do nothing, and Task 2's tests do not assert
+the relay at all, so the suite would stay green.
+
+`src/card/item-actions.ts:124` already exports the relay both other kinds use,
+and it dispatches `hass-action` — Home Assistant's own event name:
+
+```ts
+constructor() {
+  super();
+  this.editing = false;
+  relayActions(this, () => this._config);
+}
+```
+
+Import it beside `bindActions` and `hasAction`, delete the hand-rolled listener,
+and add a test that a dispatched `action` event leaves the element as
+`hass-action` carrying the config.
+
+**2. The spec's Playwright assertion cannot run in the harness as it stands.**
+
+`src/tests/playwright/harness.ts` says it plainly: *"Home Assistant is not loaded
+in this browser, so its elements are undefined."* So `hui-image` is undefined
+there, `picture-studio-image` takes its placeholder branch, and the spec's
+"renders at the expected box in both modes" measures a dashed box rather than an
+image.
+
+The harness already solves this shape of problem — `SizedChild` exists precisely
+because an undefined custom element is `display: inline` with no box. A
+`hui-image` stub belongs beside it, sized from the properties it is handed. Until
+it exists, **the browser assertions on the image box must not be claimed as
+passing**; run them, see them measure the placeholder, and stub before believing
+the numbers.
+
+---
+
 ## File Structure
 
 **Created**
