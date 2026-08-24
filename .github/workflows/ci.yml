@@ -1,8 +1,11 @@
 name: CI
 
+# Both publishing branches run here: `main` releases stable versions, `next`
+# releases pre-releases. `release.yml` hangs off this workflow's completion, so
+# a branch missing from this list cannot publish at all.
 on:
   push:
-    branches: [main]
+    branches: [main, next]
   pull_request:
 
 jobs:
@@ -10,6 +13,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # First, because a broken workflow is the one defect the rest of this job
+      # cannot reveal. This project merges locally and pushes `main`, with no
+      # pull request in between, so a workflow file is first executed by GitHub
+      # at the very moment it publishes. `release.yml` hangs off this job's
+      # success, so a failure here means nothing is released — which is the right
+      # outcome and the reason this belongs in CI rather than in a habit.
+      #
+      # YAML validity is the least of what it checks. It type-checks the
+      # `${{ }}` expressions — a typo in `steps.gate.outputs.release` yields an
+      # empty string, hence a condition silently always false and a step quietly
+      # skipped, with no error anywhere — and runs ShellCheck over every `run:`
+      # block.
+      #
+      # A `run:` rather than a third-party action, deliberately: this job
+      # declares no `permissions:`, so it inherits the repository's. An action
+      # would reach the workflow context and the token; a container started here
+      # reads files and can publish nothing. Same trade-off as the one written
+      # out in `hacs.yml`. The tag is pinned to a version because actionlint's
+      # rules move on their own, and a green CI must not turn red without a
+      # commit to explain it.
+      - name: Lint the workflows
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -31,8 +58,13 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # The bundle exists for `release.yml`, which downloads it from this run
+      # rather than rebuilding. Only a push to a publishing branch can lead to a
+      # release, so only those pushes need to keep it.
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: >
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next')
         with:
           name: bundle
           path: dist/picture-studio.js
