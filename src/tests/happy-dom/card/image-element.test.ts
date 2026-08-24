@@ -1,0 +1,172 @@
+import { afterEach, describe, expect, test } from "@rstest/core";
+import { imageSource, isImageClickable, PictureStudioImage } from "../../../card/image-element";
+import { IMAGE_TAG, type ImageElementConfig } from "../../../config";
+import type { HomeAssistant } from "../../../types";
+
+if (!customElements.get(IMAGE_TAG)) customElements.define(IMAGE_TAG, PictureStudioImage);
+
+// Minimal hui-image stub: just needs to exist in the registry and accept property
+// assignments so Lit can forward them. The assertions query it by querySelector
+// and then read the properties back.
+class HuiImageStub extends HTMLElement {}
+if (!customElements.get("hui-image")) customElements.define("hui-image", HuiImageStub);
+
+const hass = (states: Record<string, unknown> = {}): HomeAssistant =>
+  ({ states, themes: { darkMode: false }, language: "en", localize: () => "" }) as HomeAssistant;
+
+const mount = async (config: ImageElementConfig, h = hass(), editing = false) => {
+  const el = document.createElement(IMAGE_TAG) as PictureStudioImage;
+  el.editing = editing;
+  el.setConfig(config);
+  el.hass = h;
+  document.body.appendChild(el);
+  await el.updateComplete;
+  return el;
+};
+
+afterEach(() => {
+  document.body.replaceChildren();
+});
+
+describe("imageSource", () => {
+  test("a plain path passes through", () => {
+    expect(imageSource({ type: "image", width: 20, image: "/a.png" }, hass())).toBe("/a.png");
+  });
+
+  test("a media selector object is unwrapped, like the background's", () => {
+    expect(
+      imageSource({ type: "image", width: 20, image: { media_content_id: "/b.png" } }, hass()),
+    ).toBe("/b.png");
+  });
+
+  test("image_entity becomes the proxy URL, state included as its cache-buster", () => {
+    const h = hass({
+      "image.door": {
+        entity_id: "image.door",
+        state: "2026-08-24",
+        attributes: { access_token: "T" },
+      },
+    });
+    expect(imageSource({ type: "image", width: 20, image_entity: "image.door" }, h)).toBe(
+      "/api/image_proxy/image.door?token=T&state=2026-08-24",
+    );
+  });
+
+  test("no token, no image — Home Assistant's own answer, mirrored", () => {
+    const h = hass({ "image.door": { entity_id: "image.door", state: "x", attributes: {} } });
+    expect(
+      imageSource({ type: "image", width: 20, image_entity: "image.door" }, h),
+    ).toBeUndefined();
+  });
+
+  test("image_entity wins over image, as hui-image-element resolves it", () => {
+    const h = hass({
+      "image.door": {
+        entity_id: "image.door",
+        state: "s",
+        attributes: { access_token: "T" },
+      },
+    });
+    expect(
+      imageSource({ type: "image", width: 20, image: "/a.png", image_entity: "image.door" }, h),
+    ).toBe("/api/image_proxy/image.door?token=T&state=s");
+  });
+});
+
+describe("isImageClickable", () => {
+  test("absent means inert — unlike every other kind", () => {
+    expect(isImageClickable({ type: "image", width: 20 })).toBe(false);
+  });
+
+  test("an explicit action makes it clickable", () => {
+    expect(
+      isImageClickable({ type: "image", width: 20, tap_action: { action: "more-info" } }),
+    ).toBe(true);
+    expect(isImageClickable({ type: "image", width: 20, hold_action: { action: "toggle" } })).toBe(
+      true,
+    );
+  });
+
+  test("an explicit none is still inert", () => {
+    expect(isImageClickable({ type: "image", width: 20, tap_action: { action: "none" } })).toBe(
+      false,
+    );
+  });
+});
+
+describe("rendering", () => {
+  test("keep-ratio asks hui-image to contain; an explicit height asks it to fill", async () => {
+    const kept = await mount({ type: "image", width: 40, image: "/a.png" });
+    expect(kept.renderRoot.querySelector("hui-image")).toBeTruthy();
+    expect(
+      (kept.renderRoot.querySelector("hui-image") as unknown as { fitMode?: string }).fitMode,
+    ).toBe("contain");
+
+    const sized = await mount({ type: "image", width: 40, height: 25, image: "/a.png" });
+    expect(
+      (sized.renderRoot.querySelector("hui-image") as unknown as { fitMode?: string }).fitMode,
+    ).toBe("fill");
+  });
+
+  test("every hui-image key is forwarded", async () => {
+    const el = await mount({
+      type: "image",
+      width: 40,
+      image: "/a.png",
+      dark_mode_image: "/dark.png",
+      camera_image: "camera.front",
+      camera_view: "live",
+      entity: "binary_sensor.door",
+      state_image: { on: "/on.png" },
+      state_filter: { off: "grayscale(1)" },
+      filter: "blur(1px)",
+      dark_mode_filter: "brightness(.7)",
+    });
+    const image = el.renderRoot.querySelector("hui-image") as unknown as Record<string, unknown>;
+    expect(image.darkModeImage).toBe("/dark.png");
+    expect(image.cameraImage).toBe("camera.front");
+    expect(image.cameraView).toBe("live");
+    expect(image.entity).toBe("binary_sensor.door");
+    expect(image.stateImage).toEqual({ on: "/on.png" });
+    expect(image.stateFilter).toEqual({ off: "grayscale(1)" });
+    expect(image.filter).toBe("blur(1px)");
+    expect(image.darkModeFilter).toBe("brightness(.7)");
+  });
+
+  test("the clickable attribute follows the config", async () => {
+    const inert = await mount({ type: "image", width: 40, image: "/a.png" });
+    expect(inert.hasAttribute("clickable")).toBe(false);
+
+    const live = await mount({
+      type: "image",
+      width: 40,
+      image: "/a.png",
+      tap_action: { action: "more-info" },
+    });
+    expect(live.hasAttribute("clickable")).toBe(true);
+  });
+
+  test("an action event is relayed as hass-action carrying the config", async () => {
+    const config: ImageElementConfig = {
+      type: "image",
+      width: 40,
+      image: "/a.png",
+      tap_action: { action: "more-info" },
+    };
+    const el = await mount(config);
+    let received: CustomEvent | undefined;
+    el.addEventListener(
+      "hass-action",
+      (e: Event) => {
+        received = e as CustomEvent;
+      },
+      { once: true },
+    );
+    el.dispatchEvent(
+      new CustomEvent("action", { detail: { action: "tap" }, bubbles: true, composed: true }),
+    );
+    expect(received).toBeTruthy();
+    expect(received?.detail?.config).toEqual(config);
+    expect(received?.detail?.action).toBe("tap");
+  });
+});
