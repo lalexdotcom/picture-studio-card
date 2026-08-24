@@ -10,6 +10,7 @@ import { iconForm, themeModeTitle } from "./state-icon-form";
 
 export { appearanceToggleSchema } from "./state-icon-form";
 
+import { imageForm } from "./image-form";
 import { labelForm } from "./state-label-form";
 
 /**
@@ -150,6 +151,8 @@ export class PictureStudioElementForm extends LitElement {
         return iconForm.toFormData(element);
       case "state-label":
         return labelForm.toFormData(element);
+      case "image":
+        return imageForm.toFormData(element);
     }
     return assertNever(element, "element kind");
   }
@@ -169,6 +172,15 @@ export class PictureStudioElementForm extends LitElement {
         this.dispatchEvent(
           new CustomEvent("element-changed", {
             detail: { element: labelForm.fromFormData(element, data) },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+        return;
+      case "image":
+        this.dispatchEvent(
+          new CustomEvent("element-changed", {
+            detail: { element: imageForm.fromFormData(element, data) },
             bubbles: true,
             composed: true,
           }),
@@ -223,6 +235,8 @@ export class PictureStudioElementForm extends LitElement {
           return iconForm.render({ ...ctx, element });
         case "state-label":
           return labelForm.render({ ...ctx, element });
+        case "image":
+          return imageForm.render({ ...ctx, element });
       }
       return assertNever(element, "element kind");
     })();

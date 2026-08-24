@@ -13,6 +13,7 @@ import {
   isDefaultElementSize,
   normalizeElementSize,
 } from "./element-size";
+import { DEFAULT_IMAGE_WIDTH, type ImageBox, normalizeImageBox } from "./image-box";
 import {
   type Anchor,
   DEFAULT_POSITION,
@@ -30,6 +31,7 @@ export const FORM_TAG = "picture-studio-badge-form";
 export const PICKER_TAG = "picture-studio-anchor-picker";
 export const ICON_TAG = "picture-studio-state-icon";
 export const LABEL_TAG = "picture-studio-state-label";
+export const IMAGE_TAG = "picture-studio-image";
 export const ELEMENT_FORM_TAG = "picture-studio-element-form";
 export const PROBE_TAG = "picture-studio-visibility-probe";
 export const VISIBILITY_SECTION_TAG = "picture-studio-visibility-section";
@@ -127,7 +129,38 @@ export interface UnknownItem {
 
 export type PictureItem = BadgeItem | ElementItem | UnknownItem;
 
-export type ElementConfig = StateIconConfig | StateLabelConfig;
+/**
+ * A picture placed on the picture — a second background, with a box of its own.
+ *
+ * Everything above `width` is Home Assistant's `hui-image` vocabulary, forwarded
+ * to it verbatim. **`aspect_ratio` is deliberately absent**: given one,
+ * `hui-image` builds its `.ratio` container (`height: 0` plus a padding box),
+ * which defeats the height the card imposes. The two cannot coexist.
+ *
+ * `entity` and `image_entity` are different keys and read alike, so: `image_entity`
+ * *is* the picture — an `image` or `camera` domain entity — while `entity` is the
+ * state that selects an entry from `state_image` and `state_filter` and draws
+ * nothing by itself. The card's own config carries both, in two sections, and
+ * this mirrors it rather than inventing a clearer arrangement that would disagree.
+ */
+export interface ImageElementConfig extends ImageBox {
+  type: "image";
+  image?: ImageSource;
+  dark_mode_image?: ImageSource;
+  image_entity?: string;
+  camera_image?: string;
+  camera_view?: "auto" | "live";
+  entity?: string;
+  state_image?: Record<string, string>;
+  state_filter?: Record<string, string>;
+  filter?: string;
+  dark_mode_filter?: string;
+  tap_action?: ActionConfig;
+  hold_action?: ActionConfig;
+  double_tap_action?: ActionConfig;
+}
+
+export type ElementConfig = StateIconConfig | StateLabelConfig | ImageElementConfig;
 
 /**
  * The floor under every branch on an element kind. Three sites default to the
@@ -342,6 +375,13 @@ export const normalizeElementConfig = (
       show: normalizeLabelShow(raw.show),
     } as StateLabelConfig;
   }
+  if (raw.type === "image") {
+    return {
+      ...raw,
+      type: "image",
+      ...normalizeImageBox(raw),
+    } as ImageElementConfig;
+  }
   // Unreachable: normalizeConfig checks the kind before calling, because only it
   // can turn an unknown one into an UnknownItem. Kept as a type-level floor.
   throw new Error(`picture-studio: items[${index}].config has an unreadable type`);
@@ -387,7 +427,7 @@ export const normalizeConfig = (raw: unknown): PictureStudioConfig => {
     if (!isRecord(entry.config)) return unknown("config-missing", type);
     if (type === "element") {
       const kind = entry.config.type;
-      if (kind !== "state-icon" && kind !== "state-label") {
+      if (kind !== "state-icon" && kind !== "state-label" && kind !== "image") {
         return unknown("element-type", typeof kind === "string" ? kind : undefined);
       }
     }
@@ -506,6 +546,15 @@ export const storedConfig = (config: PictureStudioConfig): Record<string, unknow
         const { size, chrome, halo, ...rest } = element;
         const config = common({ ...rest }, size, halo, DEFAULT_ICON_SIZE);
         if (chrome && !isDefaultIconChrome(chrome)) config.chrome = chrome;
+        stored.config = config;
+      } else if (element.type === "image") {
+        // No `common()` here: an image has no ElementSize and no halo. `rest`
+        // carries every hui-image key untouched, which is what keeps a
+        // hand-written `camera_view` alive across an editor commit.
+        const { width, height, ...rest } = element;
+        const config: Record<string, unknown> = { ...rest };
+        if (width !== DEFAULT_IMAGE_WIDTH) config.width = width;
+        if (height !== undefined) config.height = height;
         stored.config = config;
       } else {
         assertNever(element, "element kind");
