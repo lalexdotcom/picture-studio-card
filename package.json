@@ -1,6 +1,6 @@
 {
   "name": "picture-studio-card",
-  "version": "1.5.3",
+  "version": "1.6.0-beta.1",
   "description": "Home Assistant Lovelace card: an image with badges you position by drag and drop",
   "repository": {
     "type": "git",
