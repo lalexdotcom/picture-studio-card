@@ -18,13 +18,25 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # `event == 'push'` is load-bearing and was not needed before `next` existed.
+    # For a CI run triggered by a pull request, `head_branch` is the *source*
+    # branch — so a PR from `next` onto `main` would satisfy the branch test,
+    # start this job, pass every guard, and then hard-fail on the artefact
+    # download, since CI only uploads the bundle for pushes. Previously
+    # impossible: no PR has `main` as its source.
     if: >
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.head_branch == 'main' ||
+       github.event.workflow_run.head_branch == 'next')
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          # Full history, because the reconciliation step below asks whether
+          # `next` is an ancestor of this commit, and a shallow clone cannot
+          # answer that. The repository is small; a release is rare.
+          fetch-depth: 0
 
       - name: Read the version
         id: version
@@ -45,6 +57,82 @@ jobs:
             echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # The pre-release equivalent of the `unreleased` catch below, and it exists
+      # for the same reason: a property of the pipeline rather than a habit
+      # anyone has to remember. Forgetting the `-beta.N` suffix while publishing
+      # from `next` would otherwise send a feature build to every user of the
+      # card as a stable release, which is the one mistake here that cannot be
+      # taken back.
+      #
+      # It runs *after* the gate deliberately. `next` is recreated from `main`
+      # after every minor, so it spends a moment carrying the stable version that
+      # was just published — already tagged, hence a no-op, and a no-op must stay
+      # green. Only a version this job would actually publish is checked.
+      - name: The branch and the version must agree
+        if: steps.gate.outputs.release == 'true'
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          case "$VERSION" in
+            *-*) suffixed=true ;;
+            *)   suffixed=false ;;
+          esac
+
+          if [ "$BRANCH" = main ] && [ "$suffixed" = true ]; then
+            echo "::error::$VERSION is a pre-release version and main publishes stable releases only"
+            exit 1
+          fi
+
+          if [ "$BRANCH" = next ] && [ "$suffixed" = false ]; then
+            echo "::error::$VERSION carries no pre-release suffix and next publishes pre-releases only"
+            exit 1
+          fi
+
+          echo "$BRANCH publishing $VERSION."
+
+      # The last hole in the two-branch chain, and the only one that stays
+      # silent. `next` holds `1.6.0-beta.3`; someone opens `1.6.0` on `main`
+      # believing they are taking the next minor; `main` then publishes a stable
+      # `1.6.0` containing none of the features the testers were testing, under
+      # exactly the number they were waiting for. The inverted changelog catch
+      # will stop `next` publishing afterwards — correctly, and far too late.
+      #
+      # The invariant that closes it: a stable may ship a version `next` still
+      # claims only once `next` has actually been merged into it.
+      - name: A version next still claims must ship with next in it
+        if: >
+          steps.gate.outputs.release == 'true' &&
+          github.event.workflow_run.head_branch == 'main'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if ! git ls-remote --exit-code --heads origin next >/dev/null 2>&1; then
+            echo "No next branch — nothing to reconcile."
+            exit 0
+          fi
+
+          git fetch --no-tags --quiet origin next
+          next_version=$(git show FETCH_HEAD:package.json | jq -r .version)
+          next_base="${next_version%%-*}"
+
+          if [ "$next_base" != "$VERSION" ]; then
+            echo "next holds $next_version, a different line from $VERSION."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "next ($next_version) is contained in this commit."
+            exit 0
+          fi
+
+          echo "::error::next holds $next_version and has not been merged, so $VERSION cannot ship without it"
+          exit 1
+
       - name: Extract the changelog section
         if: steps.gate.outputs.release == 'true'
         env:
@@ -52,7 +140,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          heading=$(awk -v ver="$VERSION" '
+          # A pre-release has no section of its own: `1.6.0-beta.3` publishes the
+          # notes of `## 1.6.0`, the section `next` has been filling since the
+          # version was opened. One section per minor is what keeps CHANGELOG.md
+          # readable by a user; a section per beta would not be, and the final
+          # one would then have to be rewritten as the union of them all.
+          base="${VERSION%%-*}"
+
+          # The heading is matched on the base version, and the character class
+          # is what makes that safe: the character after `## 1.6.0` may not be a
+          # version character, so `## 1.6.0-beta.1` can never be mistaken for the
+          # section of `1.6.0`, nor `## 1.6.10` for `## 1.6.1`.
+          heading=$(awk -v ver="$base" '
             index($0, "## " ver) == 1 {
               rest = substr($0, length("## " ver) + 1)
               if (rest == "" || rest ~ /^[^0-9A-Za-z.+-]/) { print; exit }
@@ -60,18 +159,30 @@ jobs:
           ' CHANGELOG.md)
 
           if [ -z "$heading" ]; then
-            echo "::error::CHANGELOG.md has no section for $VERSION"
+            echo "::error::CHANGELOG.md has no section for $base"
             exit 1
           fi
 
           case "$heading" in
-            *unreleased*)
-              echo "::error::CHANGELOG.md still marks $VERSION as unreleased"
-              exit 1
-              ;;
+            *unreleased*) open=true ;;
+            *)            open=false ;;
           esac
 
-          awk -v ver="$VERSION" '
+          if [ "$VERSION" = "$base" ] && [ "$open" = true ]; then
+            echo "::error::CHANGELOG.md still marks $VERSION as unreleased"
+            exit 1
+          fi
+
+          # The catch inverts for a pre-release, and closes the other half of the
+          # door: a dated `## 1.6.0` means the stable is out, so a `1.6.0-beta.N`
+          # of it is a mistake — a `next` that was never recreated from `main`,
+          # publishing betas of a version users already have.
+          if [ "$VERSION" != "$base" ] && [ "$open" = false ]; then
+            echo "::error::CHANGELOG.md marks $base as released, so $VERSION cannot be published"
+            exit 1
+          fi
+
+          awk -v ver="$base" '
             found && /^## / { exit }
             found { print }
             index($0, "## " ver) == 1 {
@@ -81,7 +192,7 @@ jobs:
           ' CHANGELOG.md > release-notes.md
 
           if ! grep -q '[^[:space:]]' release-notes.md; then
-            echo "::error::CHANGELOG.md section for $VERSION is empty"
+            echo "::error::CHANGELOG.md section for $base is empty"
             exit 1
           fi
 
@@ -105,6 +216,12 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.event.workflow_run.head_sha }}
           name: v${{ steps.version.outputs.version }}
+          # The SemVer suffix decides, so nobody has to: `1.6.0-beta.3` carries a
+          # `-`, `1.6.0` does not. GitHub refuses to point `latest` at a
+          # pre-release, and `latest` is what HACS follows for everyone who has
+          # not turned on "Show beta versions" — so this single field is the
+          # whole of what separates the two audiences.
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           body_path: release-notes.md
           generate_release_notes: true
           files: picture-studio.js

@@ -18,23 +18,97 @@ recorded here is *where to look* and *how to read the answer* — never the answ
 | --- | --- |
 | Which version is open? | `jq -r .version package.json` |
 | Is it releasable? | `head -3 CHANGELOG.md` — a date means yes, `unreleased` means no |
-| What is published? | `git ls-remote --tags origin` |
+| What is published? | `git ls-remote --tags origin` — a `-` in a tag means a pre-release |
+| Which branch am I on, and what does it publish? | `git branch --show-current` — `main` stable, `next` pre-release, anything else nothing |
 | How far is `main` from the remote? | `git log --oneline origin/main..main \| wc -l` |
+| Does `next` owe a back-merge? | `git log --oneline next..main \| wc -l` — 0 means it is up to date |
+| Where does this branch merge? | `git config --get "branch.$(git branch --show-current).target"` — empty means `main` |
 
 **`git tag -l` lies here and is the trap that caught a session.** This clone has
 never fetched the tags the release workflow creates, so the local list stops
 several releases behind. A session read it, told the user a published version was
 unreleased, and was corrected by the user. Always the remote.
 
-**The release chain:** a push to `main` runs CI, then `release.yml` reads
-`version` from `package.json` and creates the `v<version>` tag and the release.
-HACS installs from that tag. **The user pushes, never the agent.**
+**The release chain:** a push to a publishing branch runs CI, then `release.yml`
+reads `version` from `package.json` and creates the `v<version>` tag and the
+release. HACS installs from that tag. **The user pushes, never the agent.**
+
+**There are two publishing branches since 2026-08-24** — `main` for bugfixes,
+`next` for features — and the whole separation of audiences rests on one field of
+the GitHub release: `prerelease`, derived from the SemVer suffix. `1.6.0-beta.3`
+carries a `-` and is a pre-release; `1.6.0` does not and is a stable. GitHub
+refuses to point `latest` at a pre-release, and `latest` is what HACS follows for
+every user who has not turned on "Show beta versions". See `AGENTS.md` § Branches
+for the traffic rules; what follows is what would bite someone cold.
+
+**The workflows are linted by `actionlint`, as the first step of CI.** It
+type-checks the `${{ }}` expressions and runs ShellCheck over every `run:` block
+— the class of defect that has no other detector here, since a mistyped
+`steps.<id>.outputs.<name>` is an empty string, not an error, and merely skips a
+step in silence. The same check locally, which is worth doing while editing a
+workflow rather than waiting for a round-trip:
+
+```
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:<tag> -color
+```
+
+**The tag lives in `ci.yml` and only there** — `grep actionlint .github/workflows/ci.yml`
+gives it in a second, so it is not repeated here where it could drift. It is
+pinned on purpose: actionlint's rules move on their own, and a green CI must not
+turn red without a commit to explain it.
 
 **The CHANGELOG date is the safety catch, and it is load-bearing.** `main` can
 sit a long way ahead of `origin/main` — a push then publishes whatever
 `package.json` names. The only thing between an accidental push and a release is
 `release.yml` refusing while the heading for that version says `unreleased`. Do
 not replace that word until the user asks for the release.
+
+**The catch inverts for a pre-release, and that is deliberate.** A beta is
+refused when its base heading *no longer* says `unreleased` — a dated `## 1.6.0`
+means the stable shipped, so a `1.6.0-beta.N` of it can only be a `next` that was
+never recreated from `main`. A third step pairs branch with version and refuses a
+suffixed version on `main` or an unsuffixed one on `next`; that one guards the
+only irreversible mistake here, a feature build going out to every user as a
+stable.
+
+**Two scripts hold what CI cannot see.** `scripts/start-branch.sh fix|feature
+[name]` puts the session on the right line from anywhere and cuts the branch;
+`scripts/open-prerelease.sh 1.6` creates `next` from `main` on `1.6.0-beta.1`.
+Both **refuse rather than repair**, and neither ever touches work in flight — a
+dirty tree is a refusal, never a stash. `start-branch.sh` also writes
+`git config branch.<name>.target`, which is what the close reads instead of
+guessing: a branch cut from `main` and one cut from a freshly recreated `next`
+have the same merge-base with `main`, so the target genuinely cannot be
+recomputed after the fact.
+
+### Five things about the two-branch chain that are not obvious
+
+1. **The changelog heading never carries the beta suffix.** `package.json` reads
+   `1.6.0-beta.3`, the heading still reads `## 1.6.0 — unreleased`, and the
+   workflow releases the beta from the base version's section. Writing a
+   `## 1.6.0-beta.3` heading would fail the release *and* make the changelog
+   unreadable — one section per minor is the whole point.
+2. **`next` sits briefly on the stable version, and that must stay green.** Right
+   after it is recreated from `main` it carries the version that was just
+   published — already tagged, so the run is a no-op. The branch/version guard is
+   placed *after* the tag gate precisely so that state does not redden a job. Do
+   not move it up.
+3. **A stable fix does not reach beta testers by itself.** A tester on
+   `1.6.0-beta.3` is *above* `1.5.4` in every version comparison. Only the
+   back-merge followed by a `beta.4` delivers it.
+4. **A stable cannot ship a version `next` still claims.** `release.yml`
+   reconciles the two before publishing from `main`: if `origin/next` holds the
+   same base version, it must be an ancestor of the released commit. Without it
+   the worst drift of the whole scheme is silent — `main` publishing a stable
+   `1.6.0` containing none of the features the testers were testing, under
+   exactly the number they were waiting for. That is also why the release job
+   checks out with `fetch-depth: 0`.
+5. **The `## <ver>` matching is prefix-safe, and it was measured.** The awk guard
+   accepts a heading only when the character after the version is not a version
+   character, so `## 1.6.0` never matches `## 1.6.0-beta.1`, nor `## 1.6.1` the
+   heading `## 1.6.10`. Both cases were run against a fabricated changelog on
+   2026-08-24 rather than reasoned about; re-run them the same way if the step is
+   ever touched.
 
 Release history, which is the one thing here that does not go stale by itself:
 1.0.0 (2026-08-12, by hand), 1.1.0 (2026-08-13, first from the automated chain),

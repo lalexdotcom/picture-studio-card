@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# `state.md` and `follow-ups.md` belong to `main`. This refuses a commit that
+# touches them from the feature line — `next` itself, or any branch that merges
+# into it.
+#
+# It exists because the failure it prevents is silent. Two branches each
+# appending a `## 17.` to `follow-ups.md` merge **without a conflict** and leave
+# two entries numbered 17; git says nothing, and nobody notices until a
+# reference to "entry 17" lands on the wrong one. A rule in AGENTS.md is read by
+# whoever thinks to look for it; this is read by everyone.
+#
+# Installed by `.devcontainer/post-create.sh`:
+#
+#   git config core.hooksPath .githooks
+#
+# Its limits, which are real: `--no-verify` walks past it, and it only exists on
+# machines where that config was set. It is not the guarantee CI is. It is a
+# great deal better than remembering.
+
+set -euo pipefail
+
+# An unborn branch has no HEAD to diff the index against, and asking for one
+# fails outright — which under `set -e` would turn this hook into a refusal of a
+# repository's very first commit. Measured, not imagined: it did exactly that.
+git rev-parse --verify --quiet HEAD >/dev/null || exit 0
+
+# `symbolic-ref` rather than `rev-parse --abbrev-ref`, which answers the literal
+# string "HEAD" when detached and would need comparing against it. Here a
+# detached HEAD — a rebase, a bisect — simply yields nothing.
+branch=$(git symbolic-ref --short -q HEAD || true)
+[ -n "$branch" ] || exit 0
+
+target=$(git config --get "branch.$branch.target" || true)
+[ "$branch" = next ] || [ "$target" = next ] || exit 0
+
+owned=$(git diff --cached --name-only |
+	grep -E '^\.serena/memories/picture-studio/(state|follow-ups)\.md$' |
+	awk '{ print "  " $0 }' || true)
+
+[ -n "$owned" ] || exit 0
+
+cat >&2 <<EOF
+error: these files belong to main and cannot be committed from the feature line
+
+$owned
+
+You are on '$branch'. Write what you found in the feature line's own handoff
+file instead — the one named after the open version, following the
+1.5.0-handoff.md precedent. It is folded into follow-ups.md, with numbers, when
+next merges into main; only main ever allocates a number, which is what keeps
+the numbering from drifting.
+
+See AGENTS.md, § Project memory rule 8.
+EOF
+exit 1

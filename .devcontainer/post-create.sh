@@ -17,6 +17,11 @@ claude mcp add serena --scope user -- serena start-mcp-server --context=claude-c
 
 serena index --project-root "$PWD" 2>/dev/null || true
 
+# Hooks are not versioned by git and not shared by a clone, so the repository
+# keeps them in `.githooks/` and points git at them here. See that directory for
+# what they guard and what they cannot.
+git config core.hooksPath .githooks
+
 pnpm install
 
 # Install Playwright browsers + OS deps for rstest browser mode.
