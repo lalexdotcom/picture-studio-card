@@ -56,6 +56,18 @@ const cameraViewField = (localize: LocalizeFunc) => ({
   },
 });
 
+/**
+ * The ha-form schema for the background (image / entity / camera) section.
+ *
+ * `config` is used only to derive whether `camera_view` is shown — the values
+ * are never read for the form; `backgroundData` builds those separately.
+ *
+ * `options.aspectRatio` guards a correctness trap: pass `{ aspectRatio: false }`
+ * for an image *element*, where `hui-image` is size-managed by the card. Given
+ * an `aspect_ratio`, `hui-image` builds its `.ratio` container (`height: 0` plus
+ * a padding-trick box) that defeats the explicit height the card imposes on the
+ * wrapper. The card's own background passes the option as `true` (the default).
+ */
 export const backgroundSchema = (
   localize: LocalizeFunc,
   config: BackgroundKeys,

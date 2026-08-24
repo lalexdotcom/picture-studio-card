@@ -8,6 +8,7 @@ import {
   entitySchema,
   filtersSchema,
   mergeBackground,
+  PICTURE_ENTITY,
 } from "./form-schemas";
 import { PLACEMENT_ICON } from "./icons";
 import { iconInteractionsSchema } from "./state-icon-form";
@@ -25,19 +26,12 @@ export const KEEP_RATIO = "keep_ratio";
 const NO_ASPECT_RATIO = { aspectRatio: false } as const;
 
 /**
- * The height to write when the box is freed.
- *
- * A later task measures it off the preview so the box does not jump when
- * keep-ratio is cleared — the same route `reanchor` uses, and for the same
- * reason: only the card knows pixels. For now we fall back to the item's own
- * width, which gives a square box rather than a collapsed one.
- */
-/**
  * The height to write when the box is freed, measured rather than invented.
  *
  * The measured value comes from the card preview via the editor; the fallback
- * to `config.width` gives a square box when no preview is available (tests,
- * a form opened before the card laid out).
+ * to `config.width` gives a square box when no preview is available — no
+ * preview to measure means we hand the user a value they can already see and
+ * change, and a square box is the least surprising starting point.
  */
 const freedHeight = (measured: number | undefined, config: ImageElementConfig): number =>
   typeof measured === "number" && measured > 0 ? measured : config.width;
@@ -69,15 +63,29 @@ export const imageForm: KindForm<ImageElementConfig> = {
     const next = mergeBackground(config, fields, NO_ASPECT_RATIO);
     const width =
       typeof fields.width === "number" && fields.width > 0 ? fields.width : config.width;
+
+    // mergeBackground / sectionMerge writes only the keys the background schema
+    // rendered. Every other field the form collected — entity, filter,
+    // state_image, tap_action, etc. — passes through `fields` without being
+    // applied, silently. Apply them here so edits to the Entity, Filters, and
+    // Interactions sections reach the config.
+    const bgOwned = new Set(["image", "dark_mode_image", PICTURE_ENTITY, "camera_view", "width"]);
+    const out = next as unknown as Record<string, unknown>;
+    for (const [k, v] of Object.entries(fields)) {
+      if (bgOwned.has(k)) continue;
+      if (v === undefined || v === null || v === "") delete out[k];
+      else out[k] = v;
+    }
+
     if (keep === true) {
-      const { height: _drop, ...kept } = { ...next, width };
-      return kept as ImageElementConfig;
+      delete out.height;
+      return { ...out, width } as ImageElementConfig;
     }
     const chosen =
       typeof height === "number" && height > 0
         ? height
         : freedHeight(typeof __measuredHeight === "number" ? __measuredHeight : undefined, config);
-    return { ...next, width, height: chosen };
+    return { ...out, width, height: chosen } as ImageElementConfig;
   },
 
   render(ctx: KindFormContext<ImageElementConfig>): unknown {

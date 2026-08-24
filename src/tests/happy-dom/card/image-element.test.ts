@@ -123,6 +123,9 @@ describe("rendering", () => {
       dark_mode_filter: "brightness(.7)",
     });
     const image = el.renderRoot.querySelector("hui-image") as unknown as Record<string, unknown>;
+    // .image is the primary source binding — a regression in the template
+    // binding would make the image go blank without being caught elsewhere.
+    expect(image.image).toBe("/a.png");
     expect(image.darkModeImage).toBe("/dark.png");
     expect(image.cameraImage).toBe("camera.front");
     expect(image.cameraView).toBe("live");
@@ -144,6 +147,40 @@ describe("rendering", () => {
       tap_action: { action: "more-info" },
     });
     expect(live.hasAttribute("clickable")).toBe(true);
+  });
+
+  // I1 regression: with both entity and image_entity set, the old shouldUpdate
+  // used `entity ?? image_entity`, which evaluated to `entity` when both were
+  // present. hassRenderChanged was then called with only entity — so a state
+  // change on image_entity (new photo token, cache-buster moved) returned false
+  // and suppressed the render. The fix watches both, joined with ||.
+  test("a state change on image_entity re-renders even when entity is also set", async () => {
+    const h1 = hass({
+      "image.door": {
+        entity_id: "image.door",
+        state: "t1",
+        attributes: { access_token: "A" },
+      },
+      "sensor.temp": { entity_id: "sensor.temp", state: "25", attributes: {} },
+    });
+    const el = await mount(
+      { type: "image", width: 40, image_entity: "image.door", entity: "sensor.temp" },
+      h1,
+    );
+    const img = el.renderRoot.querySelector("hui-image") as unknown as Record<string, unknown>;
+    expect(String(img.image)).toContain("state=t1");
+
+    const h2 = hass({
+      "image.door": {
+        entity_id: "image.door",
+        state: "t2",
+        attributes: { access_token: "A" },
+      },
+      "sensor.temp": { entity_id: "sensor.temp", state: "25", attributes: {} },
+    });
+    el.hass = h2;
+    await el.updateComplete;
+    expect(String(img.image)).toContain("state=t2");
   });
 
   test("an action event is relayed as hass-action carrying the config", async () => {

@@ -61,4 +61,33 @@ describe("imageForm.fromFormData", () => {
     const next = imageForm.fromFormData(withRatio, imageForm.toFormData(withRatio));
     expect((next as { aspect_ratio?: string }).aspect_ratio).toBe("16:9");
   });
+
+  // C1 regression: entity, filter, state_image, and action fields were silently
+  // dropped before the fix — mergeBackground / sectionMerge only writes the
+  // background schema's own keys, leaving everything else untouched. The tests
+  // below would have failed against the old code: fromFormData would have returned
+  // the unchanged config value (or undefined) for every field listed, because the
+  // incoming form value was never applied.
+  test("entity, state_image, filter, and tap_action from the form reach the config", () => {
+    const next = imageForm.fromFormData(base, {
+      ...imageForm.toFormData(base),
+      entity: "sensor.temperature",
+      state_image: { on: "/on.png" },
+      filter: "grayscale(1)",
+      tap_action: { action: "more-info" },
+    });
+    expect(next.entity).toBe("sensor.temperature");
+    expect(next.state_image).toEqual({ on: "/on.png" });
+    expect(next.filter).toBe("grayscale(1)");
+    expect(next.tap_action).toEqual({ action: "more-info" });
+  });
+
+  test("clearing entity from the form removes the key from the config", () => {
+    const withEntity = { ...base, entity: "sensor.temperature" };
+    const next = imageForm.fromFormData(withEntity, {
+      ...imageForm.toFormData(withEntity),
+      entity: "",
+    });
+    expect(next).not.toHaveProperty("entity");
+  });
 });

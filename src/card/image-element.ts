@@ -6,7 +6,8 @@ import { bindActions, hasAction, relayActions } from "./item-actions";
 import { interactionStyles } from "./item-styles";
 
 /**
- * Home Assistant's shared image renderer. **Not `hui-image-element`**, the
+ * Home Assistant's shared image renderer — verified against HA frontend build
+ * **20260729.6**. **Not `hui-image-element`**, the
  * picture-elements wrapper: its own shadow root holds an unstyled `<div>` that
  * breaks the `height: 100%` chain, and nothing reaches that node from outside —
  * no `::part`, no custom property, no light-DOM selector. So it covers only one
@@ -98,16 +99,19 @@ export class PictureStudioImage extends LitElement {
   }
 
   /**
-   * The card hands every item every `hass` publication. `entity` is what makes
-   * that parameter mean something here — a state image changes with it, and an
-   * image element without one has nothing that a tick could have moved.
+   * The card hands every item every `hass` publication. Both entity keys can
+   * make that parameter mean something here: `entity` selects among
+   * `state_image` entries (state-driven picture switching), while `image_entity`
+   * IS the picture source (its proxy URL carries the state as a cache-buster).
+   * Either one changing must trigger a re-render; watching only one leaves the
+   * other stale.
    */
   protected shouldUpdate(changed: PropertyValues): boolean {
     if (changed.has("_config") || changed.has("editing") || !changed.has("_hass")) return true;
-    return hassRenderChanged(
-      changed.get("_hass") as HomeAssistant | undefined,
-      this._hass,
-      this._config?.entity ?? this._config?.image_entity,
+    const old = changed.get("_hass") as HomeAssistant | undefined;
+    return (
+      hassRenderChanged(old, this._hass, this._config?.entity) ||
+      hassRenderChanged(old, this._hass, this._config?.image_entity)
     );
   }
 
