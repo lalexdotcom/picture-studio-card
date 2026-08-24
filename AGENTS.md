@@ -17,34 +17,122 @@
    dispatch, no commit without explicit validation.
 
 
+## Branches
+
+Two branches publish, and which one a piece of work belongs to is settled before
+the branch is cut, not after.
+
+| Branch | What lands there | `package.json` | What a push publishes |
+| ------ | ---------------- | -------------- | --------------------- |
+| `main` | bugfixes | `1.5.4` | a stable release, offered to every user |
+| `next` | features | `1.6.0-beta.3` | a pre-release, offered only to users who turned on "Show beta versions" in HACS |
+
+**Getting to the right line is `scripts/start-branch.sh`, and opening a
+pre-release line is `scripts/open-prerelease.sh` — neither is a sequence of steps
+to remember.**
+
+```sh
+scripts/start-branch.sh fix [name]        # main, the stable line
+scripts/start-branch.sh feature [name]    # next, the feature line
+scripts/open-prerelease.sh 1.6            # create next from main, on 1.6.0-beta.1
+```
+
+The name is optional because "I want to fix a bug on the stable version" is said
+before anyone knows what to call the branch: without one, the script only moves
+and checks. **Both refuse rather than repair, and neither ever moves work in
+flight** — a dirty tree is a refusal, never a stash. The checks they hold are the
+ones CI cannot see, because they happen before the first commit: the stray `v` in
+a version, a changelog section that was never opened, a base branch that is
+behind the remote, `next` cut from wherever HEAD happened to be.
+
+**A branch records where it merges, at the moment it is cut** — written by
+`start-branch.sh` into `git config branch.<name>.target`, and read back at the
+close. It is written down rather than recomputed because it cannot be
+recomputed: a branch cut from `main` and one cut from a freshly recreated `next`
+share the same merge-base with `main`, and no amount of history walking tells
+them apart. A branch with no recorded target predates this and merges onto
+`main`.
+
+**`next` is not permanent.** It lives for one minor version: when that version is
+ready it merges into `main` once, `main` releases it as a stable, and a *new*
+`next` is cut from `main` for the minor after. An everlasting feature branch
+makes the changelog and memory conflicts grow without bound; a branch that dies
+every minor keeps them small enough to resolve without thinking.
+
+**Shipping the line as a stable, in order** — it is the moment with the most
+steps and the least practice:
+
+1. **Back-merge `main` into `next` first**, so the review reads a diff of
+   features and not of fixes it has already seen.
+2. **Whole-branch review** of `next` → `main`. It gates the merge, as always.
+3. **Merge `next` into `main`**, locally.
+4. **Close the version, and only when the user asks for it**: strip the suffix in
+   `package.json` — `1.6.0-beta.7` becomes `1.6.0` — and replace `unreleased`
+   with the date in the `## 1.6.0` heading. The section itself needs no work; it
+   has been written all along, which is what one section per minor buys.
+5. **The user pushes `main`.** `prerelease` is false, the reconciliation step
+   finds `next` already inside the commit, HACS moves `latest` and every user is
+   offered `1.6.0` — beta testers included, for whom it reads as an upgrade.
+6. **Delete `next`.** Until it is gone it still claims a version that has
+   shipped, and the release workflow rightly refuses any further beta of it.
+   `scripts/open-prerelease.sh` will say so and will not delete it for you.
+
+**The traffic is asymmetric — `main` → `next` after every fix lands, `next` →
+`main` once per minor.** The back-merge is neither optional nor deferred: it is
+step 2 of the close, in the same session as the merge onto `main`, because what
+it carries exists locally from that moment — the push only adds a tag. It costs
+one conflict on `CHANGELOG.md` and `package.json`, and that conflict only grows
+while it waits. Until it happens, a tester on `1.6.0-beta.3` sits *above*
+`1.5.4` and does **not** have the fix; publishing a `beta.4` once the fix is
+pushed is what delivers it to them.
+
 ## Closing a session
 
 "On clôture" is an instruction, not a summary. It means, in order:
 
-1. **Merge onto `main`**, locally, if the whole-branch review came back
-   READY TO MERGE. If it did not, say so and stop — the merge is what the
-   review gates.
-2. **Update the project memory** so the next session resumes without
+1. **Merge onto the branch the work was cut from**, locally, if the whole-branch
+   review came back READY TO MERGE. If it did not, say so and stop — the merge
+   is what the review gates. The target is read, never guessed:
+
+   ```sh
+   git config --get "branch.$(git branch --show-current).target"
+   ```
+
+   Nothing there means the branch predates the convention: it merges onto `main`.
+2. **Back-merge `main` into `next`**, if `next` exists and the merge above landed
+   on `main`. Here, not in some later session: what the back-merge carries are
+   `main`'s commits, which exist locally the moment the merge is done. The push
+   only adds a tag. Waiting for it would make the duty cross a session boundary
+   with nothing to carry it across, and would let the conflict grow for no gain.
+
+   **When it conflicts, and it will:** `package.json` keeps **`next`'s** version,
+   the beta — never `main`'s. `CHANGELOG.md` keeps **both** sections. Resolving
+   the version the other way leaves `next` on an unsuffixed version, which the
+   release workflow then refuses at the push; the pipeline catches it, but late
+   and puzzlingly.
+3. **Update the project memory** so the next session resumes without
    re-deriving anything: where the work stands, what remains, and what would
-   bite someone who picked it up cold.
-3. **Commit what is left.** Judge it: if the remaining diff is trivial —
+   bite someone who picked it up cold — on the feature line, in that line's own
+   handoff file and nowhere else, per § Project memory rule 8.
+4. **Commit what is left.** Judge it: if the remaining diff is trivial —
    memory files, docs, a settled style — commit it without asking. If it is
    not, ask. Pushing is not part of closing — see below.
 
 ## Pushing
 
-A push to `main` publishes: CI runs, `release.yml` reads `version` from
-`package.json`, cuts the tag and the GitHub release, and HACS offers it to every
-user of the card.
+A push to a publishing branch publishes: CI runs, `release.yml` reads `version`
+from `package.json`, cuts the tag and the GitHub release. From `main` that
+release reaches every user of the card; from `next` it reaches only those who
+turned beta versions on in HACS — a smaller audience, not a private one.
 
 **Never push on your own initiative** — not to close a session, not to tidy up,
 not because the branch is green. **Push when the user asks for it in so many
-words**, and then push exactly what they asked for and nothing else: `main`,
-never `--tags`, never `--force`.
+words**, and then push exactly what they asked for and nothing else: the one
+branch they named, never `--tags`, never `--force`.
 
-If the request is ambiguous — "on release", "publie" — say what the push will
-set off and ask once. Being told to go ahead is the answer; asking twice is not
-diligence.
+If the request is ambiguous — "on release", "publie" — say **which branch and
+which version** the push will publish, and ask once. Being told to go ahead is
+the answer; asking twice is not diligence.
 
 ## Project memory
 
@@ -86,6 +174,24 @@ stale one expensive.
    run does not report every test file, it is not a baseline.** Scoped runs are
    the normal thing while working; the full run belongs to the delivery's
    verification, which is also when the memory is updated.
+8. **One file, one owning branch — this is what keeps `next` affordable.**
+   `state.md` and `follow-ups.md` belong to `main` and are never edited from
+   `next`. `next` carries a handoff file of its own — `1.6.0-handoff.md`,
+   following the `1.5.0-handoff.md` precedent — where its findings are written in
+   plain prose. They are folded into `follow-ups.md`, **with numbers**, when
+   `next` merges into `main`. Only one branch ever allocates a number, so rule
+   2's numbering cannot drift. The trap this avoids is silent: two branches each
+   appending a `## 17.` merge without a conflict and leave two entries numbered
+   17, and git will not say a word. Because it is silent, it is also enforced —
+   `.githooks/pre-commit` refuses such a commit from `next` or from any branch
+   targeting it. A hook is not the guarantee CI is (`--no-verify` walks past it,
+   and it lives only where `core.hooksPath` was set, which `post-create.sh`
+   does), but it is read by everyone, where a rule is read by whoever thinks to
+   look.
+9. **Memory kept outside the repository does not merge, and is blind to the
+   branch.** It is shared by `main` and `next` alike, so anything written from
+   `next` must name that branch — otherwise it will be read during a `main`
+   session as though it described the stable line.
 
 ## Language
 
@@ -113,6 +219,10 @@ Run the project's linter/formatter after every modification if one is configured
 5. One version, mirrored everywhere: the `CHANGELOG.md` heading, `version` in
    `package.json`, and the git tag of the release must agree. HACS installs
    from the GitHub release, so the tag is what users actually get.
+   **Two versions are open at once, one per publishing branch, and that is not a
+   divergence to repair.** `main` may sit on `1.5.4` while `next` sits on
+   `1.6.0-beta.3`. Each branch mirrors its own; a session that "fixes" the
+   difference breaks both.
 6. **The bump opens the version, it does not close it.** When the user calls for
    a new version, `package.json` and the `CHANGELOG.md` heading both take the
    new number straight away, and the heading's date reads `unreleased`:
@@ -125,12 +235,31 @@ Run the project's linter/formatter after every modification if one is configured
    never a separate `## unreleased` section alongside a numbered one. Replacing
    `unreleased` with a real date is the act that releases the version, and it is
    the last thing done, not the first.
+
+   On `next` the number carries a SemVer pre-release suffix — `1.6.0-beta.1`,
+   then `-beta.2` — but **only in `package.json`. The heading does not move**: it
+   reads `## 1.6.0 — unreleased` from the day the version opens to the day it
+   ships. A pre-release publishes the notes of its base version, so
+   `1.6.0-beta.3` is released from the `## 1.6.0` section. One section per minor
+   is what keeps the changelog readable by a user; a section per beta would not
+   be, and the final one would then have to be rewritten as the union of them
+   all. Each beta is therefore a bump of `package.json` alone — and still only
+   when the user asks, by rule 4.
 7. **The date is the safety catch, and the release workflow enforces it.** Its
    changelog step refuses to publish while the heading for the version in
    `package.json` still says `unreleased`, and refuses just as flatly when that
    version has no section at all. So an in-progress version cannot be shipped by
    an accidental push, and the catch is a property of the pipeline rather than a
    habit anyone has to remember.
+
+   For a pre-release the catch **inverts** and guards the other direction: it is
+   refused when the base heading no longer says `unreleased`, because a dated
+   `## 1.6.0` means the stable already shipped and a `beta.N` of it can only be a
+   `next` that was never recreated from `main`. A third check pairs the branch
+   with the version — a suffixed version cannot be published from `main`, an
+   unsuffixed one cannot be published from `next`. That last one exists because
+   forgetting the `-beta` suffix is the only mistake here that cannot be taken
+   back: it sends a feature build to every user as a stable release.
 
 ## Tooling — Serena (symbol-aware MCP)
 
