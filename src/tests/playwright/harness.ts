@@ -65,23 +65,39 @@ export class StubHaCard extends HTMLElement {
 }
 
 /**
- * Stands in for `hui-image`, which is not loaded in this browser. Without a
- * stub it is `display: inline` with no intrinsic size, so the wrapper the card
- * wraps it in collapses to zero and `measureImageHeight` would always return
- * undefined — making any browser assertion about image-box dimensions vacuous.
+ * Stands in for `hui-image`, which is not loaded in this browser. The stub
+ * derives its height from its width using the image's aspect ratio, the way the
+ * real `<img>` inside `hui-image` does. That is what makes keep-ratio mode
+ * testable: when the wrapper has `height: auto` and `max-height: 100%`, the
+ * stub's ratio determines the wrapper's natural height, and the clamp can then
+ * be asserted against.
  *
- * The stub sizes itself from the properties the card passes down, the same way
- * the real hui-image would. Width comes from the wrapper's own style (the card
- * writes it as a percentage); height is derived from the aspect ratio the card
- * does not set on an image element, so the stub applies a fixed 1:1 ratio by
- * default — it is a known, round number that makes the expected values legible.
+ * The ratio comes from the image path by harness convention: a path containing
+ * `-<w>x<h>` (e.g. `/banner-1x10.png`) uses that ratio; anything else is 1:1.
+ * That lets one test drive a square and another a 1:10 banner without the
+ * production element learning a test-only property.
  */
 export class HuiImageStub extends HTMLElement {
+  #image: string | undefined;
+
+  /** The card passes the resolved image path as a Lit property. */
+  set image(value: string | undefined) {
+    this.#image = value;
+    this.#applyRatio();
+  }
+
   connectedCallback(): void {
     this.style.display = "block";
-    // The card controls width via the wrapper; the stub only needs to give the
-    // element a height so getBoundingClientRect reports a non-zero box.
-    this.style.height = `${BADGE.height}px`;
+    this.#applyRatio();
+  }
+
+  #applyRatio(): void {
+    const match = this.#image ? /[-](\d+)x(\d+)/.exec(this.#image) : null;
+    const group1 = match ? match[1] : undefined;
+    const group2 = match ? match[2] : undefined;
+    const w = group1 !== undefined ? parseInt(group1, 10) : 1;
+    const h = group2 !== undefined ? parseInt(group2, 10) : 1;
+    this.style.aspectRatio = w > 0 && h > 0 ? `${w} / ${h}` : "1 / 1";
   }
 }
 

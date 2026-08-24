@@ -7,9 +7,10 @@
 - A new item type, **Image**: a picture placed on the picture. It takes an image
   file, a different one for dark themes, a camera or an image entity, images that
   change with an entity's state, and CSS filters — the same choices the card's
-  own background offers. You give it a width as a percentage of the background;
-  its height either follows the picture's own proportions or is yours to set,
-  which stretches it.
+  own background offers, except `aspect_ratio`: an Image item has a size of its
+  own, so that setting does not apply. You give it a width as a percentage of
+  the background; its height either follows the picture's own proportions or is
+  yours to set, which stretches it.
 - Depth is the item list's order: an image placed above the icons in the list is
   drawn under them on the picture. Drag a row to change what covers what.
 
