@@ -227,6 +227,40 @@ the shell: header, dispatch, and the `ha-form` plumbing shared by all kinds.
 unchanged, with the existing 839-line `element-form.test.ts` as the net. It is in
 scope because it is the file the feature modifies — not unrelated refactoring.
 
+### 12. The image is hidden until it has loaded
+
+In keep-ratio mode the used height is **0 until the image decodes**, and
+`positionStyle` produces `translate(-X%, -Y%)` whose percentages resolve against
+the element's own box. So every anchor with a non-zero Y offset draws the item in
+the wrong place for one frame, then jumps.
+
+It is not a one-off. Home Assistant destroys and rebuilds the card element on
+every config change, so in the editor this fires on **every drag release** — the
+same family of defect as the mobile snap-back and as `lastPreviewHeight`, which
+exists in this very file for this very reason.
+
+The element renders `visibility: hidden` and reveals on load. Nothing is ever
+drawn in the wrong place; the cost is a brief absence on each rebuild.
+
+Four things this must get right, each of which is a way it silently fails:
+
+- **`visibility`, not `display: none`.** The box has to be laid out, or the height
+  stays 0 for a different reason and nothing has been fixed.
+- **`error` reveals too, not only `load`.** A broken URL must not become an
+  invisible, ungrabbable item — that is precisely the failure decision 9 exists
+  to prevent, arriving by another door.
+- **Check `img.complete` when the listener attaches.** A cached image can already
+  be done before the element gets to listen, and a `load` that has already fired
+  never fires again.
+- **No transition on the reveal.** A re-entry would fade in from zero and turn a
+  one-frame gap into a visible flash — the reasoning the selection ring already
+  carries in the card's styles.
+
+Applied in **both** modes, not only the auto one. With an explicit height the box
+is already definite, so the reveal buys nothing there — but it costs nothing
+either, since an unloaded image has nothing to show in that box anyway, and a
+rule that runs only sometimes is one a later change breaks by accident.
+
 ## Config shape
 
 ```yaml
@@ -302,7 +336,7 @@ placeholder of decision 9.
   `height === undefined`), and `height` shown only when it is cleared.
   **Visibility** — unchanged, shared by every kind.
 
-No Interactions section and no Appearance section: decision 12 below.
+No Interactions section and no Appearance section: decision 13 below.
 
 ## Strings
 
@@ -339,7 +373,7 @@ never touches it.
 
 ## Out of scope
 
-### 12. No interactions, no chrome, no halo on an image element
+### 13. No interactions, no chrome, no halo on an image element
 
 `tap_action` / `hold_action` / `double_tap_action`, the chrome record and the halo
 are all absent. An image element is decorative; the day one of them is asked for,
