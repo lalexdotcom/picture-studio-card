@@ -110,22 +110,50 @@ without saying so.
 A later "distort" mode (sub-project 3) therefore has its rendering already
 present; what it adds is the gesture.
 
-### 5. Keep-ratio is clamped to the background's height
-
-`height: auto` is bounded by nothing. A 1:10 banner at `width: 50%` is five
-times the background's height. `ha-card` is `overflow-y: auto`, so that does not
-merely look wrong — it raises a scrollbar and hangs below the picture.
+### 5. Keep-ratio is clamped to the background's height — the one channel nothing else bounds
 
 In keep-ratio mode only: `max-height: 100%` plus `object-fit: contain`. Inert in
 the normal case, where the box already matches the image; it bites only when the
-image would exceed the background's height, and then it bounds instead of
-overflowing. The cost, accepted: such an image gets side margins rather than
-being cut.
+image would exceed the background's height. The cost, accepted: such an image
+gets side margins rather than being cut.
 
-This bounds the *size*, not the *placement*. An item positioned near the bottom
-can still hang over the edge — exactly as a badge can today, and clamped by the
-same thing: the drag controller bounds a gesture to `[0, W - w]`, and only a
-hand-written position escapes it.
+**This does not prevent the card from scrolling, and must not be read as if it
+did.** `ha-card` is `overflow-y: auto`; `.layer` and `.root` are both
+`overflow: visible`; and `.item`'s containing-block chain runs through both. An
+item hanging below the background therefore contributes to `ha-card`'s scrollable
+overflow and raises the bar — today, already, with no image element in sight.
+Only the bottom and right do: the scroll origin is the padding box's top-left, so
+what overflows above or to the left is unreachable rather than scrollable.
+
+It is rare today only because the `auto` anchor forbids it by construction —
+`axisOffset(anchor, "y") ?? p.top` makes the translate `-100%` at `top: 100`, so
+the item's bottom edge lands exactly on the background's. It takes an explicit
+anchor *and* a low position to overflow, and the drag can only bring such an item
+back.
+
+**What this clamp really guards is a third input channel.** A box arrives from
+one of three places, and they are bounded differently:
+
+1. **A gesture** — the drag today, resize handles and distortion corners later.
+   Bounded by its controller (`[0, W - w]`), so it *cannot* produce an overflow.
+   Cheap, because the bound lives in the one place that already knows the
+   geometry.
+2. **A hand-written config** — deliberately unbounded, and it stays that way:
+   `parsePercent` does not clamp, and `round2`'s comment explains why — clamping
+   on the way out would put an overflowing item back and rewrite the user's YAML.
+   It is let through, and a gesture can only bring it home.
+3. **The image file's own ratio** — bounded by *nothing*. It is neither a gesture
+   nor a value anyone typed, so neither mechanism above reaches it.
+
+`max-height: 100%` exists for the third and only the third. A user writes
+`width: 50` on a 1:10 banner, gets nothing wrong, and without the clamp gets a
+card that scrolls five times its own height. That is not imprudence, it is a
+surprise, and it is the only one of the three that is.
+
+So the clamp is not an exception to the no-clamping rule: it fills a hole the
+rule never covered. It also bounds the **render**, never the config — it stores
+nothing, rewrites nothing, and undoes itself the moment the width changes.
+Overflow from channels 1 and 2 is accepted, deliberately, and stays accepted.
 
 ### 6. Light and dark each keep their own ratio
 
@@ -364,12 +392,64 @@ certain: the concept is this card's, so no HA key can exist for it.
   clearing keep-ratio writes a height, ticking it removes the key.
 
 **Playwright** (`appearance.test.ts`) — an image element renders at the expected
-box in both modes, and the keep-ratio clamp of decision 5 bounds a tall image
-rather than overflowing the card.
+box in both modes, and a 1:10 banner in keep-ratio mode is bounded to the
+background's height by decision 5's clamp instead of growing five times past it.
+
+The assertion is on the **box**, not on the absence of a scrollbar. Decision 5
+does not promise that, and a test written against a scrollbar would fail the day
+someone legitimately positions an item low with an explicit anchor.
 
 The full suite's count and `testFiles` figure in `mem:picture-studio/state` must
 be refreshed in the same breath as the run that closes this branch — a scoped run
 never touches it.
+
+## Forward compatibility — what sub-projects 2 and 3 need from this one
+
+Not implemented here. Written down because each is a constraint this sub-project
+could foreclose by accident, and the next one would discover far too late.
+
+### The distortion is a `matrix3d`, which forces the two-node structure
+
+The distort mode is a **free four-corner transform**: four independently dragged
+corners, no two sides parallel. That is not affine — a skew, a scale or a
+rotation always maps a rectangle to a *parallelogram*. It is a homography, and
+CSS expresses it as a 3×3 matrix embedded in `matrix3d()`, with
+`transform-origin: 0 0`.
+
+**`transform` and `transform-origin` are single-valued, and two independent
+concerns each need all of them:** the anchor wants `translate(-X%, -Y%)` with the
+default origin and percentages resolved against the box; the homography wants
+`matrix3d(…)` with the origin at zero, or the four corners do not land where they
+were dropped. They cannot share a node.
+
+This spec already separates them — the wrapper carries the translate, and
+`picture-studio-image` is where the matrix will go. **Nothing may later collapse
+those two into one node.** Note that this is not a layout argument: transforms
+never participate in layout, and that is exactly why the constraint has to be
+written down rather than discovered by something breaking.
+
+One consequence in our favour: hit-testing follows the transform. A distorted
+item stays grabbable on its visible quadrilateral, not on its untransformed
+rectangle, so the existing drag and selection work on it unchanged.
+
+### The corners are offsets from the box, never a replacement for it
+
+Store the distortion as four corner offsets **relative to** the `width`/`height`
+box. Not as four absolute points: a distorted item would then have no box at all,
+`width` and `height` would become dead keys, and removing the distortion would
+restore nothing.
+
+Decision 3's model does not foreclose this. Nothing here may start to.
+
+### Sub-projects 2 and 3 bound their gestures, never the model
+
+By decision 5's three channels: a resize handle and a distortion corner are
+channel 1, so they are bounded in their controllers, exactly as the drag already
+is.
+
+**The temptation will be to clamp `width` to 100 in the normalizer.** It must be
+refused: it would contradict the rule positions have followed since 1.2.0, and it
+would rewrite a user's YAML on the first commit after they opened the editor.
 
 ## Out of scope
 
