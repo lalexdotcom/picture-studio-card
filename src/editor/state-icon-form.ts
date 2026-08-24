@@ -1,8 +1,12 @@
+import { html, nothing } from "lit";
 import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
 import type { StateIconConfig } from "../config";
 import { DEFAULT_ICON_SIZE } from "../element-size";
+import { localizeOwn } from "../strings";
 import type { LocalizeFunc } from "../types";
+import type { KindForm, KindFormContext } from "./element-form";
 import { sizeFromFormFields, sizeSchema, sizeToFormFields } from "./element-size-form";
+import { PLACEMENT_ICON } from "./icons";
 
 export const THEME_KEY = "ui.panel.lovelace.editor.card.map";
 export const THEME_FALLBACK = { auto: "Auto", light: "Light", dark: "Dark" } as const;
@@ -189,4 +193,172 @@ export const iconFromFormData = (
     size: sizeFromFormFields(data, DEFAULT_ICON_SIZE),
     ...chromeOut,
   };
+};
+
+/**
+ * Both element kinds share these two toggles: halo and chrome on/off.
+ * Lives here (rather than element-form.ts) so neither kind form needs a
+ * circular import back into the shell module.
+ */
+export const appearanceToggleSchema = (): unknown[] => [
+  { name: "halo_enabled", selector: { boolean: {} } },
+  { name: "chrome_enabled", selector: { boolean: {} } },
+];
+
+/**
+ * The `KindForm` implementation for state-icon elements.
+ * `toFormData` and `fromFormData` delegate to the existing flat functions;
+ * `render` produces every section from the entity row to the appearance panel
+ * (the shell keeps only the header, go-back, and visibility section).
+ */
+export const iconForm: KindForm<StateIconConfig> = {
+  toFormData: iconToFormData,
+  fromFormData: iconFromFormData,
+  render(ctx: KindFormContext<StateIconConfig>): unknown {
+    const {
+      element,
+      hass,
+      data,
+      label,
+      helper,
+      valueChanged,
+      modeChanged,
+      chromeThemeChanged,
+      radioGroupAvailable,
+    } = ctx;
+    return html`
+      <ha-form
+        .hass=${hass}
+        .data=${data}
+        .schema=${iconEntitySchema()}
+        .computeLabel=${label}
+        .computeHelper=${helper}
+        @value-changed=${valueChanged}
+      ></ha-form>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:text-short"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${label({ name: "content" })}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${iconContentInnerSchema()}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+      <ha-form
+        .hass=${hass}
+        .data=${data}
+        .schema=${iconInteractionsSchema()}
+        .computeLabel=${label}
+        .computeHelper=${helper}
+        @value-changed=${valueChanged}
+      ></ha-form>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "size_and_position")}
+        </div>
+        <div class="content">
+          ${
+            radioGroupAvailable
+              ? html`
+                  <span class="section-label">${localizeOwn(hass, "size_mode")}</span>
+                  <ha-radio-group
+                    orientation="horizontal"
+                    .value=${element.size.mode}
+                    @change=${modeChanged}
+                  >
+                    <ha-radio-option .value=${"auto"}
+                      >${hass.localize("ui.common.auto") || "Automatic"}</ha-radio-option
+                    >
+                    <ha-radio-option .value=${"adaptive"}
+                      >${localizeOwn(hass, "size_mode_adaptive")}</ha-radio-option
+                    >
+                    <ha-radio-option .value=${"fixed"}
+                      >${localizeOwn(hass, "size_mode_fixed")}</ha-radio-option
+                    >
+                  </ha-radio-group>
+                `
+              : nothing
+          }
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${iconSizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
+            .computeLabel=${label}
+            @value-changed=${valueChanged}
+          ></ha-form>
+          <div class="separator"></div>
+          <span class="section-label">${localizeOwn(hass, "anchor")}</span>
+          <picture-studio-anchor-picker
+            .hass=${hass}
+            .anchor=${ctx.anchor}
+          ></picture-studio-anchor-picker>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${hass.localize("ui.panel.lovelace.editor.card.map.appearance") || "Appearance"}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${appearanceToggleSchema()}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+          ${
+            data.chrome_enabled
+              ? html`
+                  ${
+                    radioGroupAvailable
+                      ? html`
+                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
+                          <ha-radio-group
+                            orientation="horizontal"
+                            .value=${(data.chrome_theme as string) ?? "auto"}
+                            @change=${chromeThemeChanged}
+                          >
+                            ${(["auto", "light", "dark"] as const).map(
+                              (value) => html`
+                                <ha-radio-option .value=${value}
+                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
+                                >
+                              `,
+                            )}
+                          </ha-radio-group>
+                        `
+                      : html`
+                          <ha-form
+                            .hass=${hass}
+                            .data=${data}
+                            .schema=${[themeSelectRow(hass.localize)]}
+                            .computeLabel=${label}
+                            @value-changed=${valueChanged}
+                          ></ha-form>
+                        `
+                  }
+                  <ha-form
+                    .hass=${hass}
+                    .data=${data}
+                    .schema=${iconChromeSchema(hass.localize)}
+                    .computeLabel=${label}
+                    @value-changed=${valueChanged}
+                  ></ha-form>
+                `
+              : nothing
+          }
+        </div>
+      </ha-expansion-panel>
+    `;
+  },
 };

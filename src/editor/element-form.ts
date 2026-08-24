@@ -1,121 +1,48 @@
 import { css, html, LitElement, nothing } from "lit";
-import type { ElementConfig, StateLabelConfig } from "../config";
+import type { ElementConfig } from "../config";
 import { assertNever } from "../config";
 import type { Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc, VisibilityCondition } from "../types";
 import "./visibility-section";
 import { elementLabel } from "./element-catalog";
-import { PLACEMENT_ICON } from "./icons";
-import { elementShowsNothing } from "./items";
-import {
-  iconChromeSchema,
-  iconContentInnerSchema,
-  iconEntitySchema,
-  iconFromFormData,
-  iconInteractionsSchema,
-  iconSizeSchema,
-  iconToFormData,
-  themeModeLabel,
-  themeModeTitle,
-  themeSelectRow,
-} from "./state-icon-form";
-import {
-  labelChromeSchema,
-  labelContentInnerSchema,
-  labelEntitySchema,
-  labelFromFormData,
-  labelInteractionsSchema,
-  labelPillSchema,
-  labelRadiusSchema,
-  labelSizeSchema,
-  labelToFormData,
-} from "./state-label-form";
+import { iconForm, themeModeTitle } from "./state-icon-form";
 
-// Mirrors the entity-badge editor's isTimeSeries (Rf) function.
-// The time-keyed state_content values come from HA's source; keeping the
-// same list means time_format appears exactly when ha-state-display would
-// render a clock rather than text.
-//
-// THIS IS A COPY OF A NON-EXPORTED HOME ASSISTANT FUNCTION. On a version bump,
-// re-read `Rf` in the entity-badge editor's chunk (grep the shipped frontend
-// for `time_format`) and reconcile the four tables below — HA adds domains and
-// device classes without touching any public API, so this drifts silently.
-// The drift is cosmetic and recoverable: when a table falls behind, the field
-// merely stops being offered for that entity kind, and `time_format` written by
-// hand still round-trips through the editor untouched. Decision 6 of the spec
-// once cited this copy as the acceptable case against the state colour; it was
-// reversed inside 1.4.0 once the state colour turned out to be a chain of CSS
-// variable names rather than a computation, and `src/state-color.ts` now carries
-// the same kind of copy under the same kind of guarantee.
-const TIME_BASED_CONTENT = ["last_updated", "last_changed", "last_triggered"] as const;
-// Domains whose default "state" attribute already is a datetime value.
-const TIME_DOMAINS = new Set([
-  "ai_task",
-  "button",
-  "conversation",
-  "datetime",
-  "event",
-  "image",
-  "input_button",
-  "notify",
-  "scene",
-  "stt",
-  "tag",
-  "tts",
-  "wake_word",
-]);
-// Sensor device classes that carry a unix timestamp as their state.
-const TIME_DEVICE_CLASSES = ["timestamp", "uptime"] as const;
-// Per-domain attributes that represent a point in time.
-const DOMAIN_TIME_ATTRS: Record<string, string[]> = {
-  calendar: ["start_time", "end_time"],
-  input_datetime: ["timestamp"],
-  sun: ["next_dawn", "next_dusk", "next_midnight", "next_noon", "next_rising", "next_setting"],
-};
+export { appearanceToggleSchema } from "./state-icon-form";
+
+import { labelForm } from "./state-label-form";
 
 /**
- * Returns true when the label's current state_content will be rendered as a
- * time by ha-state-display — the condition that makes time_format meaningful.
- * Reproduces HA's entity-badge editor check without importing it.
+ * Implemented by each element kind's form module. The shell (`element-form.ts`)
+ * calls these three methods; the kind module owns the sections they produce.
  */
-const stateLabelIsTimeBased = (
-  element: StateLabelConfig | undefined,
-  hass: HomeAssistant,
-): boolean => {
-  const entity = element?.entity;
-  const stateContent = element?.state_content;
-  const contentList = Array.isArray(stateContent)
-    ? stateContent
-    : stateContent
-      ? [stateContent]
-      : [];
-  if (
-    stateContent &&
-    contentList.some((v) => (TIME_BASED_CONTENT as readonly string[]).includes(v))
-  )
-    return true;
-  if (!entity) return false;
-  const domain = entity.split(".")[0] ?? "";
-  if (!stateContent || contentList.includes("state")) {
-    if (TIME_DOMAINS.has(domain)) return true;
-    const stateObj = hass.states[entity];
-    if (stateObj) {
-      const dc =
-        domain === "sensor"
-          ? (stateObj.attributes["device_class"] as string | undefined)
-          : undefined;
-      if (dc && (TIME_DEVICE_CLASSES as readonly string[]).includes(dc)) return true;
-    }
-  }
-  const domainAttrs = DOMAIN_TIME_ATTRS[domain];
-  return !!(domainAttrs && stateContent && contentList.some((v) => domainAttrs.includes(v)));
-};
+export interface KindForm<C extends ElementConfig> {
+  toFormData(config: C): Record<string, unknown>;
+  fromFormData(config: C, data: Record<string, unknown>): C;
+  render(ctx: KindFormContext<C>): unknown;
+}
 
-export const appearanceToggleSchema = (): unknown[] => [
-  { name: "halo_enabled", selector: { boolean: {} } },
-  { name: "chrome_enabled", selector: { boolean: {} } },
-];
+/**
+ * Everything a kind's `render` method needs, passed by the shell.
+ * Lazy checks (`radioGroupAvailable`, `switchAvailable`) are computed in the
+ * shell at render time and forwarded here — the kind must not re-check them,
+ * because a chunk that registers the element after ours must still be found.
+ */
+export interface KindFormContext<C extends ElementConfig> {
+  element: C;
+  hass: HomeAssistant;
+  data: Record<string, unknown>;
+  label: (s: { name: string }) => string;
+  helper: (s: { name: string }) => string | undefined;
+  valueChanged: (ev: CustomEvent) => void;
+  modeChanged: (ev: Event) => void;
+  chromeThemeChanged: (ev: Event) => void;
+  /** Pill ha-switch toggle — passed for completeness; only the label kind uses it. */
+  pillChanged: (ev: Event) => void;
+  anchor: Anchor | undefined;
+  radioGroupAvailable: boolean;
+  switchAvailable: boolean;
+}
 
 export const elementFormLabel = (
   localize: LocalizeFunc,
@@ -217,34 +144,39 @@ export class PictureStudioElementForm extends LitElement {
     this._dispatch(element, data);
   };
 
-  private _toData = (element: ElementConfig): Record<string, unknown> => {
-    if (element.type === "state-label") return labelToFormData(element);
-    if (element.type === "state-icon") return iconToFormData(element);
-    return assertNever(element, "element kind");
-  };
-
-  private _dispatch = (element: ElementConfig, data: Record<string, unknown>): void => {
-    if (element.type === "state-label") {
-      this.dispatchEvent(
-        new CustomEvent("element-changed", {
-          detail: { element: labelFromFormData(element, data) },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-    } else if (element.type === "state-icon") {
-      this.dispatchEvent(
-        new CustomEvent("element-changed", {
-          detail: { element: iconFromFormData(element, data) },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+  private _toData(element: ElementConfig): Record<string, unknown> {
+    switch (element.type) {
+      case "state-icon":
+        return iconForm.toFormData(element);
+      case "state-label":
+        return labelForm.toFormData(element);
     }
-    // No else. An unknown kind never reaches this form — normalizeElementConfig
-    // raises first — and defaulting it to the icon would corrupt its config with
-    // icon-only keys the day a third kind exists.
-  };
+    return assertNever(element, "element kind");
+  }
+
+  private _dispatch(element: ElementConfig, data: Record<string, unknown>): void {
+    switch (element.type) {
+      case "state-icon":
+        this.dispatchEvent(
+          new CustomEvent("element-changed", {
+            detail: { element: iconForm.fromFormData(element, data) },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+        return;
+      case "state-label":
+        this.dispatchEvent(
+          new CustomEvent("element-changed", {
+            detail: { element: labelForm.fromFormData(element, data) },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+        return;
+    }
+    assertNever(element, "element kind");
+  }
 
   protected render() {
     const element = this.element;
@@ -264,23 +196,36 @@ export class PictureStudioElementForm extends LitElement {
     // the element is absent.
     const switchAvailable = !!customElements.get("ha-switch");
 
-    const isLabel = element.type === "state-label";
     const data = this._toData(element);
-    // Mirrors the entity-badge editor's Rf check: show time_format only when
-    // the selected state_content carries a time value. The time-based keys are
-    // the same three HA uses ("last_updated", "last_changed", "last_triggered"),
-    // plus domain defaults (e.g. datetime, button) and sensor device classes
-    // "timestamp" / "uptime", and domain-specific attributes (calendar, sun, …).
-    const showTimeFormat =
-      isLabel && stateLabelIsTimeBased(element.type === "state-label" ? element : undefined, hass);
-    const sizeSchema = isLabel ? labelSizeSchema : iconSizeSchema;
     const label = (s: { name: string }) => elementFormLabel(hass.localize, hass, s.name);
     const helper = (s: { name: string }) => elementFormHelper(hass.localize, hass, s.name);
 
-    // The warning marker: a state-label whose show list is empty displays
-    // nothing at all. The very predicate the item list marks its row with, so
-    // the two cannot come to disagree about what that means.
-    const showEmptyWarning = elementShowsNothing(element);
+    const ctx = {
+      hass,
+      data,
+      label,
+      helper,
+      valueChanged: this._valueChanged,
+      modeChanged: this._modeChanged,
+      chromeThemeChanged: this._chromeThemeChanged,
+      pillChanged: this._pillChanged,
+      anchor: this.anchor,
+      radioGroupAvailable,
+      switchAvailable,
+    };
+
+    // Dispatch to the kind's render. The switch is exhaustive: when ElementConfig
+    // gains a new member, TypeScript flags assertNever because the new type is
+    // not handled here — the compiler finds the fallout.
+    const kindSections = ((): unknown => {
+      switch (element.type) {
+        case "state-icon":
+          return iconForm.render({ ...ctx, element });
+        case "state-label":
+          return labelForm.render({ ...ctx, element });
+      }
+      return assertNever(element, "element kind");
+    })();
 
     return html`
       <div class="header">
@@ -292,197 +237,7 @@ export class PictureStudioElementForm extends LitElement {
             )}><ha-icon icon="mdi:arrow-left"></ha-icon></ha-icon-button>
         <span class="title">${elementLabel(hass.localize, element.type)}</span>
       </div>
-      <ha-form
-        .hass=${hass}
-        .data=${data}
-        .schema=${isLabel ? labelEntitySchema() : iconEntitySchema()}
-        .computeLabel=${label}
-        .computeHelper=${helper}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" icon="mdi:text-short"></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${label({ name: "content" })}
-        </div>
-        ${
-          // The `event` slot, not `icons`: ha-expansion-panel renders its header
-          // as leading-icon → header → event → chevron → icons, so anything in
-          // `icons` lands after the chevron. The marker belongs beside the title.
-          // Same glyph, colour and size as the item list's row marker in
-          // badge-list.ts (.empty rule) so the two read as the same signal.
-          showEmptyWarning
-            ? html`<ha-icon
-                slot="event"
-                icon="mdi:alert-outline"
-                title=${localizeOwn(hass, "label_empty_hint")}
-              ></ha-icon>`
-            : nothing
-        }
-        <div class="content">
-          <ha-form
-            .hass=${hass}
-            .data=${data}
-            .schema=${
-              isLabel
-                ? labelContentInnerSchema(showTimeFormat, hass.localize)
-                : iconContentInnerSchema()
-            }
-            .computeLabel=${label}
-            .computeHelper=${helper}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-        </div>
-      </ha-expansion-panel>
-      <ha-form
-        .hass=${hass}
-        .data=${data}
-        .schema=${isLabel ? labelInteractionsSchema() : iconInteractionsSchema()}
-        .computeLabel=${label}
-        .computeHelper=${helper}
-        @value-changed=${this._valueChanged}
-      ></ha-form>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${localizeOwn(hass, "size_and_position")}
-        </div>
-        <div class="content">
-          ${
-            radioGroupAvailable
-              ? html`
-                  <span class="section-label">${localizeOwn(hass, "size_mode")}</span>
-                  <ha-radio-group
-                    orientation="horizontal"
-                    .value=${element.size.mode}
-                    @change=${this._modeChanged}
-                  >
-                    <ha-radio-option .value=${"auto"}
-                      >${hass.localize("ui.common.auto") || "Automatic"}</ha-radio-option
-                    >
-                    <ha-radio-option .value=${"adaptive"}
-                      >${localizeOwn(hass, "size_mode_adaptive")}</ha-radio-option
-                    >
-                    <ha-radio-option .value=${"fixed"}
-                      >${localizeOwn(hass, "size_mode_fixed")}</ha-radio-option
-                    >
-                  </ha-radio-group>
-                `
-              : nothing
-          }
-          <ha-form
-            .hass=${hass}
-            .data=${data}
-            .schema=${sizeSchema(element.size.mode, hass.localize, hass, radioGroupAvailable)}
-            .computeLabel=${label}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-          <div class="separator"></div>
-          <span class="section-label">${localizeOwn(hass, "anchor")}</span>
-          <picture-studio-anchor-picker
-            .hass=${hass}
-            .anchor=${this.anchor}
-          ></picture-studio-anchor-picker>
-        </div>
-      </ha-expansion-panel>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" icon="mdi:shape"></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${hass.localize("ui.panel.lovelace.editor.card.map.appearance") || "Appearance"}
-        </div>
-        <div class="content">
-          <ha-form
-            .hass=${hass}
-            .data=${data}
-            .schema=${appearanceToggleSchema()}
-            .computeLabel=${label}
-            .computeHelper=${helper}
-            @value-changed=${this._valueChanged}
-          ></ha-form>
-          ${
-            data.chrome_enabled
-              ? html`
-                  ${
-                    radioGroupAvailable
-                      ? html`
-                          <span class="section-label">${themeModeTitle(hass.localize)}</span>
-                          <ha-radio-group
-                            orientation="horizontal"
-                            .value=${(data.chrome_theme as string) ?? "auto"}
-                            @change=${this._chromeThemeChanged}
-                          >
-                            ${(["auto", "light", "dark"] as const).map(
-                              (value) => html`
-                                <ha-radio-option .value=${value}
-                                  >${themeModeLabel(hass.localize, value)}</ha-radio-option
-                                >
-                              `,
-                            )}
-                          </ha-radio-group>
-                        `
-                      : html`
-                          <ha-form
-                            .hass=${hass}
-                            .data=${data}
-                            .schema=${[themeSelectRow(hass.localize)]}
-                            .computeLabel=${label}
-                            @value-changed=${this._valueChanged}
-                          ></ha-form>
-                        `
-                  }
-                  ${
-                    isLabel
-                      ? html`
-                          <div class="pill-row" ?data-pill=${data.chrome_pill === true}>
-                            ${
-                              switchAvailable
-                                ? html`
-                                    <div class="pill-control">
-                                      <span class="pill-label"
-                                        >${localizeOwn(hass, "chrome_pill")}</span
-                                      >
-                                      <ha-switch
-                                        .checked=${data.chrome_pill === true}
-                                        @change=${this._pillChanged}
-                                      ></ha-switch>
-                                    </div>
-                                  `
-                                : html`
-                                    <ha-form
-                                      .hass=${hass}
-                                      .data=${data}
-                                      .schema=${labelPillSchema()}
-                                      .computeLabel=${label}
-                                      @value-changed=${this._valueChanged}
-                                    ></ha-form>
-                                  `
-                            }
-                            <div class="pill-separator"></div>
-                            <ha-form
-                              .hass=${hass}
-                              .data=${data}
-                              .schema=${labelRadiusSchema()}
-                              .computeLabel=${label}
-                              @value-changed=${this._valueChanged}
-                            ></ha-form>
-                          </div>
-                        `
-                      : nothing
-                  }
-                  <ha-form
-                    .hass=${hass}
-                    .data=${data}
-                    .schema=${
-                      isLabel ? labelChromeSchema(hass.localize) : iconChromeSchema(hass.localize)
-                    }
-                    .computeLabel=${label}
-                    @value-changed=${this._valueChanged}
-                  ></ha-form>
-                `
-              : nothing
-          }
-        </div>
-      </ha-expansion-panel>
+      ${kindSections}
       <picture-studio-visibility-section
         .hass=${hass}
         .visibility=${this.visibility}
@@ -530,7 +285,7 @@ export class PictureStudioElementForm extends LitElement {
       border-top: 1px solid var(--divider-color);
       margin: var(--ha-space-3, 12px) 0;
     }
-    /* Both section headings (\"Taille\" above the mode control and \"Position\"
+    /* Both section headings ("Taille" above the mode control and "Position"
        above the anchor picker) share this class so they are identical by
        construction. The declarations resolve to the same values that Home
        Assistant's own wa-form-control labels use, so the pair follows HA's
