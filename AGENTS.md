@@ -65,7 +65,10 @@ steps and the least practice:
 1. **Back-merge `main` into `next` first**, so the review reads a diff of
    features and not of fixes it has already seen.
 2. **Whole-branch review** of `next` → `main`. It gates the merge, as always.
-3. **Merge `next` into `main`**, locally.
+3. **Merge `next` into `main`**, locally — a real merge, never a squash. The
+   reconciliation step in `release.yml` asks whether `next` is an *ancestor*
+   of the released commit; a squash establishes no ancestry and the release
+   is refused with a message that reads as though nothing was merged.
 4. **Close the version, and only when the user asks for it**: strip the suffix in
    `package.json` — `1.6.0-beta.7` becomes `1.6.0` — and replace `unreleased`
    with the date in the `## 1.6.0` heading. The section itself needs no work; it

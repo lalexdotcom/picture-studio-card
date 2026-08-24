@@ -67,9 +67,14 @@ remote_base=$(git ls-remote origin "refs/heads/$base" | cut -f1)
 if [ -n "$remote_base" ]; then
 	git fetch --no-tags --quiet origin "$base"
 	local_base=$(git rev-parse "$base")
-	if [ "$remote_base" != "$local_base" ] &&
-		git merge-base --is-ancestor "$local_base" "$remote_base"; then
-		die "$base is behind origin/$base — pull before cutting work from it"
+	if [ "$remote_base" != "$local_base" ]; then
+		if git merge-base --is-ancestor "$local_base" "$remote_base"; then
+			die "$base is behind origin/$base — pull before cutting work from it"
+		elif ! git merge-base --is-ancestor "$remote_base" "$local_base"; then
+			# `--is-ancestor` is false for *behind* and for *diverged* alike; this
+			# second test is what keeps a diverged base from passing as ahead.
+			die "$base and origin/$base have diverged — reconcile them before cutting work"
+		fi
 	fi
 fi
 

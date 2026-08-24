@@ -49,12 +49,13 @@ step in silence. The same check locally, which is worth doing while editing a
 workflow rather than waiting for a round-trip:
 
 ```
-docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:<tag> -color
 ```
 
-The tag is pinned on purpose: actionlint's rules move on their own, and a green
-CI must not turn red without a commit to explain it. Bumping it is a deliberate
-act, and the local command above and the one in `ci.yml` are bumped together.
+**The tag lives in `ci.yml` and only there** — `grep actionlint .github/workflows/ci.yml`
+gives it in a second, so it is not repeated here where it could drift. It is
+pinned on purpose: actionlint's rules move on their own, and a green CI must not
+turn red without a commit to explain it.
 
 **The CHANGELOG date is the safety catch, and it is load-bearing.** `main` can
 sit a long way ahead of `origin/main` — a push then publishes whatever

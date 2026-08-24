@@ -105,6 +105,10 @@ local_main=$(git rev-parse main)
 if [ "$remote_main" != "$local_main" ]; then
 	if git merge-base --is-ancestor "$local_main" "$remote_main"; then
 		die "main is behind origin/main — pull before opening a line from it"
+	elif ! git merge-base --is-ancestor "$remote_main" "$local_main"; then
+		# `--is-ancestor` is false for *behind* and for *diverged* alike, so the
+		# second test is what stops a diverged main being reported as merely ahead.
+		die "main and origin/main have diverged — reconcile them before opening a line"
 	fi
 	# Ahead is the normal state here: the user pushes when they choose to, so
 	# main routinely sits in front of the remote. Worth saying, not refusing.
@@ -112,11 +116,19 @@ if [ "$remote_main" != "$local_main" ]; then
 	echo "note: main is $ahead commit(s) ahead of origin/main; next starts from the local tip."
 fi
 
+# Compared field by field in awk rather than with `sort -V`, which is a GNU
+# extension: this repository is developed from a Linux devcontainer and from a
+# Mac, and a script that dies differently on one of them is not a guard.
 main_version=$(git show main:package.json | jq -r .version)
-newest=$(printf '%s\n%s\n' "$main_version" "$base" | sort -V | tail -1)
-if [ "$newest" != "$base" ] || [ "$main_version" = "$base" ]; then
-	die "$base is not ahead of main's $main_version"
-fi
+ahead_of_main=$(awk -v a="$base" -v b="${main_version%%-*}" 'BEGIN {
+	split(a, x, "."); split(b, y, ".")
+	for (i = 1; i <= 3; i++) {
+		if (x[i] + 0 > y[i] + 0) { print "yes"; exit }
+		if (x[i] + 0 < y[i] + 0) { print "no"; exit }
+	}
+	print "no"
+}')
+[ "$ahead_of_main" = yes ] || die "$base is not ahead of main's $main_version"
 
 git switch --quiet -c next main
 
@@ -125,8 +137,17 @@ git switch --quiet -c next main
 # share the same merge-base with `main`, so the answer cannot be recomputed.
 git config "branch.next.target" main
 
-# A targeted substitution rather than `jq`, which would reformat the whole file.
-sed -i "0,/\"version\": \"[^\"]*\"/s//\"version\": \"$version\"/" package.json
+# awk rather than `jq`, which would reformat the whole file, and rather than
+# `sed -i "0,/re/s//.../"`, whose address-zero form is a GNU extension that BSD
+# sed rejects outright — bypassing this script's own refusal path.
+awk -v v="$version" '
+	!done && /"version":/ {
+		sub(/"version": "[^"]*"/, "\"version\": \"" v "\"")
+		done = 1
+	}
+	{ print }
+' package.json >package.json.opening
+mv package.json.opening package.json
 [ "$(jq -r .version package.json)" = "$version" ] ||
 	die "package.json was not rewritten as expected — check it by hand"
 

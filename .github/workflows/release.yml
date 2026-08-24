@@ -18,8 +18,15 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # `event == 'push'` is load-bearing and was not needed before `next` existed.
+    # For a CI run triggered by a pull request, `head_branch` is the *source*
+    # branch — so a PR from `next` onto `main` would satisfy the branch test,
+    # start this job, pass every guard, and then hard-fail on the artefact
+    # download, since CI only uploads the bundle for pushes. Previously
+    # impossible: no PR has `main` as its source.
     if: >
       github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
       (github.event.workflow_run.head_branch == 'main' ||
        github.event.workflow_run.head_branch == 'next')
     steps:
