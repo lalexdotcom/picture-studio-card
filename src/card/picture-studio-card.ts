@@ -6,6 +6,7 @@ import {
   hasHeading,
   hasVisibility,
   ICON_TAG,
+  IMAGE_TAG,
   imagePath,
   isSupportedBadgeType,
   LABEL_TAG,
@@ -15,6 +16,8 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
+import { imageBoxStyle } from "../image-box";
+import { isImageClickable } from "./image-element";
 import "./card-heading";
 import {
   type Anchor,
@@ -636,6 +639,7 @@ export class PictureStudioCard extends LitElement {
     let tag: string | undefined;
     if (item.config.type === "state-label") tag = LABEL_TAG;
     else if (item.config.type === "state-icon") tag = ICON_TAG;
+    else if (item.config.type === "image") tag = IMAGE_TAG;
     // No else. An unknown kind never reaches this method — normalizeElementConfig
     // raises first — and defaulting it to the icon would corrupt its config with
     // icon-only keys the day a third kind exists.
@@ -799,6 +803,26 @@ export class PictureStudioCard extends LitElement {
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;
+
+      // The box, for the one kind that has one. It goes here rather than on the
+      // element because `.item` is `width: max-content`, and a percentage width
+      // on a child of a max-content box is cyclic — CSS resolves it as `auto`, so
+      // an element sizing itself in % simply would not. The wrapper is ours.
+      //
+      // Inline style rather than a class: `wrapper.className` is the item
+      // *family*, never the kind, so there is no `.item.image` to write a rule
+      // against — and inventing one would add a second channel saying what the
+      // config already says.
+      if (item.type === "element" && item.config.type === "image") {
+        const box = imageBoxStyle(item.config);
+        wrapper.style.width = box.width;
+        wrapper.style.height = box.height;
+        wrapper.style.maxHeight = box.maxHeight;
+        // Outside editing an image with no action must let clicks through: it is
+        // large, and it sits over other items. The class rather than an inline
+        // style so `.editing` can win it back.
+        wrapper.classList.toggle("inert", !isImageClickable(item.config));
+      }
     });
   }
 
@@ -1094,6 +1118,17 @@ export class PictureStudioCard extends LitElement {
     }
     .editing .item > * {
       pointer-events: none;
+    }
+    /* An image with no action is transparent to pointers on a dashboard. Without
+       this a large one swallows every click over its whole surface, including
+       those meant for the items underneath it — a failure that does not exist
+       for badges, which are small. While editing the wrapper keeps the pointer,
+       like every other item, so it stays selectable and draggable. */
+    .item.inert {
+      pointer-events: none;
+    }
+    .editing .item.inert {
+      pointer-events: auto;
     }
   `;
 }

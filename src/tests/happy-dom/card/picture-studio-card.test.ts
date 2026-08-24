@@ -2,7 +2,15 @@ import { afterEach, describe, expect, it, rstest } from "@rstest/core";
 import type { EditorChannel } from "../../../broker";
 import { notifyEditors, registerEditor } from "../../../broker";
 import { PictureStudioCard } from "../../../card/picture-studio-card";
-import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TAG, PROBE_TYPE } from "../../../config";
+import {
+  CARD_TAG,
+  CARD_TYPE,
+  ICON_TAG,
+  IMAGE_TAG,
+  LABEL_TAG,
+  PROBE_TAG,
+  PROBE_TYPE,
+} from "../../../config";
 
 import type { HomeAssistant } from "../../../types";
 import {
@@ -1270,5 +1278,100 @@ describe("viewportTop — the anchor the editor holds", () => {
         toJSON: () => ({}),
       }) as DOMRect;
     expect((el as unknown as { viewportTop(): number | undefined }).viewportTop()).toBe(120);
+  });
+});
+
+describe("image items", () => {
+  it("the wrapper carries the box, and keep-ratio carries the clamp", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: { type: "image", image: "/a.png", width: 40 },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("40%");
+    expect(wrapper.style.height).toBe("");
+    expect(wrapper.style.maxHeight).toBe("100%");
+  });
+
+  it("an explicit height is written and releases the clamp", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: { type: "image", image: "/a.png", width: 40, height: 25 },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("40%");
+    expect(wrapper.style.height).toBe("25%");
+    expect(wrapper.style.maxHeight).toBe("");
+  });
+
+  it("the box never lands on a badge or on the other element kinds", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 10, left: 10 },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("");
+    expect(wrapper.style.maxHeight).toBe("");
+  });
+
+  it("an inert image is marked so, and a clickable one is not", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 10, left: 10 },
+          config: { type: "image", image: "/a.png" },
+        },
+        {
+          type: "element",
+          position: { top: 20, left: 20 },
+          config: { type: "image", image: "/b.png", tap_action: { action: "more-info" } },
+        },
+      ],
+    });
+    const wrappers = card.renderRoot.querySelectorAll(".item.element");
+    const first = wrappers[0];
+    const second = wrappers[1];
+    if (!first || !second) throw new Error("expected two element wrappers");
+    expect((first as HTMLElement).classList.contains("inert")).toBe(true);
+    expect((second as HTMLElement).classList.contains("inert")).toBe(false);
+  });
+
+  it("the element is built, not a hole", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 10, left: 10 },
+          config: { type: "image", image: "/a.png" },
+        },
+      ],
+    });
+    expect(card.renderRoot.querySelector(IMAGE_TAG)).toBeTruthy();
   });
 });
