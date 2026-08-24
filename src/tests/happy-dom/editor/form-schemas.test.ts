@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@rstest/core";
+import { describe, expect, it, test } from "@rstest/core";
 import { CARD_TYPE, type PictureStudioConfig } from "../../../config";
 import {
   backgroundData,
@@ -7,6 +7,7 @@ import {
   filtersSchema,
   headingSchema,
   mergeBackground,
+  PICTURE_ENTITY,
 } from "../../../editor/form-schemas";
 import type { LocalizeFunc } from "../../../types";
 
@@ -164,5 +165,53 @@ describe("mergeBackground", () => {
   it("stores the media selector value as written; the card unwraps at render", () => {
     const next = mergeBackground(config(), { image: { media_content_id: "/local/p.png" } });
     expect(next.image).toEqual({ media_content_id: "/local/p.png" });
+  });
+});
+
+describe("generalised over any config carrying the background keys", () => {
+  const localize = (() => "") as LocalizeFunc;
+
+  test("aspect_ratio is offered by default, so the card is unchanged", () => {
+    const names = backgroundSchema(localize, {}).map((f) => f.name);
+    expect(names).toContain("aspect_ratio");
+  });
+
+  test("and is refused on request — an image element has a box of its own", () => {
+    const names = backgroundSchema(localize, {}, { aspectRatio: false }).map((f) => f.name);
+    expect(names).not.toContain("aspect_ratio");
+    expect(names).toContain("image");
+    expect(names).toContain("dark_mode_image");
+    expect(names).toContain(PICTURE_ENTITY);
+  });
+
+  test("camera_view still appears only for a camera, whatever the config type", () => {
+    const element = { type: "image" as const, width: 20, camera_image: "camera.front" };
+    const names = backgroundSchema(localize, element, { aspectRatio: false }).map((f) => f.name);
+    expect(names).toContain("camera_view");
+  });
+
+  test("merging an element config returns an element config, keys intact", () => {
+    const element = { type: "image" as const, width: 40, height: 25, image: "/a.png" };
+    const next = mergeBackground(
+      element,
+      { [PICTURE_ENTITY]: "camera.front" },
+      {
+        aspectRatio: false,
+      },
+    );
+    expect(next.type).toBe("image");
+    expect(next.width).toBe(40);
+    expect(next.height).toBe(25);
+    expect(next).toHaveProperty("camera_image", "camera.front");
+    expect(next).not.toHaveProperty("image_entity");
+  });
+
+  test("without the aspect_ratio field, merging never deletes an existing one", () => {
+    // sectionMerge only touches keys the schema rendered. A hand-written
+    // aspect_ratio on an image element does nothing, but it is the user's, and
+    // storedConfig would otherwise drop it on the first commit.
+    const element = { type: "image" as const, width: 40, aspect_ratio: "16:9" };
+    const next = mergeBackground(element, {}, { aspectRatio: false });
+    expect(next.aspect_ratio).toBe("16:9");
   });
 });
