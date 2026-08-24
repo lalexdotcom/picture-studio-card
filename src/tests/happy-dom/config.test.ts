@@ -442,7 +442,8 @@ describe("element chrome", () => {
     const config = normalizeConfig(withChrome({ theme: "dark", radius: 8 }));
     const element = config.items[0];
     if (!element || element.type !== "element") throw new Error("expected an element");
-    expect((element.config as StateIconConfig).chrome).toEqual({
+    if (element.config.type !== "state-icon") throw new Error("expected state-icon");
+    expect(element.config.chrome).toEqual({
       theme: "dark",
       radius: 8,
       opacity: 1,
@@ -454,7 +455,8 @@ describe("element chrome", () => {
     const config = normalizeConfig(withChrome(undefined));
     const element = config.items[0];
     if (!element || element.type !== "element") throw new Error("expected an element");
-    expect((element.config as StateIconConfig).chrome).toEqual({
+    if (element.config.type !== "state-icon") throw new Error("expected state-icon");
+    expect(element.config.chrome).toEqual({
       theme: "none",
       radius: 50,
       opacity: 1,
