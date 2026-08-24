@@ -68,6 +68,9 @@ export const elementFormLabel = (
   if (name === "chrome_pill") return localizeOwn(hass, "chrome_pill");
   if (name === "chrome_padding") return localizeOwn(hass, "chrome_padding");
   if (name === "chrome_theme") return themeModeTitle(localize);
+  if (name === "width") return localizeOwn(hass, "width");
+  if (name === "height") return localizeOwn(hass, "height");
+  if (name === "keep_ratio") return localizeOwn(hass, "keep_ratio");
   // Two fields whose ui.panel.lovelace.editor.card.generic.<name> key does not
   // exist, so the fallthrough put the raw key on screen. Home Assistant has both
   // under the entity badge, which is the editor this form mirrors.
@@ -90,6 +93,7 @@ export const elementFormHelper = (
   // ha-form-boolean renders the helper as the checkbox's own hint, permanently
   // visible — which is what a tooltip icon could not be on a phone.
   if (name === "halo_enabled") return localizeOwn(hass, "halo_enabled_helper");
+  if (name === "keep_ratio") return localizeOwn(hass, "keep_ratio_helper");
   return undefined;
 };
 
@@ -99,12 +103,14 @@ export class PictureStudioElementForm extends LitElement {
     element: { attribute: false },
     anchor: { attribute: false },
     visibility: { attribute: false },
+    measuredImageHeight: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare element?: ElementConfig;
   declare anchor?: Anchor;
   declare visibility?: VisibilityCondition[];
+  declare measuredImageHeight?: number;
 
   /** Merge `ev.detail.value` onto the complete flat record and dispatch. */
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
@@ -152,7 +158,12 @@ export class PictureStudioElementForm extends LitElement {
       case "state-label":
         return labelForm.toFormData(element);
       case "image":
-        return imageForm.toFormData(element);
+        return {
+          ...imageForm.toFormData(element),
+          ...(this.measuredImageHeight !== undefined
+            ? { __measuredHeight: this.measuredImageHeight }
+            : {}),
+        };
     }
     return assertNever(element, "element kind");
   }

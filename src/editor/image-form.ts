@@ -1,7 +1,16 @@
-import { nothing } from "lit";
+import { html } from "lit";
 import type { ImageElementConfig } from "../config";
-import type { KindForm } from "./element-form";
-import { backgroundData, mergeBackground } from "./form-schemas";
+import { localizeOwn } from "../strings";
+import type { KindForm, KindFormContext } from "./element-form";
+import {
+  backgroundData,
+  backgroundSchema,
+  entitySchema,
+  filtersSchema,
+  mergeBackground,
+} from "./form-schemas";
+import { PLACEMENT_ICON } from "./icons";
+import { iconInteractionsSchema } from "./state-icon-form";
 
 /**
  * The checkbox is derived from `height === undefined` and is never stored: a
@@ -23,7 +32,15 @@ const NO_ASPECT_RATIO = { aspectRatio: false } as const;
  * reason: only the card knows pixels. For now we fall back to the item's own
  * width, which gives a square box rather than a collapsed one.
  */
-const freedHeight = (config: ImageElementConfig): number => config.width;
+/**
+ * The height to write when the box is freed, measured rather than invented.
+ *
+ * The measured value comes from the card preview via the editor; the fallback
+ * to `config.width` gives a square box when no preview is available (tests,
+ * a form opened before the card laid out).
+ */
+const freedHeight = (measured: number | undefined, config: ImageElementConfig): number =>
+  typeof measured === "number" && measured > 0 ? measured : config.width;
 
 export const imageForm: KindForm<ImageElementConfig> = {
   toFormData(config: ImageElementConfig): Record<string, unknown> {
@@ -48,7 +65,7 @@ export const imageForm: KindForm<ImageElementConfig> = {
   },
 
   fromFormData(config: ImageElementConfig, data: Record<string, unknown>): ImageElementConfig {
-    const { [KEEP_RATIO]: keep, height, ...fields } = data;
+    const { [KEEP_RATIO]: keep, height, __measuredHeight, ...fields } = data;
     const next = mergeBackground(config, fields, NO_ASPECT_RATIO);
     const width =
       typeof fields.width === "number" && fields.width > 0 ? fields.width : config.width;
@@ -56,13 +73,112 @@ export const imageForm: KindForm<ImageElementConfig> = {
       const { height: _drop, ...kept } = { ...next, width };
       return kept as ImageElementConfig;
     }
-    const chosen = typeof height === "number" && height > 0 ? height : freedHeight(config);
+    const chosen =
+      typeof height === "number" && height > 0
+        ? height
+        : freedHeight(typeof __measuredHeight === "number" ? __measuredHeight : undefined, config);
     return { ...next, width, height: chosen };
   },
 
-  render(/* ctx */) {
-    // Render is a later task's. The kind is not offered by the editor's catalogue
-    // yet, so no user can reach this form.
-    return nothing;
+  render(ctx: KindFormContext<ImageElementConfig>): unknown {
+    const { element, hass, data, label, helper, valueChanged, anchor } = ctx;
+    const keepRatio = data[KEEP_RATIO] !== false;
+
+    const boxSchema = [
+      {
+        name: "width",
+        selector: { number: { min: 1, mode: "box", step: 0.5, unit_of_measurement: "%" } },
+      },
+      { name: KEEP_RATIO, selector: { boolean: {} } },
+      ...(keepRatio
+        ? []
+        : [
+            {
+              name: "height",
+              selector: { number: { min: 1, mode: "box", step: 0.5, unit_of_measurement: "%" } },
+            },
+          ]),
+    ];
+
+    return html`
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:image"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "section_image")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${backgroundSchema(hass.localize, element, { aspectRatio: false })}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:image-auto-adjust"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "section_entity")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${entitySchema(hass.localize)}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:image-filter-black-white"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "section_filters")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${filtersSchema(hass.localize)}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "size_and_position")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${boxSchema}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+          <div class="separator"></div>
+          <span class="section-label">${localizeOwn(hass, "anchor")}</span>
+          <picture-studio-anchor-picker
+            .hass=${hass}
+            .anchor=${anchor}
+          ></picture-studio-anchor-picker>
+        </div>
+      </ha-expansion-panel>
+      <ha-form
+        .hass=${hass}
+        .data=${data}
+        .schema=${iconInteractionsSchema()}
+        .computeLabel=${label}
+        .computeHelper=${helper}
+        @value-changed=${valueChanged}
+      ></ha-form>
+    `;
   },
 };

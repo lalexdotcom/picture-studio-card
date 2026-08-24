@@ -282,6 +282,30 @@ image:
 
 Both forms render identically; the editor displays either one.
 
+### Image items
+
+An **Image** item (`type: image` inside the element's `config`) places a picture
+on the picture. It takes the same image sources as the card's own background —
+a file, a dark-mode alternate, a camera or an image entity, state images and CSS
+filters. `aspect_ratio` is the one background setting an Image item does not take,
+because it has a size of its own: `width` (a percentage of the card's background)
+and, optionally, `height` (also a percentage). When `height` is absent the image
+keeps its natural proportions; set both to stretch it to an arbitrary shape.
+
+```yaml
+  - type: element
+    config:
+      type: image
+      image: /local/overlay.png
+      dark_mode_image: /local/overlay-dark.png  # optional
+      width: 30          # % of the background width
+      # height: 20       # % of the background height; absent = keep proportions
+      tap_action: { action: more-info }
+    position:
+      top: 10%
+      left: 5%
+```
+
 ### Positions, anchors and sizes
 
 An element's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices

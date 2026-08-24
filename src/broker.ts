@@ -64,6 +64,12 @@ export interface CardChannel {
    * that was wrong by 838px.
    */
   viewportTop(): number | undefined;
+  /**
+   * The item's wrapper height as a percentage of the layer's height, rounded
+   * to two decimal places. Undefined when it cannot measure — no wrapper, or a
+   * zero-height layer — exactly as `reanchor` and `viewportTop` do.
+   */
+  measureImageHeight(index: number): number | undefined;
 }
 
 const editors = new Set<EditorChannel>();

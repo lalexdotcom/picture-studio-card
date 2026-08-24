@@ -874,6 +874,16 @@ export class PictureStudioCard extends LitElement {
     return rect.height > 0 ? rect.top : undefined;
   }
 
+  measureImageHeight(index: number): number | undefined {
+    const wrapper = this._wrappers[index];
+    const layer = this._layer;
+    if (!wrapper || !layer) return undefined;
+    const layerRect = layer.getBoundingClientRect();
+    if (layerRect.height === 0) return undefined;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    return Math.round((wrapperRect.height / layerRect.height) * 10000) / 100;
+  }
+
   protected render() {
     if (!this._config) return nothing;
 

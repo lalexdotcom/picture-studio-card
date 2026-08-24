@@ -15,7 +15,11 @@ const channel = () => ({
   selectedIndex: () => undefined,
 });
 
-const card = () => ({ reanchor: () => undefined, viewportTop: () => undefined });
+const card = () => ({
+  reanchor: () => undefined,
+  viewportTop: () => undefined,
+  measureImageHeight: () => undefined,
+});
 
 describe("broker", () => {
   it("has no active editor when none is registered", () => {

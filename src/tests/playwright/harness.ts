@@ -1,8 +1,9 @@
 import { notifyEditors, registerEditor } from "../../broker";
+import { PictureStudioImage } from "../../card/image-element";
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
 import { PictureStudioStateLabel } from "../../card/state-label-element";
-import { CARD_TAG, ICON_TAG, LABEL_TAG } from "../../config";
+import { CARD_TAG, ICON_TAG, IMAGE_TAG, LABEL_TAG } from "../../config";
 import type { Anchor, Position } from "../../position";
 
 /**
@@ -63,6 +64,29 @@ export class StubHaCard extends HTMLElement {
   }
 }
 
+/**
+ * Stands in for `hui-image`, which is not loaded in this browser. Without a
+ * stub it is `display: inline` with no intrinsic size, so the wrapper the card
+ * wraps it in collapses to zero and `measureImageHeight` would always return
+ * undefined — making any browser assertion about image-box dimensions vacuous.
+ *
+ * The stub sizes itself from the properties the card passes down, the same way
+ * the real hui-image would. Width comes from the wrapper's own style (the card
+ * writes it as a percentage); height is derived from the aspect ratio the card
+ * does not set on an image element, so the stub applies a fixed 1:1 ratio by
+ * default — it is a known, round number that makes the expected values legible.
+ */
+export class HuiImageStub extends HTMLElement {
+  connectedCallback(): void {
+    this.style.display = "block";
+    // The card controls width via the wrapper; the stub only needs to give the
+    // element a height so getBoundingClientRect reports a non-zero box.
+    this.style.height = `${BADGE.height}px`;
+  }
+}
+
+export const HUI_IMAGE_TAG = "hui-image";
+
 export const FAKE_TAG = "sized-child";
 
 const define = (tag: string, ctor: CustomElementConstructor): void => {
@@ -78,8 +102,10 @@ const makeChild = (config: unknown): SizedChild => {
 export const installHelpers = (): void => {
   neutralisePointerCapture();
   define(FAKE_TAG, SizedChild);
+  define(HUI_IMAGE_TAG, HuiImageStub);
   define("ha-card", StubHaCard);
   define(CARD_TAG, PictureStudioCard);
+  define(IMAGE_TAG, PictureStudioImage);
   define(ICON_TAG, PictureStudioStateIcon);
   define(LABEL_TAG, PictureStudioStateLabel);
   (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({
