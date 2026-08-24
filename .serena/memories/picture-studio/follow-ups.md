@@ -967,3 +967,28 @@ its head, not a redesign.
 without a measurement would reintroduce anchoring in a mode where it may be
 unnecessary, and this project has already spent rounds on remedies that were
 inert because nobody proved they ran.
+
+## 17. Which `hacs.json` HACS reads for a pre-release — unverified
+
+**Opened 2026-08-24, with the two-branch release chain.** Not a defect: a gap in
+what we know, and it only bites in one scenario.
+
+`hacs.json` carries the `homeassistant` floor. `main` and `next` each have their
+own copy, and they will differ the day a feature raises the floor — say `next`
+moves to `2026.9.0` while `main` stays at `2026.6.0`. The question is what HACS
+does then: does it read `hacs.json` from the ref it is downloading (the tag), in
+which case the floor travels with the release and everything is correct — or from
+the repository's default branch, in which case a beta could be offered to an
+installation too old to run it, and, worse, `main`'s floor could be read for a
+beta that needs a newer one.
+
+**Why it is parked rather than answered.** It costs nothing until the floors
+actually differ, and until then any answer is untested. The raising-the-floor
+decision is itself cheap in this project, so the two are likely to arrive
+together.
+
+**What would close this:** read the HACS source for how a repository's manifest
+is fetched for a given version, rather than inferring it from behaviour — the
+same habit that pays everywhere else here. Failing that, the first release where
+the floors genuinely differ is the natural experiment, and it should be a beta,
+not a stable.
