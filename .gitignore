@@ -15,3 +15,8 @@ captures/
 # Checkouts of other people's repositories, kept here rather than in /tmp so
 # they survive a shell and stay visible in the editor. Never part of this repo.
 .work/
+
+# Throwaway probes and spikes, kept in the repository tree rather than in /tmp so
+# they are visible in the editor and survive a shell. Never committed: a spike's
+# output is an answer, and the answer belongs in a spec or a commit message.
+.scratchpad/
