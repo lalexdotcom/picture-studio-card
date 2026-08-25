@@ -103,14 +103,27 @@ export class PictureStudioElementForm extends LitElement {
     element: { attribute: false },
     anchor: { attribute: false },
     visibility: { attribute: false },
-    measuredImageHeight: { attribute: false },
+    measureImageHeight: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare element?: ElementConfig;
   declare anchor?: Anchor;
   declare visibility?: VisibilityCondition[];
-  declare measuredImageHeight?: number;
+  /**
+   * Asks the card preview how tall the item is drawn, right now.
+   *
+   * A **function**, deliberately, where this was once a number. A value has to
+   * be captured at some moment, and the moment available was the editor's
+   * render — which is not the moment it is used. Home Assistant's number field
+   * emits on every keystroke, so typing `40` into the width commits `4` first:
+   * the card laid out at 4%, the editor measured 4, and clearing keep-ratio
+   * minutes later still wrote that 4. Every symptom was the first digit typed.
+   *
+   * A function cannot go stale. It answers when it is asked, which is at the
+   * dispatch below — after the width has settled and the card has laid out.
+   */
+  declare measureImageHeight?: () => number | undefined;
 
   /** Merge `ev.detail.value` onto the complete flat record and dispatch. */
   private _valueChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {
@@ -158,12 +171,7 @@ export class PictureStudioElementForm extends LitElement {
       case "state-label":
         return labelForm.toFormData(element);
       case "image":
-        return {
-          ...imageForm.toFormData(element),
-          ...(this.measuredImageHeight !== undefined
-            ? { __measuredHeight: this.measuredImageHeight }
-            : {}),
-        };
+        return imageForm.toFormData(element);
     }
     return assertNever(element, "element kind");
   }
@@ -191,7 +199,16 @@ export class PictureStudioElementForm extends LitElement {
       case "image":
         this.dispatchEvent(
           new CustomEvent("element-changed", {
-            detail: { element: imageForm.fromFormData(element, data) },
+            detail: {
+              // Measured HERE, at the dispatch, and nowhere earlier. See the
+              // comment on `measureImageHeight` for what capturing it sooner
+              // cost. The key is injected rather than passed as an argument so
+              // `fromFormData` stays a pure function of its data.
+              element: imageForm.fromFormData(element, {
+                ...data,
+                __measuredHeight: this.measureImageHeight?.(),
+              }),
+            },
             bubbles: true,
             composed: true,
           }),

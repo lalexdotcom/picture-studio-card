@@ -633,11 +633,10 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
                 .element=${editing.config}
                 .anchor=${editing.anchor}
                 .visibility=${editing.visibility}
-                .measuredImageHeight=${
-                  this._editingIndex !== undefined
-                    ? activeCard()?.measureImageHeight(this._editingIndex)
-                    : undefined
-                }
+                .measureImageHeight=${() =>
+                  this._editingIndex === undefined
+                    ? undefined
+                    : activeCard()?.measureImageHeight(this._editingIndex)}
                 @element-changed=${this._elementChanged}
                 @anchor-changed=${this._anchorChanged}
                 @visibility-changed=${this._visibilityChanged}
