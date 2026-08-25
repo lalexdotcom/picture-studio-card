@@ -1,6 +1,7 @@
 import { html, nothing } from "lit";
 import { DEFAULT_LABEL_CHROME, normalizeLabelChrome } from "../chrome";
 import { normalizeLabelShow, type StateLabelConfig } from "../config";
+import { defaultActionName, STATE_LABEL_KIND } from "../element-kinds";
 import { DEFAULT_LABEL_SIZE } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
@@ -67,14 +68,19 @@ export const labelInteractionsSchema = (): unknown[] => [
     flatten: true,
     icon: "mdi:gesture-tap",
     schema: [
-      { name: "tap_action", selector: { ui_action: { default_action: "more-info" } } },
+      {
+        name: "tap_action",
+        selector: {
+          ui_action: { default_action: defaultActionName(STATE_LABEL_KIND, "tap_action") },
+        },
+      },
       {
         name: "",
         type: "optional_actions",
         flatten: true,
-        schema: ["hold_action", "double_tap_action"].map((name) => ({
+        schema: (["hold_action", "double_tap_action"] as const).map((name) => ({
           name,
-          selector: { ui_action: { default_action: "none" } },
+          selector: { ui_action: { default_action: defaultActionName(STATE_LABEL_KIND, name) } },
         })),
       },
     ],

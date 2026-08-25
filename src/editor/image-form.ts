@@ -1,5 +1,6 @@
 import { html } from "lit";
 import type { ImageElementConfig } from "../config";
+import { defaultActionName, IMAGE_KIND } from "../element-kinds";
 import { ratioIsForced } from "../image-box";
 import { localizeOwn } from "../strings";
 import type { KindForm, KindFormContext } from "./element-form";
@@ -43,14 +44,17 @@ const imageInteractionsSchema = (): unknown[] => [
     flatten: true,
     icon: "mdi:gesture-tap",
     schema: [
-      { name: "tap_action", selector: { ui_action: { default_action: "none" } } },
+      {
+        name: "tap_action",
+        selector: { ui_action: { default_action: defaultActionName(IMAGE_KIND, "tap_action") } },
+      },
       {
         name: "",
         type: "optional_actions",
         flatten: true,
-        schema: ["hold_action", "double_tap_action"].map((name) => ({
+        schema: (["hold_action", "double_tap_action"] as const).map((name) => ({
           name,
-          selector: { ui_action: { default_action: "none" } },
+          selector: { ui_action: { default_action: defaultActionName(IMAGE_KIND, name) } },
         })),
       },
     ],

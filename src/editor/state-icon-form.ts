@@ -1,6 +1,7 @@
 import { html, nothing } from "lit";
 import { DEFAULT_ICON_CHROME, normalizeIconChrome } from "../chrome";
 import type { StateIconConfig } from "../config";
+import { defaultActionName, STATE_ICON_KIND } from "../element-kinds";
 import { DEFAULT_ICON_SIZE } from "../element-size";
 import { localizeOwn } from "../strings";
 import type { LocalizeFunc } from "../types";
@@ -58,14 +59,19 @@ export const iconInteractionsSchema = (): unknown[] => [
     flatten: true,
     icon: "mdi:gesture-tap",
     schema: [
-      { name: "tap_action", selector: { ui_action: { default_action: "more-info" } } },
+      {
+        name: "tap_action",
+        selector: {
+          ui_action: { default_action: defaultActionName(STATE_ICON_KIND, "tap_action") },
+        },
+      },
       {
         name: "",
         type: "optional_actions",
         flatten: true,
-        schema: ["hold_action", "double_tap_action"].map((name) => ({
+        schema: (["hold_action", "double_tap_action"] as const).map((name) => ({
           name,
-          selector: { ui_action: { default_action: "none" } },
+          selector: { ui_action: { default_action: defaultActionName(STATE_ICON_KIND, name) } },
         })),
       },
     ],

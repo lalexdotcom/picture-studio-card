@@ -283,7 +283,7 @@ here: every link is a rule we write.
 does not change during a gesture in this sub-project. Sub-project 2 is what makes
 it change, and it will have to extend that guard from the coordinates to the box.
 
-### 8. An image is clickable when there is something to open — REVISED 2026-08-25
+### 8. An image is inert until an action is asked for — REVISED TWICE, settled 2026-08-25
 
 **The original decision was wrong on its premise and harmful in its remedy.** It
 read: *"an image element has no implicit subject — `entity` drives `state_image`,
@@ -304,6 +304,14 @@ An image element has **three** possible subjects, tried in that order, and HA
 falls back to the camera and the image entity itself. Where none resolves, it
 already shows a visible failure rather than doing nothing silently.
 
+**The first revision drew the wrong conclusion from a true fact.** It made the
+cursor follow *reachability* — is there a subject for the action to find. That
+answers "will this work", which requires a copy of `handleAction`'s own table
+(only `more-info` and `toggle` read the item's config; the six others carry their
+own payload), pinned to a frontend build and silently wrong the day it changes.
+It also left the card promising more-info while the form displayed `none`, which
+no reader could have caught: two files, two rules, no test between them.
+
 **The remedy was worse than the problem it solved.** `pointer-events: none` was
 meant to stop a large image swallowing clicks meant for the icons underneath it.
 But an opaque image already hides those icons: letting clicks through does not
@@ -312,18 +320,32 @@ picture, belonging to something the user cannot identify. Reported in use, and
 the honest summary is that it traded "I cannot click what I can see" for "I click
 what I cannot see". The first is a property worth having.
 
-**What now holds:**
+**What now holds — the rule, in one line:**
 
-- An image is clickable when it carries an explicit action, or when there is a
-  subject for the default one — `entity`, `camera_image` or `image_entity`. That
-  is HA's own list, not ours to invent.
-- The `clickable` attribute, and with it the pointer cursor, follows that.
+> **Our cursor follows Home Assistant's decision, never a forecast of the
+> result.** If an action is declared, we announce it; a misconfigured one does
+> nothing, and Home Assistant says so its own way. Tant pis.
+
+- All three kinds share `isClickable`, HA's own `badge.hasAction` rule: no cursor
+  only when every action is explicitly `none`. There is no image-specific
+  predicate any more, and no copy of HA's action table.
+- What separates an image from an icon is its **default**, not its rule. The
+  image kind declares `defaultActions: { tap_action: { action: "none" } }` in
+  `src/element-kinds.ts`; the icon and the label declare nothing, which delegates
+  to HA's own more-info default. That declaration is merged into the config at
+  `setConfig`, exactly as Home Assistant's own elements do it — so the cursor,
+  the gesture binding and what `handleAction` executes all read one object.
+- The form **derives** its `ui_action` `default_action` from the same
+  declaration and never merges: the selector displays a default, it does not
+  store one. The card and the form can no longer disagree, because there is only
+  one statement to disagree with.
 - **No `pointer-events: none`, ever.** An image without an action is simply not
   interactive: default cursor, and it covers what it covers.
-- The form must not promise what will not happen: the image kind carries its own
-  interactions schema with `default_action: "none"`, where the icon's says
-  `more-info`. `default_action` is what the selector *displays* for an absent
-  value, and for an icon that display is truthful.
+
+**What this costs, knowingly:** an image fed by a camera or an image entity no
+longer opens more-info on a tap unless the user asks for it. Home Assistant would
+have opened it; we decline to offer a cursor for an action nobody declared, and a
+single `tap_action: more-info` restores it.
 
 **What this gives up, knowingly:** a PNG with a transparent hole cannot let
 clicks reach what is behind it. For HTML content CSS defines only

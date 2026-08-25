@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "@rstest/core";
-import { imageSource, isImageClickable, PictureStudioImage } from "../../../card/image-element";
+import { imageSource, PictureStudioImage } from "../../../card/image-element";
 import { IMAGE_TAG, type ImageElementConfig } from "../../../config";
 import type { HomeAssistant } from "../../../types";
 
@@ -70,27 +70,6 @@ describe("imageSource", () => {
     expect(
       imageSource({ type: "image", width: 20, image: "/a.png", image_entity: "image.door" }, h),
     ).toBe("/api/image_proxy/image.door?token=T&state=s");
-  });
-});
-
-describe("isImageClickable", () => {
-  test("absent means inert — unlike every other kind", () => {
-    expect(isImageClickable({ type: "image", width: 20 })).toBe(false);
-  });
-
-  test("an explicit action makes it clickable", () => {
-    expect(
-      isImageClickable({ type: "image", width: 20, tap_action: { action: "more-info" } }),
-    ).toBe(true);
-    expect(isImageClickable({ type: "image", width: 20, hold_action: { action: "toggle" } })).toBe(
-      true,
-    );
-  });
-
-  test("an explicit none is still inert", () => {
-    expect(isImageClickable({ type: "image", width: 20, tap_action: { action: "none" } })).toBe(
-      false,
-    );
   });
 });
 
@@ -226,44 +205,70 @@ describe("a live camera forces the fit", () => {
 });
 
 /**
- * Revised decision 8. The original made an absent action mean inert, on the
- * premise that an image has no implicit subject. `handleAction` disagrees:
- * its more-info branch resolves `action.entity || config.entity ||
- * config.camera_image || config.image_entity`, read out of frontend build
- * 20260729.6. An image fed by a camera or an image entity has a subject, and
- * HA opens it. The cursor has to say so.
+ * Decision 8, settled 2026-08-25. The cursor follows Home Assistant's own
+ * decision — whether an action is declared — and never a forecast of what that
+ * action will produce; a misconfigured action does nothing, and Home Assistant
+ * says so in its own way.
+ *
+ * What separates an image from an icon is therefore not the rule but the
+ * default: the image kind declares `tap_action: none` in `element-kinds.ts`, so
+ * silence means inert here while it still means more-info there. That is also
+ * what the form has always displayed.
+ *
+ * Asserted through `setConfig`, not on the predicate: the merge of the kind's
+ * defaults is half of what is being tested.
  */
-describe("isImageClickable follows what more-info could open", () => {
-  test("a decorative picture stays inert", () => {
-    expect(isImageClickable({ type: "image", width: 20, image: "/a.png" })).toBe(false);
-    expect(isImageClickable({ type: "image", width: 20 })).toBe(false);
+const clickable = async (config: ImageElementConfig): Promise<boolean> =>
+  (await mount(config)).hasAttribute("clickable");
+
+describe("the cursor follows the declared action", () => {
+  test("a picture nobody gave an action to is inert", async () => {
+    expect(await clickable({ type: "image", width: 20, image: "/a.png" })).toBe(false);
+    expect(await clickable({ type: "image", width: 20 })).toBe(false);
   });
 
-  test("any of Home Assistant's three subjects makes it clickable", () => {
-    expect(isImageClickable({ type: "image", width: 20, entity: "light.a" })).toBe(true);
-    expect(isImageClickable({ type: "image", width: 20, camera_image: "camera.a" })).toBe(true);
-    expect(isImageClickable({ type: "image", width: 20, image_entity: "image.a" })).toBe(true);
+  test("a subject is not an action — a camera picture waits to be asked", async () => {
+    expect(await clickable({ type: "image", width: 20, entity: "light.a" })).toBe(false);
+    expect(await clickable({ type: "image", width: 20, camera_image: "camera.a" })).toBe(false);
+    expect(await clickable({ type: "image", width: 20, image_entity: "image.a" })).toBe(false);
   });
 
-  test("an explicit none wins over a subject — the user said no", () => {
+  test("an explicit action makes it clickable, subject or none", async () => {
+    expect(await clickable({ type: "image", width: 20, tap_action: { action: "more-info" } })).toBe(
+      true,
+    );
+    expect(await clickable({ type: "image", width: 20, hold_action: { action: "toggle" } })).toBe(
+      true,
+    );
     expect(
-      isImageClickable({
-        type: "image",
-        width: 20,
-        camera_image: "camera.a",
-        tap_action: { action: "none" },
-      }),
-    ).toBe(false);
-  });
-
-  test("an explicit action still works without any subject", () => {
-    expect(
-      isImageClickable({
+      await clickable({
         type: "image",
         width: 20,
         image: "/a.png",
         tap_action: { action: "navigate", navigation_path: "/lovelace" },
       }),
     ).toBe(true);
+  });
+
+  test("an explicit none is inert, like the default it repeats", async () => {
+    expect(await clickable({ type: "image", width: 20, tap_action: { action: "none" } })).toBe(
+      false,
+    );
+  });
+});
+
+describe("the kind's default action", () => {
+  test("is merged into the stored config, so Home Assistant reads it too", async () => {
+    const el = await mount({ type: "image", width: 20, image: "/a.png" });
+    expect(el._config?.tap_action).toEqual({ action: "none" });
+  });
+
+  test("never overrides what the user wrote", async () => {
+    const el = await mount({
+      type: "image",
+      width: 20,
+      tap_action: { action: "more-info" },
+    });
+    expect(el._config?.tap_action).toEqual({ action: "more-info" });
   });
 });
