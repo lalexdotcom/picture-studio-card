@@ -12,8 +12,6 @@
   the background; its height either follows the picture's own proportions or is
   yours to set, which stretches it. Tap, hold and double-tap actions are yours to
   set too: unlike an icon, an image does nothing until you ask it to.
-- Depth is the item list's order: an image placed above the icons in the list is
-  drawn under them on the picture. Drag a row to change what covers what.
 
 ## 1.5.3 — 2026-08-23
 
