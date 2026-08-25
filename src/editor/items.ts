@@ -105,6 +105,12 @@ export const removeItem = (items: PictureItem[], index: number): PictureItem[] =
 export interface RowLabel {
   primary: string;
   secondary?: string;
+  /**
+   * The row is named after something the item is derived FROM, not after what
+   * it is. Only the list knows how to say that — it marks the first line with a
+   * glyph — so this stays a fact rather than an icon name.
+   */
+  derived?: boolean;
 }
 
 /**
@@ -169,6 +175,41 @@ const pickedImageLabel = (image: ImageSource | undefined): string | undefined =>
   return imagePath(image) || undefined;
 };
 
+/**
+ * A row headed by an entity: its name on the first line, "Area ▸ Device" on the
+ * second, both composed by `hass.formatEntityName` against the registry rather
+ * than assembled out of `friendly_name` and an id.
+ *
+ * Undefined when the entity is not in `hass.states` or the frontend is too old
+ * to compose names — the caller then degrades on its own terms, because what
+ * "no entity name" should fall back to differs by item kind.
+ */
+const entityLabel = (
+  entityId: string | undefined,
+  hass?: HomeAssistant,
+  named?: string,
+): RowLabel | undefined => {
+  const stateObj = entityId ? hass?.states?.[entityId] : undefined;
+  if (!entityId || !stateObj || !hass?.formatEntityName) return undefined;
+  const format = hass.formatEntityName;
+  const primary = named || format(stateObj, { type: "entity" }) || entityId;
+  // Asked for part by part rather than as one list, so that a part which
+  // merely repeats the first line can be dropped. An entity that is its
+  // device's main one composes to the device's own name, and Home Assistant
+  // resolves that with a registry heuristic we would have to copy; comparing
+  // the two strings we already hold arrives at the same place — device on
+  // top, place underneath — without copying anything.
+  // The result is empty for an entity attached to neither, which is common
+  // enough that it has to mean "no second line" rather than a blank one.
+  const secondary = [format(stateObj, { type: "area" }), format(stateObj, { type: "device" })]
+    .filter((part) => part && part !== primary)
+    // A device and the area it sits in can carry the same name, and
+    // "Bureau ▸ Bureau" says less than "Bureau".
+    .filter((part, i, parts) => parts.indexOf(part) === i)
+    .join(" ▸ ");
+  return secondary ? { primary, secondary } : { primary };
+};
+
 export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel => {
   // First, because everything below reads `item.config`. The token is the raw
   // string a user will search their YAML for; the reason is why it is here.
@@ -180,7 +221,6 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
   }
 
   const entityId = subjectEntity(item);
-  const stateObj = entityId ? hass?.states?.[entityId] : undefined;
 
   // A `name` written into a badge outranks the registry: it is an explicit
   // choice by whoever configured that badge, and Home Assistant's own lists
@@ -197,25 +237,8 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
           : undefined))
       : undefined;
 
-  if (entityId && stateObj && hass?.formatEntityName) {
-    const format = hass.formatEntityName;
-    const primary = named || format(stateObj, { type: "entity" }) || entityId;
-    // Asked for part by part rather than as one list, so that a part which
-    // merely repeats the first line can be dropped. An entity that is its
-    // device's main one composes to the device's own name, and Home Assistant
-    // resolves that with a registry heuristic we would have to copy; comparing
-    // the two strings we already hold arrives at the same place — device on
-    // top, place underneath — without copying anything.
-    // The result is empty for an entity attached to neither, which is common
-    // enough that it has to mean "no second line" rather than a blank one.
-    const secondary = [format(stateObj, { type: "area" }), format(stateObj, { type: "device" })]
-      .filter((part) => part && part !== primary)
-      // A device and the area it sits in can carry the same name, and
-      // "Bureau ▸ Bureau" says less than "Bureau".
-      .filter((part, i, parts) => parts.indexOf(part) === i)
-      .join(" ▸ ");
-    return secondary ? { primary, secondary } : { primary };
-  }
+  const asEntity = entityLabel(entityId, hass, named);
+  if (asEntity) return asEntity;
 
   if (item.type === "element") {
     // A picture nobody named after an entity is named after itself: what the
@@ -224,11 +247,18 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     if (item.config.type === "image") {
       const picked = pickedImageLabel(item.config.image);
       if (picked) return { primary: picked };
-      // `entity` is deliberately NOT a fallback here. On an image it only
-      // influences the filter or swaps the picture through `state_image`; it is
-      // never what the picture IS, and a row named after it would announce a
-      // subject the item does not have. An unnamed picture says what kind it is,
-      // through the catalogue's own label so the row and the picker agree.
+      // `entity` never NAMES an image: it is not what the picture is. But paired
+      // with `state_image` it is what the picture is drawn FROM, and a list is
+      // read to know the content — so the row borrows the entity's name and
+      // flags itself as derived, which is what the glyph in front of it says.
+      // `state_filter` is deliberately not a trigger: it changes the treatment,
+      // not the content.
+      const source = item.config.entity;
+      if (source && Object.keys(item.config.state_image ?? {}).length > 0) {
+        return { ...(entityLabel(source, hass) ?? { primary: source }), derived: true };
+      }
+      // Nothing names it: say what kind it is, through the catalogue's own label
+      // so that the row and the element picker agree on the word.
       return {
         primary: hass?.localize ? elementLabel(hass.localize, "image") : item.config.type,
       };

@@ -241,7 +241,23 @@ export class PictureStudioBadgeList extends LitElement {
                   title=${kinds[index]}
                 ></ha-icon>
                 <div class="label">
-                  <span class="primary">${labels[index]?.primary}</span>
+                  <span class="primary">
+                    ${
+                      // Named after what it is drawn FROM, not after what it is:
+                      // the glyph is what carries that distinction, since both
+                      // cases put an entity's name on this line. Attenuated and
+                      // text-sized so it reads as an annotation of the name
+                      // rather than as a second kind icon — the accent colours
+                      // in this list already mean selection and error.
+                      labels[index]?.derived
+                        ? html`<ha-icon
+                            class="derived"
+                            icon="mdi:image-sync-outline"
+                            title=${localizeOwn(this.hass, "derived_from_entity")}
+                          ></ha-icon>`
+                        : nothing
+                    }${labels[index]?.primary}
+                  </span>
                   ${
                     secondary[index]
                       ? html`<span class="secondary ${broken[index] ? "error" : ""}">${secondary[index]}</span>`
@@ -448,6 +464,14 @@ export class PictureStudioBadgeList extends LitElement {
     .secondary {
       font-size: var(--ha-font-size-s);
       color: var(--secondary-text-color);
+    }
+    ha-icon.derived {
+      /* Sized to the text it annotates, not to the row: --mdc-icon-size is what
+         ha-icon reads, and its own default is the 24px the kind icon keeps. */
+      --mdc-icon-size: 16px;
+      color: var(--secondary-text-color);
+      margin-inline-end: 4px;
+      vertical-align: -2px;
     }
     /* The same pill as the count in an item form's Visibility header:
        ha-label's dense geometry and its background formula. Drawn here rather

@@ -370,8 +370,49 @@ describe("rowLabel for an image", () => {
     ).toBe("Hall");
   });
 
-  it("never names the row after `entity`, not even with nothing else to show", () => {
+  it("never names the row after `entity` alone — it drives nothing on its own", () => {
     expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("image");
+  });
+
+  /**
+   * Paired with `state_image`, `entity` is what the picture is drawn FROM, and a
+   * list is read to know the content. The row borrows its name and flags itself
+   * derived; the glyph the list puts in front is what tells this apart from a
+   * row named after the picture itself, since both show an entity's name.
+   */
+  it("borrows the entity's name when state_image is what draws the picture", () => {
+    expect(rowLabel(image({ entity: "camera.hall", state_image: { on: "/a.png" } }), hass)).toEqual(
+      { primary: "Hall", secondary: "Rez ▸ Caméra", derived: true },
+    );
+  });
+
+  it("keeps the id, still flagged, when the registry cannot name the entity", () => {
+    expect(
+      rowLabel(image({ entity: "light.absent", state_image: { on: "/a.png" } }), hass),
+    ).toEqual({ primary: "light.absent", derived: true });
+  });
+
+  it("ignores state_filter, which changes the treatment and not the content", () => {
+    expect(
+      rowLabel(image({ entity: "camera.hall", state_filter: { on: "blur(2px)" } }), hass).primary,
+    ).toBe("image");
+  });
+
+  it("never lets state_image outrank a picture the item actually carries", () => {
+    expect(
+      rowLabel(
+        image({ image: "/local/plan.png", entity: "camera.hall", state_image: { on: "/a.png" } }),
+        hass,
+      ),
+    ).toEqual({ primary: "/local/plan.png" });
+  });
+
+  it("does not flag a row named after the picture entity", () => {
+    expect(rowLabel(image({ camera_image: "camera.hall" }), hass).derived).toBeUndefined();
+  });
+
+  it("an empty state_image drives nothing, so it names nothing", () => {
+    expect(rowLabel(image({ entity: "camera.hall", state_image: {} }), hass).primary).toBe("image");
   });
 
   it("shows the picker's own title for a file chosen through it", () => {

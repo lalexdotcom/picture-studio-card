@@ -723,3 +723,44 @@ describe("the Items section", () => {
     expect(header?.querySelector("ha-dropdown.add")).toBeNull();
   });
 });
+
+/**
+ * The glyph is the only thing separating "this row is named after the picture"
+ * from "this row is named after what draws it": both put an entity's name on
+ * the first line. Asserted on the rendered row rather than on `rowLabel`, since
+ * the flag and the icon live in two different files and the point is that they
+ * meet.
+ */
+describe("the derived glyph", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const mount = async (config: Record<string, unknown>) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "element",
+        position: { top: "0%", left: "0%" },
+        config: { type: "image", width: 30, ...config },
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  const glyph = (el: PictureStudioBadgeList) =>
+    el.shadowRoot?.querySelector(".primary ha-icon.derived");
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("marks a picture drawn from an entity's state", async () => {
+    const el = await mount({ entity: "light.a", state_image: { on: "/a.png" } });
+    expect(glyph(el)).toBeTruthy();
+  });
+
+  it("leaves a picture that carries its own source unmarked", async () => {
+    expect(glyph(await mount({ image: "/local/plan.png" }))).toBeNull();
+  });
+});
