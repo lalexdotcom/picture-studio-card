@@ -1,8 +1,9 @@
 import { notifyEditors, registerEditor } from "../../broker";
+import { PictureStudioImage } from "../../card/image-element";
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
 import { PictureStudioStateLabel } from "../../card/state-label-element";
-import { CARD_TAG, ICON_TAG, LABEL_TAG } from "../../config";
+import { CARD_TAG, ICON_TAG, IMAGE_TAG, LABEL_TAG } from "../../config";
 import type { Anchor, Position } from "../../position";
 
 /**
@@ -63,6 +64,45 @@ export class StubHaCard extends HTMLElement {
   }
 }
 
+/**
+ * Stands in for `hui-image`, which is not loaded in this browser. The stub
+ * derives its height from its width using the image's aspect ratio, the way the
+ * real `<img>` inside `hui-image` does. That is what makes keep-ratio mode
+ * testable: when the wrapper has `height: auto` and `max-height: 100%`, the
+ * stub's ratio determines the wrapper's natural height, and the clamp can then
+ * be asserted against.
+ *
+ * The ratio comes from the image path by harness convention: a path containing
+ * `-<w>x<h>` (e.g. `/banner-1x10.png`) uses that ratio; anything else is 1:1.
+ * That lets one test drive a square and another a 1:10 banner without the
+ * production element learning a test-only property.
+ */
+export class HuiImageStub extends HTMLElement {
+  #image: string | undefined;
+
+  /** The card passes the resolved image path as a Lit property. */
+  set image(value: string | undefined) {
+    this.#image = value;
+    this.#applyRatio();
+  }
+
+  connectedCallback(): void {
+    this.style.display = "block";
+    this.#applyRatio();
+  }
+
+  #applyRatio(): void {
+    const match = this.#image ? /[-](\d+)x(\d+)/.exec(this.#image) : null;
+    const group1 = match ? match[1] : undefined;
+    const group2 = match ? match[2] : undefined;
+    const w = group1 !== undefined ? parseInt(group1, 10) : 1;
+    const h = group2 !== undefined ? parseInt(group2, 10) : 1;
+    this.style.aspectRatio = w > 0 && h > 0 ? `${w} / ${h}` : "1 / 1";
+  }
+}
+
+export const HUI_IMAGE_TAG = "hui-image";
+
 export const FAKE_TAG = "sized-child";
 
 const define = (tag: string, ctor: CustomElementConstructor): void => {
@@ -78,8 +118,10 @@ const makeChild = (config: unknown): SizedChild => {
 export const installHelpers = (): void => {
   neutralisePointerCapture();
   define(FAKE_TAG, SizedChild);
+  define(HUI_IMAGE_TAG, HuiImageStub);
   define("ha-card", StubHaCard);
   define(CARD_TAG, PictureStudioCard);
+  define(IMAGE_TAG, PictureStudioImage);
   define(ICON_TAG, PictureStudioStateIcon);
   define(LABEL_TAG, PictureStudioStateLabel);
   (window as unknown as { loadCardHelpers: unknown }).loadCardHelpers = async () => ({

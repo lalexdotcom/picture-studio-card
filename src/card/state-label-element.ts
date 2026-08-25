@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { chromeFill } from "../chrome";
 import type { StateLabelConfig } from "../config";
+import { STATE_LABEL_KIND, withDefaultActions } from "../element-kinds";
 import { DEFAULT_LABEL_SIZE, elementSizeCss } from "../element-size";
 import { hassRenderChanged } from "../has-changed";
 import { itemColorCss, stateColorBrightness } from "../state-color";
@@ -35,7 +36,7 @@ export class PictureStudioStateLabel extends LitElement {
   }
 
   setConfig(config: StateLabelConfig): void {
-    this._config = config;
+    this._config = withDefaultActions(STATE_LABEL_KIND, config);
   }
 
   set hass(hass: HomeAssistant) {

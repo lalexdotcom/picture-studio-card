@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { chromeFill } from "../chrome";
 import type { StateIconConfig } from "../config";
+import { STATE_ICON_KIND, withDefaultActions } from "../element-kinds";
 import { DEFAULT_ICON_SIZE, elementSizeCss } from "../element-size";
 import { hassRenderChanged } from "../has-changed";
 import { itemColorCss } from "../state-color";
@@ -33,7 +34,7 @@ export class PictureStudioStateIcon extends LitElement {
   }
 
   setConfig(config: StateIconConfig): void {
-    this._config = config;
+    this._config = withDefaultActions(STATE_ICON_KIND, config);
   }
 
   set hass(hass: HomeAssistant) {

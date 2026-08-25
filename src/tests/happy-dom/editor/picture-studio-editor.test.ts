@@ -118,6 +118,7 @@ describe("a position commit must not move the view", () => {
     const channel = {
       reanchor: () => undefined,
       viewportTop: () => (present ? previewTop - top : undefined),
+      measureImageHeight: () => undefined,
     };
     let release = registerCard(channel);
 

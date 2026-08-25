@@ -2,7 +2,15 @@ import { afterEach, describe, expect, it, rstest } from "@rstest/core";
 import type { EditorChannel } from "../../../broker";
 import { notifyEditors, registerEditor } from "../../../broker";
 import { PictureStudioCard } from "../../../card/picture-studio-card";
-import { CARD_TAG, CARD_TYPE, ICON_TAG, LABEL_TAG, PROBE_TAG, PROBE_TYPE } from "../../../config";
+import {
+  CARD_TAG,
+  CARD_TYPE,
+  ICON_TAG,
+  IMAGE_TAG,
+  LABEL_TAG,
+  PROBE_TAG,
+  PROBE_TYPE,
+} from "../../../config";
 
 import type { HomeAssistant } from "../../../types";
 import {
@@ -1270,5 +1278,125 @@ describe("viewportTop — the anchor the editor holds", () => {
         toJSON: () => ({}),
       }) as DOMRect;
     expect((el as unknown as { viewportTop(): number | undefined }).viewportTop()).toBe(120);
+  });
+});
+
+describe("image items", () => {
+  it("the wrapper carries the box, and keep-ratio carries the clamp", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: { type: "image", image: "/a.png", width: 40 },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("40%");
+    expect(wrapper.style.height).toBe("");
+    expect(wrapper.style.maxHeight).toBe("100%");
+  });
+
+  it("an explicit height is written and releases the clamp", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: { type: "image", image: "/a.png", width: 40, height: 25 },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("40%");
+    expect(wrapper.style.height).toBe("25%");
+    expect(wrapper.style.maxHeight).toBe("");
+  });
+
+  it("a live camera is drawn in keep-ratio, whatever height the config carries", async () => {
+    // hui-image holds its `.ratio` container for a stream — no <img> ever loads
+    // to settle _lastImageHeight — and that container ignores an imposed
+    // height. Measured on frontend 20260729.6: in a box asked to be 196x49 the
+    // container came out 196x110.3 and ha-camera-stream 196x0. So the card
+    // draws what is actually achievable, and leaves the stored height alone.
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: {
+            type: "image",
+            camera_image: "camera.hall",
+            camera_view: "live",
+            width: 40,
+            height: 20,
+          },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("40%");
+    expect(wrapper.style.height).toBe("");
+    expect(wrapper.style.maxHeight).toBe("100%");
+  });
+
+  it("the box never lands on a badge or on the other element kinds", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 10, left: 10 },
+          config: { type: "state-icon", entity: "light.a" },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("");
+    expect(wrapper.style.maxHeight).toBe("");
+  });
+
+  it("an image never blocks its own pointer events, action or not", async () => {
+    // `pointer-events: none` on an actionless image was tried and removed. It
+    // traded one confusion for a worse one: instead of an image blocking items
+    // it already hides, the items under it became clickable THROUGH it, showing
+    // their cursor over a picture with no way to tell what was being hovered.
+    // You cannot click what you cannot see, and that is a property worth having.
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 10, left: 10 },
+          config: { type: "image", image: "/a.png" },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.classList.contains("inert")).toBe(false);
+  });
+
+  it("the element is built, not a hole", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 10, left: 10 },
+          config: { type: "image", image: "/a.png" },
+        },
+      ],
+    });
+    expect(card.renderRoot.querySelector(IMAGE_TAG)).toBeTruthy();
   });
 });

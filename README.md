@@ -282,6 +282,30 @@ image:
 
 Both forms render identically; the editor displays either one.
 
+### Image items
+
+An **Image** item (`type: image` inside the element's `config`) places a picture
+on the picture. It takes the same image sources as the card's own background —
+a file, a dark-mode alternate, a camera or an image entity, state images and CSS
+filters. `aspect_ratio` is the one background setting an Image item does not take,
+because it has a size of its own: `width` (a percentage of the card's background)
+and, optionally, `height` (also a percentage). When `height` is absent the image
+keeps its natural proportions; set both to stretch it to an arbitrary shape.
+
+```yaml
+  - type: element
+    config:
+      type: image
+      image: /local/overlay.png
+      dark_mode_image: /local/overlay-dark.png  # optional
+      width: 30          # % of the background width
+      # height: 20       # % of the background height; absent = keep proportions
+      tap_action: { action: more-info }
+    position:
+      top: 10%
+      left: 5%
+```
+
 ### Positions, anchors and sizes
 
 An element's `size.mode` is `auto`, `adaptive` or `fixed` — the three choices
@@ -322,13 +346,26 @@ pulled back in but not pushed further out, and once fully inside it stays there.
 Items overlap in the order `items` gives them: **the last one in the YAML is
 drawn over the others**. There is no `z-index` to set.
 
+That order is what makes an image usable as a backdrop for the items on it: put
+the image *before* the icons and labels it sits behind, and they stay visible
+and clickable over it. In the editor, drag a row in the item list to change what
+covers what.
+
 ### Interaction keys
 
 Every item takes `tap_action`, `hold_action` and `double_tap_action`, in the
-shape Home Assistant's own cards and badges use. An absent `tap_action` means
-`more-info`; an item stops reacting once `tap_action` is `{ action: none }` and
-neither hold nor double tap carries an action of its own. Nothing reacts while you are editing the card — the whole
-picture belongs to placing items there.
+shape Home Assistant's own cards and badges use. An item stops reacting once
+`tap_action` is `{ action: none }` and neither hold nor double tap carries an
+action of its own.
+
+What an **absent** `tap_action` means depends on the item. An icon or a label
+follows Home Assistant and opens more-info. An **image** does nothing: a picture
+is often decoration, and a cursor promising something that never happens is
+worse than no cursor. Give it `tap_action: { action: more-info }` — or any other
+action — to make it react.
+
+Nothing reacts while you are editing the card — the whole picture belongs to
+placing items there.
 
 ### Visibility keys
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@rstest/core";
+import { describe, expect, it, test } from "@rstest/core";
 import { DEFAULT_LABEL_CHROME, type LabelChrome } from "../../chrome";
 import {
   type BadgeItem,
@@ -10,12 +10,21 @@ import {
   isSupportedBadgeType,
   normalizeConfig,
   normalizeElementConfig,
+  type PictureItem,
+  type PictureStudioConfig,
   type StateIconConfig,
   type StateLabelConfig,
   storedConfig,
   stubConfig,
 } from "../../config";
 import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE, type ElementSize } from "../../element-size";
+import { DEFAULT_IMAGE_WIDTH } from "../../image-box";
+
+const itemAt = (config: PictureStudioConfig, index: number): PictureItem => {
+  const item = config.items[index];
+  if (!item) throw new Error(`expected an item at index ${index}`);
+  return item;
+};
 
 describe("imagePath", () => {
   it("keeps a hand-written path as-is", () => {
@@ -441,6 +450,7 @@ describe("element chrome", () => {
     const config = normalizeConfig(withChrome({ theme: "dark", radius: 8 }));
     const element = config.items[0];
     if (!element || element.type !== "element") throw new Error("expected an element");
+    if (element.config.type !== "state-icon") throw new Error("expected state-icon");
     expect(element.config.chrome).toEqual({
       theme: "dark",
       radius: 8,
@@ -453,6 +463,7 @@ describe("element chrome", () => {
     const config = normalizeConfig(withChrome(undefined));
     const element = config.items[0];
     if (!element || element.type !== "element") throw new Error("expected an element");
+    if (element.config.type !== "state-icon") throw new Error("expected state-icon");
     expect(element.config.chrome).toEqual({
       theme: "none",
       radius: 50,
@@ -1085,5 +1096,68 @@ describe("isSupportedBadgeType", () => {
   it("rejects a nonsense native type", () => {
     expect(isSupportedBadgeType("entty")).toBe(false);
     expect(isSupportedBadgeType("")).toBe(false);
+  });
+});
+
+describe("image element", () => {
+  const item = (config: Record<string, unknown>) => ({
+    type: "element",
+    position: { top: 10, left: 10 },
+    config: { type: "image", ...config },
+  });
+
+  test("normalizes its box and keeps every passthrough key", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [item({ image: "/a.png", filter: "blur(2px)", state_image: { on: "/b.png" } })],
+    });
+    const element = itemAt(config, 0);
+    expect(element.type).toBe("element");
+    if (element.type !== "element" || element.config.type !== "image") throw new Error("shape");
+    expect(element.config.width).toBe(DEFAULT_IMAGE_WIDTH);
+    expect(element.config).not.toHaveProperty("height");
+    expect(element.config.filter).toBe("blur(2px)");
+    expect(element.config.state_image).toEqual({ on: "/b.png" });
+  });
+
+  test("an unreadable kind is still an unknown item, not an image", () => {
+    const config = normalizeConfig({
+      type: CARD_TYPE,
+      items: [{ type: "element", position: {}, config: { type: "picture" } }],
+    });
+    expect(itemAt(config, 0).type).toBe("unknown");
+  });
+
+  test("round trips: the default width is omitted, an absent height stays absent", () => {
+    const stored = storedConfig(
+      normalizeConfig({ type: CARD_TYPE, items: [item({ image: "/a.png" })] }),
+    );
+    const raw = (stored.items as Record<string, unknown>[])[0];
+    if (!raw) throw new Error("expected an item at index 0");
+    const config = raw.config as Record<string, unknown>;
+    expect(config).not.toHaveProperty("width");
+    expect(config).not.toHaveProperty("height");
+    expect(config.image).toBe("/a.png");
+  });
+
+  test("round trips: a chosen box is written back", () => {
+    const stored = storedConfig(
+      normalizeConfig({ type: CARD_TYPE, items: [item({ width: 40, height: 25 })] }),
+    );
+    const raw = (stored.items as Record<string, unknown>[])[0];
+    if (!raw) throw new Error("expected an item at index 0");
+    const config = raw.config as Record<string, unknown>;
+    expect(config.width).toBe(40);
+    expect(config.height).toBe(25);
+  });
+
+  test("round trips: an unknown key survives the commit", () => {
+    const stored = storedConfig(
+      normalizeConfig({ type: CARD_TYPE, items: [item({ future_key: "kept" })] }),
+    );
+    const raw = (stored.items as Record<string, unknown>[])[0];
+    if (!raw) throw new Error("expected an item at index 0");
+    const config = raw.config as Record<string, unknown>;
+    expect(config.future_key).toBe("kept");
   });
 });

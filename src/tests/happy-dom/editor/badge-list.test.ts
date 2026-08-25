@@ -62,7 +62,8 @@ describe("addChoices", () => {
     const values = addChoices(localize).map((c) => c.value);
     expect(values[0]).toBe("element:state-icon");
     expect(values[1]).toBe("element:state-label");
-    expect(values.slice(2).every((v) => v.startsWith("badge:"))).toBe(true);
+    expect(values[2]).toBe("element:image");
+    expect(values.slice(3).every((v) => v.startsWith("badge:"))).toBe(true);
   });
 });
 

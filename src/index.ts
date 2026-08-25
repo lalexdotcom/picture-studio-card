@@ -1,4 +1,5 @@
 import { PictureStudioHeading } from "./card/card-heading";
+import { PictureStudioImage } from "./card/image-element";
 import { PictureStudioCard } from "./card/picture-studio-card";
 import { PictureStudioStateIcon } from "./card/state-icon-element";
 import { PictureStudioStateLabel } from "./card/state-label-element";
@@ -11,6 +12,7 @@ import {
   HEADING_SECTION_TAG,
   HEADING_TAG,
   ICON_TAG,
+  IMAGE_TAG,
   LABEL_TAG,
   LIST_TAG,
   PICKER_TAG,
@@ -53,6 +55,7 @@ if (!customElements.get(PICKER_TAG)) {
 }
 
 if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudioStateIcon);
+if (!customElements.get(IMAGE_TAG)) customElements.define(IMAGE_TAG, PictureStudioImage);
 if (!customElements.get(LABEL_TAG)) customElements.define(LABEL_TAG, PictureStudioStateLabel);
 
 if (!customElements.get(ELEMENT_FORM_TAG)) {

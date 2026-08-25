@@ -1,8 +1,15 @@
-import type { ElementConfig, PictureItem, UnknownReason } from "../config";
+import {
+  type ElementConfig,
+  type ImageSource,
+  imagePath,
+  type PictureItem,
+  type UnknownReason,
+} from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
 import { localizeOwn, type StringKey } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { badgeIsBroken } from "./badge-existence";
+import { elementLabel } from "./element-catalog";
 
 /**
  * Every operation moves a {type, position, anchor, config} item as a unit, which
@@ -121,6 +128,47 @@ const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
   "element-type": "unknown_element_type",
 };
 
+/**
+ * The entity a row is *about*.
+ *
+ * For every kind but the image that is `entity`, and the reading is obvious. An
+ * image element carries three entity keys and only two of them are its subject:
+ * `image_entity` and `camera_image` ARE the picture. `entity` is not, at all —
+ * it only influences the filter or swaps the picture through `state_image`, so
+ * it never names an image row, not even as a last resort. `imageSource` reads
+ * the two in this same order, so the row cannot name one picture while the card
+ * draws another.
+ */
+const subjectEntity = (item: PictureItem): string | undefined => {
+  if (item.type === "unknown") return undefined;
+  // Unconditional, and that is the whole point: falling through to `entity`
+  // here would let it reach the entity-name path AHEAD of the chosen file,
+  // which is the opposite of the order intended. `entity` is the last resort
+  // for an image, applied further down, not the first.
+  if (item.type === "element" && item.config.type === "image") {
+    const picture = item.config.image_entity ?? item.config.camera_image;
+    return typeof picture === "string" ? picture : undefined;
+  }
+  const entity = (item.config as { entity?: unknown }).entity;
+  return typeof entity === "string" ? entity : undefined;
+};
+
+/**
+ * What the picture selector itself shows for a chosen file, so the row and the
+ * form agree without either one inventing a wording.
+ *
+ * `ha-selector-media` stores what it displays: `metadata.title` for a file
+ * picked or uploaded through it. A plain path written in YAML has no metadata —
+ * the selector then shows the path, and so does this.
+ */
+const pickedImageLabel = (image: ImageSource | undefined): string | undefined => {
+  if (typeof image === "object" && image !== null) {
+    const title = (image.metadata as { title?: unknown } | undefined)?.title;
+    if (typeof title === "string" && title) return title;
+  }
+  return imagePath(image) || undefined;
+};
+
 export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel => {
   // First, because everything below reads `item.config`. The token is the raw
   // string a user will search their YAML for; the reason is why it is here.
@@ -131,7 +179,7 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     };
   }
 
-  const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
+  const entityId = subjectEntity(item);
   const stateObj = entityId ? hass?.states?.[entityId] : undefined;
 
   // A `name` written into a badge outranks the registry: it is an explicit
@@ -170,6 +218,21 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
   }
 
   if (item.type === "element") {
+    // A picture nobody named after an entity is named after itself: what the
+    // form's own selector shows, rather than the bare word "image" repeated
+    // down a list of them.
+    if (item.config.type === "image") {
+      const picked = pickedImageLabel(item.config.image);
+      if (picked) return { primary: picked };
+      // `entity` is deliberately NOT a fallback here. On an image it only
+      // influences the filter or swaps the picture through `state_image`; it is
+      // never what the picture IS, and a row named after it would announce a
+      // subject the item does not have. An unnamed picture says what kind it is,
+      // through the catalogue's own label so the row and the picker agree.
+      return {
+        primary: hass?.localize ? elementLabel(hass.localize, "image") : item.config.type,
+      };
+    }
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.
     return { primary: entityId ?? item.config.type };

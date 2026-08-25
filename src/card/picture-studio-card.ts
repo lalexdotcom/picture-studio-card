@@ -6,6 +6,7 @@ import {
   hasHeading,
   hasVisibility,
   ICON_TAG,
+  IMAGE_TAG,
   imagePath,
   isSupportedBadgeType,
   LABEL_TAG,
@@ -15,6 +16,7 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
+import { effectiveBox, imageBoxStyle } from "../image-box";
 import "./card-heading";
 import {
   type Anchor,
@@ -636,6 +638,7 @@ export class PictureStudioCard extends LitElement {
     let tag: string | undefined;
     if (item.config.type === "state-label") tag = LABEL_TAG;
     else if (item.config.type === "state-icon") tag = ICON_TAG;
+    else if (item.config.type === "image") tag = IMAGE_TAG;
     // No else. An unknown kind never reaches this method — normalizeElementConfig
     // raises first — and defaulting it to the icon would corrupt its config with
     // icon-only keys the day a third kind exists.
@@ -799,6 +802,22 @@ export class PictureStudioCard extends LitElement {
       wrapper.style.top = style.top;
       wrapper.style.left = style.left;
       wrapper.style.transform = style.transform;
+
+      // The box, for the one kind that has one. It goes here rather than on the
+      // element because `.item` is `width: max-content`, and a percentage width
+      // on a child of a max-content box is cyclic — CSS resolves it as `auto`, so
+      // an element sizing itself in % simply would not. The wrapper is ours.
+      //
+      // Inline style rather than a class: `wrapper.className` is the item
+      // *family*, never the kind, so there is no `.item.image` to write a rule
+      // against — and inventing one would add a second channel saying what the
+      // config already says.
+      if (item.type === "element" && item.config.type === "image") {
+        const box = imageBoxStyle(effectiveBox(item.config));
+        wrapper.style.width = box.width;
+        wrapper.style.height = box.height;
+        wrapper.style.maxHeight = box.maxHeight;
+      }
     });
   }
 
@@ -848,6 +867,16 @@ export class PictureStudioCard extends LitElement {
     // A height of zero means the picture has not laid out. Reporting a top then
     // hands the editor a number it would trust.
     return rect.height > 0 ? rect.top : undefined;
+  }
+
+  measureImageHeight(index: number): number | undefined {
+    const wrapper = this._wrappers[index];
+    const layer = this._layer;
+    if (!wrapper || !layer) return undefined;
+    const layerRect = layer.getBoundingClientRect();
+    if (layerRect.height === 0) return undefined;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    return Math.round((wrapperRect.height / layerRect.height) * 10000) / 100;
   }
 
   protected render() {

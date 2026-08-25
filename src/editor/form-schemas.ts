@@ -1,4 +1,4 @@
-import type { ImageSource, PictureStudioConfig } from "../config";
+import type { ImageSource } from "../config";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant, LocalizeFunc } from "../types";
 import type { FormSchema } from "./form-section";
@@ -29,13 +29,49 @@ const domainOf = (entityId: string | undefined): string => entityId?.split(".")[
 export const PICTURE_ENTITY = "picture_entity";
 
 /**
- * Background. `camera_view` is rendered only for a camera, which is what makes
- * this schema a function of the config and not of `localize` alone — and why the
- * data builder and the drop list are derived from it rather than from a constant.
+ * The slice of a config the background section reads — the card's, and now an
+ * image element's. Structural rather than a union of the two: the section does
+ * not care what else the record carries, and a union would have to grow every
+ * time a third consumer appears.
+ */
+export interface BackgroundKeys {
+  image?: ImageSource;
+  dark_mode_image?: ImageSource;
+  image_entity?: string;
+  camera_image?: string;
+  camera_view?: "auto" | "live";
+  aspect_ratio?: string;
+}
+
+const cameraViewField = (localize: LocalizeFunc) => ({
+  name: "camera_view",
+  selector: {
+    select: {
+      options: ["auto", "live"].map((value) => ({
+        value,
+        label: localize(`ui.panel.lovelace.editor.card.generic.camera_view_options.${value}`),
+      })),
+      mode: "dropdown",
+    },
+  },
+});
+
+/**
+ * The ha-form schema for the background (image / entity / camera) section.
+ *
+ * `config` is used only to derive whether `camera_view` is shown — the values
+ * are never read for the form; `backgroundData` builds those separately.
+ *
+ * `options.aspectRatio` guards a correctness trap: pass `{ aspectRatio: false }`
+ * for an image *element*, where `hui-image` is size-managed by the card. Given
+ * an `aspect_ratio`, `hui-image` builds its `.ratio` container (`height: 0` plus
+ * a padding-trick box) that defeats the explicit height the card imposes on the
+ * wrapper. The card's own background passes the option as `true` (the default).
  */
 export const backgroundSchema = (
   localize: LocalizeFunc,
-  config: PictureStudioConfig,
+  config: BackgroundKeys,
+  options: { aspectRatio?: boolean } = {},
 ): FormSchema => {
   const chosen = config.camera_image ?? config.image_entity;
   const isCamera = domainOf(chosen) === "camera";
@@ -43,25 +79,13 @@ export const backgroundSchema = (
     { name: "image", selector: imageSelector(localize) },
     { name: "dark_mode_image", selector: imageSelector(localize) },
     { name: PICTURE_ENTITY, selector: { entity: { domain: ["image", "camera"] } } },
-    ...(isCamera
-      ? [
-          {
-            name: "camera_view",
-            selector: {
-              select: {
-                options: ["auto", "live"].map((value) => ({
-                  value,
-                  label: localize(
-                    `ui.panel.lovelace.editor.card.generic.camera_view_options.${value}`,
-                  ),
-                })),
-                mode: "dropdown",
-              },
-            },
-          },
-        ]
-      : []),
-    { name: "aspect_ratio", selector: { text: {} } },
+    ...(isCamera ? [cameraViewField(localize)] : []),
+    // The card's own background takes it; an image element must not. Given an
+    // aspect_ratio, hui-image builds its `.ratio` container — height: 0 plus a
+    // padding box — which defeats the height the card imposes on the wrapper.
+    // Refused here rather than filtered by the caller, so the field cannot be
+    // rendered by one path and dropped by another.
+    ...(options.aspectRatio === false ? [] : [{ name: "aspect_ratio", selector: { text: {} } }]),
   ];
 };
 
@@ -89,7 +113,7 @@ export const entitySchema = (_localize: LocalizeFunc): FormSchema => [
 ];
 
 /** The camera first: it is what renders when both keys are set. */
-export const backgroundData = (config: PictureStudioConfig): Record<string, unknown> => {
+export const backgroundData = <T extends BackgroundKeys>(config: T): Record<string, unknown> => {
   const chosen = config.camera_image ?? config.image_entity;
   return {
     ...(config.image !== undefined ? { image: asMediaValue(config.image) } : {}),
@@ -109,21 +133,25 @@ export const backgroundData = (config: PictureStudioConfig): Record<string, unkn
  * absence of a conflict alert safe: a forgotten key cannot resurface through the
  * interface.
  */
-export const mergeBackground = (
-  config: PictureStudioConfig,
+export const mergeBackground = <T extends BackgroundKeys>(
+  config: T,
   data: Record<string, unknown>,
-): PictureStudioConfig => {
-  const schema = backgroundSchema(() => "", config);
+  options: { aspectRatio?: boolean } = {},
+): T => {
+  const schema = backgroundSchema(() => "", config, options);
 
   // The picker's key belongs to the form, not to the config: it is the one field
   // whose value has to be split across two real keys. Reading it out of `data`
-  // before the merge is what keeps `next` a genuine PictureStudioConfig — so
+  // before the merge is what keeps `next` a genuine config record — so
   // every assignment below is checked, where the whole block used to run on an
   // untyped record between two casts.
   const { [PICTURE_ENTITY]: picked, ...fields } = data;
   const chosen = typeof picked === "string" && picked ? picked : undefined;
 
-  const next = sectionMerge(schema, config, fields);
+  const next = sectionMerge(schema, config as Record<string, unknown>, fields) as Record<
+    string,
+    unknown
+  >;
 
   if (!chosen) {
     delete next.camera_image;
@@ -137,7 +165,7 @@ export const mergeBackground = (
     delete next.camera_image;
     delete next.camera_view;
   }
-  return next;
+  return next as T;
 };
 
 /**

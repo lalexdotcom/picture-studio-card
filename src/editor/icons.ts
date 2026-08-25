@@ -30,6 +30,7 @@ const ELEMENT_ICON = "mdi:shape-outline";
 const ELEMENT_ICONS: Record<string, string> = {
   "state-icon": "mdi:brightness-7",
   "state-label": "mdi:card-text-outline",
+  image: "mdi:image-outline",
 };
 
 /**

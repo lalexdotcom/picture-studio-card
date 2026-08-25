@@ -1,10 +1,15 @@
 import { describe, expect, it } from "@rstest/core";
 import { elementCatalog, elementLabel, stubElementConfig } from "../../../editor/element-catalog";
 import { DEFAULT_ICON_SIZE, DEFAULT_LABEL_SIZE } from "../../../element-size";
+import { DEFAULT_IMAGE_WIDTH } from "../../../image-box";
 
 describe("elementCatalog", () => {
-  it("offers both kinds, the icon first", () => {
-    expect(elementCatalog()).toEqual([{ type: "state-icon" }, { type: "state-label" }]);
+  it("offers all three kinds, icon first", () => {
+    expect(elementCatalog()).toEqual([
+      { type: "state-icon" },
+      { type: "state-label" },
+      { type: "image" },
+    ]);
   });
 });
 
@@ -35,6 +40,13 @@ describe("stubElementConfig", () => {
       type: "state-label",
       show: ["state"],
       size: DEFAULT_LABEL_SIZE,
+    });
+  });
+
+  it("stubs an image with no source — the placeholder is what makes it selectable", () => {
+    expect(stubElementConfig("image")).toEqual({
+      type: "image",
+      width: DEFAULT_IMAGE_WIDTH,
     });
   });
 
