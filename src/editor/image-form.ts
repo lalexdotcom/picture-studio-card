@@ -112,8 +112,16 @@ export const imageForm: KindForm<ImageElementConfig> = {
       <!-- Open by default: an image element with no picture draws nothing at
            all, so the section that sets one is what a freshly added item always
            needs. The card's own Background section is opened for the same
-           reason. -->
-      <ha-expansion-panel outlined open>
+           reason.
+
+           The property is \`expanded\`, not \`open\` — read out of
+           ha-expansion-panel in frontend build 20260729.6, whose render is
+           driven by \`this.expanded\` throughout. A first attempt used \`open\`,
+           which the component never reads: the panel stayed shut and the test
+           passed anyway, because it asserted our own markup instead of the
+           property Home Assistant acts on. Bound as a property, not an
+           attribute, so nothing depends on attribute reflection. -->
+      <ha-expansion-panel outlined .expanded=${true}>
         <ha-icon slot="leading-icon" icon="mdi:image"></ha-icon>
         <div slot="header" role="heading" aria-level="3">
           ${localizeOwn(hass, "section_image")}

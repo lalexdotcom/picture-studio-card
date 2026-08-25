@@ -101,11 +101,18 @@ describe("the picture section opens by default", () => {
     document.body.append(form);
     await form.updateComplete;
 
-    const panels = [...(form.shadowRoot?.querySelectorAll("ha-expansion-panel") ?? [])];
+    const panels = [
+      ...(form.shadowRoot?.querySelectorAll("ha-expansion-panel") ?? []),
+    ] as (Element & { expanded?: boolean })[];
     expect(panels.length).toBeGreaterThan(1);
-    expect(panels[0]?.hasAttribute("open")).toBe(true);
+    // `expanded` is the property ha-expansion-panel actually renders from —
+    // verified against frontend build 20260729.6. An earlier version of this
+    // test asserted an `open` attribute, which the component never reads: the
+    // panel stayed shut in the browser and the test stayed green, because it
+    // was checking our markup rather than the thing Home Assistant acts on.
+    expect(panels[0]?.expanded).toBe(true);
     // Opening more than one would defeat the point: the reader would have to
     // scroll past everything to reach the field they came for.
-    expect(panels.slice(1).some((p) => p.hasAttribute("open"))).toBe(false);
+    expect(panels.slice(1).some((p) => p.expanded === true)).toBe(false);
   });
 });
