@@ -319,6 +319,71 @@ describe("rowLabel for an element", () => {
   });
 });
 
+/**
+ * An image carries three entity keys and only two of them are its subject.
+ * `image_entity` and `camera_image` ARE the picture; `entity` merely selects an
+ * entry from `state_image`, so a row headed by it would name the switch rather
+ * than the thing shown. Where no entity draws the picture, the row says what the
+ * form's own selector says.
+ */
+describe("rowLabel for an image", () => {
+  const image = (config: Record<string, unknown>): PictureItem =>
+    ({
+      type: "element",
+      position: DEFAULT_POSITION,
+      anchor: DEFAULT_ANCHOR,
+      config: { type: "image", width: 30, ...config },
+    }) as unknown as PictureItem;
+
+  const hass = {
+    states: { "camera.hall": { attributes: {} }, "image.door": { attributes: {} } },
+    formatEntityName: (_s: unknown, part?: unknown): string =>
+      ({ entity: "Hall", area: "Rez", device: "Caméra" })[
+        (part as { type?: string } | undefined)?.type ?? ""
+      ] ?? "",
+  } as never;
+
+  it("names a camera picture as any entity row is named", () => {
+    expect(rowLabel(image({ camera_image: "camera.hall" }), hass)).toEqual({
+      primary: "Hall",
+      secondary: "Rez ▸ Caméra",
+    });
+  });
+
+  it("reads image_entity as the subject too", () => {
+    expect(rowLabel(image({ image_entity: "image.door" }), hass).primary).toBe("Hall");
+  });
+
+  it("never names the row after `entity`, which only picks a state_image", () => {
+    expect(rowLabel(image({ image: "/local/plan.png", entity: "light.a" }), hass).primary).toBe(
+      "/local/plan.png",
+    );
+  });
+
+  it("shows the picker's own title for a file chosen through it", () => {
+    expect(
+      rowLabel(
+        image({
+          image: {
+            media_content_id: "media-source://media_source/local/plan.png",
+            metadata: { title: "plan.png" },
+          },
+        }),
+      ).primary,
+    ).toBe("plan.png");
+  });
+
+  it("shows the path when a hand-written config has no metadata to show", () => {
+    expect(rowLabel(image({ image: { media_content_id: "/local/plan.png" } })).primary).toBe(
+      "/local/plan.png",
+    );
+  });
+
+  it("still says what kind it is when nothing has been chosen", () => {
+    expect(rowLabel(image({})).primary).toBe("image");
+  });
+});
+
 describe("setVisibility", () => {
   const items = [
     {

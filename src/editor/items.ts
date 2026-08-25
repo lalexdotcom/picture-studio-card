@@ -1,4 +1,10 @@
-import type { ElementConfig, PictureItem, UnknownReason } from "../config";
+import {
+  type ElementConfig,
+  type ImageSource,
+  imagePath,
+  type PictureItem,
+  type UnknownReason,
+} from "../config";
 import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "../position";
 import { localizeOwn, type StringKey } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
@@ -121,6 +127,43 @@ const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
   "element-type": "unknown_element_type",
 };
 
+/**
+ * The entity a row is *about*.
+ *
+ * For every kind but the image that is `entity`, and the reading is obvious. An
+ * image element carries three entity keys and only one of them is its subject:
+ * `image_entity` and `camera_image` ARE the picture, while `entity` merely picks
+ * an entry out of `state_image` — it draws nothing by itself, and a row headed
+ * by it would name the switch rather than the thing shown. `imageSource` reads
+ * them in this same order, so the row cannot name one picture while the card
+ * draws another.
+ */
+const subjectEntity = (item: PictureItem): string | undefined => {
+  if (item.type === "unknown") return undefined;
+  if (item.type === "element" && item.config.type === "image") {
+    const picture = item.config.image_entity ?? item.config.camera_image;
+    if (typeof picture === "string") return picture;
+  }
+  const entity = (item.config as { entity?: unknown }).entity;
+  return typeof entity === "string" ? entity : undefined;
+};
+
+/**
+ * What the picture selector itself shows for a chosen file, so the row and the
+ * form agree without either one inventing a wording.
+ *
+ * `ha-selector-media` stores what it displays: `metadata.title` for a file
+ * picked or uploaded through it. A plain path written in YAML has no metadata —
+ * the selector then shows the path, and so does this.
+ */
+const pickedImageLabel = (image: ImageSource | undefined): string | undefined => {
+  if (typeof image === "object" && image !== null) {
+    const title = (image.metadata as { title?: unknown } | undefined)?.title;
+    if (typeof title === "string" && title) return title;
+  }
+  return imagePath(image) || undefined;
+};
+
 export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel => {
   // First, because everything below reads `item.config`. The token is the raw
   // string a user will search their YAML for; the reason is why it is here.
@@ -131,7 +174,7 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     };
   }
 
-  const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
+  const entityId = subjectEntity(item);
   const stateObj = entityId ? hass?.states?.[entityId] : undefined;
 
   // A `name` written into a badge outranks the registry: it is an explicit
@@ -170,6 +213,13 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
   }
 
   if (item.type === "element") {
+    // A picture nobody named after an entity is named after itself: what the
+    // form's own selector shows, rather than the bare word "image" repeated
+    // down a list of them.
+    if (item.config.type === "image") {
+      const picked = pickedImageLabel(item.config.image);
+      if (picked) return { primary: picked };
+    }
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.
     return { primary: entityId ?? item.config.type };

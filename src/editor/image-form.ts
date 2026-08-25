@@ -194,38 +194,14 @@ export const imageForm: KindForm<ImageElementConfig> = {
           ></ha-form>
         </div>
       </ha-expansion-panel>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" icon="mdi:image-auto-adjust"></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${localizeOwn(hass, "section_entity")}
-        </div>
-        <div class="content">
-          <ha-form
-            .hass=${hass}
-            .data=${data}
-            .schema=${entitySchema(hass.localize)}
-            .computeLabel=${label}
-            .computeHelper=${helper}
-            @value-changed=${valueChanged}
-          ></ha-form>
-        </div>
-      </ha-expansion-panel>
-      <ha-expansion-panel outlined>
-        <ha-icon slot="leading-icon" icon="mdi:image-filter-black-white"></ha-icon>
-        <div slot="header" role="heading" aria-level="3">
-          ${localizeOwn(hass, "section_filters")}
-        </div>
-        <div class="content">
-          <ha-form
-            .hass=${hass}
-            .data=${data}
-            .schema=${filtersSchema(hass.localize)}
-            .computeLabel=${label}
-            .computeHelper=${helper}
-            @value-changed=${valueChanged}
-          ></ha-form>
-        </div>
-      </ha-expansion-panel>
+      <ha-form
+        .hass=${hass}
+        .data=${data}
+        .schema=${imageInteractionsSchema()}
+        .computeLabel=${label}
+        .computeHelper=${helper}
+        @value-changed=${valueChanged}
+      ></ha-form>
       <ha-expansion-panel outlined>
         <ha-icon slot="leading-icon" .icon=${PLACEMENT_ICON}></ha-icon>
         <div slot="header" role="heading" aria-level="3">
@@ -254,14 +230,38 @@ export const imageForm: KindForm<ImageElementConfig> = {
           ></picture-studio-anchor-picker>
         </div>
       </ha-expansion-panel>
-      <ha-form
-        .hass=${hass}
-        .data=${data}
-        .schema=${imageInteractionsSchema()}
-        .computeLabel=${label}
-        .computeHelper=${helper}
-        @value-changed=${valueChanged}
-      ></ha-form>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:image-filter-black-white"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "section_filters")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${filtersSchema(hass.localize)}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
+      <ha-expansion-panel outlined>
+        <ha-icon slot="leading-icon" icon="mdi:image-auto-adjust"></ha-icon>
+        <div slot="header" role="heading" aria-level="3">
+          ${localizeOwn(hass, "section_entity")}
+        </div>
+        <div class="content">
+          <ha-form
+            .hass=${hass}
+            .data=${data}
+            .schema=${entitySchema(hass.localize)}
+            .computeLabel=${label}
+            .computeHelper=${helper}
+            @value-changed=${valueChanged}
+          ></ha-form>
+        </div>
+      </ha-expansion-panel>
     `;
   },
 };
