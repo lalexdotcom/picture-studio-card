@@ -108,8 +108,8 @@ export interface RowLabel {
   secondary?: string;
   /**
    * The row is named after something the item is derived FROM, not after what
-   * it is. Only the list knows how to say that — it marks the first line with a
-   * glyph — so this stays a fact rather than an icon name.
+   * it is. Only the list knows how to say that — it qualifies the first line
+   * with a word — so this stays a fact rather than a piece of presentation.
    */
   derived?: boolean;
 }

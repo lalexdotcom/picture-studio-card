@@ -355,18 +355,17 @@ describe("rowLabel for an image", () => {
   });
 
   /**
-   * `camera.hall`, not some absent id: an entity the registry can name is the
-   * only version of this test that proves anything. With an unknown one it
-   * passes whatever the precedence is, because the entity path needs a state
-   * object to fire at all — which is exactly how its first version hid an
-   * inverted precedence through a review.
-   */
-  /**
    * The order is `hui-image`'s, read out of frontend build 20260729.6: a camera
    * outranks everything, `state_image` outranks the file, and `image_entity`
    * comes last because it reaches `hui-image` through `.image` — the very
    * branch `state_image` overrides. Each case below pins one rung of that
    * ladder against the rung beneath it.
+   *
+   * Every entity used here is one the fixture's registry can name, and that is
+   * not incidental: the entity path needs a state object to fire at all, so a
+   * case built on an absent id passes whatever the precedence is. An earlier
+   * version of these tests was built that way and carried an inverted
+   * precedence through a whole review.
    */
   it("puts the camera above every other source", () => {
     expect(
@@ -397,7 +396,11 @@ describe("rowLabel for an image", () => {
       image({ image_entity: "image.door", entity: "camera.hall", state_image: { on: "/a.png" } }),
       hass,
     );
-    expect(row.derived).toBe(true);
+    // `derived` is the discriminator, not the name: the fixture's
+    // formatEntityName answers "Hall" for any entity, so the name alone could
+    // not tell which of the two branches ran. Only the state_image branch sets
+    // the flag.
+    expect(row).toEqual({ primary: "Hall", secondary: "Rez ▸ Caméra", derived: true });
   });
 
   it("keeps the id, still marked, when the registry cannot name the entity", () => {
