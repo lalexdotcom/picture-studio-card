@@ -9,6 +9,7 @@ import { type Anchor, DEFAULT_ANCHOR, DEFAULT_POSITION, type Position } from "..
 import { localizeOwn, type StringKey } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
 import { badgeIsBroken } from "./badge-existence";
+import { elementLabel } from "./element-catalog";
 
 /**
  * Every operation moves a {type, position, anchor, config} item as a unit, which
@@ -132,11 +133,11 @@ const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
  *
  * For every kind but the image that is `entity`, and the reading is obvious. An
  * image element carries three entity keys and only two of them are its subject:
- * `image_entity` and `camera_image` ARE the picture, while `entity` merely picks
- * an entry out of `state_image` — it draws nothing by itself, so it must never
- * outrank the picture that is actually shown. `imageSource` reads the two in
- * this same order, so the row cannot name one picture while the card draws
- * another.
+ * `image_entity` and `camera_image` ARE the picture. `entity` is not, at all —
+ * it only influences the filter or swaps the picture through `state_image`, so
+ * it never names an image row, not even as a last resort. `imageSource` reads
+ * the two in this same order, so the row cannot name one picture while the card
+ * draws another.
  */
 const subjectEntity = (item: PictureItem): string | undefined => {
   if (item.type === "unknown") return undefined;
@@ -223,11 +224,14 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     if (item.config.type === "image") {
       const picked = pickedImageLabel(item.config.image);
       if (picked) return { primary: picked };
-      // Last resort, and only once nothing else has named the picture: an image
-      // whose whole content is `state_image` keyed on this entity says more
-      // with its name than with the bare word "image". It is the raw id, not a
-      // composed name, because it is not what the row is about.
-      if (item.config.entity) return { primary: item.config.entity };
+      // `entity` is deliberately NOT a fallback here. On an image it only
+      // influences the filter or swaps the picture through `state_image`; it is
+      // never what the picture IS, and a row named after it would announce a
+      // subject the item does not have. An unnamed picture says what kind it is,
+      // through the catalogue's own label so the row and the picker agree.
+      return {
+        primary: hass?.localize ? elementLabel(hass.localize, "image") : item.config.type,
+      };
     }
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.

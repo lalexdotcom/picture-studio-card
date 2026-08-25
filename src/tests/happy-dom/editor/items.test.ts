@@ -370,8 +370,8 @@ describe("rowLabel for an image", () => {
     ).toBe("Hall");
   });
 
-  it("falls back to `entity` only once nothing else names the picture", () => {
-    expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("camera.hall");
+  it("never names the row after `entity`, not even with nothing else to show", () => {
+    expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("image");
   });
 
   it("shows the picker's own title for a file chosen through it", () => {
@@ -395,6 +395,15 @@ describe("rowLabel for an image", () => {
 
   it("still says what kind it is when nothing has been chosen", () => {
     expect(rowLabel(image({})).primary).toBe("image");
+  });
+
+  it("names that kind with the catalogue's own label, so the row and the picker agree", () => {
+    const translated = {
+      ...(hass as unknown as Record<string, unknown>),
+      localize: (key: string) =>
+        key === "ui.panel.lovelace.editor.card.picture-elements.element_types.image" ? "Image" : "",
+    } as never;
+    expect(rowLabel(image({ entity: "camera.hall" }), translated).primary).toBe("Image");
   });
 });
 
