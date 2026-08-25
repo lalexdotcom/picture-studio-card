@@ -16,7 +16,7 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
-import { imageBoxStyle } from "../image-box";
+import { effectiveBox, imageBoxStyle } from "../image-box";
 import { isImageClickable } from "./image-element";
 import "./card-heading";
 import {
@@ -814,7 +814,7 @@ export class PictureStudioCard extends LitElement {
       // against — and inventing one would add a second channel saying what the
       // config already says.
       if (item.type === "element" && item.config.type === "image") {
-        const box = imageBoxStyle(item.config);
+        const box = imageBoxStyle(effectiveBox(item.config));
         wrapper.style.width = box.width;
         wrapper.style.height = box.height;
         wrapper.style.maxHeight = box.maxHeight;

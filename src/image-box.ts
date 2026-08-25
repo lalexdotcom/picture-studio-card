@@ -64,3 +64,43 @@ export const imageBoxStyle = (
   box.height === undefined
     ? { width: `${box.width}%`, height: "", maxHeight: "100%" }
     : { width: `${box.width}%`, height: `${box.height}%`, maxHeight: "" };
+
+/**
+ * The keys that decide whether a live camera is forcing the ratio. Structural,
+ * because three very different readers ask the question — the card that writes
+ * the box, the element that picks a fit mode, and the form that shows the
+ * checkbox — and none of them should have to know the others' types.
+ */
+export interface LiveCameraKeys {
+  camera_image?: string;
+  camera_view?: "auto" | "live";
+}
+
+/**
+ * A live camera keeps its own proportions, whatever height the config asks for.
+ *
+ * Not our choice: `hui-image` holds its `.ratio` container for a stream, because
+ * no `<img>` ever loads to settle `_lastImageHeight`, and that container ignores
+ * an imposed height. Measured on frontend 20260729.6 against a real camera — in
+ * a box asked to be 196×49, the container came out 196×110.3 and
+ * `ha-camera-stream` 196×0.
+ *
+ * **One predicate, three readers.** The card writes the box from it, the element
+ * picks its fit mode from it, and the form disables its checkbox from it. Three
+ * copies of this condition would eventually disagree, and the disagreement would
+ * be invisible: each of the three is correct on its own.
+ */
+export const ratioIsForced = (config: LiveCameraKeys): boolean =>
+  config.camera_view === "live" && !!config.camera_image;
+
+/**
+ * The box as it will actually be drawn.
+ *
+ * A forced ratio drops the height for RENDERING only. The stored `height` is
+ * left exactly where the user typed it, so switching the camera back to Auto
+ * restores it — `storedConfig` rewrites the whole config on every commit, so
+ * dropping the key here would delete it from the user's YAML, and a round trip
+ * through the editor would silently cost them a value they set.
+ */
+export const effectiveBox = (config: ImageBox & LiveCameraKeys): ImageBox =>
+  ratioIsForced(config) ? { width: config.width } : config;

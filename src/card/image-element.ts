@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { type ImageElementConfig, imagePath } from "../config";
 import { hassRenderChanged } from "../has-changed";
+import { effectiveBox } from "../image-box";
 import type { HomeAssistant } from "../types";
 import { bindActions, hasAction, relayActions } from "./item-actions";
 import { interactionStyles } from "./item-styles";
@@ -143,7 +144,7 @@ export class PictureStudioImage extends LitElement {
         .stateFilter=${config.state_filter}
         .filter=${config.filter}
         .darkModeFilter=${config.dark_mode_filter}
-        .fitMode=${config.height === undefined ? "contain" : "fill"}
+        .fitMode=${effectiveBox(config).height === undefined ? "contain" : "fill"}
       ></hui-image>
     `;
   }

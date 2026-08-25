@@ -1,5 +1,11 @@
 import { describe, expect, test } from "@rstest/core";
-import { DEFAULT_IMAGE_WIDTH, imageBoxStyle, normalizeImageBox } from "../../image-box";
+import {
+  DEFAULT_IMAGE_WIDTH,
+  effectiveBox,
+  imageBoxStyle,
+  normalizeImageBox,
+  ratioIsForced,
+} from "../../image-box";
 
 describe("normalizeImageBox", () => {
   test("a bare config takes the default width and keeps its ratio", () => {
@@ -48,5 +54,35 @@ describe("imageBoxStyle", () => {
       height: "25%",
       maxHeight: "",
     });
+  });
+});
+
+describe("a live camera forces the ratio", () => {
+  test("only a live view on a camera counts", () => {
+    expect(ratioIsForced({ camera_image: "camera.hall", camera_view: "live" })).toBe(true);
+    expect(ratioIsForced({ camera_image: "camera.hall", camera_view: "auto" })).toBe(false);
+    // A live view with no camera is a config that draws from `image`; nothing
+    // forces anything there.
+    expect(ratioIsForced({ camera_view: "live" })).toBe(false);
+    expect(ratioIsForced({})).toBe(false);
+  });
+
+  test("the drawn box drops the height, and the stored one keeps it", () => {
+    const config = {
+      width: 40,
+      height: 20,
+      camera_image: "camera.hall",
+      camera_view: "live" as const,
+    };
+    expect(effectiveBox(config)).toEqual({ width: 40 });
+    // The input is untouched: `storedConfig` rewrites the whole config on every
+    // commit, so mutating here would delete a value from the user's YAML that
+    // leaving Live is supposed to give back.
+    expect(config.height).toBe(20);
+  });
+
+  test("anything else is its own box", () => {
+    const config = { width: 40, height: 20 };
+    expect(effectiveBox(config)).toEqual(config);
   });
 });

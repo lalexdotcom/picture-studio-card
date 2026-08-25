@@ -207,3 +207,20 @@ describe("rendering", () => {
     expect(received?.detail?.action).toBe("tap");
   });
 });
+
+describe("a live camera forces the fit", () => {
+  test("contain, even with a height in the config", async () => {
+    // The card draws such an item in keep-ratio; the element has to agree, or
+    // the two would disagree about the same fact. Both read `effectiveBox`.
+    const el = await mount({
+      type: "image",
+      camera_image: "camera.hall",
+      camera_view: "live",
+      width: 40,
+      height: 20,
+    });
+    expect((el.renderRoot.querySelector("hui-image") as { fitMode?: string }).fitMode).toBe(
+      "contain",
+    );
+  });
+});

@@ -52,6 +52,9 @@ const STRINGS = {
     width: "Width",
     height: "Height",
     keep_ratio: "Keep the image's proportions",
+    keep_ratio_forced: "Forced: a live camera keeps its own proportions.",
+    live_camera_ratio:
+      "A live camera keeps its own proportions. The height stays saved and applies again when the view is Auto.",
     keep_ratio_helper:
       "The height follows the picture. Clear it to set both dimensions and stretch the image.",
     picture_entity: "Image or camera entity",
@@ -103,6 +106,9 @@ const STRINGS = {
     width: "Largeur",
     height: "Hauteur",
     keep_ratio: "Conserver les proportions de l'image",
+    keep_ratio_forced: "Imposé : une caméra en direct conserve ses proportions.",
+    live_camera_ratio:
+      "Une caméra en direct conserve ses propres proportions. La hauteur reste enregistrée et s'applique à nouveau en vue Auto.",
     keep_ratio_helper:
       "La hauteur suit l'image. Décochez pour fixer les deux dimensions et étirer l'image.",
     picture_entity: "Entité image ou caméra",

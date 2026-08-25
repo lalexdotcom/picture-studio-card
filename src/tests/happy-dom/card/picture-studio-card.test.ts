@@ -1318,6 +1318,35 @@ describe("image items", () => {
     expect(wrapper.style.maxHeight).toBe("");
   });
 
+  it("a live camera is drawn in keep-ratio, whatever height the config carries", async () => {
+    // hui-image holds its `.ratio` container for a stream — no <img> ever loads
+    // to settle _lastImageHeight — and that container ignores an imposed
+    // height. Measured on frontend 20260729.6: in a box asked to be 196x49 the
+    // container came out 196x110.3 and ha-camera-stream 196x0. So the card
+    // draws what is actually achievable, and leaves the stored height alone.
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: {
+            type: "image",
+            camera_image: "camera.hall",
+            camera_view: "live",
+            width: 40,
+            height: 20,
+          },
+        },
+      ],
+    });
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.style.width).toBe("40%");
+    expect(wrapper.style.height).toBe("");
+    expect(wrapper.style.maxHeight).toBe("100%");
+  });
+
   it("the box never lands on a badge or on the other element kinds", async () => {
     const card = await mountCard({
       type: CARD_TYPE,

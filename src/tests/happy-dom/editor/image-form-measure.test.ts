@@ -116,3 +116,89 @@ describe("the picture section opens by default", () => {
     expect(panels.slice(1).some((p) => p.expanded === true)).toBe(false);
   });
 });
+
+/**
+ * A live camera keeps its own proportions whatever the config asks for.
+ *
+ * Not a choice: `hui-image` holds its `.ratio` container for a stream, because
+ * no `<img>` ever loads to settle `_lastImageHeight`, and that container gives
+ * `height: 100%` children nothing to resolve against. Measured on frontend
+ * 20260729.6 against a real camera — in a box asked to be 196×49, the container
+ * came out 196×110.3 and `ha-camera-stream` 196×0.
+ *
+ * So the checkbox reads as ticked and disabled, the warning says why at the
+ * field that caused it, and **the height the user typed is never touched** —
+ * `storedConfig` rewrites the whole config on every commit, so writing here
+ * would delete a value from their YAML that leaving Live should give back.
+ */
+describe("a live camera forces the ratio", () => {
+  const live: ImageElementConfig = {
+    type: "image",
+    camera_image: "camera.hall",
+    camera_view: "live",
+    width: 40,
+    height: 20,
+  };
+
+  const mountWith = async (element: ImageElementConfig) => {
+    const form = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    form.hass = hass;
+    form.element = element;
+    document.body.append(form);
+    await form.updateComplete;
+    return form;
+  };
+
+  /**
+   * Found by what it contains, not by its position. An earlier version took the
+   * last `ha-form`, which is Interactions — the box form is the one before it,
+   * and an index is exactly the kind of thing a new section silently breaks.
+   */
+  const boxForm = (form: PictureStudioElementForm) =>
+    [...(form.shadowRoot?.querySelectorAll("ha-form") ?? [])].find((f) =>
+      ((f as Element & { schema?: { name: string }[] }).schema ?? []).some(
+        (field) => field.name === KEEP_RATIO,
+      ),
+    ) as (Element & { schema?: { name: string }[] }) | undefined;
+
+  const boxSchema = (form: PictureStudioElementForm) => boxForm(form)?.schema ?? [];
+
+  it("shows the checkbox ticked and disabled, and hides the height field", async () => {
+    const form = await mountWith(live);
+    const entry = boxSchema(form).find((f) => f.name === KEEP_RATIO) as
+      | { disabled?: boolean }
+      | undefined;
+    expect(entry?.disabled).toBe(true);
+    expect(boxSchema(form).some((f) => f.name === "height")).toBe(false);
+  });
+
+  it("warns at the field that caused it, not somewhere else", async () => {
+    const form = await mountWith(live);
+    const forms = form.shadowRoot?.querySelectorAll("ha-form") ?? [];
+    const content = forms[0] as (Element & { warning?: Record<string, string> }) | undefined;
+    expect(content?.warning?.camera_view).toBeTruthy();
+
+    const auto = await mountWith({ ...live, camera_view: "auto" });
+    const autoContent = (auto.shadowRoot?.querySelectorAll("ha-form") ?? [])[0] as
+      | (Element & { warning?: Record<string, string> })
+      | undefined;
+    expect(autoContent?.warning).toBeUndefined();
+  });
+
+  it("never writes the height while the ratio is forced", async () => {
+    const form = await mountWith(live);
+    const events: Event[] = [];
+    form.addEventListener("element-changed", (ev) => events.push(ev));
+    // Nudging the width emits the whole record, keep_ratio included — which is
+    // exactly how a forced tick would have deleted the height.
+    boxForm(form)?.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: { ...imageForm.toFormData(live), [KEEP_RATIO]: true, width: 55 } },
+        bubbles: true,
+      }),
+    );
+    const next = (events[0] as CustomEvent<{ element: ImageElementConfig }>).detail.element;
+    expect(next.width).toBe(55);
+    expect(next.height).toBe(20);
+  });
+});

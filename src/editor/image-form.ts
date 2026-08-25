@@ -1,5 +1,6 @@
 import { html } from "lit";
 import type { ImageElementConfig } from "../config";
+import { ratioIsForced } from "../image-box";
 import { localizeOwn } from "../strings";
 import type { KindForm, KindFormContext } from "./element-form";
 import {
@@ -77,6 +78,13 @@ export const imageForm: KindForm<ImageElementConfig> = {
       else out[k] = v;
     }
 
+    // A forced ratio must not be persisted. The checkbox reads as ticked and is
+    // disabled while a live camera is chosen, so every other field in that same
+    // ha-form emits `keep_ratio: true` alongside itself — and acting on it would
+    // delete a height the user typed the moment they nudged the width. The
+    // height stays exactly as it is until the camera view leaves Live.
+    if (ratioIsForced(next)) return { ...out, width } as ImageElementConfig;
+
     if (keep === true) {
       delete out.height;
       return { ...out, width } as ImageElementConfig;
@@ -90,14 +98,20 @@ export const imageForm: KindForm<ImageElementConfig> = {
 
   render(ctx: KindFormContext<ImageElementConfig>): unknown {
     const { element, hass, data, label, helper, valueChanged, anchor } = ctx;
-    const keepRatio = data[KEEP_RATIO] !== false;
+    // A live camera keeps its own proportions whatever the config asks for, so
+    // the checkbox reads as ticked and is disabled: a control that cannot act
+    // says so before the click, not after it. The height itself is untouched —
+    // `fromFormData` refuses to write it while this holds — so leaving Live
+    // gives the user their value back.
+    const forced = ratioIsForced(element);
+    const keepRatio = forced || data[KEEP_RATIO] !== false;
 
     const boxSchema = [
       {
         name: "width",
         selector: { number: { min: 1, mode: "box", step: 0.5, unit_of_measurement: "%" } },
       },
-      { name: KEEP_RATIO, selector: { boolean: {} } },
+      { name: KEEP_RATIO, selector: { boolean: {} }, ...(forced ? { disabled: true } : {}) },
       ...(keepRatio
         ? []
         : [
@@ -133,6 +147,14 @@ export const imageForm: KindForm<ImageElementConfig> = {
             .schema=${backgroundSchema(hass.localize, element, { aspectRatio: false })}
             .computeLabel=${label}
             .computeHelper=${helper}
+            .warning=${
+              // ha-form's own per-field channel: it renders an ha-alert at the
+              // field, in Home Assistant's styling and margins. Keyed by field
+              // name, like `error`. Verified against frontend build 20260729.6,
+              // where _computeWarning returns the raw value when no
+              // computeWarning is supplied — so the text can be passed directly.
+              forced ? { camera_view: localizeOwn(hass, "live_camera_ratio") } : undefined
+            }
             @value-changed=${valueChanged}
           ></ha-form>
         </div>
@@ -177,10 +199,16 @@ export const imageForm: KindForm<ImageElementConfig> = {
         <div class="content">
           <ha-form
             .hass=${hass}
-            .data=${data}
+            .data=${forced ? { ...data, [KEEP_RATIO]: true } : data}
             .schema=${boxSchema}
             .computeLabel=${label}
-            .computeHelper=${helper}
+            .computeHelper=${(field: { name: string }) =>
+              // The checkbox's legend, on the checkbox: it is disabled and
+              // ticked, and this is what says why without the reader having to
+              // connect it to the warning three sections above.
+              forced && field.name === KEEP_RATIO
+                ? localizeOwn(hass, "keep_ratio_forced")
+                : helper(field)}
             @value-changed=${valueChanged}
           ></ha-form>
           <div class="separator"></div>
