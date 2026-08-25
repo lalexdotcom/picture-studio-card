@@ -463,7 +463,12 @@ export class PictureStudioBadgeList extends LitElement {
     }
     .primary .derived {
       color: var(--primary-color);
-      font-size: var(--ha-font-size-s);
+      /* Relative to the name it qualifies, not to Home Assistant's scale: the
+         name carries no size of its own — nothing in this element or above it
+         declares one, so it inherits from the edit dialog. An absolute token
+         would be a gap only by coincidence of what that dialog happens to
+         impose; an em keeps the gap whatever it imposes. */
+      font-size: 0.95em;
       font-weight: var(--ha-font-weight-bold, 700);
       /* The gap, rather than a space in the template: a literal one would be
          collapsed or kept depending on how the expression is formatted. */
