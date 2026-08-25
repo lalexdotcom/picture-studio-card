@@ -131,18 +131,22 @@ const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
  * The entity a row is *about*.
  *
  * For every kind but the image that is `entity`, and the reading is obvious. An
- * image element carries three entity keys and only one of them is its subject:
+ * image element carries three entity keys and only two of them are its subject:
  * `image_entity` and `camera_image` ARE the picture, while `entity` merely picks
- * an entry out of `state_image` — it draws nothing by itself, and a row headed
- * by it would name the switch rather than the thing shown. `imageSource` reads
- * them in this same order, so the row cannot name one picture while the card
- * draws another.
+ * an entry out of `state_image` — it draws nothing by itself, so it must never
+ * outrank the picture that is actually shown. `imageSource` reads the two in
+ * this same order, so the row cannot name one picture while the card draws
+ * another.
  */
 const subjectEntity = (item: PictureItem): string | undefined => {
   if (item.type === "unknown") return undefined;
+  // Unconditional, and that is the whole point: falling through to `entity`
+  // here would let it reach the entity-name path AHEAD of the chosen file,
+  // which is the opposite of the order intended. `entity` is the last resort
+  // for an image, applied further down, not the first.
   if (item.type === "element" && item.config.type === "image") {
     const picture = item.config.image_entity ?? item.config.camera_image;
-    if (typeof picture === "string") return picture;
+    return typeof picture === "string" ? picture : undefined;
   }
   const entity = (item.config as { entity?: unknown }).entity;
   return typeof entity === "string" ? entity : undefined;
@@ -219,6 +223,11 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     if (item.config.type === "image") {
       const picked = pickedImageLabel(item.config.image);
       if (picked) return { primary: picked };
+      // Last resort, and only once nothing else has named the picture: an image
+      // whose whole content is `state_image` keyed on this entity says more
+      // with its name than with the bare word "image". It is the raw id, not a
+      // composed name, because it is not what the row is about.
+      if (item.config.entity) return { primary: item.config.entity };
     }
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.

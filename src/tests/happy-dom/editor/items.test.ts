@@ -354,10 +354,24 @@ describe("rowLabel for an image", () => {
     expect(rowLabel(image({ image_entity: "image.door" }), hass).primary).toBe("Hall");
   });
 
-  it("never names the row after `entity`, which only picks a state_image", () => {
-    expect(rowLabel(image({ image: "/local/plan.png", entity: "light.a" }), hass).primary).toBe(
+  /**
+   * `camera.hall`, not some absent id: an entity the registry can name is the
+   * only version of this test that proves anything. With an unknown one it
+   * passes whatever the precedence is, because the entity path needs a state
+   * object to fire at all — which is exactly how its first version hid an
+   * inverted precedence through a review.
+   */
+  it("never lets `entity` outrank the picture, even when it is a real entity", () => {
+    expect(rowLabel(image({ image: "/local/plan.png", entity: "camera.hall" }), hass).primary).toBe(
       "/local/plan.png",
     );
+    expect(
+      rowLabel(image({ image_entity: "image.door", entity: "camera.hall" }), hass).primary,
+    ).toBe("Hall");
+  });
+
+  it("falls back to `entity` only once nothing else names the picture", () => {
+    expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("camera.hall");
   });
 
   it("shows the picker's own title for a file chosen through it", () => {
