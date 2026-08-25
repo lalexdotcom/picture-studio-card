@@ -723,3 +723,46 @@ describe("the Items section", () => {
     expect(header?.querySelector("ha-dropdown.add")).toBeNull();
   });
 });
+
+/**
+ * The wording is the only thing separating "this row is named after the picture"
+ * from "this row is named after what decides it": both put an entity's name on
+ * the first line. Asserted on the rendered row rather than on `rowLabel`, since
+ * the flag and the words live in two different files and the point is that they
+ * meet.
+ */
+describe("the derived qualifier", () => {
+  if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
+
+  const mount = async (config: Record<string, unknown>) => {
+    const el = document.createElement(LIST_TAG) as PictureStudioBadgeList;
+    el.items = [
+      {
+        type: "element",
+        position: { top: "0%", left: "0%" },
+        config: { type: "image", width: 30, ...config },
+      },
+    ] as unknown as PictureItem[];
+    document.body.append(el);
+    await el.updateComplete;
+    return el;
+  };
+
+  const qualifier = (el: PictureStudioBadgeList) =>
+    el.shadowRoot?.querySelector(".primary .derived");
+
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it("marks a picture drawn from an entity's state, and leaves the name alone", async () => {
+    const el = await mount({ entity: "light.a", state_image: { on: "/a.png" } });
+    expect(qualifier(el)?.textContent).toBe("Based on");
+    // The qualifier is a child of .primary, so the name is what remains beside it.
+    expect(el.shadowRoot?.querySelector(".primary")?.textContent).toContain("light.a");
+  });
+
+  it("leaves a picture that carries its own source unmarked", async () => {
+    expect(qualifier(await mount({ image: "/local/plan.png" }))).toBeNull();
+  });
+});

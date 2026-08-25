@@ -1,5 +1,6 @@
 import {
   type ElementConfig,
+  type ImageElementConfig,
   type ImageSource,
   imagePath,
   type PictureItem,
@@ -105,6 +106,12 @@ export const removeItem = (items: PictureItem[], index: number): PictureItem[] =
 export interface RowLabel {
   primary: string;
   secondary?: string;
+  /**
+   * The row is named after something the item is derived FROM, not after what
+   * it is. Only the list knows how to say that — it qualifies the first line
+   * with a word — so this stays a fact rather than a piece of presentation.
+   */
+  derived?: boolean;
 }
 
 /**
@@ -129,28 +136,44 @@ const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
 };
 
 /**
- * The entity a row is *about*.
+ * What a row shows for an image, in Home Assistant's own order of precedence —
+ * read out of `hui-image`'s render, frontend build `20260729.6`:
  *
- * For every kind but the image that is `entity`, and the reading is obvious. An
- * image element carries three entity keys and only two of them are its subject:
- * `image_entity` and `camera_image` ARE the picture. `entity` is not, at all —
- * it only influences the filter or swaps the picture through `state_image`, so
- * it never names an image row, not even as a last resort. `imageSource` reads
- * the two in this same order, so the row cannot name one picture while the card
- * draws another.
+ * ```js
+ * if (this.cameraImage) …
+ * else if (this.stateImage) { const t = resolved[state]; t ? s = t : s = image }
+ * else s = darkMode ? darkModeImage : image
+ * ```
+ *
+ * So a camera outranks everything, `state_image` outranks the file, and
+ * `image_entity` arrives last — it reaches `hui-image` through `.image`, which
+ * is the branch `state_image` overrides.
+ *
+ * **The row names what DECIDES the picture, not what is drawn this second.**
+ * Which `state_image` branch wins depends on the entity's state at render time:
+ * a table with no entry for the current state falls back to the file. A label
+ * that tracked that would flip between the entity's name and a filename as a
+ * door opens, which is worse than one that is merely approximate. The entity
+ * decided either way — including when it decided to fall back — so it heads the
+ * row, marked as derived.
+ *
+ * `state_filter` is deliberately not a trigger: it changes the treatment, not
+ * the content, and a list is read to know the content.
  */
-const subjectEntity = (item: PictureItem): string | undefined => {
-  if (item.type === "unknown") return undefined;
-  // Unconditional, and that is the whole point: falling through to `entity`
-  // here would let it reach the entity-name path AHEAD of the chosen file,
-  // which is the opposite of the order intended. `entity` is the last resort
-  // for an image, applied further down, not the first.
-  if (item.type === "element" && item.config.type === "image") {
-    const picture = item.config.image_entity ?? item.config.camera_image;
-    return typeof picture === "string" ? picture : undefined;
+const imageRowLabel = (config: ImageElementConfig, hass?: HomeAssistant): RowLabel => {
+  const asEntity = (entityId: string): RowLabel =>
+    entityLabel(entityId, hass) ?? { primary: entityId };
+
+  if (config.camera_image) return asEntity(config.camera_image);
+  if (config.entity && Object.keys(config.state_image ?? {}).length > 0) {
+    return { ...asEntity(config.entity), derived: true };
   }
-  const entity = (item.config as { entity?: unknown }).entity;
-  return typeof entity === "string" ? entity : undefined;
+  if (config.image_entity) return asEntity(config.image_entity);
+  const picked = pickedImageLabel(config.image);
+  if (picked) return { primary: picked };
+  // Nothing names it: say what kind it is, through the catalogue's own label so
+  // that the row and the element picker agree on the word.
+  return { primary: hass?.localize ? elementLabel(hass.localize, "image") : config.type };
 };
 
 /**
@@ -169,6 +192,41 @@ const pickedImageLabel = (image: ImageSource | undefined): string | undefined =>
   return imagePath(image) || undefined;
 };
 
+/**
+ * A row headed by an entity: its name on the first line, "Area ▸ Device" on the
+ * second, both composed by `hass.formatEntityName` against the registry rather
+ * than assembled out of `friendly_name` and an id.
+ *
+ * Undefined when the entity is not in `hass.states` or the frontend is too old
+ * to compose names — the caller then degrades on its own terms, because what
+ * "no entity name" should fall back to differs by item kind.
+ */
+const entityLabel = (
+  entityId: string | undefined,
+  hass?: HomeAssistant,
+  named?: string,
+): RowLabel | undefined => {
+  const stateObj = entityId ? hass?.states?.[entityId] : undefined;
+  if (!entityId || !stateObj || !hass?.formatEntityName) return undefined;
+  const format = hass.formatEntityName;
+  const primary = named || format(stateObj, { type: "entity" }) || entityId;
+  // Asked for part by part rather than as one list, so that a part which
+  // merely repeats the first line can be dropped. An entity that is its
+  // device's main one composes to the device's own name, and Home Assistant
+  // resolves that with a registry heuristic we would have to copy; comparing
+  // the two strings we already hold arrives at the same place — device on
+  // top, place underneath — without copying anything.
+  // The result is empty for an entity attached to neither, which is common
+  // enough that it has to mean "no second line" rather than a blank one.
+  const secondary = [format(stateObj, { type: "area" }), format(stateObj, { type: "device" })]
+    .filter((part) => part && part !== primary)
+    // A device and the area it sits in can carry the same name, and
+    // "Bureau ▸ Bureau" says less than "Bureau".
+    .filter((part, i, parts) => parts.indexOf(part) === i)
+    .join(" ▸ ");
+  return secondary ? { primary, secondary } : { primary };
+};
+
 export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: string): RowLabel => {
   // First, because everything below reads `item.config`. The token is the raw
   // string a user will search their YAML for; the reason is why it is here.
@@ -179,8 +237,13 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     };
   }
 
-  const entityId = subjectEntity(item);
-  const stateObj = entityId ? hass?.states?.[entityId] : undefined;
+  // Answered whole and first: an image's order of precedence is Home Assistant's,
+  // not this function's, and two of its four sources are not `entity` at all.
+  if (item.type === "element" && item.config.type === "image") {
+    return imageRowLabel(item.config, hass);
+  }
+
+  const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
 
   // A `name` written into a badge outranks the registry: it is an explicit
   // choice by whoever configured that badge, and Home Assistant's own lists
@@ -197,42 +260,10 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
           : undefined))
       : undefined;
 
-  if (entityId && stateObj && hass?.formatEntityName) {
-    const format = hass.formatEntityName;
-    const primary = named || format(stateObj, { type: "entity" }) || entityId;
-    // Asked for part by part rather than as one list, so that a part which
-    // merely repeats the first line can be dropped. An entity that is its
-    // device's main one composes to the device's own name, and Home Assistant
-    // resolves that with a registry heuristic we would have to copy; comparing
-    // the two strings we already hold arrives at the same place — device on
-    // top, place underneath — without copying anything.
-    // The result is empty for an entity attached to neither, which is common
-    // enough that it has to mean "no second line" rather than a blank one.
-    const secondary = [format(stateObj, { type: "area" }), format(stateObj, { type: "device" })]
-      .filter((part) => part && part !== primary)
-      // A device and the area it sits in can carry the same name, and
-      // "Bureau ▸ Bureau" says less than "Bureau".
-      .filter((part, i, parts) => parts.indexOf(part) === i)
-      .join(" ▸ ");
-    return secondary ? { primary, secondary } : { primary };
-  }
+  const asEntity = entityLabel(entityId, hass, named);
+  if (asEntity) return asEntity;
 
   if (item.type === "element") {
-    // A picture nobody named after an entity is named after itself: what the
-    // form's own selector shows, rather than the bare word "image" repeated
-    // down a list of them.
-    if (item.config.type === "image") {
-      const picked = pickedImageLabel(item.config.image);
-      if (picked) return { primary: picked };
-      // `entity` is deliberately NOT a fallback here. On an image it only
-      // influences the filter or swaps the picture through `state_image`; it is
-      // never what the picture IS, and a row named after it would announce a
-      // subject the item does not have. An unnamed picture says what kind it is,
-      // through the catalogue's own label so the row and the picker agree.
-      return {
-        primary: hass?.localize ? elementLabel(hass.localize, "image") : item.config.type,
-      };
-    }
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.
     return { primary: entityId ?? item.config.type };

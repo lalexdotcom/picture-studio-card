@@ -241,7 +241,19 @@ export class PictureStudioBadgeList extends LitElement {
                   title=${kinds[index]}
                 ></ha-icon>
                 <div class="label">
-                  <span class="primary">${labels[index]?.primary}</span>
+                  <span class="primary">
+                    ${
+                      // Words, not a glyph: both this row and one named after
+                      // the picture entity show an entity's name, and only the
+                      // wording says which is which. Coloured and bold so the
+                      // eye separates the qualifier from the name, which keeps
+                      // the ordinary text colour — the name is still the thing
+                      // being read.
+                      labels[index]?.derived
+                        ? html`<span class="derived">${localizeOwn(this.hass, "derived_from")}</span>`
+                        : nothing
+                    }${labels[index]?.primary}
+                  </span>
                   ${
                     secondary[index]
                       ? html`<span class="secondary ${broken[index] ? "error" : ""}">${secondary[index]}</span>`
@@ -448,6 +460,19 @@ export class PictureStudioBadgeList extends LitElement {
     .secondary {
       font-size: var(--ha-font-size-s);
       color: var(--secondary-text-color);
+    }
+    .primary .derived {
+      color: var(--primary-color);
+      /* Relative to the name it qualifies, not to Home Assistant's scale: the
+         name carries no size of its own — nothing in this element or above it
+         declares one, so it inherits from the edit dialog. An absolute token
+         would be a gap only by coincidence of what that dialog happens to
+         impose; an em keeps the gap whatever it imposes. */
+      font-size: 0.95em;
+      font-weight: var(--ha-font-weight-bold, 700);
+      /* The gap, rather than a space in the template: a literal one would be
+         collapsed or kept depending on how the expression is formatted. */
+      margin-inline-end: 4px;
     }
     /* The same pill as the count in an item form's Visibility header:
        ha-label's dense geometry and its background formula. Drawn here rather

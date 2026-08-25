@@ -355,23 +355,77 @@ describe("rowLabel for an image", () => {
   });
 
   /**
-   * `camera.hall`, not some absent id: an entity the registry can name is the
-   * only version of this test that proves anything. With an unknown one it
-   * passes whatever the precedence is, because the entity path needs a state
-   * object to fire at all — which is exactly how its first version hid an
-   * inverted precedence through a review.
+   * The order is `hui-image`'s, read out of frontend build 20260729.6: a camera
+   * outranks everything, `state_image` outranks the file, and `image_entity`
+   * comes last because it reaches `hui-image` through `.image` — the very
+   * branch `state_image` overrides. Each case below pins one rung of that
+   * ladder against the rung beneath it.
+   *
+   * Every entity used here is one the fixture's registry can name, and that is
+   * not incidental: the entity path needs a state object to fire at all, so a
+   * case built on an absent id passes whatever the precedence is. An earlier
+   * version of these tests was built that way and carried an inverted
+   * precedence through a whole review.
    */
-  it("never lets `entity` outrank the picture, even when it is a real entity", () => {
-    expect(rowLabel(image({ image: "/local/plan.png", entity: "camera.hall" }), hass).primary).toBe(
-      "/local/plan.png",
-    );
+  it("puts the camera above every other source", () => {
     expect(
-      rowLabel(image({ image_entity: "image.door", entity: "camera.hall" }), hass).primary,
+      rowLabel(
+        image({
+          camera_image: "camera.hall",
+          image_entity: "image.door",
+          image: "/local/plan.png",
+          entity: "light.absent",
+          state_image: { on: "/a.png" },
+        }),
+        hass,
+      ).primary,
     ).toBe("Hall");
   });
 
-  it("never names the row after `entity`, not even with nothing else to show", () => {
+  it("puts a state-driven picture above the file it falls back to", () => {
+    expect(
+      rowLabel(
+        image({ image: "/local/plan.png", entity: "camera.hall", state_image: { on: "/a.png" } }),
+        hass,
+      ),
+    ).toEqual({ primary: "Hall", secondary: "Rez ▸ Caméra", derived: true });
+  });
+
+  it("puts a state-driven picture above image_entity, which reaches hui-image last", () => {
+    const row = rowLabel(
+      image({ image_entity: "image.door", entity: "camera.hall", state_image: { on: "/a.png" } }),
+      hass,
+    );
+    // `derived` is the discriminator, not the name: the fixture's
+    // formatEntityName answers "Hall" for any entity, so the name alone could
+    // not tell which of the two branches ran. Only the state_image branch sets
+    // the flag.
+    expect(row).toEqual({ primary: "Hall", secondary: "Rez ▸ Caméra", derived: true });
+  });
+
+  it("keeps the id, still marked, when the registry cannot name the entity", () => {
+    expect(
+      rowLabel(image({ entity: "light.absent", state_image: { on: "/a.png" } }), hass),
+    ).toEqual({ primary: "light.absent", derived: true });
+  });
+
+  it("never names the row after `entity` alone — it decides nothing on its own", () => {
     expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("image");
+  });
+
+  it("an empty state_image decides nothing either", () => {
+    expect(rowLabel(image({ entity: "camera.hall", state_image: {} }), hass).primary).toBe("image");
+  });
+
+  it("ignores state_filter, which changes the treatment and not the content", () => {
+    expect(
+      rowLabel(image({ entity: "camera.hall", state_filter: { on: "blur(2px)" } }), hass).primary,
+    ).toBe("image");
+  });
+
+  it("does not mark a row named after the picture itself", () => {
+    expect(rowLabel(image({ camera_image: "camera.hall" }), hass).derived).toBeUndefined();
+    expect(rowLabel(image({ image_entity: "image.door" }), hass).derived).toBeUndefined();
   });
 
   it("shows the picker's own title for a file chosen through it", () => {
