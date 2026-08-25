@@ -45,6 +45,14 @@ ones CI cannot see, because they happen before the first commit: the stray `v` i
 a version, a changelog section that was never opened, a base branch that is
 behind the remote, `next` cut from wherever HEAD happened to be.
 
+**A branch's name says what the change is; the script's first argument says
+which line it is cut from. The two are independent and must not be conflated.**
+Every feature branch is named `feat/<name>`, a bugfix branch `fix/<name>`, and
+housekeeping `chore/<name>`. The trap: `start-branch.sh feature` means "cut from
+`next`", not "this is a feature" — a bug in something that only exists on `next`
+is fixed on `next`, by that very command, and the branch is still a `fix/`. The
+script therefore takes the name verbatim and cannot prefix it for you.
+
 **A branch records where it merges, at the moment it is cut** — written by
 `start-branch.sh` into `git config branch.<name>.target`, and read back at the
 close. It is written down rather than recomputed because it cannot be
