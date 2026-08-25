@@ -1364,7 +1364,12 @@ describe("image items", () => {
     expect(wrapper.style.maxHeight).toBe("");
   });
 
-  it("an inert image is marked so, and a clickable one is not", async () => {
+  it("an image never blocks its own pointer events, action or not", async () => {
+    // `pointer-events: none` on an actionless image was tried and removed. It
+    // traded one confusion for a worse one: instead of an image blocking items
+    // it already hides, the items under it became clickable THROUGH it, showing
+    // their cursor over a picture with no way to tell what was being hovered.
+    // You cannot click what you cannot see, and that is a property worth having.
     const card = await mountCard({
       type: CARD_TYPE,
       image: "/bg.png",
@@ -1374,19 +1379,10 @@ describe("image items", () => {
           position: { top: 10, left: 10 },
           config: { type: "image", image: "/a.png" },
         },
-        {
-          type: "element",
-          position: { top: 20, left: 20 },
-          config: { type: "image", image: "/b.png", tap_action: { action: "more-info" } },
-        },
       ],
     });
-    const wrappers = card.renderRoot.querySelectorAll(".item.element");
-    const first = wrappers[0];
-    const second = wrappers[1];
-    if (!first || !second) throw new Error("expected two element wrappers");
-    expect((first as HTMLElement).classList.contains("inert")).toBe(true);
-    expect((second as HTMLElement).classList.contains("inert")).toBe(false);
+    const wrapper = card.renderRoot.querySelector(".item.element") as HTMLElement;
+    expect(wrapper.classList.contains("inert")).toBe(false);
   });
 
   it("the element is built, not a hole", async () => {

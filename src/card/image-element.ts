@@ -52,20 +52,41 @@ export const imageSource = (
 };
 
 /**
- * **The one place this kind disagrees with the other two.** `isClickable` in
- * `item-actions.ts` reads an absent `tap_action` as clickable, because Home
- * Assistant's default is more-info and a state-icon always has a subject to show
- * it for. An image has none: `entity` selects a state image, it is not what the
- * item is about, and more-info on nothing is an accident rather than a default.
+ * Whether the item should look and behave as something you can press.
  *
- * The failure is also asymmetric with size. A badge that needlessly catches the
- * pointer costs a few square pixels; a large image would swallow every click
- * over its whole surface, including those meant for the icons underneath it.
+ * **Revised 2026-08-25.** The first rule required an explicit action, on the
+ * premise that an image has no implicit subject. `handleAction` disagrees — its
+ * more-info branch, read out of frontend build `20260729.6`, resolves:
+ *
+ * ```js
+ * action.entity || config.entity || config.camera_image || config.image_entity
+ * ```
+ *
+ * So an image fed by a camera or an image entity DOES have a subject, and Home
+ * Assistant opens it on a tap whether we mark the item or not. Withholding the
+ * cursor only hid that from the user.
+ *
+ * What survives from the first rule is its real case: a decorative picture, with
+ * none of those three keys, opens nothing — HA answers such a tap with a failure
+ * toast — so it must not offer a pointer. And an explicit `none` still wins over
+ * a subject, because the user said no.
+ *
+ * `isClickable` in `item-actions.ts` cannot serve here: it reads an absent
+ * action as clickable unconditionally, which is right for a glyph that always
+ * has an entity and wrong for a picture that may have none.
  */
-export const isImageClickable = (config: ImageElementConfig): boolean =>
-  hasAction(config.tap_action) ||
-  hasAction(config.hold_action) ||
-  hasAction(config.double_tap_action);
+export const isImageClickable = (config: ImageElementConfig): boolean => {
+  if (
+    hasAction(config.tap_action) ||
+    hasAction(config.hold_action) ||
+    hasAction(config.double_tap_action)
+  ) {
+    return true;
+  }
+  // Only when the user has not spoken: an explicit `none` is a decision.
+  if (config.tap_action !== undefined) return false;
+  return !!(config.entity || config.camera_image || config.image_entity);
+};
 
 export class PictureStudioImage extends LitElement {
   static properties = {

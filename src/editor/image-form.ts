@@ -12,7 +12,6 @@ import {
   PICTURE_ENTITY,
 } from "./form-schemas";
 import { PLACEMENT_ICON } from "./icons";
-import { iconInteractionsSchema } from "./state-icon-form";
 
 /**
  * The checkbox is derived from `height === undefined` and is never stored: a
@@ -25,6 +24,38 @@ import { iconInteractionsSchema } from "./state-icon-form";
 export const KEEP_RATIO = "keep_ratio";
 
 const NO_ASPECT_RATIO = { aspectRatio: false } as const;
+
+/**
+ * The image kind's own interactions, differing from the icon's in one value:
+ * `tap_action` defaults to **none**, not more-info.
+ *
+ * `default_action` is what the selector DISPLAYS when the config carries
+ * nothing. The icon can show more-info honestly, because an absent action there
+ * really does behave as more-info. An image with no action does nothing at all,
+ * so showing more-info would promise a behaviour that never happens — which is
+ * exactly what it did, and what someone reported after clicking an image and
+ * watching nothing occur.
+ */
+const imageInteractionsSchema = (): unknown[] => [
+  {
+    name: "interactions",
+    type: "expandable",
+    flatten: true,
+    icon: "mdi:gesture-tap",
+    schema: [
+      { name: "tap_action", selector: { ui_action: { default_action: "none" } } },
+      {
+        name: "",
+        type: "optional_actions",
+        flatten: true,
+        schema: ["hold_action", "double_tap_action"].map((name) => ({
+          name,
+          selector: { ui_action: { default_action: "none" } },
+        })),
+      },
+    ],
+  },
+];
 
 /**
  * The height to write when the box is freed, measured rather than invented.
@@ -222,7 +253,7 @@ export const imageForm: KindForm<ImageElementConfig> = {
       <ha-form
         .hass=${hass}
         .data=${data}
-        .schema=${iconInteractionsSchema()}
+        .schema=${imageInteractionsSchema()}
         .computeLabel=${label}
         .computeHelper=${helper}
         @value-changed=${valueChanged}

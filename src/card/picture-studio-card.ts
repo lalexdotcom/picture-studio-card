@@ -17,7 +17,6 @@ import {
   stubConfig,
 } from "../config";
 import { effectiveBox, imageBoxStyle } from "../image-box";
-import { isImageClickable } from "./image-element";
 import "./card-heading";
 import {
   type Anchor,
@@ -818,10 +817,6 @@ export class PictureStudioCard extends LitElement {
         wrapper.style.width = box.width;
         wrapper.style.height = box.height;
         wrapper.style.maxHeight = box.maxHeight;
-        // Outside editing an image with no action must let clicks through: it is
-        // large, and it sits over other items. The class rather than an inline
-        // style so `.editing` can win it back.
-        wrapper.classList.toggle("inert", !isImageClickable(item.config));
       }
     });
   }
@@ -1128,17 +1123,6 @@ export class PictureStudioCard extends LitElement {
     }
     .editing .item > * {
       pointer-events: none;
-    }
-    /* An image with no action is transparent to pointers on a dashboard. Without
-       this a large one swallows every click over its whole surface, including
-       those meant for the items underneath it — a failure that does not exist
-       for badges, which are small. While editing the wrapper keeps the pointer,
-       like every other item, so it stays selectable and draggable. */
-    .item.inert {
-      pointer-events: none;
-    }
-    .editing .item.inert {
-      pointer-events: auto;
     }
   `;
 }

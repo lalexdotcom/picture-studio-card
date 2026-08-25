@@ -283,22 +283,54 @@ here: every link is a rule we write.
 does not change during a gesture in this sub-project. Sub-project 2 is what makes
 it change, and it will have to extend that guard from the coordinates to the box.
 
-### 8. An image is clickable only when it says so
+### 8. An image is clickable when there is something to open — REVISED 2026-08-25
 
-Unlike every other kind. `item-actions.ts` treats an absent `tap_action` as
-clickable, because Home Assistant's default action is more-info and a state-icon
-always has a subject to show it for. **An image element has no implicit
-subject** — `entity` drives `state_image`, it is not "what the item is about".
-More-info on nothing is not a default, it is an accident.
+**The original decision was wrong on its premise and harmful in its remedy.** It
+read: *"an image element has no implicit subject — `entity` drives `state_image`,
+it is not what the item is about. More-info on nothing is not a default, it is an
+accident."* From that it made an absent `tap_action` mean inert, and gave such an
+item `pointer-events: none`.
 
-And the failure is asymmetric with size: a badge that needlessly catches the
-pointer costs a few square pixels; a large image would swallow every click over
-its whole surface, including those meant for the icons underneath it.
+**The premise is false, and Home Assistant says so.** `handleAction`'s more-info
+branch, read out of frontend build `20260729.6`:
 
-So: an explicit `tap_action` (or hold, or double-tap) makes the item clickable
-and gives it the pointer cursor through the existing `clickable` attribute.
-Absent, the item is `pointer-events: none` outside editing and clicks pass
-through. While editing the wrapper keeps the pointer as every item does.
+```js
+const target = action.entity || config.entity || config.camera_image || config.image_entity;
+target ? fireEvent(el, "hass-more-info", { entityId: target })
+       : showToast(el, { message: localize("…actions.no_entity_more_info") });
+```
+
+An image element has **three** possible subjects, tried in that order, and HA
+falls back to the camera and the image entity itself. Where none resolves, it
+already shows a visible failure rather than doing nothing silently.
+
+**The remedy was worse than the problem it solved.** `pointer-events: none` was
+meant to stop a large image swallowing clicks meant for the icons underneath it.
+But an opaque image already hides those icons: letting clicks through does not
+restore them, it makes them clickable *unseen* — a pointer cursor appears over a
+picture, belonging to something the user cannot identify. Reported in use, and
+the honest summary is that it traded "I cannot click what I can see" for "I click
+what I cannot see". The first is a property worth having.
+
+**What now holds:**
+
+- An image is clickable when it carries an explicit action, or when there is a
+  subject for the default one — `entity`, `camera_image` or `image_entity`. That
+  is HA's own list, not ours to invent.
+- The `clickable` attribute, and with it the pointer cursor, follows that.
+- **No `pointer-events: none`, ever.** An image without an action is simply not
+  interactive: default cursor, and it covers what it covers.
+- The form must not promise what will not happen: the image kind carries its own
+  interactions schema with `default_action: "none"`, where the icon's says
+  `more-info`. `default_action` is what the selector *displays* for an absent
+  value, and for an icon that display is truthful.
+
+**What this gives up, knowingly:** a PNG with a transparent hole cannot let
+clicks reach what is behind it. For HTML content CSS defines only
+`pointer-events: auto | none` — the pixel-testing values are SVG-only, and an
+SVG loaded through `<img>` is a replaced box whose interior is not interactive.
+The only real route is `clip-path`, which does affect hit-testing but needs the
+shape written out; it is recorded as a follow-up rather than guessed at here.
 
 **Stacking is DOM order, and the item list's reordering already controls it.**
 That is what makes an image *under* the icons reachable, with no new property,

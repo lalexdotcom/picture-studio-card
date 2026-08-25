@@ -202,3 +202,33 @@ describe("a live camera forces the ratio", () => {
     expect(next.height).toBe(20);
   });
 });
+
+/**
+ * `default_action` is what the selector DISPLAYS when the config carries
+ * nothing. The icon can honestly show more-info, because an absent action there
+ * really does behave as more-info. An image with no action does nothing at all.
+ *
+ * Reported after clicking an image and watching nothing happen: the form
+ * promised more-info, the element was inert, and neither was wrong on its own.
+ */
+describe("an image promises no action it will not perform", () => {
+  it("defaults tap_action to none, unlike the icon", async () => {
+    const form = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    form.hass = hass;
+    form.element = { type: "image", width: 20 };
+    document.body.append(form);
+    await form.updateComplete;
+
+    const interactions = [...(form.shadowRoot?.querySelectorAll("ha-form") ?? [])]
+      .map((f) => (f as Element & { schema?: { name?: string }[] }).schema ?? [])
+      .find((schema) => schema.some((field) => field.name === "interactions"));
+    expect(interactions).toBeTruthy();
+
+    const inner = (interactions?.[0] as { schema?: { name?: string; selector?: unknown }[] })
+      ?.schema;
+    const tap = inner?.find((f) => f.name === "tap_action") as
+      | { selector?: { ui_action?: { default_action?: string } } }
+      | undefined;
+    expect(tap?.selector?.ui_action?.default_action).toBe("none");
+  });
+});

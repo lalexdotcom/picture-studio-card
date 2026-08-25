@@ -224,3 +224,46 @@ describe("a live camera forces the fit", () => {
     );
   });
 });
+
+/**
+ * Revised decision 8. The original made an absent action mean inert, on the
+ * premise that an image has no implicit subject. `handleAction` disagrees:
+ * its more-info branch resolves `action.entity || config.entity ||
+ * config.camera_image || config.image_entity`, read out of frontend build
+ * 20260729.6. An image fed by a camera or an image entity has a subject, and
+ * HA opens it. The cursor has to say so.
+ */
+describe("isImageClickable follows what more-info could open", () => {
+  test("a decorative picture stays inert", () => {
+    expect(isImageClickable({ type: "image", width: 20, image: "/a.png" })).toBe(false);
+    expect(isImageClickable({ type: "image", width: 20 })).toBe(false);
+  });
+
+  test("any of Home Assistant's three subjects makes it clickable", () => {
+    expect(isImageClickable({ type: "image", width: 20, entity: "light.a" })).toBe(true);
+    expect(isImageClickable({ type: "image", width: 20, camera_image: "camera.a" })).toBe(true);
+    expect(isImageClickable({ type: "image", width: 20, image_entity: "image.a" })).toBe(true);
+  });
+
+  test("an explicit none wins over a subject — the user said no", () => {
+    expect(
+      isImageClickable({
+        type: "image",
+        width: 20,
+        camera_image: "camera.a",
+        tap_action: { action: "none" },
+      }),
+    ).toBe(false);
+  });
+
+  test("an explicit action still works without any subject", () => {
+    expect(
+      isImageClickable({
+        type: "image",
+        width: 20,
+        image: "/a.png",
+        tap_action: { action: "navigate", navigation_path: "/lovelace" },
+      }),
+    ).toBe(true);
+  });
+});
