@@ -94,6 +94,12 @@ export const defaultActionName = (
  * The config an element is stored with: what the user wrote, over what its kind
  * means by silence. Per key, so a user who sets only `hold_action` keeps the
  * kind's `tap_action` default.
+ *
+ * Spread keeps a key whose value is `undefined`, so `{ tap_action: undefined }`
+ * would erase the default rather than fall back to it. Nothing reaches here that
+ * way — YAML yields absence or `null`, and `ui_action` emits whole objects — but
+ * the type permits it, so an internal caller building a config by hand should
+ * omit the key rather than set it to `undefined`.
  */
 export const withDefaultActions = <C extends ElementConfig>(kind: ElementKind<C>, config: C): C =>
   kind.defaultActions ? { ...kind.defaultActions, ...config } : config;

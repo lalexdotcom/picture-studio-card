@@ -474,6 +474,22 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     });
   };
 
+  /**
+   * A field rather than an arrow built in `render()`: `element-form` declares
+   * `measureImageHeight` as a reactive property, so a fresh function each render
+   * marks it changed and re-renders the form on every `hass` publication —
+   * neither element carries a `shouldUpdate`. The number it replaced compared by
+   * value and absorbed those ticks.
+   *
+   * Being a field costs nothing here: `this._editingIndex` and `activeCard()`
+   * are still read when it is *called*, which is the whole point of passing a
+   * function instead of a measurement.
+   */
+  private _measureImageHeight = (): number | undefined =>
+    this._editingIndex === undefined
+      ? undefined
+      : activeCard()?.measureImageHeight(this._editingIndex);
+
   private _elementChanged = (ev: CustomEvent<{ element: ElementConfig }>): void => {
     ev.stopPropagation();
     const config = this._config;
@@ -633,10 +649,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
                 .element=${editing.config}
                 .anchor=${editing.anchor}
                 .visibility=${editing.visibility}
-                .measureImageHeight=${() =>
-                  this._editingIndex === undefined
-                    ? undefined
-                    : activeCard()?.measureImageHeight(this._editingIndex)}
+                .measureImageHeight=${this._measureImageHeight}
                 @element-changed=${this._elementChanged}
                 @anchor-changed=${this._anchorChanged}
                 @visibility-changed=${this._visibilityChanged}
