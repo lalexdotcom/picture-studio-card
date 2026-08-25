@@ -361,35 +361,57 @@ describe("rowLabel for an image", () => {
    * object to fire at all — which is exactly how its first version hid an
    * inverted precedence through a review.
    */
-  it("never lets `entity` outrank the picture, even when it is a real entity", () => {
-    expect(rowLabel(image({ image: "/local/plan.png", entity: "camera.hall" }), hass).primary).toBe(
-      "/local/plan.png",
-    );
+  /**
+   * The order is `hui-image`'s, read out of frontend build 20260729.6: a camera
+   * outranks everything, `state_image` outranks the file, and `image_entity`
+   * comes last because it reaches `hui-image` through `.image` — the very
+   * branch `state_image` overrides. Each case below pins one rung of that
+   * ladder against the rung beneath it.
+   */
+  it("puts the camera above every other source", () => {
     expect(
-      rowLabel(image({ image_entity: "image.door", entity: "camera.hall" }), hass).primary,
+      rowLabel(
+        image({
+          camera_image: "camera.hall",
+          image_entity: "image.door",
+          image: "/local/plan.png",
+          entity: "light.absent",
+          state_image: { on: "/a.png" },
+        }),
+        hass,
+      ).primary,
     ).toBe("Hall");
   });
 
-  it("never names the row after `entity` alone — it drives nothing on its own", () => {
-    expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("image");
+  it("puts a state-driven picture above the file it falls back to", () => {
+    expect(
+      rowLabel(
+        image({ image: "/local/plan.png", entity: "camera.hall", state_image: { on: "/a.png" } }),
+        hass,
+      ),
+    ).toEqual({ primary: "Hall", secondary: "Rez ▸ Caméra", derived: true });
   });
 
-  /**
-   * Paired with `state_image`, `entity` is what the picture is drawn FROM, and a
-   * list is read to know the content. The row borrows its name and flags itself
-   * derived; the glyph the list puts in front is what tells this apart from a
-   * row named after the picture itself, since both show an entity's name.
-   */
-  it("borrows the entity's name when state_image is what draws the picture", () => {
-    expect(rowLabel(image({ entity: "camera.hall", state_image: { on: "/a.png" } }), hass)).toEqual(
-      { primary: "Hall", secondary: "Rez ▸ Caméra", derived: true },
+  it("puts a state-driven picture above image_entity, which reaches hui-image last", () => {
+    const row = rowLabel(
+      image({ image_entity: "image.door", entity: "camera.hall", state_image: { on: "/a.png" } }),
+      hass,
     );
+    expect(row.derived).toBe(true);
   });
 
-  it("keeps the id, still flagged, when the registry cannot name the entity", () => {
+  it("keeps the id, still marked, when the registry cannot name the entity", () => {
     expect(
       rowLabel(image({ entity: "light.absent", state_image: { on: "/a.png" } }), hass),
     ).toEqual({ primary: "light.absent", derived: true });
+  });
+
+  it("never names the row after `entity` alone — it decides nothing on its own", () => {
+    expect(rowLabel(image({ entity: "camera.hall" }), hass).primary).toBe("image");
+  });
+
+  it("an empty state_image decides nothing either", () => {
+    expect(rowLabel(image({ entity: "camera.hall", state_image: {} }), hass).primary).toBe("image");
   });
 
   it("ignores state_filter, which changes the treatment and not the content", () => {
@@ -398,21 +420,9 @@ describe("rowLabel for an image", () => {
     ).toBe("image");
   });
 
-  it("never lets state_image outrank a picture the item actually carries", () => {
-    expect(
-      rowLabel(
-        image({ image: "/local/plan.png", entity: "camera.hall", state_image: { on: "/a.png" } }),
-        hass,
-      ),
-    ).toEqual({ primary: "/local/plan.png" });
-  });
-
-  it("does not flag a row named after the picture entity", () => {
+  it("does not mark a row named after the picture itself", () => {
     expect(rowLabel(image({ camera_image: "camera.hall" }), hass).derived).toBeUndefined();
-  });
-
-  it("an empty state_image drives nothing, so it names nothing", () => {
-    expect(rowLabel(image({ entity: "camera.hall", state_image: {} }), hass).primary).toBe("image");
+    expect(rowLabel(image({ image_entity: "image.door" }), hass).derived).toBeUndefined();
   });
 
   it("shows the picker's own title for a file chosen through it", () => {

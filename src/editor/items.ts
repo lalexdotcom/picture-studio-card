@@ -1,5 +1,6 @@
 import {
   type ElementConfig,
+  type ImageElementConfig,
   type ImageSource,
   imagePath,
   type PictureItem,
@@ -135,28 +136,44 @@ const UNKNOWN_REASON_KEYS: Record<UnknownReason, StringKey> = {
 };
 
 /**
- * The entity a row is *about*.
+ * What a row shows for an image, in Home Assistant's own order of precedence —
+ * read out of `hui-image`'s render, frontend build `20260729.6`:
  *
- * For every kind but the image that is `entity`, and the reading is obvious. An
- * image element carries three entity keys and only two of them are its subject:
- * `image_entity` and `camera_image` ARE the picture. `entity` is not, at all —
- * it only influences the filter or swaps the picture through `state_image`, so
- * it never names an image row, not even as a last resort. `imageSource` reads
- * the two in this same order, so the row cannot name one picture while the card
- * draws another.
+ * ```js
+ * if (this.cameraImage) …
+ * else if (this.stateImage) { const t = resolved[state]; t ? s = t : s = image }
+ * else s = darkMode ? darkModeImage : image
+ * ```
+ *
+ * So a camera outranks everything, `state_image` outranks the file, and
+ * `image_entity` arrives last — it reaches `hui-image` through `.image`, which
+ * is the branch `state_image` overrides.
+ *
+ * **The row names what DECIDES the picture, not what is drawn this second.**
+ * Which `state_image` branch wins depends on the entity's state at render time:
+ * a table with no entry for the current state falls back to the file. A label
+ * that tracked that would flip between the entity's name and a filename as a
+ * door opens, which is worse than one that is merely approximate. The entity
+ * decided either way — including when it decided to fall back — so it heads the
+ * row, marked as derived.
+ *
+ * `state_filter` is deliberately not a trigger: it changes the treatment, not
+ * the content, and a list is read to know the content.
  */
-const subjectEntity = (item: PictureItem): string | undefined => {
-  if (item.type === "unknown") return undefined;
-  // Unconditional, and that is the whole point: falling through to `entity`
-  // here would let it reach the entity-name path AHEAD of the chosen file,
-  // which is the opposite of the order intended. `entity` is the last resort
-  // for an image, applied further down, not the first.
-  if (item.type === "element" && item.config.type === "image") {
-    const picture = item.config.image_entity ?? item.config.camera_image;
-    return typeof picture === "string" ? picture : undefined;
+const imageRowLabel = (config: ImageElementConfig, hass?: HomeAssistant): RowLabel => {
+  const asEntity = (entityId: string): RowLabel =>
+    entityLabel(entityId, hass) ?? { primary: entityId };
+
+  if (config.camera_image) return asEntity(config.camera_image);
+  if (config.entity && Object.keys(config.state_image ?? {}).length > 0) {
+    return { ...asEntity(config.entity), derived: true };
   }
-  const entity = (item.config as { entity?: unknown }).entity;
-  return typeof entity === "string" ? entity : undefined;
+  if (config.image_entity) return asEntity(config.image_entity);
+  const picked = pickedImageLabel(config.image);
+  if (picked) return { primary: picked };
+  // Nothing names it: say what kind it is, through the catalogue's own label so
+  // that the row and the element picker agree on the word.
+  return { primary: hass?.localize ? elementLabel(hass.localize, "image") : config.type };
 };
 
 /**
@@ -220,7 +237,13 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
     };
   }
 
-  const entityId = subjectEntity(item);
+  // Answered whole and first: an image's order of precedence is Home Assistant's,
+  // not this function's, and two of its four sources are not `entity` at all.
+  if (item.type === "element" && item.config.type === "image") {
+    return imageRowLabel(item.config, hass);
+  }
+
+  const entityId = typeof item.config.entity === "string" ? item.config.entity : undefined;
 
   // A `name` written into a badge outranks the registry: it is an explicit
   // choice by whoever configured that badge, and Home Assistant's own lists
@@ -241,28 +264,6 @@ export const rowLabel = (item: PictureItem, hass?: HomeAssistant, badgeName?: st
   if (asEntity) return asEntity;
 
   if (item.type === "element") {
-    // A picture nobody named after an entity is named after itself: what the
-    // form's own selector shows, rather than the bare word "image" repeated
-    // down a list of them.
-    if (item.config.type === "image") {
-      const picked = pickedImageLabel(item.config.image);
-      if (picked) return { primary: picked };
-      // `entity` never NAMES an image: it is not what the picture is. But paired
-      // with `state_image` it is what the picture is drawn FROM, and a list is
-      // read to know the content — so the row borrows the entity's name and
-      // flags itself as derived, which is what the glyph in front of it says.
-      // `state_filter` is deliberately not a trigger: it changes the treatment,
-      // not the content.
-      const source = item.config.entity;
-      if (source && Object.keys(item.config.state_image ?? {}).length > 0) {
-        return { ...(entityLabel(source, hass) ?? { primary: source }), derived: true };
-      }
-      // Nothing names it: say what kind it is, through the catalogue's own label
-      // so that the row and the element picker agree on the word.
-      return {
-        primary: hass?.localize ? elementLabel(hass.localize, "image") : item.config.type,
-      };
-    }
     // `name` is deliberately not read: in composed mode it holds sentinels like
     // ___device_name___, which belong in a tooltip, not in a list row.
     return { primary: entityId ?? item.config.type };

@@ -725,13 +725,13 @@ describe("the Items section", () => {
 });
 
 /**
- * The glyph is the only thing separating "this row is named after the picture"
- * from "this row is named after what draws it": both put an entity's name on
+ * The wording is the only thing separating "this row is named after the picture"
+ * from "this row is named after what decides it": both put an entity's name on
  * the first line. Asserted on the rendered row rather than on `rowLabel`, since
- * the flag and the icon live in two different files and the point is that they
+ * the flag and the words live in two different files and the point is that they
  * meet.
  */
-describe("the derived glyph", () => {
+describe("the derived qualifier", () => {
   if (!customElements.get(LIST_TAG)) customElements.define(LIST_TAG, PictureStudioBadgeList);
 
   const mount = async (config: Record<string, unknown>) => {
@@ -748,19 +748,21 @@ describe("the derived glyph", () => {
     return el;
   };
 
-  const glyph = (el: PictureStudioBadgeList) =>
-    el.shadowRoot?.querySelector(".primary ha-icon.derived");
+  const qualifier = (el: PictureStudioBadgeList) =>
+    el.shadowRoot?.querySelector(".primary .derived");
 
   afterEach(() => {
     document.body.replaceChildren();
   });
 
-  it("marks a picture drawn from an entity's state", async () => {
+  it("marks a picture drawn from an entity's state, and leaves the name alone", async () => {
     const el = await mount({ entity: "light.a", state_image: { on: "/a.png" } });
-    expect(glyph(el)).toBeTruthy();
+    expect(qualifier(el)?.textContent).toBe("Based on");
+    // The qualifier is a child of .primary, so the name is what remains beside it.
+    expect(el.shadowRoot?.querySelector(".primary")?.textContent).toContain("light.a");
   });
 
   it("leaves a picture that carries its own source unmarked", async () => {
-    expect(glyph(await mount({ image: "/local/plan.png" }))).toBeNull();
+    expect(qualifier(await mount({ image: "/local/plan.png" }))).toBeNull();
   });
 });
