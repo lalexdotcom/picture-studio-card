@@ -109,7 +109,11 @@ export const imageForm: KindForm<ImageElementConfig> = {
     ];
 
     return html`
-      <ha-expansion-panel outlined>
+      <!-- Open by default: an image element with no picture draws nothing at
+           all, so the section that sets one is what a freshly added item always
+           needs. The card's own Background section is opened for the same
+           reason. -->
+      <ha-expansion-panel outlined open>
         <ha-icon slot="leading-icon" icon="mdi:image"></ha-icon>
         <div slot="header" role="heading" aria-level="3">
           ${localizeOwn(hass, "section_image")}

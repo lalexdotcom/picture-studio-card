@@ -86,3 +86,26 @@ describe("the freed height is measured at the moment keep-ratio is cleared", () 
     expect(untick(form).height).toBe(element.width);
   });
 });
+
+/**
+ * An image element with no picture draws nothing at all — unlike a state-icon,
+ * which gets Home Assistant's own missing-entity marker. The section that sets
+ * one is therefore the section a freshly added item always needs, and it is
+ * opened for the same reason the card's own Background section is.
+ */
+describe("the picture section opens by default", () => {
+  it("carries `open` on the first panel and on no other", async () => {
+    const form = document.createElement(ELEMENT_FORM_TAG) as PictureStudioElementForm;
+    form.hass = hass;
+    form.element = { type: "image", width: 20 };
+    document.body.append(form);
+    await form.updateComplete;
+
+    const panels = [...(form.shadowRoot?.querySelectorAll("ha-expansion-panel") ?? [])];
+    expect(panels.length).toBeGreaterThan(1);
+    expect(panels[0]?.hasAttribute("open")).toBe(true);
+    // Opening more than one would defeat the point: the reader would have to
+    // scroll past everything to reach the field they came for.
+    expect(panels.slice(1).some((p) => p.hasAttribute("open"))).toBe(false);
+  });
+});
