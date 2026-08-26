@@ -271,7 +271,12 @@ export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> 
 
 const POINTER_ID = 1;
 
-const pointerEvent = (type: string, clientX: number, clientY: number): PointerEvent =>
+const pointerEvent = (
+  type: string,
+  clientX: number,
+  clientY: number,
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
+): PointerEvent =>
   new PointerEvent(type, {
     clientX,
     clientY,
@@ -281,6 +286,7 @@ const pointerEvent = (type: string, clientX: number, clientY: number): PointerEv
     bubbles: true,
     composed: true,
     cancelable: true,
+    ...modifiers,
   });
 
 /**
@@ -293,9 +299,10 @@ export const press = async (
   card: PictureStudioCard,
   target: HTMLElement,
   at: { x: number; y: number },
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> => {
   const base = layer(card).getBoundingClientRect();
-  target.dispatchEvent(pointerEvent("pointerdown", base.left + at.x, base.top + at.y));
+  target.dispatchEvent(pointerEvent("pointerdown", base.left + at.x, base.top + at.y, modifiers));
   await flush();
 };
 
@@ -303,9 +310,10 @@ export const move = async (
   card: PictureStudioCard,
   target: HTMLElement,
   to: { x: number; y: number },
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> => {
   const base = layer(card).getBoundingClientRect();
-  target.dispatchEvent(pointerEvent("pointermove", base.left + to.x, base.top + to.y));
+  target.dispatchEvent(pointerEvent("pointermove", base.left + to.x, base.top + to.y, modifiers));
   await flush();
 };
 
@@ -313,9 +321,10 @@ export const release = async (
   card: PictureStudioCard,
   target: HTMLElement,
   at: { x: number; y: number },
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> => {
   const base = layer(card).getBoundingClientRect();
-  target.dispatchEvent(pointerEvent("pointerup", base.left + at.x, base.top + at.y));
+  target.dispatchEvent(pointerEvent("pointerup", base.left + at.x, base.top + at.y, modifiers));
   await flush();
 };
 
