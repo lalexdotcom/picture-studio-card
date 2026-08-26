@@ -1,15 +1,82 @@
 import { afterEach, describe, expect, test } from "@rstest/core";
-import { imageSource, PictureStudioImage } from "../../../card/image-element";
+import {
+  applyLiveCameraRatio,
+  imageSource,
+  liveCameraRatioCache,
+  PictureStudioImage,
+} from "../../../card/image-element";
 import { IMAGE_TAG, type ImageElementConfig } from "../../../config";
 import type { HomeAssistant } from "../../../types";
 
 if (!customElements.get(IMAGE_TAG)) customElements.define(IMAGE_TAG, PictureStudioImage);
 
-// Minimal hui-image stub: just needs to exist in the registry and accept property
-// assignments so Lit can forward them. The assertions query it by querySelector
-// and then read the properties back.
-class HuiImageStub extends HTMLElement {}
+/**
+ * Minimal hui-image stub: accepts Lit property assignments and exposes a
+ * shadow root with `.container` so `applyLiveCameraRatio`'s guard can read
+ * `padding-bottom`. In happy-dom there is no layout, so getComputedStyle
+ * returns the inline style value directly ("56.25%"), and the guard handles
+ * that form explicitly. The assertions below query the container to verify
+ * the ratio was applied.
+ *
+ * Modelled from the real hui-image's shadow-root layout on HA frontend
+ * 20260729.6 — only as much as the guard and the assertions need.
+ */
+class HuiImageStub extends HTMLElement {
+  #container: HTMLElement;
+
+  constructor() {
+    super();
+    const shadow = this.attachShadow({ mode: "open" });
+    this.#container = document.createElement("div");
+    this.#container.className = "container";
+    // 16:9 fallback: hui-image's hard-coded default before any ratio is derived.
+    this.#container.style.paddingBottom = "56.25%";
+    shadow.appendChild(this.#container);
+  }
+
+  set aspectRatio(value: string | undefined) {
+    if (!value) {
+      this.#container.style.paddingBottom = "56.25%";
+      return;
+    }
+    const parts = value.split("x");
+    const wStr = parts[0];
+    const hStr = parts[1];
+    const w = wStr !== undefined ? parseFloat(wStr) : 0;
+    const h = hStr !== undefined ? parseFloat(hStr) : 0;
+    if (w > 0 && h > 0) {
+      this.#container.style.paddingBottom = `${(100 * h) / w}%`;
+    }
+  }
+}
 if (!customElements.get("hui-image")) customElements.define("hui-image", HuiImageStub);
+
+/**
+ * Image mock: fires `onload` as a microtask with controllable dimensions so
+ * the ratio tests do not perform real network requests. The load count is
+ * reset in `afterEach` together with the cache so each test is independent.
+ */
+let imageLoadCount = 0;
+const mockImageDimensions = { width: 600, height: 410 };
+
+(globalThis as unknown as { Image: unknown }).Image = class MockImage {
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  get naturalWidth(): number {
+    return mockImageDimensions.width;
+  }
+  get naturalHeight(): number {
+    return mockImageDimensions.height;
+  }
+
+  set src(_value: string) {
+    imageLoadCount++;
+    queueMicrotask(() => {
+      this.onload?.();
+    });
+  }
+};
 
 const hass = (states: Record<string, unknown> = {}): HomeAssistant =>
   ({ states, themes: { darkMode: false }, language: "en", localize: () => "" }) as HomeAssistant;
@@ -26,6 +93,8 @@ const mount = async (config: ImageElementConfig, h = hass(), editing = false) =>
 
 afterEach(() => {
   document.body.replaceChildren();
+  liveCameraRatioCache.clear();
+  imageLoadCount = 0;
 });
 
 describe("imageSource", () => {
@@ -299,5 +368,168 @@ describe("the kind's default action", () => {
       tap_action: { action: "more-info" },
     });
     expect(el._config?.tap_action).toEqual({ action: "more-info" });
+  });
+});
+
+/**
+ * Tests for applyLiveCameraRatio. happy-dom performs no layout, so the
+ * contract under test is the decision logic, not the geometry. The stub's
+ * shadow-root container reports padding-bottom as an inline percentage string
+ * ("56.25%"), which the production code handles explicitly alongside the pixel
+ * form real browsers return.
+ */
+describe("live camera ratio correction", () => {
+  test("a live camera at 16:9 gets aspectRatio set from entity_picture", async () => {
+    mockImageDimensions.width = 600;
+    mockImageDimensions.height = 410;
+    const h = hass({
+      "camera.hallA": {
+        entity_id: "camera.hallA",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.hallA?token=t" },
+      },
+    });
+    const el = await mount(
+      {
+        type: "image",
+        camera_image: "camera.hallA",
+        camera_view: "live",
+        width: 20,
+      },
+      h,
+    );
+    // Let the async Image onload (microtask) fire.
+    await new Promise<void>((r) => queueMicrotask(r));
+
+    const hui = el.renderRoot.querySelector("hui-image") as Element;
+    const container = hui.shadowRoot?.querySelector(".container") as HTMLElement;
+    // Container now shows the real ratio, not 16:9.
+    expect(container.style.paddingBottom).toBe(`${(100 * 410) / 600}%`);
+  });
+
+  test("the guard: container not at 16:9 gets nothing on re-render", async () => {
+    // First mount establishes the cache and applies the ratio.
+    const h = hass({
+      "camera.hallB": {
+        entity_id: "camera.hallB",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.hallB?token=t" },
+      },
+    });
+    const el = await mount(
+      {
+        type: "image",
+        camera_image: "camera.hallB",
+        camera_view: "live",
+        width: 20,
+      },
+      h,
+    );
+    await new Promise<void>((r) => queueMicrotask(r));
+    imageLoadCount = 0; // reset after first load
+
+    // Directly move the container away from 16:9, simulating hui-image having
+    // derived its own ratio (so our fix should not act again).
+    const hui = el.renderRoot.querySelector("hui-image") as Element;
+    const container = hui.shadowRoot?.querySelector(".container") as HTMLElement;
+    container.style.paddingBottom = "75%";
+
+    // Trigger another call to updated() via a reactive property change.
+    el.stretch = true;
+    await el.updateComplete;
+    await new Promise<void>((r) => queueMicrotask(r));
+
+    // Guard blocked the fix — no new image was loaded.
+    expect(imageLoadCount).toBe(0);
+  });
+
+  test("a non-live camera (camera_view: auto) gets nothing", async () => {
+    const h = hass({
+      "camera.hallC": {
+        entity_id: "camera.hallC",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.hallC?token=t" },
+      },
+    });
+    await mount({ type: "image", camera_image: "camera.hallC", camera_view: "auto", width: 20 }, h);
+    await new Promise<void>((r) => queueMicrotask(r));
+    expect(imageLoadCount).toBe(0);
+  });
+
+  test("an ordinary image (no camera_view) gets nothing", async () => {
+    await mount({ type: "image", image: "/a.png", width: 20 });
+    await new Promise<void>((r) => queueMicrotask(r));
+    expect(imageLoadCount).toBe(0);
+  });
+
+  test("no entity_picture gets nothing and does not throw", async () => {
+    const h = hass({
+      "camera.hallD": {
+        entity_id: "camera.hallD",
+        state: "idle",
+        attributes: {},
+      },
+    });
+    // Should complete without throwing; the early-return on missing entity_picture
+    // is the only guarantee needed here.
+    await mount(
+      {
+        type: "image",
+        camera_image: "camera.hallD",
+        camera_view: "live",
+        width: 20,
+      },
+      h,
+    );
+    await new Promise<void>((r) => queueMicrotask(r));
+    expect(imageLoadCount).toBe(0);
+  });
+
+  test("null shadowRoot does not throw", () => {
+    // applyLiveCameraRatio is exported so this path can be exercised directly.
+    // A plain div has no shadow root; the guard returns early without throwing.
+    const fake = document.createElement("div");
+    const h = hass({
+      "camera.hallE": {
+        entity_id: "camera.hallE",
+        state: "idle",
+        attributes: { entity_picture: "/a.jpg" },
+      },
+    });
+    expect(() =>
+      applyLiveCameraRatio(
+        { type: "image", camera_image: "camera.hallE", camera_view: "live", width: 20 },
+        h,
+        fake,
+      ),
+    ).not.toThrow();
+    expect(imageLoadCount).toBe(0);
+  });
+
+  test("the picture is loaded once for two elements on the same camera — the cache", async () => {
+    mockImageDimensions.width = 600;
+    mockImageDimensions.height = 410;
+    const h = hass({
+      "camera.shared": {
+        entity_id: "camera.shared",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.shared?token=t" },
+      },
+    });
+    const config: ImageElementConfig = {
+      type: "image",
+      camera_image: "camera.shared",
+      camera_view: "live",
+      width: 20,
+    };
+    await mount(config, h);
+    await new Promise<void>((r) => queueMicrotask(r));
+    // First element populated the cache.
+    imageLoadCount = 0;
+
+    await mount(config, h);
+    await new Promise<void>((r) => queueMicrotask(r));
+    // Second element hit the cache — no new Image() was created.
+    expect(imageLoadCount).toBe(0);
   });
 });

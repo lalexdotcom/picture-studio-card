@@ -19,6 +19,12 @@
   yours to set, which stretches it. Tap, hold and double-tap actions are yours to
   set too: unlike an icon, an image does nothing until you ask it to.
 
+### Fixed
+
+- A camera shown live was drawn outside the selection outline the editor traces
+  around it. The picture, the outline, and the resize handles now all agree on
+  the same box.
+
 ## 1.5.3 — 2026-08-23
 
 ### Fixed

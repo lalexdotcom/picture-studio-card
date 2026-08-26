@@ -80,25 +80,78 @@ export class StubHaCard extends HTMLElement {
  */
 export class HuiImageStub extends HTMLElement {
   #image: string | undefined;
+  #container: HTMLElement;
+
+  /**
+   * Mirrors the real `hui-image`'s shadow-root `.container` behaviour, measured
+   * on HA frontend 20260729.6:
+   *   - When no `aspectRatio` is given, hui-image hard-codes 56.25 % padding-bottom
+   *     (16:9). The camera serves 600 × 410, overflowing the box by 72.5 px.
+   *   - When `aspectRatio = "WxH"` is set, the padding-bottom becomes (h/w)×100 %.
+   *
+   * The guard in `applyLiveCameraRatio` reads `padding-bottom / offsetWidth` from
+   * this container. The browser-lane ratio assertion reads the resulting layout
+   * height. Modelled from a real browser; not invented.
+   */
+  constructor() {
+    super();
+    const shadow = this.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    // width: 100% ensures padding-bottom resolves against the host's width —
+    // how the real .container is laid out inside hui-image's shadow.
+    style.textContent = ".container { width: 100%; box-sizing: border-box; }";
+    this.#container = document.createElement("div");
+    this.#container.className = "container";
+    // 16:9 fallback: hui-image's hard-coded default before any ratio is derived.
+    this.#container.style.paddingBottom = "56.25%";
+    shadow.append(style, this.#container);
+  }
 
   /** The card passes the resolved image path as a Lit property. */
   set image(value: string | undefined) {
     this.#image = value;
-    this.#applyRatio();
+    this.#applyRatioFromImage();
+  }
+
+  /**
+   * Mirrors hui-image's public `aspectRatio` property (e.g. "600x410").
+   * Setting it switches the container's padding-bottom from the 16:9 default
+   * to the supplied ratio — exactly what the real hui-image does once
+   * `parseAspectRatio` resolves the string.
+   */
+  set aspectRatio(value: string | undefined) {
+    if (!value) {
+      this.#container.style.paddingBottom = "56.25%";
+      return;
+    }
+    const parts = value.split("x");
+    const wStr = parts[0];
+    const hStr = parts[1];
+    const w = wStr !== undefined ? parseFloat(wStr) : 0;
+    const h = hStr !== undefined ? parseFloat(hStr) : 0;
+    if (w > 0 && h > 0) {
+      this.#container.style.paddingBottom = `${(100 * h) / w}%`;
+    }
   }
 
   connectedCallback(): void {
     this.style.display = "block";
-    this.#applyRatio();
+    this.#applyRatioFromImage();
   }
 
-  #applyRatio(): void {
-    const match = this.#image ? /[-](\d+)x(\d+)/.exec(this.#image) : null;
-    const group1 = match ? match[1] : undefined;
-    const group2 = match ? match[2] : undefined;
-    const w = group1 !== undefined ? parseInt(group1, 10) : 1;
-    const h = group2 !== undefined ? parseInt(group2, 10) : 1;
-    this.style.aspectRatio = w > 0 && h > 0 ? `${w} / ${h}` : "1 / 1";
+  #applyRatioFromImage(): void {
+    // If the image path has no ratio suffix, keep the current padding-bottom
+    // (the 16:9 default for cameras without a static image, which is correct).
+    if (!this.#image) return;
+    const match = /[-](\d+)x(\d+)/.exec(this.#image);
+    if (!match) return;
+    const wStr = match[1];
+    const hStr = match[2];
+    const w = wStr !== undefined ? parseInt(wStr, 10) : 0;
+    const h = hStr !== undefined ? parseInt(hStr, 10) : 0;
+    if (w > 0 && h > 0) {
+      this.#container.style.paddingBottom = `${(100 * h) / w}%`;
+    }
   }
 }
 
