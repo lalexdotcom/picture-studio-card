@@ -117,6 +117,7 @@ describe("a real change", () => {
     let selected: number | undefined = 1;
     const editor: EditorChannel = {
       patchPosition: () => {},
+      patchBox: () => {},
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => selected,
@@ -244,6 +245,7 @@ describe("visibility probes", () => {
 
   const EDITOR_STUB: EditorChannel = {
     patchPosition: () => {},
+    patchBox: () => {},
     patchAnchor: () => {},
     select: () => {},
     selectedIndex: () => undefined,
@@ -364,6 +366,7 @@ describe("the condition marker", () => {
     card.preview = true;
     releaseEditor = registerEditor({
       patchPosition: () => {},
+      patchBox: () => {},
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
@@ -454,6 +457,7 @@ describe("editing flag on element rebuild", () => {
     card.preview = true;
     releaseEditor = registerEditor({
       patchPosition: () => {},
+      patchBox: () => {},
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
@@ -608,6 +612,7 @@ describe("hui-error-badge display in editing mode", () => {
       card.preview = true;
       releaseEditor = registerEditor({
         patchPosition: () => {},
+        patchBox: () => {},
         patchAnchor: () => {},
         select: () => {},
         selectedIndex: () => undefined,
@@ -1172,6 +1177,7 @@ describe("the header", () => {
 describe("the preview reserves the height of the one it replaces", () => {
   const editorChannel = (): EditorChannel => ({
     patchPosition: () => {},
+    patchBox: () => {},
     patchAnchor: () => {},
     select: () => {},
     selectedIndex: () => undefined,
@@ -1398,5 +1404,231 @@ describe("image items", () => {
       ],
     });
     expect(card.renderRoot.querySelector(IMAGE_TAG)).toBeTruthy();
+  });
+});
+
+describe("resize handles", () => {
+  const HANDLED = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "element",
+        position: { top: "10%", left: "10%" },
+        config: { type: "image", width: 20, image: "/a.png" },
+      },
+      {
+        type: "element",
+        position: { top: "50%", left: "50%" },
+        config: { type: "state-icon", entity: "light.a" },
+      },
+    ],
+  };
+
+  /** Arms editing the way the dialog does: preview plus one registered editor. */
+  const editing = async (config: unknown = HANDLED) => {
+    installHelpers();
+    const card = await mountCard(config);
+    const boxes: { index: number; box: unknown }[] = [];
+    const selections: (number | undefined)[] = [];
+    let selected: number | undefined = 0;
+    releaseEditor = registerEditor({
+      patchPosition: () => undefined,
+      patchBox: (index, box) => boxes.push({ index, box }),
+      patchAnchor: () => undefined,
+      select: (index) => {
+        selected = index;
+        selections.push(index);
+        notifyEditors();
+      },
+      selectedIndex: () => selected,
+    });
+    (card as unknown as { preview: boolean }).preview = true;
+    notifyEditors();
+    await card.updateComplete;
+    await flush();
+    return { card, boxes, selections };
+  };
+
+  it("builds four handles on the image and none on the icon", async () => {
+    const { card } = await editing();
+    const [image, icon] = wrappers(card);
+    expect(image?.querySelectorAll(".handle")).toHaveLength(4);
+    expect(icon?.querySelectorAll(".handle")).toHaveLength(0);
+  });
+
+  it("names each handle's corner, which is what the hit test reads", async () => {
+    const { card } = await editing();
+    const corners = [...(wrappers(card)[0]?.querySelectorAll(".handle") ?? [])].map(
+      (h) => (h as HTMLElement).dataset.corner,
+    );
+    expect(corners).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
+  });
+
+  it("shows them only on the selected item", async () => {
+    // The rule is CSS, so assert the rule rather than a computed style —
+    // happy-dom does no layout and `cssRules` is what this file already uses to
+    // check a declaration exists.
+    await editing();
+    expect(
+      cssRules(PictureStudioCard.styles).get(".editing .item.selected > .handle"),
+    ).toBeTruthy();
+  });
+
+  it("does not clear the selection when a handle is pressed", async () => {
+    // Without `isHandle`, the press would resolve to no wrapper — and a press on
+    // no wrapper is the deselect, so grabbing a handle would close the form.
+    const { card, selections } = await editing();
+    const handle = wrappers(card)[0]?.querySelector(".handle-top-left") as HTMLElement;
+    handle.setPointerCapture = () => undefined;
+    handle.releasePointerCapture = () => undefined;
+    const send = (type: string) =>
+      handle.dispatchEvent(
+        new PointerEvent(type, { pointerId: 1, clientX: 0, clientY: 0, button: 0, bubbles: true }),
+      );
+    send("pointerdown");
+    send("pointerup");
+    expect(selections).not.toContain(undefined);
+  });
+
+  it("does not rewrite the marker corner of a conditional image during a resize", async () => {
+    const { card } = await editing({
+      type: "custom:picture-studio",
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "10%" },
+          visibility: [{ condition: "state", entity: "light.a", state: "on" }],
+          config: { type: "image", width: 20, image: "/a.png" },
+        },
+      ],
+    });
+    // position {top:10, left:10} → markerCorner gives "bottom-right"
+    const wrapper = wrappers(card)[0] as HTMLElement;
+    expect(wrapper.classList.contains("marker-bottom-right")).toBe(true);
+
+    // Stub layout so the resize controller's pointerdown can start a gesture.
+    const layer = root(card).querySelector(".layer") as HTMLElement;
+    layer.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 100,
+        right: 200,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.getBoundingClientRect = () =>
+      ({
+        left: 40,
+        top: 10,
+        width: 40,
+        height: 20,
+        right: 80,
+        bottom: 30,
+        x: 40,
+        y: 10,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.setPointerCapture = () => undefined;
+    wrapper.releasePointerCapture = () => undefined;
+
+    const handle = wrapper.querySelector(".handle-top-left") as HTMLElement;
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 1,
+        clientX: 40,
+        clientY: 10,
+        button: 0,
+        bubbles: true,
+      }),
+    );
+
+    // Plant a different corner so we can detect whether _applyMarks overwrites
+    // it with the stale stored position. Without the fix, _applyMarks reads
+    // _drag.draggingIndex() — undefined during a resize — so the guard never
+    // fires and _applyMarkerCorner restores marker-bottom-right.
+    wrapper.classList.remove("marker-bottom-right");
+    wrapper.classList.add("marker-top-right");
+
+    // A selection change triggers _syncEditing → this.selected changes →
+    // updated() → _applyMarks. This is the real path that fires mid-gesture.
+    (card as unknown as { selected?: number }).selected = 1;
+    await card.updateComplete;
+
+    expect(wrapper.classList.contains("marker-top-right")).toBe(true);
+    expect(wrapper.classList.contains("marker-bottom-right")).toBe(false);
+  });
+
+  it("detaches window key listeners when removed from the DOM", async () => {
+    // Without `_resize.detach()` in `disconnectedCallback`, the resize
+    // controller's `keydown`/`keyup` listeners survive on `window` after the
+    // card element is removed. Home Assistant rebuilds the card on every config
+    // commit, so each edit session accumulates two orphaned window listeners per
+    // commit — each one holds a reference to a dead element's state.
+    //
+    // Observable side effect: if a gesture is in progress when the card is
+    // removed and the listener is NOT cleaned up, a subsequent Shift keydown
+    // calls apply() and writes a pixel height onto the wrapper element. With the
+    // fix, detach() removes the listener (and clears state), so apply() never
+    // runs and the height stays as the gesture left it.
+    const { card } = await editing();
+    const wrapper = wrappers(card)[0] as HTMLElement;
+
+    // Stub layout so onPointerDown can set up gesture state.
+    const layer = root(card).querySelector(".layer") as HTMLElement;
+    layer.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 100,
+        right: 200,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.getBoundingClientRect = () =>
+      ({
+        left: 40,
+        top: 10,
+        width: 40,
+        height: 20,
+        right: 80,
+        bottom: 30,
+        x: 40,
+        y: 10,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.setPointerCapture = () => undefined;
+    wrapper.releasePointerCapture = () => undefined;
+
+    // Start a resize gesture (no height in config → keep-ratio mode → height "").
+    const handle = wrapper.querySelector(".handle-bottom-right") as HTMLElement;
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 1,
+        clientX: 80,
+        clientY: 30,
+        button: 0,
+        bubbles: true,
+      }),
+    );
+    const heightAfterGestureStart = wrapper.style.height;
+
+    // Remove the card. disconnectedCallback must call _resize.detach(), which
+    // removes the keydown/keyup listeners from window and clears gesture state.
+    card.remove();
+
+    // A Shift keydown would call apply() and write a pixel height if the
+    // listener were still registered. Without the fix, height changes to "0px".
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }));
+
+    expect(wrapper.style.height).toBe(heightAfterGestureStart);
   });
 });

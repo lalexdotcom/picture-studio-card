@@ -4,6 +4,7 @@ import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
 import { PictureStudioStateLabel } from "../../card/state-label-element";
 import { CARD_TAG, ICON_TAG, IMAGE_TAG, LABEL_TAG } from "../../config";
+import type { ImageBox } from "../../image-box";
 import type { Anchor, Position } from "../../position";
 
 /**
@@ -73,31 +74,107 @@ export class StubHaCard extends HTMLElement {
  * be asserted against.
  *
  * The ratio comes from the image path by harness convention: a path containing
- * `-<w>x<h>` (e.g. `/banner-1x10.png`) uses that ratio; anything else is 1:1.
- * That lets one test drive a square and another a 1:10 banner without the
- * production element learning a test-only property.
+ * `-<w>x<h>` (e.g. `/banner-1x10.png`) uses that ratio; anything else keeps the
+ * 16:9 default (the same fallback the real hui-image applies). That lets one test
+ * drive a wide image and another a tall banner without the production element
+ * learning a test-only property.
  */
 export class HuiImageStub extends HTMLElement {
   #image: string | undefined;
+  #container: HTMLElement | undefined;
+
+  /**
+   * Mirrors the real `hui-image`'s shadow-root `.container` behaviour, measured
+   * on HA frontend 20260729.6:
+   *   - When no `aspectRatio` is given, hui-image hard-codes 56.25 % padding-bottom
+   *     (16:9). The camera served 600 × 410, overflowing the box by 72.5 px.
+   *   - When `aspectRatio = "WxH"` is set, the padding-bottom becomes (h/w)×100 %.
+   *
+   * The guard in `applyLiveCameraRatio` reads `padding-bottom / offsetWidth` from
+   * this container. The browser-lane ratio assertion reads the resulting layout
+   * height. Modelled from a real browser; not invented.
+   *
+   * **Async shadow DOM** — measured on HA frontend 20260729.6:
+   * `PictureStudioImage.updated()` fires before `hui-image` has settled its own
+   * shadow DOM on the first render. A synchronous stub cannot reproduce this at
+   * all: the container appears in a microtask (`updateComplete`), not in the
+   * constructor. Images whose path carries no `-WxH` suffix keep 56.25 % (the
+   * real hui-image default); the old stub used 1:1 for those, which was an
+   * artefact of its simplified logic.
+   */
+  readonly updateComplete: Promise<boolean> = new Promise<boolean>((resolve) => {
+    queueMicrotask(() => {
+      this.#buildShadow();
+      resolve(true);
+    });
+  });
+
+  #buildShadow(): void {
+    if (this.shadowRoot) return;
+    const shadow = this.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    // width: 100% ensures padding-bottom resolves against the host's width —
+    // how the real .container is laid out inside hui-image's shadow.
+    style.textContent = ".container { width: 100%; box-sizing: border-box; }";
+    this.#container = document.createElement("div");
+    this.#container.className = "container";
+    // 16:9 fallback: hui-image's hard-coded default before any ratio is derived.
+    this.#container.style.paddingBottom = "56.25%";
+    shadow.append(style, this.#container);
+    // Apply any ratio that was set via .image before the shadow was ready.
+    this.#applyRatioFromImage();
+  }
 
   /** The card passes the resolved image path as a Lit property. */
   set image(value: string | undefined) {
     this.#image = value;
-    this.#applyRatio();
+    this.#applyRatioFromImage();
+  }
+
+  /**
+   * Mirrors hui-image's public `aspectRatio` property (e.g. "600x410").
+   * Setting it switches the container's padding-bottom from the 16:9 default
+   * to the supplied ratio — exactly what the real hui-image does once
+   * `parseAspectRatio` resolves the string.
+   *
+   * Called only after `await hui-image.updateComplete` in `applyLiveCameraRatio`,
+   * so `#container` is always defined by the time this setter fires in practice.
+   * The early-return guard covers any future caller that does not await.
+   */
+  set aspectRatio(value: string | undefined) {
+    const container = this.#container;
+    if (!container) return;
+    if (!value) {
+      container.style.paddingBottom = "56.25%";
+      return;
+    }
+    const parts = value.split("x");
+    const wStr = parts[0];
+    const hStr = parts[1];
+    const w = wStr !== undefined ? parseFloat(wStr) : 0;
+    const h = hStr !== undefined ? parseFloat(hStr) : 0;
+    if (w > 0 && h > 0) {
+      container.style.paddingBottom = `${(100 * h) / w}%`;
+    }
   }
 
   connectedCallback(): void {
     this.style.display = "block";
-    this.#applyRatio();
   }
 
-  #applyRatio(): void {
-    const match = this.#image ? /[-](\d+)x(\d+)/.exec(this.#image) : null;
-    const group1 = match ? match[1] : undefined;
-    const group2 = match ? match[2] : undefined;
-    const w = group1 !== undefined ? parseInt(group1, 10) : 1;
-    const h = group2 !== undefined ? parseInt(group2, 10) : 1;
-    this.style.aspectRatio = w > 0 && h > 0 ? `${w} / ${h}` : "1 / 1";
+  #applyRatioFromImage(): void {
+    // If the image path has no ratio suffix, keep the current padding-bottom
+    // (the 16:9 default for cameras without a static image, which is correct).
+    if (!this.#image || !this.#container) return;
+    const match = /[-](\d+)x(\d+)/.exec(this.#image);
+    if (!match) return;
+    const wStr = match[1];
+    const hStr = match[2];
+    const w = wStr !== undefined ? parseInt(wStr, 10) : 0;
+    const h = hStr !== undefined ? parseInt(hStr, 10) : 0;
+    if (w > 0 && h > 0) {
+      this.#container.style.paddingBottom = `${(100 * h) / w}%`;
+    }
   }
 }
 
@@ -145,7 +222,7 @@ const releases: (() => void)[] = [];
  * whatever holds it. Pinning that width is what makes the layer exactly
  * LAYER.width and the percentages exact.
  */
-export const mountCard = async (config: unknown): Promise<PictureStudioCard> => {
+export const mountCard = async (config: unknown, hass?: unknown): Promise<PictureStudioCard> => {
   installHelpers();
   const host = document.createElement("div");
   host.style.width = `${LAYER.width}px`;
@@ -157,6 +234,11 @@ export const mountCard = async (config: unknown): Promise<PictureStudioCard> => 
 
   const card = document.createElement(CARD_TAG) as PictureStudioCard;
   card.setConfig(config);
+  // Set hass before appending so the card's first render sees it and propagates
+  // it to items. This exercises the first-render timing path: hui-image is
+  // freshly created, its shadow DOM is not yet settled (updateComplete resolves
+  // one microtask later), and applyLiveCameraRatio must await it to act correctly.
+  if (hass !== undefined) (card as unknown as { hass: unknown }).hass = hass;
   host.append(card);
   await card.updateComplete;
   await flush();
@@ -227,6 +309,7 @@ const neutralisePointerCapture = (): void => {
 /** What the drag sent to the editor, which is the card's only way out. */
 export interface EditorSpy {
   commits: { index: number; position: Position }[];
+  boxes: { index: number; box: ImageBox; position?: Position }[];
   selections: (number | undefined)[];
   anchors: { index: number; anchor: Anchor }[];
   release(): void;
@@ -240,6 +323,7 @@ export interface EditorSpy {
 export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> => {
   const spy: EditorSpy = {
     commits: [],
+    boxes: [],
     selections: [],
     anchors: [],
     release: () => undefined,
@@ -247,6 +331,7 @@ export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> 
   let selected: number | undefined;
   const off = registerEditor({
     patchPosition: (index, position) => spy.commits.push({ index, position }),
+    patchBox: (index, box, position) => spy.boxes.push({ index, box, position }),
     patchAnchor: (index, anchor) => spy.anchors.push({ index, anchor }),
     select: (index) => {
       selected = index;
@@ -267,7 +352,12 @@ export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> 
 
 const POINTER_ID = 1;
 
-const pointerEvent = (type: string, clientX: number, clientY: number): PointerEvent =>
+const pointerEvent = (
+  type: string,
+  clientX: number,
+  clientY: number,
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
+): PointerEvent =>
   new PointerEvent(type, {
     clientX,
     clientY,
@@ -277,6 +367,7 @@ const pointerEvent = (type: string, clientX: number, clientY: number): PointerEv
     bubbles: true,
     composed: true,
     cancelable: true,
+    ...modifiers,
   });
 
 /**
@@ -289,9 +380,10 @@ export const press = async (
   card: PictureStudioCard,
   target: HTMLElement,
   at: { x: number; y: number },
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> => {
   const base = layer(card).getBoundingClientRect();
-  target.dispatchEvent(pointerEvent("pointerdown", base.left + at.x, base.top + at.y));
+  target.dispatchEvent(pointerEvent("pointerdown", base.left + at.x, base.top + at.y, modifiers));
   await flush();
 };
 
@@ -299,9 +391,10 @@ export const move = async (
   card: PictureStudioCard,
   target: HTMLElement,
   to: { x: number; y: number },
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> => {
   const base = layer(card).getBoundingClientRect();
-  target.dispatchEvent(pointerEvent("pointermove", base.left + to.x, base.top + to.y));
+  target.dispatchEvent(pointerEvent("pointermove", base.left + to.x, base.top + to.y, modifiers));
   await flush();
 };
 
@@ -309,9 +402,10 @@ export const release = async (
   card: PictureStudioCard,
   target: HTMLElement,
   at: { x: number; y: number },
+  modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
 ): Promise<void> => {
   const base = layer(card).getBoundingClientRect();
-  target.dispatchEvent(pointerEvent("pointerup", base.left + at.x, base.top + at.y));
+  target.dispatchEvent(pointerEvent("pointerup", base.left + at.x, base.top + at.y, modifiers));
   await flush();
 };
 

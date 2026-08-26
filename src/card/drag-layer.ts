@@ -89,6 +89,20 @@ interface DragOptions {
    */
   onSelect(index: number | undefined): void;
   /**
+   * Whether this target is a resize handle.
+   *
+   * Asked BEFORE the wrapper lookup. A handle is a child of the wrapper, so
+   * without this a press on one would resolve to the item and start a move; and
+   * simply returning no wrapper would be worse still, because a press on nothing
+   * is the deselect.
+   *
+   * The two controllers are independent by construction rather than by
+   * registration order: each consults the card's single hit test and decides for
+   * itself. Neither stops the other's propagation, and a listener on the same
+   * node fires regardless of `stopPropagation`.
+   */
+  isHandle?(target: EventTarget | null): boolean;
+  /**
    * The clock the hold is measured against. Injected so the boundary can be
    * tested exactly rather than by sleeping through it; `performance.now` in
    * production, because it is monotonic and a clock change mid-gesture must not
@@ -151,6 +165,7 @@ export const createDragController = (options: DragOptions) => {
   const onPointerDown = (ev: PointerEvent): void => {
     if (ev.button !== 0) return;
     if (state) return; // ignore a second pointer while a drag is in progress
+    if (options.isHandle?.(ev.target)) return;
     // A press released off the card never reaches our pointerup, so the pending
     // one is dropped here rather than left to answer for the next gesture.
     emptyPress = undefined;

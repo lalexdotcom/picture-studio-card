@@ -14,10 +14,13 @@ import {
   type ElementItem,
   type HeadingConfig,
   hasHeading,
+  type ImageElementConfig,
   normalizeConfig,
+  type PictureItem,
   type PictureStudioConfig,
   storedConfig,
 } from "../config";
+import type { ImageBox } from "../image-box";
 import type { Anchor, Position } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
@@ -151,6 +154,40 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
       // for unknown items regardless of future callers.
       if (item.type === "unknown") return item;
       return { ...item, position };
+    });
+    this._commit({ ...config, items });
+  }
+
+  /**
+   * The resize gesture's single commit.
+   *
+   * `height` is rebuilt rather than spread: the key's *absence* is the
+   * keep-ratio mode, and `{ ...config, height: undefined }` would leave a key
+   * present with a value that is not a number — which `normalizeImageBox`
+   * discards on the next read and `"height" in config` reads as present in the
+   * meantime.
+   */
+  patchBox(index: number, box: ImageBox, position?: Position): void {
+    const config = this._config;
+    if (!config) return;
+    const target = config.items[index];
+    // Unreachable today for the same reason patchPosition's guard is: an item
+    // that is not a readable image has no handle, because it has no wrapper the
+    // card would hang one on. It returns *before* committing rather than
+    // committing an unchanged config: a no-op commit still rebuilds the card.
+    if (target?.type !== "element" || target.config.type !== "image") return;
+
+    const { height: _dropped, ...rest } = target.config;
+    const next: ImageElementConfig = {
+      ...rest,
+      width: box.width,
+      ...(box.height === undefined ? {} : { height: box.height }),
+    };
+    const items = config.items.map((item, i): PictureItem => {
+      // The type guard on `item.type` narrows from the union before the spread,
+      // so TypeScript can confirm the result is still a valid ElementItem.
+      if (i !== index || item.type !== "element") return item;
+      return { ...item, ...(position ? { position } : {}), config: next };
     });
     this._commit({ ...config, items });
   }

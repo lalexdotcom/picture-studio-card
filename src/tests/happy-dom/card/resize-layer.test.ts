@@ -1,0 +1,371 @@
+import { afterEach, describe, expect, it } from "@rstest/core";
+import { createResizeController } from "../../../card/resize-layer";
+import type { ImageBox, LiveCameraKeys } from "../../../image-box";
+import type { Anchor, Position } from "../../../position";
+
+/**
+ * happy-dom performs no layout, so the wrapper's box is stubbed — and here the
+ * stub has to be **dynamic**. In keep-ratio mode the controller writes a width
+ * and reads the height back, exactly as a browser would resolve `height: auto`;
+ * a fixed rect would answer the same height whatever the width, and every
+ * keep-ratio assertion would pass for the wrong reason.
+ */
+const SURFACE = { width: 400, height: 300 };
+
+const setup = (options?: {
+  /** The item's box in surface pixels at pointerdown. */
+  box?: { x: number; y: number; width: number; height: number };
+  /** The intrinsic ratio the stubbed image holds while height is auto. */
+  intrinsic?: number;
+  config?: ImageBox & LiveCameraKeys;
+  anchor?: Anchor;
+  position?: Position;
+}) => {
+  const box = options?.box ?? { x: 40, y: 30, width: 80, height: 40 };
+  const intrinsic = options?.intrinsic ?? 2; // width / height
+  const config = options?.config ?? { width: 20 };
+
+  const root = document.createElement("div");
+  const surface = document.createElement("div");
+  const wrapper = document.createElement("div");
+  const handle = document.createElement("div");
+  wrapper.append(handle);
+  root.append(surface, wrapper);
+  document.body.append(root);
+
+  surface.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      top: 0,
+      width: SURFACE.width,
+      height: SURFACE.height,
+      right: SURFACE.width,
+      bottom: SURFACE.height,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  /**
+   * The wrapper's live box. Before the gesture writes anything it is the stored
+   * one; once the gesture writes pixels it is what those pixels say — and an
+   * empty height is resolved from the intrinsic ratio, which is the browser's
+   * job and the one this stub has to do honestly.
+   */
+  wrapper.getBoundingClientRect = () => {
+    const w = wrapper.style.width ? Number.parseFloat(wrapper.style.width) : box.width;
+    const h = wrapper.style.height ? Number.parseFloat(wrapper.style.height) : w / intrinsic;
+    const left = wrapper.style.left ? Number.parseFloat(wrapper.style.left) : box.x;
+    const top = wrapper.style.top ? Number.parseFloat(wrapper.style.top) : box.y;
+    return {
+      left,
+      top,
+      width: w,
+      height: h,
+      right: left + w,
+      bottom: top + h,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect;
+  };
+
+  const commits: { index: number; box: ImageBox; position?: Position }[] = [];
+  const stretches: (boolean | undefined)[] = [];
+
+  const controller = createResizeController({
+    getHandle: (target) =>
+      target === handle ? { element: wrapper, index: 0, corner: "bottom-right" } : undefined,
+    getSurface: () => surface,
+    getAnchor: () => options?.anchor ?? "top-left",
+    getPosition: () => options?.position ?? { left: 10, top: 10 },
+    getConfig: () => config,
+    onCommit: (index, b, position) => commits.push({ index, box: b, position }),
+    onStretch: (_index, stretched) => stretches.push(stretched),
+  });
+  controller.attach(root);
+
+  const send = (
+    type: string,
+    clientX: number,
+    clientY: number,
+    modifiers: { shiftKey?: boolean; altKey?: boolean } = {},
+    target: HTMLElement = handle,
+  ): void => {
+    target.dispatchEvent(
+      new PointerEvent(type, {
+        pointerId: 1,
+        clientX,
+        clientY,
+        button: 0,
+        bubbles: true,
+        ...modifiers,
+      }),
+    );
+  };
+
+  const key = (type: "keydown" | "keyup", shiftKey: boolean): void => {
+    window.dispatchEvent(new KeyboardEvent(type, { key: "Shift", shiftKey, bubbles: true }));
+  };
+
+  return { root, wrapper, handle, surface, commits, stretches, controller, send, key };
+};
+
+afterEach(() => document.body.replaceChildren());
+
+describe("createResizeController", () => {
+  it("keeps the ratio by default: the width follows the diagonal and the height is left auto", () => {
+    // Box 80x40 at (40,30), bottom-right grabbed. The pointer asks for 160x40;
+    // the lock projects that onto the 2:1 diagonal.
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 70);
+
+    // kx = 2, ky = 1 -> k = (2*6400 + 1*1600) / 8000 = 1.8 -> width 144
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeCloseTo(144, 6);
+    // Keep-ratio writes no height at all: the image holds the ratio itself.
+    expect(h.wrapper.style.height).toBe("");
+  });
+
+  it("locks the ratio in pixels, not on the stored percentages", () => {
+    // The trap of the whole design: width is a % of 400 and height a % of 300,
+    // so a square box is NOT equal percentages. A non-square surface and a
+    // non-square box are what make the two formulas disagree.
+    const h = setup({ box: { x: 0, y: 0, width: 80, height: 40 }, intrinsic: 2 });
+    h.send("pointerdown", 80, 40);
+    h.send("pointermove", 160, 80);
+    h.send("pointerup", 160, 80);
+
+    const box = h.commits[0]?.box as ImageBox;
+    // 160x80 in pixels -> 40% of 400 wide. Keep-ratio, so no height is stored.
+    expect(box.width).toBeCloseTo(40, 6);
+    expect("height" in box).toBe(false);
+  });
+
+  it("frees the ratio while SHIFT is down and writes both dimensions", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100, { shiftKey: true });
+
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeCloseTo(160, 6);
+    expect(Number.parseFloat(h.wrapper.style.height)).toBeCloseTo(70, 6);
+  });
+
+  it("re-locking clears the pixel height, so a released SHIFT commits no height", () => {
+    // The silent failure this design spent the longest on: forgetting to clear
+    // the height breaks nothing visible — it goes back to auto anyway — and
+    // freezes an item the user left in keep-ratio.
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100, { shiftKey: true });
+    expect(h.wrapper.style.height).not.toBe("");
+
+    h.send("pointermove", 200, 100, { shiftKey: false });
+    expect(h.wrapper.style.height).toBe("");
+
+    h.send("pointerup", 200, 100, { shiftKey: false });
+    const reLockedBox = h.commits[0]?.box as ImageBox;
+    expect("height" in reLockedBox).toBe(false);
+  });
+
+  it("commits a height when SHIFT is down at the release", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100, { shiftKey: true });
+    h.send("pointerup", 200, 100, { shiftKey: true });
+
+    const box = h.commits[0]?.box as ImageBox;
+    expect(box.height).toBeDefined();
+  });
+
+  it("rewrites an existing height even when the ratio was kept", () => {
+    // Branch 2: the item is already stretched, and that stretch is preserved by
+    // scaling both numbers rather than by leaving the height where it was.
+    const h = setup({ config: { width: 20, height: 20 } });
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 70);
+    h.send("pointerup", 200, 70);
+
+    const box = h.commits[0]?.box as ImageBox;
+    expect(box.height).toBeCloseTo(20 * 1.8, 6);
+  });
+
+  it("replays the last pointer position when SHIFT is toggled without a move", () => {
+    // No pointermove will come, so the keyboard listener is the only thing that
+    // can refresh the preview. The window is the target: under pointer capture
+    // the element has no keyboard focus.
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100);
+    const locked = h.wrapper.style.width;
+
+    h.key("keydown", true);
+    expect(h.wrapper.style.width).not.toBe(locked);
+    expect(h.wrapper.style.height).not.toBe("");
+
+    h.key("keyup", false);
+    expect(h.wrapper.style.width).toBe(locked);
+    expect(h.wrapper.style.height).toBe("");
+  });
+
+  it("stops at the surface, and one axis binding does not distort the other", () => {
+    // A box against the right edge under a locked ratio: clamping the two axes
+    // separately would keep growing the height while the width is pinned.
+    const h = setup({ box: { x: 320, y: 0, width: 80, height: 40 }, intrinsic: 2 });
+    h.send("pointerdown", 400, 40);
+    h.send("pointermove", 900, 40);
+
+    const w = Number.parseFloat(h.wrapper.style.width);
+    expect(w).toBeCloseTo(80, 6); // already flush right; it cannot grow
+    expect(h.wrapper.style.height).toBe("");
+  });
+
+  it("lets an item that already overflows be reduced but not pushed further out", () => {
+    // The ratchet, which is `tighten` reused on an edge. A plain clamp would be
+    // indistinguishable from it on an item that starts inside.
+    const h = setup({ box: { x: 320, y: 0, width: 160, height: 80 }, intrinsic: 2 });
+    h.send("pointerdown", 480, 80);
+    h.send("pointermove", 560, 80); // further out
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeCloseTo(160, 6);
+
+    h.send("pointermove", 420, 80); // back in
+    // kx = 100/160 = 0.625, ky = 80/80 = 1.0 (y pointer hasn't moved).
+    // k = (0.625·25600 + 1.0·6400) / 32000 = 0.7 → size = 112.
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeCloseTo(112, 6);
+
+    h.send("pointermove", 560, 80); // and it cannot leave again
+    // Ratchet tightened trailing to 432 (origin 320 + 112). k = 1.4 but
+    // kBounds.hi = 112/160 = 0.7 → clamped, size stays at 112.
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeCloseTo(112, 6);
+  });
+
+  it("never goes below the floor", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 41, 31);
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeGreaterThanOrEqual(24);
+  });
+
+  it("under a forced ratio SHIFT is inert and no height is created", () => {
+    const h = setup({ config: { width: 20, camera_image: "camera.a", camera_view: "live" } });
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100, { shiftKey: true });
+    expect(h.wrapper.style.height).toBe("");
+
+    h.send("pointerup", 200, 100, { shiftKey: true });
+    const forcedBox = h.commits[0]?.box as ImageBox;
+    expect("height" in forcedBox).toBe(false);
+  });
+
+  it("under a forced ratio a dormant height is scaled, never dropped", () => {
+    const h = setup({
+      config: { width: 20, height: 30, camera_image: "camera.a", camera_view: "live" },
+    });
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 70);
+    h.send("pointerup", 200, 70);
+
+    const box = h.commits[0]?.box as ImageBox;
+    // Width went 80 -> 144, so k = 1.8 and the dormant height follows it.
+    expect(box.width).toBeCloseTo(36, 6);
+    expect(box.height).toBeCloseTo(54, 6);
+  });
+
+  it("commits nothing when the rounded percentages did not change", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointerup", 120, 70);
+    expect(h.commits).toHaveLength(0);
+  });
+
+  it("puts the verbatim declarations back when the gesture is cancelled", () => {
+    const h = setup();
+    h.wrapper.style.left = "10%";
+    h.wrapper.style.top = "10%";
+    h.wrapper.style.width = "20%";
+    h.wrapper.style.maxHeight = "100%";
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100);
+    h.send("pointercancel", 200, 100);
+
+    expect(h.wrapper.style.left).toBe("10%");
+    expect(h.wrapper.style.width).toBe("20%");
+    expect(h.wrapper.style.maxHeight).toBe("100%");
+    expect(h.commits).toHaveLength(0);
+  });
+
+  it("drops max-height for the length of the gesture", () => {
+    // Otherwise the drag hits an invisible ceiling at the background's height.
+    const h = setup();
+    h.wrapper.style.maxHeight = "100%";
+    h.send("pointerdown", 120, 70);
+    expect(h.wrapper.style.maxHeight).toBe("");
+  });
+
+  it("announces the stretch so the card can push a transient fit mode", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100, { shiftKey: true });
+    expect(h.stretches).toContain(true);
+
+    // The release leaves it agreeing with the config it just committed, rather
+    // than dropping it: the round trip takes frames, and an element reading its
+    // old config would letterbox for exactly those frames.
+    h.send("pointerup", 200, 100, { shiftKey: true });
+    expect(h.stretches.at(-1)).toBe(true);
+  });
+
+  it("drops the override when the gesture commits nothing", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 100, { shiftKey: true });
+    h.send("pointercancel", 200, 100, { shiftKey: true });
+    expect(h.stretches.at(-1)).toBeUndefined();
+  });
+
+  it("ignores a press that is not on a handle", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70, {}, h.wrapper);
+    expect(h.controller.resizingIndex()).toBeUndefined();
+  });
+
+  it("ignores a second pointer while a gesture is live", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    const width = h.wrapper.style.width;
+    h.handle.dispatchEvent(
+      new PointerEvent("pointerdown", { pointerId: 2, clientX: 300, clientY: 300, bubbles: true }),
+    );
+    expect(h.wrapper.style.width).toBe(width);
+  });
+});
+
+describe("the ALT mode", () => {
+  it("resizes around the anchor and never writes a position", () => {
+    // Anchor centre: the box grows symmetrically, so the leading edge moves
+    // outward by half of the growth and the commit carries no position.
+    const h = setup({
+      box: { x: 160, y: 130, width: 80, height: 40 },
+      anchor: "center",
+      position: { left: 50, top: 50 },
+    });
+    h.send("pointerdown", 240, 170);
+    h.send("pointermove", 280, 170, { altKey: true });
+    h.send("pointerup", 280, 170, { altKey: true });
+
+    expect(h.commits[0]?.position).toBeUndefined();
+  });
+
+  it("refuses to grow an already-overflowing item on the axis that overflows", () => {
+    // Growing from the anchor pushes BOTH edges out, and the ratchet forbids the
+    // one that is already outside from going further.
+    const h = setup({
+      box: { x: -20, y: 0, width: 440, height: 220 },
+      anchor: "center",
+      position: { left: 50, top: 50 },
+    });
+    h.send("pointerdown", 420, 220);
+    h.send("pointermove", 600, 220, { altKey: true });
+    expect(Number.parseFloat(h.wrapper.style.width)).toBeCloseTo(440, 6);
+  });
+});

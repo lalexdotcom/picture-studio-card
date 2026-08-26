@@ -40,6 +40,14 @@ export interface ElementKind<C extends ElementConfig> {
    * following it the day Home Assistant changes.
    */
   defaultActions?: ElementActions;
+  /**
+   * Whether a corner handle can size this kind. The image alone: its `width` and
+   * `height` are percentages of the background, while an icon and a label size
+   * themselves through `ElementSize` — `clamp(min px, ratio cqw, max px)`, which
+   * is not a box, and which a handle would have to pick one of three numbers
+   * from. That is a different design.
+   */
+  resizable?: true;
 }
 
 /**
@@ -70,6 +78,7 @@ export const IMAGE_KIND: ElementKind<ImageElementConfig> = {
    * nothing happen.
    */
   defaultActions: { tap_action: { action: "none" } },
+  resizable: true,
 };
 
 /** The kinds we implement. A new one is added here and nowhere else. */
@@ -103,3 +112,8 @@ export const defaultActionName = (
  */
 export const withDefaultActions = <C extends ElementConfig>(kind: ElementKind<C>, config: C): C =>
   kind.defaultActions ? { ...kind.defaultActions, ...config } : config;
+
+/** Whether a corner handle can size this element kind. */
+export const isResizableKind = (type: string): boolean =>
+  (ELEMENT_KINDS as Record<string, ElementKind<ElementConfig> | undefined>)[type]?.resizable ===
+  true;

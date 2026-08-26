@@ -4,6 +4,12 @@
 
 ### Added
 
+- Images can be resized directly on the picture: select one and drag any of its
+  four corners. The proportions are kept as you drag — hold **Shift** to set the
+  width and the height independently, and **Alt** to resize around the item's
+  anchor instead of its opposite corner. Breaking the proportions is what makes
+  the picture stretch to fill its box; while they are kept, it keeps its own
+  shape.
 - A new item type, **Image**: a picture placed on the picture. It takes an image
   file, a different one for dark themes, a camera or an image entity, images that
   change with an entity's state, and CSS filters — the same choices the card's
@@ -12,6 +18,12 @@
   the background; its height either follows the picture's own proportions or is
   yours to set, which stretches it. Tap, hold and double-tap actions are yours to
   set too: unlike an icon, an image does nothing until you ask it to.
+
+### Fixed
+
+- A camera shown live was drawn outside the selection outline the editor traces
+  around it. The picture, the outline, and the resize handles now all agree on
+  the same box.
 
 ## 1.5.3 — 2026-08-23
 

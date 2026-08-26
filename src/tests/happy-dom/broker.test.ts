@@ -10,6 +10,7 @@ import {
 
 const channel = () => ({
   patchPosition: () => undefined,
+  patchBox: () => undefined,
   patchAnchor: () => undefined,
   select: () => undefined,
   selectedIndex: () => undefined,

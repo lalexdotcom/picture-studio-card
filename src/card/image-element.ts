@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { type ImageElementConfig, imagePath } from "../config";
 import { IMAGE_KIND, withDefaultActions } from "../element-kinds";
 import { hassRenderChanged } from "../has-changed";
-import { effectiveBox } from "../image-box";
+import { effectiveBox, ratioIsForced } from "../image-box";
 import type { HomeAssistant } from "../types";
 import { bindActions, isClickable, relayActions } from "./item-actions";
 import { interactionStyles } from "./item-styles";
@@ -52,16 +52,147 @@ export const imageSource = (
   return imagePath(config.image);
 };
 
+/**
+ * Per-page ratio cache, keyed by camera entity id.
+ * Exported so tests can clear it between cases.
+ */
+export const liveCameraRatioCache = new Map<string, string>();
+
+/**
+ * Corrects `hui-image`'s aspect ratio for a live camera.
+ *
+ * Verified on HA frontend **20260729.6**: with no `aspectRatio` given and
+ * the camera not yet measured, `hui-image` falls back to a hard-coded
+ * **56.25 % padding-bottom** (16:9). The camera served 600 × 410; the
+ * wrapper came out 600 × 337.5 — a 72.5 px overflow. `_lastImageHeight` is
+ * only set by `_onVideoLoad`, from `ha-camera-stream.offsetHeight`, which is
+ * 0 because the container gave it no height. Measured stable from 200 ms to
+ * 9 s after a card rebuild. It never heals on its own.
+ *
+ * Fix: supply the real ratio via `hui-image`'s public `aspectRatio` property
+ * (the string form `parseAspectRatio` accepts, e.g. `"600x410"`). After
+ * setting it, the container comes out 600 × 410 — equal by construction.
+ *
+ * **Spec tension:** the image-element spec says `aspect_ratio` is "the one
+ * background key an image element must not take" because it makes `hui-image`
+ * build a `.ratio` container that defeats an imposed height. That is about the
+ * **config key**. The case here is the inverse: a live camera is already in
+ * forced keep-ratio (`ratioIsForced` is true), so there is no imposed height
+ * to defeat. These are not in conflict.
+ *
+ * **Guard:** we act only while `hui-image` is demonstrably guessing — its
+ * 16:9 fallback. We read `padding-bottom / offsetWidth` from the open shadow
+ * root and proceed only when the ratio is within 0.002 of 0.5625. When Home
+ * Assistant derives the real ratio itself, that test stops matching and our
+ * value never lands — the workaround retires itself rather than overriding
+ * a proper fix. If you find yourself removing this guard or widening it,
+ * stop and report instead.
+ *
+ * **Cache:** `entity_picture` tokens rotate; the ratio does not. One
+ * measurement per camera entity per page load.
+ *
+ * **Failures:** every failure path (no `entity_picture`, load error, absent
+ * or closed shadow root, not yet connected) degrades to today's behaviour
+ * silently — no throw.
+ */
+export const applyLiveCameraRatio = async (
+  config: ImageElementConfig,
+  hass: HomeAssistant,
+  huiImage: Element,
+): Promise<void> => {
+  if (!ratioIsForced(config)) return;
+
+  // hui-image is a Lit element whose shadow DOM is not settled on the same
+  // turn as our own updated(). Measured on HA frontend 20260729.6: the
+  // container was absent at the first synchronous check; calling setConfig a
+  // second time made it apply immediately — confirming timing, not logic, was
+  // wrong. Fall back to Promise.resolve() for stubs without updateComplete.
+  await ((huiImage as unknown as { updateComplete?: Promise<boolean> }).updateComplete ??
+    Promise.resolve());
+
+  // If the element was removed while we were waiting, the layout it would read
+  // is stale and the aspectRatio it would set lands on an orphaned node.
+  if (!huiImage.isConnected) return;
+
+  // Guard: act only while hui-image is serving its 16:9 guess.
+  // In a real browser getComputedStyle returns pixels ("337.5px" for a 600 px
+  // host); in happy-dom it may return the inline percentage ("56.25%").
+  // Both forms are handled so the happy-dom tests cover the decision logic.
+  const shadow = huiImage.shadowRoot;
+  if (!shadow) return;
+  const container = shadow.querySelector(".container");
+  if (!(container instanceof HTMLElement)) return;
+
+  const pb = window.getComputedStyle(container).paddingBottom;
+  const w = container.offsetWidth;
+
+  let ratio: number | undefined;
+  if (pb.endsWith("%")) {
+    const pct = parseFloat(pb);
+    if (!Number.isNaN(pct)) ratio = pct / 100;
+  } else if (pb.endsWith("px") && w > 0) {
+    ratio = parseFloat(pb) / w;
+  }
+
+  if (ratio === undefined || Math.abs(ratio - 0.5625) >= 0.002) return;
+
+  const cameraEntity = config.camera_image;
+  if (!cameraEntity) return;
+
+  // Cache hit: entity_picture tokens rotate, the ratio does not.
+  if (liveCameraRatioCache.has(cameraEntity)) {
+    const cached = liveCameraRatioCache.get(cameraEntity);
+    if (cached !== undefined) {
+      (huiImage as unknown as { aspectRatio: string }).aspectRatio = cached;
+    }
+    return;
+  }
+
+  const stateObj = hass.states?.[cameraEntity];
+  const entityPicture = (stateObj?.attributes as Record<string, unknown> | undefined)
+    ?.entity_picture as string | undefined;
+  if (!entityPicture) return;
+
+  // Load entity_picture — the HA-published attribute, not a hand-built URL.
+  const img = new Image();
+  img.onerror = (): void => {
+    // A failed load fires no onload and throws nothing — the silent-degrade
+    // requirement already holds in practice. The explicit no-op makes the
+    // failure path visible to a reader who is auditing error handling.
+  };
+  img.onload = () => {
+    const { naturalWidth: imgW, naturalHeight: imgH } = img;
+    if (imgW > 0 && imgH > 0) {
+      const aspectRatio = `${imgW}x${imgH}`;
+      liveCameraRatioCache.set(cameraEntity, aspectRatio);
+      (huiImage as unknown as { aspectRatio: string }).aspectRatio = aspectRatio;
+    }
+  };
+  img.src = entityPicture;
+};
+
 export class PictureStudioImage extends LitElement {
   static properties = {
     _config: { state: true },
     _hass: { state: true },
     editing: { type: Boolean },
+    stretch: { type: Boolean },
   };
 
   declare _config?: ImageElementConfig;
   declare _hass?: HomeAssistant;
   declare editing: boolean;
+  /**
+   * A fit mode the gesture imposes before the config catches up.
+   *
+   * During a resize no `setConfig` fires, so an element whose box has just
+   * gained a pixel height would still render `contain` and sit letterboxed
+   * inside the selection ring until the release flipped it to `fill`. The card
+   * pushes this for the length of the gesture and drops it at the commit, which
+   * restores the derived value. `undefined` means "read the config", which is
+   * every moment outside a gesture.
+   */
+  declare stretch: boolean | undefined;
 
   constructor() {
     super();
@@ -129,19 +260,25 @@ export class PictureStudioImage extends LitElement {
         .stateFilter=${config.state_filter}
         .filter=${config.filter}
         .darkModeFilter=${config.dark_mode_filter}
-        .fitMode=${effectiveBox(config).height === undefined ? "contain" : "fill"}
+        .fitMode=${(this.stretch ?? effectiveBox(config).height !== undefined) ? "fill" : "contain"}
       ></hui-image>
     `;
   }
 
   protected updated(changed: PropertyValues): void {
     const config = this._config;
-    if (!config || !changed.has("_config")) return;
-    // The same rule as the other two kinds, on the config the kind's defaults
-    // have already been merged into: an image defaults to `none`, so a picture
-    // nobody gave an action offers no cursor.
-    this.toggleAttribute("clickable", isClickable(config));
-    bindActions(this, config);
+    if (!config) return;
+    if (changed.has("_config")) {
+      // The same rule as the other two kinds, on the config the kind's defaults
+      // have already been merged into: an image defaults to `none`, so a picture
+      // nobody gave an action offers no cursor.
+      this.toggleAttribute("clickable", isClickable(config));
+      bindActions(this, config);
+    }
+    if (this._hass) {
+      const huiImage = this.renderRoot.querySelector("hui-image");
+      if (huiImage) void applyLiveCameraRatio(config, this._hass, huiImage);
+    }
   }
 
   static styles = [
