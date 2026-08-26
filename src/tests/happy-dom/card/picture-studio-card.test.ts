@@ -1490,4 +1490,77 @@ describe("resize handles", () => {
     send("pointerup");
     expect(selections).not.toContain(undefined);
   });
+
+  it("does not rewrite the marker corner of a conditional image during a resize", async () => {
+    const { card } = await editing({
+      type: "custom:picture-studio",
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "10%" },
+          visibility: [{ condition: "state", entity: "light.a", state: "on" }],
+          config: { type: "image", width: 20, image: "/a.png" },
+        },
+      ],
+    });
+    // position {top:10, left:10} → markerCorner gives "bottom-right"
+    const wrapper = wrappers(card)[0] as HTMLElement;
+    expect(wrapper.classList.contains("marker-bottom-right")).toBe(true);
+
+    // Stub layout so the resize controller's pointerdown can start a gesture.
+    const layer = root(card).querySelector(".layer") as HTMLElement;
+    layer.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 100,
+        right: 200,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.getBoundingClientRect = () =>
+      ({
+        left: 40,
+        top: 10,
+        width: 40,
+        height: 20,
+        right: 80,
+        bottom: 30,
+        x: 40,
+        y: 10,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.setPointerCapture = () => undefined;
+    wrapper.releasePointerCapture = () => undefined;
+
+    const handle = wrapper.querySelector(".handle-top-left") as HTMLElement;
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 1,
+        clientX: 40,
+        clientY: 10,
+        button: 0,
+        bubbles: true,
+      }),
+    );
+
+    // Plant a different corner so we can detect whether _applyMarks overwrites
+    // it with the stale stored position. Without the fix, _applyMarks reads
+    // _drag.draggingIndex() — undefined during a resize — so the guard never
+    // fires and _applyMarkerCorner restores marker-bottom-right.
+    wrapper.classList.remove("marker-bottom-right");
+    wrapper.classList.add("marker-top-right");
+
+    // A selection change triggers _syncEditing → this.selected changes →
+    // updated() → _applyMarks. This is the real path that fires mid-gesture.
+    (card as unknown as { selected?: number }).selected = 1;
+    await card.updateComplete;
+
+    expect(wrapper.classList.contains("marker-top-right")).toBe(true);
+    expect(wrapper.classList.contains("marker-bottom-right")).toBe(false);
+  });
 });

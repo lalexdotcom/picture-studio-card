@@ -808,13 +808,13 @@ export class PictureStudioCard extends LitElement {
    * lane caught it at once.
    */
   private _applyMarks(items: PictureItem[]): void {
-    const dragging = this._drag.draggingIndex();
+    const liveGesture = this._gestureIndex();
     items.forEach((item, index) => {
       const wrapper = this._wrappers[index];
       if (!wrapper) return;
       if (item.type === "unknown") return;
       // A class rather than a Lit binding because the wrappers are built
-      // imperatively. It sits outside the drag guard below because a mark is
+      // imperatively. It sits outside the gesture guard below because a mark is
       // not a coordinate: nothing about it goes stale mid-gesture.
       wrapper.classList.toggle("selected", this.editing && index === this.selected);
       // "This item carries conditions", not "it is hidden right now": there is
@@ -829,9 +829,10 @@ export class PictureStudioCard extends LitElement {
       const conditional = this.preview && hasVisibility(item);
       wrapper.classList.toggle("conditional", conditional);
       // The marker's corner is guarded like a coordinate, because it is one:
-      // during a gesture the stored position is stale, and the drag controller
-      // is what keeps the corner honest, through onMove.
-      if (index === dragging) return;
+      // during a gesture the stored position is stale, and whichever controller
+      // is live (drag via onMove, resize by holding the corner steady) is what
+      // keeps the corner honest.
+      if (index === liveGesture) return;
       this._applyMarkerCorner(wrapper, conditional ? item.position : undefined);
     });
   }
