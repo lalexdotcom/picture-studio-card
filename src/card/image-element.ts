@@ -57,11 +57,23 @@ export class PictureStudioImage extends LitElement {
     _config: { state: true },
     _hass: { state: true },
     editing: { type: Boolean },
+    stretch: { type: Boolean },
   };
 
   declare _config?: ImageElementConfig;
   declare _hass?: HomeAssistant;
   declare editing: boolean;
+  /**
+   * A fit mode the gesture imposes before the config catches up.
+   *
+   * During a resize no `setConfig` fires, so an element whose box has just
+   * gained a pixel height would still render `contain` and sit letterboxed
+   * inside the selection ring until the release flipped it to `fill`. The card
+   * pushes this for the length of the gesture and drops it at the commit, which
+   * restores the derived value. `undefined` means "read the config", which is
+   * every moment outside a gesture.
+   */
+  declare stretch: boolean | undefined;
 
   constructor() {
     super();
@@ -129,7 +141,7 @@ export class PictureStudioImage extends LitElement {
         .stateFilter=${config.state_filter}
         .filter=${config.filter}
         .darkModeFilter=${config.dark_mode_filter}
-        .fitMode=${effectiveBox(config).height === undefined ? "contain" : "fill"}
+        .fitMode=${(this.stretch ?? effectiveBox(config).height !== undefined) ? "fill" : "contain"}
       ></hui-image>
     `;
   }

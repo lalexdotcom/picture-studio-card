@@ -257,6 +257,35 @@ describe("the cursor follows the declared action", () => {
   });
 });
 
+test("the gesture's stretch overrides the fit mode the config implies", async () => {
+  // During a resize no setConfig fires, so an element whose box has just gained
+  // a pixel height would still render `contain` and letterbox inside the
+  // selection ring until the release.
+  const el = await mount({ type: "image", width: 40, image: "/a.png" });
+  const fit = () => (el.renderRoot.querySelector("hui-image") as { fitMode?: string }).fitMode;
+  expect(fit()).toBe("contain");
+
+  el.stretch = true;
+  await el.updateComplete;
+  expect(fit()).toBe("fill");
+
+  el.stretch = undefined;
+  await el.updateComplete;
+  expect(fit()).toBe("contain");
+});
+
+test("a false stretch overrides a config that would fill", async () => {
+  // `?? ` and not `||`: false is a value here, not an absence.
+  const el = await mount({ type: "image", width: 40, height: 25, image: "/a.png" });
+  expect((el.renderRoot.querySelector("hui-image") as { fitMode?: string }).fitMode).toBe("fill");
+
+  el.stretch = false;
+  await el.updateComplete;
+  expect((el.renderRoot.querySelector("hui-image") as { fitMode?: string }).fitMode).toBe(
+    "contain",
+  );
+});
+
 describe("the kind's default action", () => {
   test("is merged into the stored config, so Home Assistant reads it too", async () => {
     const el = await mount({ type: "image", width: 20, image: "/a.png" });

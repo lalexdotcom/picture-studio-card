@@ -112,10 +112,12 @@ const boxed = (el: HTMLElement, left: number, top: number, width: number, height
     }) as DOMRect;
 };
 
-const setup = () => {
+const setup = (opts: { isHandle?: boolean } = {}) => {
   const root = document.createElement("div");
   const surface = document.createElement("div");
   const item = document.createElement("div");
+  const handle = document.createElement("div");
+  if (opts.isHandle) item.append(handle);
   root.append(surface, item);
   document.body.append(root);
 
@@ -148,6 +150,7 @@ const setup = () => {
     onCommit: (index, position) => commits.push({ index, position }),
     onSelect: (index) => selections.push(index),
     now: () => clock,
+    ...(opts.isHandle ? { isHandle: (target: EventTarget | null) => target === handle } : {}),
   });
   controller.attach(root);
 
@@ -169,6 +172,7 @@ const setup = () => {
   return {
     item,
     surface,
+    handle,
     commits,
     selections,
     controller,
@@ -428,5 +432,17 @@ describe("a press on the picture", () => {
     send("pointerup", 5, 5, surface);
 
     expect(selections).toEqual([undefined]);
+  });
+});
+
+describe("the handle guard", () => {
+  it("does not treat a press on a handle as a press on the picture", () => {
+    // Without the guard the handle would resolve to no wrapper, and a press on
+    // no wrapper is the deselect — so grabbing a handle would close the form.
+    const h = setup({ isHandle: true });
+    h.send("pointerdown", 30, 20, h.handle);
+    h.send("pointerup", 30, 20, h.handle);
+    expect(h.selections).toHaveLength(0);
+    expect(h.commits).toHaveLength(0);
   });
 });

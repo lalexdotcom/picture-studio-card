@@ -1406,3 +1406,88 @@ describe("image items", () => {
     expect(card.renderRoot.querySelector(IMAGE_TAG)).toBeTruthy();
   });
 });
+
+describe("resize handles", () => {
+  const HANDLED = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "element",
+        position: { top: "10%", left: "10%" },
+        config: { type: "image", width: 20, image: "/a.png" },
+      },
+      {
+        type: "element",
+        position: { top: "50%", left: "50%" },
+        config: { type: "state-icon", entity: "light.a" },
+      },
+    ],
+  };
+
+  /** Arms editing the way the dialog does: preview plus one registered editor. */
+  const editing = async (config: unknown = HANDLED) => {
+    installHelpers();
+    const card = await mountCard(config);
+    const boxes: { index: number; box: unknown }[] = [];
+    const selections: (number | undefined)[] = [];
+    let selected: number | undefined = 0;
+    releaseEditor = registerEditor({
+      patchPosition: () => undefined,
+      patchBox: (index, box) => boxes.push({ index, box }),
+      patchAnchor: () => undefined,
+      select: (index) => {
+        selected = index;
+        selections.push(index);
+        notifyEditors();
+      },
+      selectedIndex: () => selected,
+    });
+    (card as unknown as { preview: boolean }).preview = true;
+    notifyEditors();
+    await card.updateComplete;
+    await flush();
+    return { card, boxes, selections };
+  };
+
+  it("builds four handles on the image and none on the icon", async () => {
+    const { card } = await editing();
+    const [image, icon] = wrappers(card);
+    expect(image?.querySelectorAll(".handle")).toHaveLength(4);
+    expect(icon?.querySelectorAll(".handle")).toHaveLength(0);
+  });
+
+  it("names each handle's corner, which is what the hit test reads", async () => {
+    const { card } = await editing();
+    const corners = [...(wrappers(card)[0]?.querySelectorAll(".handle") ?? [])].map(
+      (h) => (h as HTMLElement).dataset.corner,
+    );
+    expect(corners).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
+  });
+
+  it("shows them only on the selected item", async () => {
+    // The rule is CSS, so assert the rule rather than a computed style —
+    // happy-dom does no layout and `cssRules` is what this file already uses to
+    // check a declaration exists.
+    await editing();
+    expect(
+      cssRules(PictureStudioCard.styles).get(".editing .item.selected > .handle"),
+    ).toBeTruthy();
+  });
+
+  it("does not clear the selection when a handle is pressed", async () => {
+    // Without `isHandle`, the press would resolve to no wrapper — and a press on
+    // no wrapper is the deselect, so grabbing a handle would close the form.
+    const { card, selections } = await editing();
+    const handle = wrappers(card)[0]?.querySelector(".handle-top-left") as HTMLElement;
+    handle.setPointerCapture = () => undefined;
+    handle.releasePointerCapture = () => undefined;
+    const send = (type: string) =>
+      handle.dispatchEvent(
+        new PointerEvent(type, { pointerId: 1, clientX: 0, clientY: 0, button: 0, bubbles: true }),
+      );
+    send("pointerdown");
+    send("pointerup");
+    expect(selections).not.toContain(undefined);
+  });
+});

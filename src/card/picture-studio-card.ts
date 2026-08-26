@@ -18,14 +18,17 @@ import {
 } from "../config";
 import { effectiveBox, imageBoxStyle } from "../image-box";
 import "./card-heading";
+import { isResizableKind } from "../element-kinds";
 import {
   type Anchor,
+  DEFAULT_POSITION,
   type MarkerCorner,
   markerCorner,
   type Position,
   positionStyle,
   reanchor,
 } from "../position";
+import type { Corner } from "../resize-box";
 import type {
   BadgeConfig,
   HomeAssistant,
@@ -34,6 +37,7 @@ import type {
   LovelaceGridOptions,
 } from "../types";
 import { createDragController } from "./drag-layer";
+import { createResizeController, type ResizeHit } from "./resize-layer";
 
 /**
  * The slice of `hui-card` a probe uses. Declared rather than imported: it is
@@ -47,6 +51,9 @@ type ProbeElement = HTMLElement & {
 };
 
 const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+
+/** The four corners a handle sits on, in DOM order. */
+const HANDLE_CORNERS: Corner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 /** Home Assistant's own error badge, the one its detail dialog dumps origConfig from. */
 const ERROR_BADGE_TAG = "hui-error-badge";
@@ -122,6 +129,7 @@ export class PictureStudioCard extends LitElement {
   private _unsubscribe?: () => void;
 
   private _drag = createDragController({
+    isHandle: (target) => this._hitHandle(target) !== undefined,
     getIndexedWrapper: (target) => {
       const wrapper = (target as HTMLElement | null)?.closest?.(".item") as HTMLElement | null;
       const index = wrapper?.dataset.index;
@@ -146,6 +154,30 @@ export class PictureStudioCard extends LitElement {
       }
     },
     onSelect: (index) => activeEditor()?.select(index, "picture"),
+  });
+
+  private _resize = createResizeController({
+    getHandle: (target) => this._hitHandle(target),
+    getSurface: () => this.renderRoot.querySelector(".layer"),
+    getAnchor: (index) => {
+      const item = this._config?.items[index];
+      if (!item || item.type === "unknown") return "auto";
+      return item.anchor ?? "auto";
+    },
+    getPosition: (index) => {
+      const item = this._config?.items[index];
+      return item && item.type !== "unknown" ? item.position : { ...DEFAULT_POSITION };
+    },
+    getConfig: (index) => {
+      const item = this._config?.items[index];
+      if (!item || item.type !== "element" || item.config.type !== "image") return undefined;
+      return item.config;
+    },
+    onCommit: (index, box, position) => activeEditor()?.patchBox(index, box, position),
+    onStretch: (index, stretched) => {
+      const child = this._elements[index] as (HTMLElement & { stretch?: boolean }) | undefined;
+      if (child) child.stretch = stretched;
+    },
   });
 
   constructor() {
@@ -291,8 +323,10 @@ export class PictureStudioCard extends LitElement {
     const root = this.hasUpdated ? this.renderRoot.querySelector(".root") : null;
     if (this.editing && root instanceof HTMLElement) {
       this._drag.attach(root);
+      this._resize.attach(root);
     } else {
       this._drag.detach();
+      this._resize.detach();
     }
 
     // Registered on the same condition the drag is armed on, so the editor only
@@ -515,6 +549,19 @@ export class PictureStudioCard extends LitElement {
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
 
+        // Built once and shown by CSS on the selected item, rather than added
+        // and removed as the selection moves: the wrapper's box is what the
+        // gesture measures, and DOM churn under the pointer is how a gesture
+        // loses its target.
+        if (item.type === "element" && isResizableKind(item.config.type)) {
+          for (const corner of HANDLE_CORNERS) {
+            const handle = document.createElement("div");
+            handle.className = `handle handle-${corner}`;
+            handle.dataset.corner = corner;
+            wrapper.append(handle);
+          }
+        }
+
         const probe = this._createProbe(item);
         if (probe) layer.append(probe);
         layer.append(wrapper);
@@ -530,6 +577,11 @@ export class PictureStudioCard extends LitElement {
         const child = this._elements[index];
         if (!child) return;
         child.setConfig(item.config as unknown as BadgeConfig);
+        // The config the gesture committed has landed, so the element derives
+        // its own fit mode again. Left in place, a stale override would outlive
+        // a later change made through the form — the element survives a config
+        // change, only its config is replaced.
+        (child as unknown as { stretch?: boolean }).stretch = undefined;
         if (this._hass) child.hass = this._hass;
 
         const probe = this._probes[index];
@@ -786,16 +838,17 @@ export class PictureStudioCard extends LitElement {
 
   private _applyPositions(items: PictureItem[]): void {
     this._applyMarks(items);
-    const dragging = this._drag.draggingIndex();
+    const dragging = this._gestureIndex();
     items.forEach((item, index) => {
       const wrapper = this._wrappers[index];
       if (!wrapper) return;
       if (item.type === "unknown") return;
-      // Leave the badge under the cursor alone: its styles are live pixels
-      // managed by the drag controller. Writing the stored config position over
-      // them would jump the badge back toward its pre-drag location on every
-      // hass tick. Once the drag ends, the controller restores the derived
-      // style and the next _applyPositions then matches it exactly — no flash.
+      // Leave the item under the cursor alone: its styles are live pixels
+      // managed by the active gesture controller (drag or resize). Writing the
+      // stored config position over them would jump the item back toward its
+      // pre-gesture location on every hass tick. Once the gesture ends, the
+      // controller restores the derived style and the next _applyPositions then
+      // matches it exactly — no flash.
       if (index === dragging) return;
 
       const style = positionStyle(item.position, item.anchor);
@@ -833,6 +886,34 @@ export class PictureStudioCard extends LitElement {
   private _applyMarkerCorner(wrapper: HTMLElement, position: Position | undefined): void {
     const corner = position ? markerCorner(position) : undefined;
     for (const c of MARKER_CORNERS) wrapper.classList.toggle(`marker-${c}`, c === corner);
+  }
+
+  /**
+   * What a pointer landed on: a resize handle, an item, or the picture.
+   *
+   * One owner, consulted by both gesture controllers. Two copies of this — one
+   * per controller — is the shape that eventually disagrees, and the
+   * disagreement would be invisible because each is correct on its own.
+   */
+  private _hitHandle(target: EventTarget | null): ResizeHit | undefined {
+    const handle = (target as HTMLElement | null)?.closest?.(".handle") as HTMLElement | null;
+    const corner = handle?.dataset.corner as Corner | undefined;
+    const wrapper = handle?.closest(".item") as HTMLElement | null;
+    const index = wrapper?.dataset.index;
+    return handle && corner && wrapper && index !== undefined
+      ? { element: wrapper, index: Number(index), corner }
+      : undefined;
+  }
+
+  /**
+   * The item under a live gesture, whichever gesture it is.
+   *
+   * `_applyPositions` must leave that wrapper alone: its styles are raw pixels
+   * managed by a controller, and writing the stored config over them would jump
+   * the item back on every hass tick. One question, not one flag per controller.
+   */
+  private _gestureIndex(): number | undefined {
+    return this._drag.draggingIndex() ?? this._resize.resizingIndex();
   }
 
   /**
@@ -1123,6 +1204,48 @@ export class PictureStudioCard extends LitElement {
     }
     .editing .item > * {
       pointer-events: none;
+    }
+    /* The handles exist on every resizable item and are shown only on the
+       selected one. Absolutely positioned, so they add nothing to the wrapper's
+       box — getBoundingClientRect is what both gestures measure, and the
+       condition marker's comment above makes the same point for the same
+       reason. */
+    .handle {
+      display: none;
+    }
+    .editing .item.selected > .handle {
+      display: block;
+      position: absolute;
+      width: var(--psc-handle-size, 10px);
+      height: var(--psc-handle-size, 10px);
+      box-sizing: border-box;
+      background: var(--card-background-color, #fff);
+      border: 2px solid var(--primary-color);
+      border-radius: 2px;
+      /* Beats \`.editing .item > *\`, which mutes the real children so a badge
+         never sees a click. A handle is the exception: it is the target. */
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .editing .item.selected > .handle-top-left {
+      top: calc(var(--psc-handle-size, 10px) / -2);
+      left: calc(var(--psc-handle-size, 10px) / -2);
+      cursor: nwse-resize;
+    }
+    .editing .item.selected > .handle-top-right {
+      top: calc(var(--psc-handle-size, 10px) / -2);
+      right: calc(var(--psc-handle-size, 10px) / -2);
+      cursor: nesw-resize;
+    }
+    .editing .item.selected > .handle-bottom-left {
+      bottom: calc(var(--psc-handle-size, 10px) / -2);
+      left: calc(var(--psc-handle-size, 10px) / -2);
+      cursor: nesw-resize;
+    }
+    .editing .item.selected > .handle-bottom-right {
+      bottom: calc(var(--psc-handle-size, 10px) / -2);
+      right: calc(var(--psc-handle-size, 10px) / -2);
+      cursor: nwse-resize;
     }
   `;
 }
