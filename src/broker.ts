@@ -1,3 +1,4 @@
+import type { ImageBox } from "./image-box";
 import type { Anchor, Position } from "./position";
 
 /**
@@ -27,6 +28,15 @@ export type SelectOrigin = "list" | "picture";
  */
 export interface EditorChannel {
   patchPosition(index: number, position: Position): void;
+  /**
+   * An image element's box, and — when the gesture moved it — its position, in
+   * **one** write. `patchAnchor`'s comment says why two would not do: they would
+   * render the new box against the old coordinates for a frame.
+   *
+   * `box` carries `height` by its presence. Omitting the key is what keep-ratio
+   * *is*, so this must never write `height: undefined`.
+   */
+  patchBox(index: number, box: ImageBox, position?: Position): void;
   patchAnchor(index: number, anchor: Anchor): void;
   /**
    * Open a badge's own form, the same way the pencil in the list does, or clear

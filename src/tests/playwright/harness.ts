@@ -4,6 +4,7 @@ import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
 import { PictureStudioStateLabel } from "../../card/state-label-element";
 import { CARD_TAG, ICON_TAG, IMAGE_TAG, LABEL_TAG } from "../../config";
+import type { ImageBox } from "../../image-box";
 import type { Anchor, Position } from "../../position";
 
 /**
@@ -227,6 +228,7 @@ const neutralisePointerCapture = (): void => {
 /** What the drag sent to the editor, which is the card's only way out. */
 export interface EditorSpy {
   commits: { index: number; position: Position }[];
+  boxes: { index: number; box: ImageBox; position?: Position }[];
   selections: (number | undefined)[];
   anchors: { index: number; anchor: Anchor }[];
   release(): void;
@@ -240,6 +242,7 @@ export interface EditorSpy {
 export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> => {
   const spy: EditorSpy = {
     commits: [],
+    boxes: [],
     selections: [],
     anchors: [],
     release: () => undefined,
@@ -247,6 +250,7 @@ export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> 
   let selected: number | undefined;
   const off = registerEditor({
     patchPosition: (index, position) => spy.commits.push({ index, position }),
+    patchBox: (index, box, position) => spy.boxes.push({ index, box, position }),
     patchAnchor: (index, anchor) => spy.anchors.push({ index, anchor }),
     select: (index) => {
       selected = index;

@@ -3,6 +3,7 @@ import { registerCard } from "../../../broker";
 import {
   CARD_TYPE,
   EDITOR_TAG,
+  type ElementItem,
   HEADING_SECTION_TAG,
   LIST_TAG,
   type PictureStudioConfig,
@@ -1312,5 +1313,103 @@ describe("which container moves, and on which trigger", () => {
     await el.updateComplete;
     expect(form.scrollTop).toBe(800);
     expect(dialog.scrollTop).toBe(0);
+  });
+});
+
+describe("patchBox", () => {
+  const imageConfig = (
+    box: Record<string, unknown> = { width: 20 },
+    extra: Record<string, unknown> = {},
+  ) =>
+    ({
+      type: "custom:picture-studio",
+      image: "/local/plan.png",
+      items: [
+        {
+          type: "element",
+          position: { top: "10%", left: "10%" },
+          config: { type: "image", ...box, ...extra },
+        },
+      ],
+    }) as unknown as PictureStudioConfig;
+
+  const mountImage = async (config = imageConfig()) => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(config);
+    el.hass = { localize: () => "", states: {} } as never;
+    const emitted: PictureStudioConfig[] = [];
+    el.addEventListener("config-changed", (ev) => {
+      emitted.push((ev as CustomEvent<{ config: PictureStudioConfig }>).detail.config);
+    });
+    document.body.append(el);
+    await el.updateComplete;
+    return { el, emitted, last: () => emitted.at(-1) as PictureStudioConfig };
+  };
+
+  const firstItem = (config: PictureStudioConfig) => config.items[0] as ElementItem;
+
+  it("writes the width into the item's own config", async () => {
+    const h = await mountImage();
+    h.el.patchBox(0, { width: 42 });
+    expect(firstItem(h.last()).config).toMatchObject({ width: 42 });
+  });
+
+  it("omits height rather than setting it to undefined, so keep-ratio survives", async () => {
+    // `"height" in config` is the predicate normalizeImageBox, effectiveBox and
+    // the form all read. A key present with an undefined value reads as a
+    // height that is there and is not a number.
+    const h = await mountImage();
+    h.el.patchBox(0, { width: 42 });
+    expect("height" in firstItem(h.last()).config).toBe(false);
+  });
+
+  it("removes a height that was there when the new box has none", async () => {
+    const h = await mountImage(imageConfig({ width: 20, height: 30 }));
+    h.el.patchBox(0, { width: 42 });
+    expect("height" in firstItem(h.last()).config).toBe(false);
+  });
+
+  it("writes box and position in a single commit", async () => {
+    const h = await mountImage();
+    const before = h.emitted.length;
+    h.el.patchBox(0, { width: 42, height: 21 }, { left: 10, top: 20 });
+    expect(h.emitted.length - before).toBe(1);
+    expect(firstItem(h.last()).config).toMatchObject({ width: 42, height: 21 });
+    // _reemit passes the config through storedConfig, which serialises Position
+    // numbers to StoredPosition strings — "10%" not 10.
+    expect(firstItem(h.last()).position).toEqual({ left: "10%", top: "20%" });
+  });
+
+  it("leaves the position alone when the gesture did not move the box", async () => {
+    const h = await mountImage();
+    h.el.patchBox(0, { width: 42 });
+    // _reemit passes the config through storedConfig, which serialises Position
+    // numbers to StoredPosition strings — "10%" not 10.
+    expect(firstItem(h.last()).position).toEqual({ left: "10%", top: "10%" });
+  });
+
+  it("leaves every other key of the config untouched", async () => {
+    const h = await mountImage(
+      imageConfig({ width: 20 }, { image: "/a.png", tap_action: { action: "none" } }),
+    );
+    h.el.patchBox(0, { width: 42 });
+    expect(firstItem(h.last()).config).toMatchObject({
+      image: "/a.png",
+      tap_action: { action: "none" },
+    });
+  });
+
+  it("ignores an item that is not a readable image", async () => {
+    // `normalizeConfig` turns an unrecognised element type into an UnknownItem,
+    // whose raw config is written back untouched. No handle can exist on one —
+    // it has no wrapper — so this guard is a floor, like patchPosition's.
+    const h = await mountImage({
+      type: "custom:picture-studio",
+      image: "/local/plan.png",
+      items: [{ type: "element", position: { top: "0%", left: "0%" }, config: { type: "nope" } }],
+    } as unknown as PictureStudioConfig);
+    const before = h.emitted.length;
+    h.el.patchBox(0, { width: 42 });
+    expect(h.emitted.length).toBe(before);
   });
 });
