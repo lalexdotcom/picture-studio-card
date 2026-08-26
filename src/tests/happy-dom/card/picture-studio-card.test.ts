@@ -1626,7 +1626,8 @@ describe("resize handles", () => {
     card.remove();
 
     // A Shift keydown would call apply() and write a pixel height if the
-    // listener were still registered. Without the fix, height changes to "0px".
+    // listener were still registered. Measured without the fix: the height
+    // changes from "" to "24px", the floor apply() clamps a detached box to.
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }));
 
     expect(wrapper.style.height).toBe(heightAfterGestureStart);
