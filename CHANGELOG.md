@@ -4,6 +4,12 @@
 
 ### Added
 
+- Images can be resized directly on the picture: select one and drag any of its
+  four corners. The proportions are kept as you drag — hold **Shift** to set the
+  width and the height independently, and **Alt** to resize around the item's
+  anchor instead of its opposite corner. Breaking the proportions is what makes
+  the picture stretch to fill its box; while they are kept, it keeps its own
+  shape.
 - A new item type, **Image**: a picture placed on the picture. It takes an image
   file, a different one for dark themes, a camera or an image entity, images that
   change with an entity's state, and CSS filters — the same choices the card's

@@ -291,6 +291,9 @@ filters. `aspect_ratio` is the one background setting an Image item does not tak
 because it has a size of its own: `width` (a percentage of the card's background)
 and, optionally, `height` (also a percentage). When `height` is absent the image
 keeps its natural proportions; set both to stretch it to an arbitrary shape.
+Both can be set by dragging any corner of the image in the card editor; drag
+without **Shift** and only `width` is saved — the same as leaving `height` out,
+which keeps the picture's own proportions.
 
 ```yaml
   - type: element
