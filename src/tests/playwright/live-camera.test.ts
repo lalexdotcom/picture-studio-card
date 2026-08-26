@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "@rstest/core";
-import { cleanup, flush, mountCard, rectInLayer, wrappers } from "./harness";
+import { cleanup, mountCard, rectInLayer, wrappers } from "./harness";
 
 afterEach(cleanup);
 
@@ -61,24 +61,26 @@ const cameraCard = (cameraW: number, cameraH: number): { config: unknown; hass: 
  * at `padding-bottom: 56.25 %` (16:9), and for a 600 × 410 camera the wrapper
  * is 56.25 % of its width tall — off by 12 pp from the real 68.33 %.
  *
- * RED: run `pnpm test src/tests/playwright/live-camera.test.ts` against the
- * code before the fix; the assertion fires because `rect.height / rect.width`
- * is 0.5625 rather than 0.6833.
+ * RED evidence (without the async fix): hass is passed to mountCard so the
+ * very first render of PictureStudioImage — when hui-image's shadow DOM is not
+ * yet settled — is the one applyLiveCameraRatio must handle. HuiImageStub
+ * mirrors this timing: its shadow DOM is built in a microtask (updateComplete),
+ * not in the constructor. Without `await hui-image.updateComplete` the
+ * synchronous check in updated() finds no container and the ratio is never
+ * applied: rect.height / rect.width ≈ 0.5625 ≠ 0.6833.
  */
 it("a live-camera item's wrapper ends up at the camera's real ratio, not 16:9", async () => {
   const CAMERA_W = 600;
   const CAMERA_H = 410;
   const { config, hass } = cameraCard(CAMERA_W, CAMERA_H);
 
-  const card = await mountCard(config);
-
-  // Deliver hass — the card propagates it to every item element, which triggers
-  // PictureStudioImage to re-render and call applyLiveCameraRatio.
-  (card as unknown as { hass: unknown }).hass = hass;
-  await card.updateComplete;
-  // Settle Lit's async queue; then give the browser time to fire the Image onload
-  // for the entity_picture data URL (which resolves as a macrotask).
-  await flush();
+  // hass is passed so the first render sees it and applyLiveCameraRatio runs
+  // while hui-image's shadow DOM is still settling (updateComplete pending).
+  // That is the timing path the fix addresses.
+  const card = await mountCard(config, hass);
+  // mountCard's flush() includes setTimeout(0), but that macrotask was
+  // registered before img.src was set (during applyLiveCameraRatio's async
+  // continuation). Give the browser one more turn to fire Image.onload.
   await new Promise<void>((r) => setTimeout(r, 50));
 
   const rect = rectInLayer(card, wrappers(card)[0] as Element);

@@ -74,27 +74,43 @@ export class StubHaCard extends HTMLElement {
  * be asserted against.
  *
  * The ratio comes from the image path by harness convention: a path containing
- * `-<w>x<h>` (e.g. `/banner-1x10.png`) uses that ratio; anything else is 1:1.
- * That lets one test drive a square and another a 1:10 banner without the
- * production element learning a test-only property.
+ * `-<w>x<h>` (e.g. `/banner-1x10.png`) uses that ratio; anything else keeps the
+ * 16:9 default (the same fallback the real hui-image applies). That lets one test
+ * drive a wide image and another a tall banner without the production element
+ * learning a test-only property.
  */
 export class HuiImageStub extends HTMLElement {
   #image: string | undefined;
-  #container: HTMLElement;
+  #container: HTMLElement | undefined;
 
   /**
    * Mirrors the real `hui-image`'s shadow-root `.container` behaviour, measured
    * on HA frontend 20260729.6:
    *   - When no `aspectRatio` is given, hui-image hard-codes 56.25 % padding-bottom
-   *     (16:9). The camera serves 600 × 410, overflowing the box by 72.5 px.
+   *     (16:9). The camera served 600 × 410, overflowing the box by 72.5 px.
    *   - When `aspectRatio = "WxH"` is set, the padding-bottom becomes (h/w)×100 %.
    *
    * The guard in `applyLiveCameraRatio` reads `padding-bottom / offsetWidth` from
    * this container. The browser-lane ratio assertion reads the resulting layout
    * height. Modelled from a real browser; not invented.
+   *
+   * **Async shadow DOM** — measured on HA frontend 20260729.6:
+   * `PictureStudioImage.updated()` fires before `hui-image` has settled its own
+   * shadow DOM on the first render. A synchronous stub cannot reproduce this at
+   * all: the container appears in a microtask (`updateComplete`), not in the
+   * constructor. Images whose path carries no `-WxH` suffix keep 56.25 % (the
+   * real hui-image default); the old stub used 1:1 for those, which was an
+   * artefact of its simplified logic.
    */
-  constructor() {
-    super();
+  readonly updateComplete: Promise<boolean> = new Promise<boolean>((resolve) => {
+    queueMicrotask(() => {
+      this.#buildShadow();
+      resolve(true);
+    });
+  });
+
+  #buildShadow(): void {
+    if (this.shadowRoot) return;
     const shadow = this.attachShadow({ mode: "open" });
     const style = document.createElement("style");
     // width: 100% ensures padding-bottom resolves against the host's width —
@@ -105,6 +121,8 @@ export class HuiImageStub extends HTMLElement {
     // 16:9 fallback: hui-image's hard-coded default before any ratio is derived.
     this.#container.style.paddingBottom = "56.25%";
     shadow.append(style, this.#container);
+    // Apply any ratio that was set via .image before the shadow was ready.
+    this.#applyRatioFromImage();
   }
 
   /** The card passes the resolved image path as a Lit property. */
@@ -118,10 +136,16 @@ export class HuiImageStub extends HTMLElement {
    * Setting it switches the container's padding-bottom from the 16:9 default
    * to the supplied ratio — exactly what the real hui-image does once
    * `parseAspectRatio` resolves the string.
+   *
+   * Called only after `await hui-image.updateComplete` in `applyLiveCameraRatio`,
+   * so `#container` is always defined by the time this setter fires in practice.
+   * The early-return guard covers any future caller that does not await.
    */
   set aspectRatio(value: string | undefined) {
+    const container = this.#container;
+    if (!container) return;
     if (!value) {
-      this.#container.style.paddingBottom = "56.25%";
+      container.style.paddingBottom = "56.25%";
       return;
     }
     const parts = value.split("x");
@@ -130,19 +154,18 @@ export class HuiImageStub extends HTMLElement {
     const w = wStr !== undefined ? parseFloat(wStr) : 0;
     const h = hStr !== undefined ? parseFloat(hStr) : 0;
     if (w > 0 && h > 0) {
-      this.#container.style.paddingBottom = `${(100 * h) / w}%`;
+      container.style.paddingBottom = `${(100 * h) / w}%`;
     }
   }
 
   connectedCallback(): void {
     this.style.display = "block";
-    this.#applyRatioFromImage();
   }
 
   #applyRatioFromImage(): void {
     // If the image path has no ratio suffix, keep the current padding-bottom
     // (the 16:9 default for cameras without a static image, which is correct).
-    if (!this.#image) return;
+    if (!this.#image || !this.#container) return;
     const match = /[-](\d+)x(\d+)/.exec(this.#image);
     if (!match) return;
     const wStr = match[1];
@@ -199,7 +222,7 @@ const releases: (() => void)[] = [];
  * whatever holds it. Pinning that width is what makes the layer exactly
  * LAYER.width and the percentages exact.
  */
-export const mountCard = async (config: unknown): Promise<PictureStudioCard> => {
+export const mountCard = async (config: unknown, hass?: unknown): Promise<PictureStudioCard> => {
   installHelpers();
   const host = document.createElement("div");
   host.style.width = `${LAYER.width}px`;
@@ -211,6 +234,11 @@ export const mountCard = async (config: unknown): Promise<PictureStudioCard> => 
 
   const card = document.createElement(CARD_TAG) as PictureStudioCard;
   card.setConfig(config);
+  // Set hass before appending so the card's first render sees it and propagates
+  // it to items. This exercises the first-render timing path: hui-image is
+  // freshly created, its shadow DOM is not yet settled (updateComplete resolves
+  // one microtask later), and applyLiveCameraRatio must await it to act correctly.
+  if (hass !== undefined) (card as unknown as { hass: unknown }).hass = hass;
   host.append(card);
   await card.updateComplete;
   await flush();

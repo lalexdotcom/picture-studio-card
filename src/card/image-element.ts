@@ -95,12 +95,24 @@ export const liveCameraRatioCache = new Map<string, string>();
  * or closed shadow root, not yet connected) degrades to today's behaviour
  * silently — no throw.
  */
-export const applyLiveCameraRatio = (
+export const applyLiveCameraRatio = async (
   config: ImageElementConfig,
   hass: HomeAssistant,
   huiImage: Element,
-): void => {
+): Promise<void> => {
   if (!ratioIsForced(config)) return;
+
+  // hui-image is a Lit element whose shadow DOM is not settled on the same
+  // turn as our own updated(). Measured on HA frontend 20260729.6: the
+  // container was absent at the first synchronous check; calling setConfig a
+  // second time made it apply immediately — confirming timing, not logic, was
+  // wrong. Fall back to Promise.resolve() for stubs without updateComplete.
+  await ((huiImage as unknown as { updateComplete?: Promise<boolean> }).updateComplete ??
+    Promise.resolve());
+
+  // If the element was removed while we were waiting, the layout it would read
+  // is stale and the aspectRatio it would set lands on an orphaned node.
+  if (!huiImage.isConnected) return;
 
   // Guard: act only while hui-image is serving its 16:9 guess.
   // In a real browser getComputedStyle returns pixels ("337.5px" for a 600 px
@@ -143,6 +155,11 @@ export const applyLiveCameraRatio = (
 
   // Load entity_picture — the HA-published attribute, not a hand-built URL.
   const img = new Image();
+  img.onerror = (): void => {
+    // A failed load fires no onload and throws nothing — the silent-degrade
+    // requirement already holds in practice. The explicit no-op makes the
+    // failure path visible to a reader who is auditing error handling.
+  };
   img.onload = () => {
     const { naturalWidth: imgW, naturalHeight: imgH } = img;
     if (imgW > 0 && imgH > 0) {
@@ -260,7 +277,7 @@ export class PictureStudioImage extends LitElement {
     }
     if (this._hass) {
       const huiImage = this.renderRoot.querySelector("hui-image");
-      if (huiImage) applyLiveCameraRatio(config, this._hass, huiImage);
+      if (huiImage) void applyLiveCameraRatio(config, this._hass, huiImage);
     }
   }
 
