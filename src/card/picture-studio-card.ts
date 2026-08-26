@@ -373,6 +373,13 @@ export class PictureStudioCard extends LitElement {
     this._unregisterCard?.();
     this._unregisterCard = undefined;
     this._drag.detach();
+    // Must detach the resize controller explicitly: its pointer listeners live on
+    // `.root` (which dies with the shadow root) but `keydown`/`keyup` are
+    // registered on `window`, which does not. Home Assistant rebuilds the card
+    // element on every config commit, so without this call an edit session
+    // accumulates two orphaned window listeners per commit, each holding a
+    // reference to a dead element's state.
+    this._resize.detach();
   }
 
   protected updated(changed: PropertyValues): void {

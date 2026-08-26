@@ -14,6 +14,12 @@ import {
 afterEach(cleanup);
 
 /**
+ * RED verification: each of the four tests below was run against a targeted
+ * break to confirm it would fail without the mechanism it guards. Done
+ * 2026-08-26; see final-fix-report.md for the exact failure output of each.
+ */
+
+/**
  * One image element, at a known box. `image` carries the `-<w>x<h>` suffix the
  * harness's `HuiImageStub` reads to apply an aspect ratio — which is what makes
  * a keep-ratio assertion precise without touching production code.

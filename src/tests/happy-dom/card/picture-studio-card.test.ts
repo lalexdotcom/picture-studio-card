@@ -1563,4 +1563,72 @@ describe("resize handles", () => {
     expect(wrapper.classList.contains("marker-top-right")).toBe(true);
     expect(wrapper.classList.contains("marker-bottom-right")).toBe(false);
   });
+
+  it("detaches window key listeners when removed from the DOM", async () => {
+    // Without `_resize.detach()` in `disconnectedCallback`, the resize
+    // controller's `keydown`/`keyup` listeners survive on `window` after the
+    // card element is removed. Home Assistant rebuilds the card on every config
+    // commit, so each edit session accumulates two orphaned window listeners per
+    // commit — each one holds a reference to a dead element's state.
+    //
+    // Observable side effect: if a gesture is in progress when the card is
+    // removed and the listener is NOT cleaned up, a subsequent Shift keydown
+    // calls apply() and writes a pixel height onto the wrapper element. With the
+    // fix, detach() removes the listener (and clears state), so apply() never
+    // runs and the height stays as the gesture left it.
+    const { card } = await editing();
+    const wrapper = wrappers(card)[0] as HTMLElement;
+
+    // Stub layout so onPointerDown can set up gesture state.
+    const layer = root(card).querySelector(".layer") as HTMLElement;
+    layer.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 100,
+        right: 200,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.getBoundingClientRect = () =>
+      ({
+        left: 40,
+        top: 10,
+        width: 40,
+        height: 20,
+        right: 80,
+        bottom: 30,
+        x: 40,
+        y: 10,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    wrapper.setPointerCapture = () => undefined;
+    wrapper.releasePointerCapture = () => undefined;
+
+    // Start a resize gesture (no height in config → keep-ratio mode → height "").
+    const handle = wrapper.querySelector(".handle-bottom-right") as HTMLElement;
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 1,
+        clientX: 80,
+        clientY: 30,
+        button: 0,
+        bubbles: true,
+      }),
+    );
+    const heightAfterGestureStart = wrapper.style.height;
+
+    // Remove the card. disconnectedCallback must call _resize.detach(), which
+    // removes the keydown/keyup listeners from window and clears gesture state.
+    card.remove();
+
+    // A Shift keydown would call apply() and write a pixel height if the
+    // listener were still registered. Without the fix, height changes to "0px".
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }));
+
+    expect(wrapper.style.height).toBe(heightAfterGestureStart);
+  });
 });

@@ -293,7 +293,8 @@ and, optionally, `height` (also a percentage). When `height` is absent the image
 keeps its natural proportions; set both to stretch it to an arbitrary shape.
 Both can be set by dragging any corner of the image in the card editor; drag
 without **Shift** and only `width` is saved — the same as leaving `height` out,
-which keeps the picture's own proportions.
+which keeps the picture's own proportions. Hold **Alt** to resize around the
+item's anchor instead of holding the opposite corner fixed.
 
 ```yaml
   - type: element
