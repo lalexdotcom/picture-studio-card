@@ -8,7 +8,14 @@ if (!customElements.get(IMAGE_TAG)) customElements.define(IMAGE_TAG, PictureStud
 // Minimal hui-image stub: just needs to exist in the registry and accept property
 // assignments so Lit can forward them. The assertions query it by querySelector
 // and then read the properties back.
-class HuiImageStub extends HTMLElement {}
+class HuiImageStub extends HTMLElement {
+  constructor() {
+    super();
+    // An open shadow root is required so PictureStudioImage.updated() can
+    // append the stream-fix <style> and the test can verify it landed there.
+    this.attachShadow({ mode: "open" });
+  }
+}
 if (!customElements.get("hui-image")) customElements.define("hui-image", HuiImageStub);
 
 const hass = (states: Record<string, unknown> = {}): HomeAssistant =>
@@ -201,6 +208,85 @@ describe("a live camera forces the fit", () => {
     expect((el.renderRoot.querySelector("hui-image") as { fitMode?: string }).fitMode).toBe(
       "contain",
     );
+  });
+});
+
+describe("the live-camera stream fix", () => {
+  // happy-dom performs no layout, so the contract under test is the injection,
+  // not its visual effect. Each case reaches into hui-image's shadow root and
+  // checks whether the marker style is present (or absent).
+
+  test("a live camera gets the stream-fix rule injected into hui-image's shadow root", async () => {
+    const el = await mount({
+      type: "image",
+      camera_image: "camera.hall",
+      camera_view: "live",
+      width: 40,
+    });
+    const hui = el.renderRoot.querySelector("hui-image");
+    const style = hui?.shadowRoot?.querySelector("style[data-ps-stream-fix]");
+    expect(style).not.toBeNull();
+    expect(style?.textContent).toContain("ha-camera-stream");
+  });
+
+  test("an ordinary image and a camera with camera_view: auto get no injection", async () => {
+    const plain = await mount({ type: "image", image: "/a.png", width: 40 });
+    expect(
+      plain.renderRoot
+        .querySelector("hui-image")
+        ?.shadowRoot?.querySelector("style[data-ps-stream-fix]"),
+    ).toBeNull();
+
+    const auto = await mount({
+      type: "image",
+      camera_image: "camera.hall",
+      camera_view: "auto",
+      width: 40,
+    });
+    expect(
+      auto.renderRoot
+        .querySelector("hui-image")
+        ?.shadowRoot?.querySelector("style[data-ps-stream-fix]"),
+    ).toBeNull();
+  });
+
+  test("switching camera_view from auto to live injects exactly once", async () => {
+    const el = await mount({
+      type: "image",
+      camera_image: "camera.hall",
+      camera_view: "auto",
+      width: 40,
+    });
+    const hui = () => el.renderRoot.querySelector("hui-image");
+    expect(hui()?.shadowRoot?.querySelector("style[data-ps-stream-fix]")).toBeNull();
+
+    el.setConfig({ type: "image", camera_image: "camera.hall", camera_view: "live", width: 40 });
+    await el.updateComplete;
+    expect(hui()?.shadowRoot?.querySelectorAll("style[data-ps-stream-fix]").length).toBe(1);
+
+    // A second setConfig with the same live config must not append a second copy.
+    el.setConfig({ type: "image", camera_image: "camera.hall", camera_view: "live", width: 40 });
+    await el.updateComplete;
+    expect(hui()?.shadowRoot?.querySelectorAll("style[data-ps-stream-fix]").length).toBe(1);
+  });
+
+  test("a hui-image with no shadow root does not throw", async () => {
+    // Simulate the day Home Assistant closes its shadow root by overriding the
+    // getter on the specific stub instance after the initial mount.
+    const el = await mount({
+      type: "image",
+      camera_image: "camera.hall",
+      camera_view: "live",
+      width: 40,
+    });
+    const hui = el.renderRoot.querySelector("hui-image") as HTMLElement;
+    Object.defineProperty(hui, "shadowRoot", { get: () => null, configurable: true });
+
+    // A config change triggers updated(), which attempts injection against the
+    // now-null shadow root. It must be a silent no-op.
+    el.setConfig({ type: "image", camera_image: "camera.hall", camera_view: "live", width: 40 });
+    await el.updateComplete;
+    // Reaching here without an unhandled exception is the assertion.
   });
 });
 

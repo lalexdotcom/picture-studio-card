@@ -19,6 +19,12 @@
   yours to set, which stretches it. Tap, hold and double-tap actions are yours to
   set too: unlike an icon, an image does nothing until you ask it to.
 
+### Fixed
+
+- A camera shown live no longer draws outside the box the editor traces around
+  it. The selection outline, the hover halo and the resize handles now match what
+  you see on screen.
+
 ## 1.5.3 — 2026-08-23
 
 ### Fixed
