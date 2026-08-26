@@ -80,13 +80,6 @@ export class StubHaCard extends HTMLElement {
  */
 export class HuiImageStub extends HTMLElement {
   #image: string | undefined;
-  #cameraView: string | undefined;
-  #cameraImage: string | undefined;
-
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-  }
 
   /** The card passes the resolved image path as a Lit property. */
   set image(value: string | undefined) {
@@ -94,68 +87,18 @@ export class HuiImageStub extends HTMLElement {
     this.#applyRatio();
   }
 
-  set cameraView(value: string | undefined) {
-    this.#cameraView = value;
-    this.#buildShadow();
-  }
-
-  set cameraImage(value: string | undefined) {
-    this.#cameraImage = value;
-    this.#buildShadow();
-  }
-
   connectedCallback(): void {
     this.style.display = "block";
     this.#applyRatio();
-    this.#buildShadow();
   }
 
   #applyRatio(): void {
-    // For a live camera the height comes from the .container.ratio shadow content
-    // (see #buildShadow); setting aspect-ratio here would override that padding box.
-    if (this.#cameraView === "live" && this.#cameraImage) {
-      this.style.removeProperty("aspect-ratio");
-      return;
-    }
     const match = this.#image ? /[-](\d+)x(\d+)/.exec(this.#image) : null;
     const group1 = match ? match[1] : undefined;
     const group2 = match ? match[2] : undefined;
     const w = group1 !== undefined ? parseInt(group1, 10) : 1;
     const h = group2 !== undefined ? parseInt(group2, 10) : 1;
     this.style.aspectRatio = w > 0 && h > 0 ? `${w} / ${h}` : "1 / 1";
-  }
-
-  /**
-   * Models hui-image's live-camera layout, measured on frontend 20260729.6:
-   * a `.container.ratio` element (`position: relative; height: 0;
-   * padding-bottom: 56.25%` — hard-coded 16:9) holds `ha-camera-stream`.
-   * hui-image's own stylesheet covers only `.ratio img, .ratio div`, so
-   * `ha-camera-stream` resolves `height: 100%` against `height: 0` and is
-   * drawn as overflow — measured 358.8 × 0 while the wrapper read
-   * 358.8 × 201.8. This models the broken state so the regression test can
-   * observe the failure before the fix is applied.
-   */
-  #buildShadow(): void {
-    const root = this.shadowRoot;
-    if (!root) return;
-    root.replaceChildren();
-    if (!(this.#cameraView === "live" && this.#cameraImage)) return;
-
-    // The rule hui-image ships: covers img and div but not ha-camera-stream.
-    const baseStyle = document.createElement("style");
-    baseStyle.textContent =
-      ".ratio img, .ratio div { width: 100%; height: 100%; position: absolute; top: 0; left: 0 }";
-    root.appendChild(baseStyle);
-
-    // The 16:9 padding box; position:relative so absolute children resolve against it.
-    const container = document.createElement("div");
-    container.className = "container ratio";
-    container.style.cssText = "position: relative; height: 0; padding-bottom: 56.25%;";
-
-    // ha-camera-stream: neither img nor div, so the rule above does not reach it.
-    const stream = document.createElement("ha-camera-stream");
-    container.appendChild(stream);
-    root.appendChild(container);
   }
 }
 

@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing, type PropertyValues } from "lit";
 import { type ImageElementConfig, imagePath } from "../config";
 import { IMAGE_KIND, withDefaultActions } from "../element-kinds";
 import { hassRenderChanged } from "../has-changed";
-import { effectiveBox, ratioIsForced } from "../image-box";
+import { effectiveBox } from "../image-box";
 import type { HomeAssistant } from "../types";
 import { bindActions, isClickable, relayActions } from "./item-actions";
 import { interactionStyles } from "./item-styles";
@@ -29,23 +29,6 @@ import { interactionStyles } from "./item-styles";
  * deprecation cycle.
  */
 const HUI_IMAGE = "hui-image";
-
-/**
- * The rule `hui-image` ships for its live-camera padding box covers only
- * `.ratio img` and `.ratio div`; `ha-camera-stream` is neither, so it resolves
- * `height: 100%` against `height: 0` and the picture is drawn as overflow —
- * measured 358.8 × 0 while the wrapper read 358.8 × 201.8 on frontend
- * 20260729.6. This additive rule gives `ha-camera-stream` the same treatment.
- * When Home Assistant extends its own selector to include the tag, the two rules
- * agree and nothing breaks — unlike a transform, which would become a double
- * correction. Only the layout is corrected: the container is still 16:9 and
- * still not the camera's own ratio, which only Home Assistant can know.
- */
-const CAMERA_STREAM_FIX_CSS =
-  ".ratio ha-camera-stream { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }";
-
-/** Marks the injected style element so a repeated call is a no-op. */
-const STREAM_FIX_ATTR = "data-ps-stream-fix";
 
 /**
  * The path `hui-image` should draw, resolving `image_entity` ourselves.
@@ -171,23 +154,6 @@ export class PictureStudioImage extends LitElement {
     // nobody gave an action offers no cursor.
     this.toggleAttribute("clickable", isClickable(config));
     bindActions(this, config);
-    // `ratioIsForced` is the single predicate for a live camera — its comment
-    // names its readers and says why there must not be a fourth copy of the
-    // condition. The injection is conditional on it because the ratio container
-    // (`.container.ratio`) only exists when the camera is live; injecting
-    // unconditionally would be wasted work and harder to reason about.
-    if (ratioIsForced(config)) {
-      const hui = this.renderRoot.querySelector(HUI_IMAGE);
-      const root = hui?.shadowRoot;
-      // `shadowRoot` may be null the day Home Assistant closes it; a missing
-      // `hui-image` means nothing drawable — both are silent no-ops.
-      if (root && !root.querySelector(`style[${STREAM_FIX_ATTR}]`)) {
-        const style = document.createElement("style");
-        style.setAttribute(STREAM_FIX_ATTR, "");
-        style.textContent = CAMERA_STREAM_FIX_CSS;
-        root.appendChild(style);
-      }
-    }
   }
 
   static styles = [
