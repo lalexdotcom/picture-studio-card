@@ -86,6 +86,6 @@ export const createResizeTool = (options: ResizeToolOptions): Tool => {
 
     hit,
 
-    resizingIndex: controller.resizingIndex,
+    gestureIndex: controller.resizingIndex,
   };
 };

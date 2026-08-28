@@ -13,7 +13,7 @@ export interface ToolTarget {
 /**
  * A gesture tool: owns its handles, its hit test and its controller.
  *
- * `resizingIndex` is added here because the card's `_gestureIndex` needs to
+ * `gestureIndex` is added here because the card's `_gestureIndex` needs to
  * know which item is being gestured on to skip overwriting its live pixels.
  * Task 8 (tool registry) may refine or generalise this once more tools exist.
  */
@@ -25,6 +25,6 @@ export interface Tool {
   detach(): void;
   /** Single owner of the hit test for its own handles. */
   hit(target: EventTarget | null): ResizeHit | undefined;
-  /** The index being gestured on, if a gesture is in progress. */
-  resizingIndex(): number | undefined;
+  /** The index of the item under this tool's live gesture, or undefined when the tool is idle. */
+  gestureIndex(): number | undefined;
 }

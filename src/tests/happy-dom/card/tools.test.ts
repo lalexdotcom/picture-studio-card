@@ -103,13 +103,28 @@ describe("createResizeTool", () => {
   });
 
   it("leaves the handles alone while its own gesture is running", async () => {
+    // The gesture guard must be tested with render(undefined): calling render
+    // with the same element hits the `mounted === target.element` short-circuit
+    // first, which would mask the gesture guard. render(undefined) bypasses
+    // that short-circuit and directly exercises the gesture guard.
+    //
+    // toEqual compares structurally in happy-dom, so it cannot distinguish
+    // freshly built nodes from the originals. Each handle is asserted with toBe
+    // (reference identity), so a rebuild — which the guard must prevent — is
+    // detectable even when the two sets look identical.
     const tool = createResizeTool(options);
     tool.attach(root);
     tool.render({ element: wrapperA, index: 0 });
-    const before = Array.from(wrapperA.querySelectorAll(".handle"));
+    const before = Array.from(wrapperA.querySelectorAll(".handle")) as HTMLElement[];
     startGestureOn(wrapperA, "bottom-right");
-    tool.render({ element: wrapperA, index: 0 });
-    expect(Array.from(wrapperA.querySelectorAll(".handle"))).toEqual(before);
+    // Without the gesture guard, render(undefined) would call unmount() and
+    // strip the handles from wrapperA. The guard must prevent that.
+    tool.render(undefined);
+    const after = Array.from(wrapperA.querySelectorAll(".handle")) as HTMLElement[];
+    expect(after).toHaveLength(before.length);
+    before.forEach((node, i) => {
+      expect(after[i]).toBe(node);
+    });
   });
 
   it("answers the hit test for its own handles, and for nothing else", async () => {

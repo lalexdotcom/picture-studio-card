@@ -907,14 +907,6 @@ export class PictureStudioCard extends LitElement {
   }
 
   /**
-   * What a pointer landed on: a resize handle, an item, or the picture.
-   *
-   * One owner, consulted by both gesture controllers. Two copies of this — one
-   * per controller — is the shape that eventually disagrees, and the
-   * disagreement would be invisible because each is correct on its own.
-   */
-
-  /**
    * The item under a live gesture, whichever gesture it is.
    *
    * `_applyPositions` must leave that wrapper alone: its styles are raw pixels
@@ -922,7 +914,7 @@ export class PictureStudioCard extends LitElement {
    * the item back on every hass tick. One question, not one flag per controller.
    */
   private _gestureIndex(): number | undefined {
-    return this._drag.draggingIndex() ?? this._activeTool.resizingIndex();
+    return this._drag.draggingIndex() ?? this._activeTool.gestureIndex();
   }
 
   /**
