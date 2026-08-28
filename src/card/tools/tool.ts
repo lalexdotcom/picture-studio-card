@@ -1,4 +1,30 @@
+import type { ResizeHit } from "../resize-layer";
+
 /** What a corner drag means. Move is not here: dragging the body always moves. */
 export type ToolId = "resize" | "distort";
 
 export const DEFAULT_TOOL: ToolId = "resize";
+
+export interface ToolTarget {
+  element: HTMLElement;
+  index: number;
+}
+
+/**
+ * A gesture tool: owns its handles, its hit test and its controller.
+ *
+ * `resizingIndex` is added here because the card's `_gestureIndex` needs to
+ * know which item is being gestured on to skip overwriting its live pixels.
+ * Task 8 (tool registry) may refine or generalise this once more tools exist.
+ */
+export interface Tool {
+  readonly id: ToolId;
+  /** Reconciles handles and state from fresh config. Inert during its own gesture. */
+  render(target: ToolTarget | undefined): void;
+  attach(root: HTMLElement): void;
+  detach(): void;
+  /** Single owner of the hit test for its own handles. */
+  hit(target: EventTarget | null): ResizeHit | undefined;
+  /** The index being gestured on, if a gesture is in progress. */
+  resizingIndex(): number | undefined;
+}

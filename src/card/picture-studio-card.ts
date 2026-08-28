@@ -19,7 +19,6 @@ import {
 import { effectiveBox, imageBoxStyle, normalizeImageBox } from "../image-box";
 import "./card-heading";
 import "./toolbar";
-import { isResizableKind } from "../element-kinds";
 import {
   type Anchor,
   DEFAULT_POSITION,
@@ -29,7 +28,7 @@ import {
   positionStyle,
   reanchor,
 } from "../position";
-import type { Corner } from "../resize-box";
+
 import type {
   BadgeConfig,
   HomeAssistant,
@@ -38,8 +37,8 @@ import type {
   LovelaceGridOptions,
 } from "../types";
 import { createDragController } from "./drag-layer";
-import { createResizeController, type ResizeHit } from "./resize-layer";
-import { DEFAULT_TOOL, type ToolId } from "./tools/tool";
+import { createResizeTool } from "./tools/resize-tool";
+import { DEFAULT_TOOL, type Tool, type ToolId, type ToolTarget } from "./tools/tool";
 
 /**
  * The slice of `hui-card` a probe uses. Declared rather than imported: it is
@@ -53,9 +52,6 @@ type ProbeElement = HTMLElement & {
 };
 
 const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
-
-/** The four corners a handle sits on, in DOM order. */
-const HANDLE_CORNERS: Corner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 /** Home Assistant's own error badge, the one its detail dialog dumps origConfig from. */
 const ERROR_BADGE_TAG = "hui-error-badge";
@@ -136,7 +132,7 @@ export class PictureStudioCard extends LitElement {
   private _unsubscribe?: () => void;
 
   private _drag = createDragController({
-    isHandle: (target) => this._hitHandle(target) !== undefined,
+    isHandle: (target) => this._activeTool.hit(target) !== undefined,
     getIndexedWrapper: (target) => {
       const wrapper = (target as HTMLElement | null)?.closest?.(".item") as HTMLElement | null;
       const index = wrapper?.dataset.index;
@@ -163,8 +159,7 @@ export class PictureStudioCard extends LitElement {
     onSelect: (index) => activeEditor()?.select(index, "picture"),
   });
 
-  private _resize = createResizeController({
-    getHandle: (target) => this._hitHandle(target),
+  private _activeTool: Tool = createResizeTool({
     getSurface: () => this.renderRoot.querySelector(".layer"),
     getAnchor: (index) => {
       const item = this._config?.items[index];
@@ -333,10 +328,10 @@ export class PictureStudioCard extends LitElement {
     const root = this.hasUpdated ? this.renderRoot.querySelector(".root") : null;
     if (this.editing && root instanceof HTMLElement) {
       this._drag.attach(root);
-      this._resize.attach(root);
+      this._activeTool.attach(root);
     } else {
       this._drag.detach();
-      this._resize.detach();
+      this._activeTool.detach();
     }
 
     // Registered on the same condition the drag is armed on, so the editor only
@@ -383,13 +378,13 @@ export class PictureStudioCard extends LitElement {
     this._unregisterCard?.();
     this._unregisterCard = undefined;
     this._drag.detach();
-    // Must detach the resize controller explicitly: its pointer listeners live on
+    // Must detach the active tool explicitly: its pointer listeners live on
     // `.root` (which dies with the shadow root) but `keydown`/`keyup` are
     // registered on `window`, which does not. Home Assistant rebuilds the card
     // element on every config commit, so without this call an edit session
     // accumulates two orphaned window listeners per commit, each holding a
     // reference to a dead element's state.
-    this._resize.detach();
+    this._activeTool.detach();
   }
 
   protected updated(changed: PropertyValues): void {
@@ -433,6 +428,7 @@ export class PictureStudioCard extends LitElement {
     if (configChanged) {
       void this._syncBackground();
       // _syncItems ends with _applyPositions, so it is not called again here.
+      // _syncItems also calls _activeTool.render() after rebuilding wrappers.
       void this._syncItems();
       // `preview` is in the gate because the condition marker keys on it: a
       // dashboard entering or leaving edit mode changes nothing else here, and
@@ -442,6 +438,18 @@ export class PictureStudioCard extends LitElement {
       // the selection, now announced when a drag is released — arrives while the
       // config still holds the pre-drag position. See _applyMarks.
       this._applyMarks(this._config?.items ?? []);
+    }
+
+    // Re-render the active tool's handles whenever the selection or the active
+    // tool changes. The config case is handled inside _syncItems, which rebuilds
+    // wrappers asynchronously before calling render there.
+    if (changed.has("selected") || changed.has("tool")) {
+      const sel = this.selected;
+      const wrapper = sel !== undefined ? this._wrappers[sel] : undefined;
+      const target: ToolTarget | undefined = wrapper
+        ? { element: wrapper, index: sel as number }
+        : undefined;
+      this._activeTool.render(target);
     }
   }
 
@@ -566,19 +574,6 @@ export class PictureStudioCard extends LitElement {
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
 
-        // Built once and shown by CSS on the selected item, rather than added
-        // and removed as the selection moves: the wrapper's box is what the
-        // gesture measures, and DOM churn under the pointer is how a gesture
-        // loses its target.
-        if (item.type === "element" && isResizableKind(item.config.type)) {
-          for (const corner of HANDLE_CORNERS) {
-            const handle = document.createElement("div");
-            handle.className = `handle handle-${corner}`;
-            handle.dataset.corner = corner;
-            wrapper.append(handle);
-          }
-        }
-
         const probe = this._createProbe(item);
         if (probe) layer.append(probe);
         layer.append(wrapper);
@@ -609,6 +604,11 @@ export class PictureStudioCard extends LitElement {
     }
 
     this._applyPositions(items);
+    // Render after wrappers are settled: if the shape changed, the above rebuilt
+    // the DOM asynchronously and updated() ran before the new wrappers existed.
+    const sel = this.selected;
+    const wrapper = sel !== undefined ? this._wrappers[sel] : undefined;
+    this._activeTool.render(wrapper ? { element: wrapper, index: sel as number } : undefined);
   }
 
   private _createChild(
@@ -913,15 +913,6 @@ export class PictureStudioCard extends LitElement {
    * per controller — is the shape that eventually disagrees, and the
    * disagreement would be invisible because each is correct on its own.
    */
-  private _hitHandle(target: EventTarget | null): ResizeHit | undefined {
-    const handle = (target as HTMLElement | null)?.closest?.(".handle") as HTMLElement | null;
-    const corner = handle?.dataset.corner as Corner | undefined;
-    const wrapper = handle?.closest(".item") as HTMLElement | null;
-    const index = wrapper?.dataset.index;
-    return handle && corner && wrapper && index !== undefined
-      ? { element: wrapper, index: Number(index), corner }
-      : undefined;
-  }
 
   /**
    * The item under a live gesture, whichever gesture it is.
@@ -931,7 +922,7 @@ export class PictureStudioCard extends LitElement {
    * the item back on every hass tick. One question, not one flag per controller.
    */
   private _gestureIndex(): number | undefined {
-    return this._drag.draggingIndex() ?? this._resize.resizingIndex();
+    return this._drag.draggingIndex() ?? this._activeTool.resizingIndex();
   }
 
   /**
@@ -1254,16 +1245,12 @@ export class PictureStudioCard extends LitElement {
     .editing .item > * {
       pointer-events: none;
     }
-    /* The handles exist on every resizable item and are shown only on the
-       selected one. Absolutely positioned, so they add nothing to the wrapper's
-       box — getBoundingClientRect is what both gestures measure, and the
-       condition marker's comment above makes the same point for the same
-       reason. */
+    /* Handles are mounted by JS on the selected wrapper only, so the old
+       display:none / display:block pair collapses into a single rule.
+       position:absolute is load-bearing: an out-of-flow child cannot shift the
+       wrapper's getBoundingClientRect, which is what both gesture controllers
+       read. */
     .handle {
-      display: none;
-    }
-    .editing .item.selected > .handle {
-      display: block;
       position: absolute;
       width: var(--psc-handle-size, 10px);
       height: var(--psc-handle-size, 10px);
@@ -1271,27 +1258,32 @@ export class PictureStudioCard extends LitElement {
       background: var(--card-background-color, #fff);
       border: 2px solid var(--primary-color);
       border-radius: 2px;
-      /* Beats \`.editing .item > *\`, which mutes the real children so a badge
-         never sees a click. A handle is the exception: it is the target. */
-      pointer-events: auto;
       touch-action: none;
     }
-    .editing .item.selected > .handle-top-left {
+    /* Overrides \`.editing .item > *\`, which mutes children so a badge never
+       sees a click. A handle is the exception: it is the target. Same
+       specificity as that rule, source order wins. */
+    .editing .item > .handle {
+      pointer-events: auto;
+    }
+    /* Handles exist only where mounted, so the .editing .item.selected >
+       prefix is now redundant. */
+    .handle-top-left {
       top: calc(var(--psc-handle-size, 10px) / -2);
       left: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nwse-resize;
     }
-    .editing .item.selected > .handle-top-right {
+    .handle-top-right {
       top: calc(var(--psc-handle-size, 10px) / -2);
       right: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nesw-resize;
     }
-    .editing .item.selected > .handle-bottom-left {
+    .handle-bottom-left {
       bottom: calc(var(--psc-handle-size, 10px) / -2);
       left: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nesw-resize;
     }
-    .editing .item.selected > .handle-bottom-right {
+    .handle-bottom-right {
       bottom: calc(var(--psc-handle-size, 10px) / -2);
       right: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nwse-resize;

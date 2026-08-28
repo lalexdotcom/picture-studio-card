@@ -1595,14 +1595,14 @@ describe("resize handles", () => {
     expect(corners).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
   });
 
-  it("shows them only on the selected item", async () => {
-    // The rule is CSS, so assert the rule rather than a computed style —
-    // happy-dom does no layout and `cssRules` is what this file already uses to
-    // check a declaration exists.
-    await editing();
-    expect(
-      cssRules(PictureStudioCard.styles).get(".editing .item.selected > .handle"),
-    ).toBeTruthy();
+  it("shows them only on the selected item: mounted by JS, not CSS display-toggle", async () => {
+    // Old strategy: .handle { display:none } toggled to display:block via
+    // .editing .item.selected > .handle. New strategy: the tool mounts nodes
+    // only on the selected wrapper, so the CSS neither hides nor shows them —
+    // position:absolute is what keeps mounting one from shifting the wrapper's box.
+    const rules = cssRules(PictureStudioCard.styles);
+    expect(rules.get(".handle")).toMatch("position: absolute");
+    expect(rules.get(".editing .item.selected > .handle")).toBeUndefined();
   });
 
   it("does not clear the selection when a handle is pressed", async () => {
