@@ -211,15 +211,20 @@ export class PictureStudioToolbar extends LitElement {
     :host {
       display: block;
     }
-    /* --psc-toolbar-height is provisional — it will be measured against real
-       button content in a browser in Task 10. What matters here is that the bar
-       declares its own height rather than deriving it from whichever group
-       happens to be tallest at render time: a badge selection (anchor group
-       only) and an image selection (anchor group + tools) would otherwise
-       produce different heights, shifting the picture vertically at the exact
-       moment the user is aiming at something. --ha-space-8 is 32px on HA's 4px
-       base scale; 32px comfortably clears the buttons that Tasks 3, 5 and 8
-       will fill in. */
+    /* --psc-toolbar-height governs the bar's declared height (measured at 40px
+       in a live browser: 32px min-height + 4px vertical padding on each side).
+       The bar declaring its own height — not deriving it from whichever group
+       happens to be tallest — is what prevents a vertical jump when the anchor
+       group alone (badge selection) gains the separator + tools group (image
+       selection) at the exact moment the user is aiming at something.
+       --ha-space-8 is 32px on HA's 4px base scale.
+       Touch target: HA's guideline is 48px; this bar lands at 40px. The gap is
+       accepted because the toolbar is editor chrome that lives in the dialog
+       preview, where the primary gesture is dragging items on the picture, not
+       tapping toolbar buttons. Bumping to 48px (--ha-space-12) would shrink
+       the visible picture by 8px for 8px of touch improvement on an already
+       secondary surface. Tablets that need it can set --psc-toolbar-height via
+       a theme token. */
     .bar {
       display: flex;
       align-items: center;
@@ -232,10 +237,11 @@ export class PictureStudioToolbar extends LitElement {
         var(--ha-card-content-padding, var(--card-content-padding, 16px));
       gap: var(--ha-space-2, 8px);
     }
-    /* Fixed box for every button, so a taller glyph added by a later task
-       cannot outgrow its sibling group and break the bar's declared height.
-       --psc-toolbar-button-size matches --psc-toolbar-height minus the vertical
-       padding so the buttons sit flush without overflow. */
+    /* Fixed 24×24px box for every button (--ha-space-6). A fixed size prevents
+       a taller glyph from outgrowing its sibling group and breaking the bar's
+       declared height. The invariant is: button-size = toolbar-height − 2×padding
+       (24 = 32 − 2×4). Any custom --psc-toolbar-height must keep that algebra
+       or the buttons will overflow their group. */
     button {
       box-sizing: border-box;
       width: var(--psc-toolbar-button-size, var(--ha-space-6, 24px));

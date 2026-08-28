@@ -18,6 +18,22 @@
   the background; its height either follows the picture's own proportions or is
   yours to set, which stretches it. Tap, hold and double-tap actions are yours to
   set too: unlike an icon, an image does nothing until you ask it to.
+- A small toolbar now appears above the picture while you are editing the card.
+  It shows two buttons when any item is selected. The first, labelled **Auto**,
+  removes any fixed anchor: the item moves freely, and its corner follows the
+  nearest edge when you drag it. The second, labelled **Anchored**, opens a
+  3×3 grid; tap a cell to pin the item to that corner, edge or centre of the
+  picture. Clicking or tapping outside the grid closes it without changing
+  anything, and pressing **Escape** does the same.
+  When an **Image** item is selected, the toolbar also shows a separator and two
+  more controls. A two-button tool picker lets you choose between **Resize** —
+  the handles on the picture's corners — and **Distort**, which removes the
+  handles. The distortion transform itself is not yet implemented and will arrive
+  in a later pre-release; selecting Distort and seeing the handles disappear is
+  the expected behaviour for now. Beside the picker, a **Restore proportions**
+  button becomes active whenever the image has been stretched (width and height
+  set independently); pressing it removes the stored height and lets the image
+  follow its natural proportions again.
 
 ### Fixed
 
