@@ -1166,6 +1166,46 @@ describe("the toolbar", () => {
     await edit(card);
     expect(card.renderRoot.querySelector(TOOLBAR_TAG)).not.toBeNull();
   });
+
+  it("keep-ratio-restore omits the height key, never sets it to undefined", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: { type: "image", image: "/a.png", width: 40, height: 25 },
+        },
+      ],
+    });
+    let recorded: { index: number; box: Record<string, unknown> } | undefined;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchBox: (index, box) => {
+        recorded = { index, box: box as Record<string, unknown> };
+      },
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+    });
+    card.preview = true;
+    await flush();
+    const toolbar = card.renderRoot.querySelector(TOOLBAR_TAG) as HTMLElement;
+    toolbar.dispatchEvent(
+      new CustomEvent("keep-ratio-restore", {
+        detail: { index: 0 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(recorded).toBeDefined();
+    if (recorded === undefined) return; // narrow so the assertions below need no !
+    expect(recorded.index).toBe(0);
+    // The key must be absent — `"height" in box` is the predicate every reader
+    // uses. `{ height: undefined }` would pass the value check and break the mode.
+    expect("height" in recorded.box).toBe(false);
+  });
 });
 
 describe("the header", () => {

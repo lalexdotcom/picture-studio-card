@@ -1,5 +1,6 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { PictureItem } from "../config";
+import { ratioIsForced } from "../image-box";
 import { ANCHOR_OFFSETS, type Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant } from "../types";
@@ -141,8 +142,39 @@ export class PictureStudioToolbar extends LitElement {
   };
 
   private _renderTools() {
-    return html`<button type="button" class="keep-ratio" ?disabled=${this._disabled}></button>`;
+    return html`<button
+      type="button"
+      class="keep-ratio"
+      ?disabled=${!this._canRestoreRatio}
+      title=${localizeOwn(this.hass, "keep_ratio_restore")}
+      @click=${this._emitRestore}
+    >
+      <ha-icon icon="mdi:lock-reset"></ha-icon>
+    </button>`;
   }
+
+  /**
+   * A stored height is what keep-ratio is not, so it is what there is to undo.
+   * Under a forced ratio there is nothing to restore: the height is already
+   * dormant, and the item is in keep-ratio whatever the config says.
+   */
+  private get _canRestoreRatio(): boolean {
+    const item = this.item;
+    if (item?.type !== "element" || item.config.type !== "image") return false;
+    return "height" in item.config && !ratioIsForced(item.config);
+  }
+
+  private _emitRestore = (): void => {
+    const index = this.index;
+    if (index === undefined) return;
+    this.dispatchEvent(
+      new CustomEvent("keep-ratio-restore", {
+        detail: { index },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
 
   static styles = css`
     :host {

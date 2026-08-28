@@ -16,7 +16,7 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
-import { effectiveBox, imageBoxStyle } from "../image-box";
+import { effectiveBox, imageBoxStyle, normalizeImageBox } from "../image-box";
 import "./card-heading";
 import "./toolbar";
 import { isResizableKind } from "../element-kinds";
@@ -996,6 +996,14 @@ export class PictureStudioCard extends LitElement {
                     const index = this.selected;
                     if (index === undefined) return;
                     activeEditor()?.patchAnchor(index, ev.detail.anchor);
+                  }}
+                  @keep-ratio-restore=${(ev: CustomEvent<{ index: number }>) => {
+                    const item = this._config?.items[ev.detail.index];
+                    if (item?.type !== "element" || item.config.type !== "image") return;
+                    // The key is omitted, never set to undefined: its presence IS
+                    // the mode, and `"height" in config` is what every reader asks.
+                    const { height: _dropped, ...box } = normalizeImageBox(item.config);
+                    activeEditor()?.patchBox(ev.detail.index, box);
                   }}
                 ></picture-studio-toolbar>
               `

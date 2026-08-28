@@ -34,6 +34,16 @@ const imageItem = {
 
 const badgeItem = { type: "badge", anchor: "auto", position: { x: 50, y: 50 }, config: {} };
 
+const stretched = {
+  ...imageItem,
+  config: { type: "image", width: 20, height: 15 },
+};
+
+const liveCamera = {
+  ...imageItem,
+  config: { type: "image", width: 20, height: 15, camera_image: "camera.x", camera_view: "live" },
+};
+
 afterEach(() => {
   document.body.replaceChildren();
 });
@@ -135,5 +145,39 @@ describe("the toolbar", () => {
     await el.updateComplete;
     expect(seen).toBe("bottom-left");
     expect((el.renderRoot.querySelector("dialog") as HTMLDialogElement).open).toBe(false);
+  });
+
+  it("offers the restore button only when a height is stored", async () => {
+    expect(
+      (
+        (await mount(imageItem, 0)).renderRoot.querySelector(
+          "button.keep-ratio",
+        ) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (
+        (await mount(stretched, 0)).renderRoot.querySelector(
+          "button.keep-ratio",
+        ) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  });
+
+  it("does not offer it when a live camera forces the ratio", async () => {
+    const el = await mount(liveCamera, 0);
+    expect((el.renderRoot.querySelector("button.keep-ratio") as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("emits the restore request with the item's index", async () => {
+    const el = await mount(stretched, 3);
+    let seen: number | undefined;
+    el.addEventListener("keep-ratio-restore", (ev) => {
+      seen = (ev as CustomEvent<{ index: number }>).detail.index;
+    });
+    (el.renderRoot.querySelector("button.keep-ratio") as HTMLButtonElement).click();
+    expect(seen).toBe(3);
   });
 });
