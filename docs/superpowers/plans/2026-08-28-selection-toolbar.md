@@ -436,7 +436,20 @@ export class PictureStudioToolbar extends LitElement {
   }
 ```
 
-`_renderAnchorGroup` and `_renderTools` return two disabled placeholder buttons each for now; Tasks 3 and 5 fill them. The placeholders are not "TODO" — they are the disabled state the final buttons also have, so the four tests above assert real behaviour.
+`_renderAnchorGroup` and `_renderTools` are written now, disabled throughout, and Tasks 3, 5 and 8 give them their content. This is not scaffolding to replace: the disabled branch is the one the final buttons also take, and it is what the four tests above assert.
+
+```ts
+  private _renderAnchorGroup() {
+    return html`
+      <button type="button" class="auto" ?disabled=${true}></button>
+      <button type="button" class="anchored" ?disabled=${true}></button>
+    `;
+  }
+
+  private _renderTools() {
+    return html`<button type="button" class="keep-ratio" ?disabled=${true}></button>`;
+  }
+```
 
 Styles: `.bar` is `display: flex; align-items: center;` with `gap` and padding from HA tokens with fallbacks; `.sep` copies the `align-self: stretch; border-left: 1px solid var(--divider-color)` idiom the picker already uses for its own rule.
 
@@ -976,7 +989,14 @@ export interface Tool {
   hit(target: EventTarget | null): ResizeHit | undefined;
 }
 
-export const createResizeTool: (options: ResizeOptions) => Tool;
+/**
+ * `getHandle` is NOT part of what the card hands over: the tool owns the hit
+ * test now, and supplies its own to the controller. Passing one in would leave
+ * two answers to one question, which is the shape `_hitHandle`'s comment warned
+ * about — "two copies of this is the shape that eventually disagrees".
+ */
+export type ResizeToolOptions = Omit<ResizeOptions, "getHandle">;
+export const createResizeTool: (options: ResizeToolOptions) => Tool;
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -1052,8 +1072,8 @@ Move `HANDLE_CORNERS` and the body of `_hitHandle` from the card into `src/card/
  * the structure does not, a selection changing mid-gesture from two fingers —
  * one dragging on the picture, one tapping a row in the editor's list.
  */
-export const createResizeTool = (options: ResizeOptions): Tool => {
-  const controller = createResizeController(options);
+export const createResizeTool = (options: ResizeToolOptions): Tool => {
+  const controller = createResizeController({ ...options, getHandle: (t) => hit(t) });
   let mounted: HTMLElement | undefined;
 
   const unmount = (): void => {
@@ -1081,8 +1101,31 @@ export const createResizeTool = (options: ResizeOptions): Tool => {
       controller.detach();
       unmount();
     },
-    hit(target) { /* the body moved from the card's _hitHandle */ },
+    hit,
   };
+};
+```
+
+`hit` is a module-level function in the same file — the body that was
+`_hitHandle`, unchanged, because it is already correct and already documented:
+
+```ts
+/**
+ * What a pointer landed on: one of this tool's handles, or nothing.
+ *
+ * One owner, consulted by this tool's controller AND by the drag, which asks it
+ * in order to know that a press is not a move. Two copies of this is the shape
+ * that eventually disagrees, and the disagreement would be invisible because
+ * each is correct on its own.
+ */
+const hit = (target: EventTarget | null): ResizeHit | undefined => {
+  const handle = (target as HTMLElement | null)?.closest?.(".handle") as HTMLElement | null;
+  const corner = handle?.dataset.corner as Corner | undefined;
+  const wrapper = handle?.closest(".item") as HTMLElement | null;
+  const index = wrapper?.dataset.index;
+  return handle && corner && wrapper && index !== undefined
+    ? { element: wrapper, index: Number(index), corner }
+    : undefined;
 };
 ```
 
