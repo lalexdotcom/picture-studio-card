@@ -18,22 +18,25 @@
   the background; its height either follows the picture's own proportions or is
   yours to set, which stretches it. Tap, hold and double-tap actions are yours to
   set too: unlike an icon, an image does nothing until you ask it to.
-- A small toolbar now appears above the picture while you are editing the card.
-  It shows two buttons when any item is selected. The first, labelled **Auto**,
-  removes any fixed anchor: the item moves freely, and its corner follows the
-  nearest edge when you drag it. The second, labelled **Anchored**, opens a
-  3×3 grid; tap a cell to pin the item to that corner, edge or centre of the
-  picture. Clicking or tapping outside the grid closes it without changing
-  anything, and pressing **Escape** does the same.
-  When an **Image** item is selected, the toolbar also shows a separator and two
-  more controls. A two-button tool picker lets you choose between **Resize** —
-  the handles on the picture's corners — and **Distort**, which removes the
-  handles. The distortion transform itself is not yet implemented and will arrive
-  in a later pre-release; selecting Distort and seeing the handles disappear is
-  the expected behaviour for now. Beside the picker, a **Restore proportions**
-  button becomes active whenever the image has been stretched (width and height
-  set independently); pressing it removes the stored height and lets the image
-  follow its natural proportions again.
+- A small toolbar now sits above the picture for as long as you are editing the
+  card. It always carries two buttons, which come alive once you select an item.
+  The first, labelled **Auto**, removes any fixed anchor: the item moves freely,
+  and its corner follows the nearest edge when you drag it. The second, labelled
+  **Anchored**, opens a 3×3 grid; tap a cell to pin the item to that corner, edge
+  or centre of the picture. Clicking or tapping outside the grid closes it without
+  changing anything, and pressing **Escape** does the same.
+  When an **Image** item is selected, a tool picker appears after a separator and
+  lets you choose between **Resize** — the handles on the picture's corners — and
+  **Distort**, which removes them. The distortion itself is not implemented yet
+  and will arrive in a later pre-release; selecting Distort and seeing the handles
+  disappear is the expected behaviour for now, and the item still moves when you
+  drag it.
+  **Resize** carries one control of its own, shown after a second separator:
+  **Restore proportions** becomes available whenever the image has been stretched
+  — width and height set independently — and returns it to its natural
+  proportions. The image keeps its top-left corner exactly where it was, so
+  restoring the proportions changes its size and nothing else. The button belongs
+  to the Resize tool, so it is not shown while Distort is chosen.
 
 ### Fixed
 
