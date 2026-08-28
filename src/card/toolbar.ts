@@ -46,6 +46,15 @@ export class PictureStudioToolbar extends LitElement {
             : nothing
         }
       </div>
+      <dialog
+        @click=${this._backdropClick}
+        @anchor-changed=${this._closePicker}
+      >
+        <picture-studio-anchor-input
+          .hass=${this.hass}
+          .anchor=${this.item?.type === "unknown" ? undefined : this.item?.anchor}
+        ></picture-studio-anchor-input>
+      </dialog>
     `;
   }
 
@@ -95,9 +104,41 @@ export class PictureStudioToolbar extends LitElement {
   }
 
   /** Placeholder — Task 4 will open the anchor picker popover. */
-  private _openPicker() {
-    // no-op until Task 4
-  }
+  /**
+   * A modal <dialog>, not a popover.
+   *
+   * The requirement is that a click outside dismisses the picker and reaches
+   * nothing. The native popover light-dismiss does not do that: the outside
+   * pointerdown closes it AND still lands on what is beneath. showModal() gives
+   * the whole requirement — the editor behind is inert, ::backdrop swallows the
+   * click, and Escape closes.
+   *
+   * It is in the top layer, so it is above Home Assistant's own dialog and is
+   * never clipped by ha-card's overflow — the same constraint that refused a
+   * floating toolbar.
+   */
+  private _openPicker = (ev: Event): void => {
+    const dialog = this.renderRoot.querySelector("dialog");
+    if (!(dialog instanceof HTMLDialogElement) || dialog.open) return;
+    const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    // Placed against the button rather than centred, which is what a modal
+    // dialog does by default. Read before showModal(): the call is what makes
+    // the dialog take layout, and the button's rect does not move.
+    dialog.style.top = `${rect.bottom + 4}px`;
+    dialog.style.left = `${rect.left}px`;
+    dialog.showModal();
+  };
+
+  private _backdropClick = (ev: MouseEvent): void => {
+    if (ev.target === ev.currentTarget) {
+      (ev.currentTarget as HTMLDialogElement).close();
+    }
+  };
+
+  private _closePicker = (ev: Event): void => {
+    (ev.currentTarget as HTMLDialogElement).close();
+    // Do not stopPropagation — the anchor-changed event must reach the card listener.
+  };
 
   private _renderTools() {
     return html`<button type="button" class="keep-ratio" ?disabled=${this._disabled}></button>`;
@@ -173,6 +214,24 @@ export class PictureStudioToolbar extends LitElement {
     .mini span.on {
       background: var(--primary-color);
       opacity: 1;
+    }
+    /* position: fixed keeps the dialog against the button regardless of scroll;
+       margin: 0 overrides the browser's auto-centering that modal dialogs get
+       by default — we position it ourselves in _openPicker. */
+    dialog {
+      position: fixed;
+      margin: 0;
+      padding: var(--ha-space-2, 8px);
+      border: 1px solid
+        var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, var(--divider-color)));
+      border-radius: var(--ha-card-border-radius, 4px);
+      background: var(--card-background-color, var(--primary-background-color));
+      color: var(--primary-text-color);
+    }
+    /* Transparent backdrop: the modality (inert editor, Escape key) is what is
+       wanted, not a visual dimming that would read as a second dialog. */
+    dialog::backdrop {
+      background: transparent;
     }
   `;
 }

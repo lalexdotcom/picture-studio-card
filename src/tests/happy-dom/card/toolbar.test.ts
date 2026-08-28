@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from "@rstest/core";
 import { PictureStudioToolbar } from "../../../card/toolbar";
-import { TOOLBAR_TAG } from "../../../config";
+import { ANCHOR_INPUT_TAG, TOOLBAR_TAG } from "../../../config";
+import { PictureStudioAnchorInput } from "../../../editor/anchor-input";
 import type { HomeAssistant } from "../../../types";
 
 if (!customElements.get(TOOLBAR_TAG)) {
   customElements.define(TOOLBAR_TAG, PictureStudioToolbar);
+}
+
+if (!customElements.get(ANCHOR_INPUT_TAG)) {
+  customElements.define(ANCHOR_INPUT_TAG, PictureStudioAnchorInput);
 }
 
 const hass = { states: {}, language: "en", localize: () => "" } as unknown as HomeAssistant;
@@ -88,5 +93,44 @@ describe("the toolbar", () => {
     const buttons = Array.from(el.renderRoot.querySelectorAll("button"));
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it("opens the picker when the anchored button is pressed", async () => {
+    const el = await mount({ ...imageItem, anchor: "center" }, 0);
+    (el.renderRoot.querySelector("button.anchored") as HTMLButtonElement).click();
+    await el.updateComplete;
+    const dialog = el.renderRoot.querySelector("dialog") as HTMLDialogElement;
+    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector("picture-studio-anchor-input")).not.toBeNull();
+  });
+
+  it("mounts the input with no label, so the modal carries no form chrome", async () => {
+    const el = await mount({ ...imageItem, anchor: "center" }, 0);
+    (el.renderRoot.querySelector("button.anchored") as HTMLButtonElement).click();
+    await el.updateComplete;
+    const input = el.renderRoot.querySelector("picture-studio-anchor-input") as HTMLElement & {
+      label?: string;
+    };
+    expect(input.label).toBeUndefined();
+  });
+
+  it("closes on a choice, and the choice leaves the toolbar", async () => {
+    const el = await mount({ ...imageItem, anchor: "center" }, 0);
+    (el.renderRoot.querySelector("button.anchored") as HTMLButtonElement).click();
+    await el.updateComplete;
+    let seen: string | undefined;
+    el.addEventListener("anchor-changed", (ev) => {
+      seen = (ev as CustomEvent<{ anchor: string }>).detail.anchor;
+    });
+    el.renderRoot.querySelector("picture-studio-anchor-input")?.dispatchEvent(
+      new CustomEvent("anchor-changed", {
+        detail: { anchor: "bottom-left" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(seen).toBe("bottom-left");
+    expect((el.renderRoot.querySelector("dialog") as HTMLDialogElement).open).toBe(false);
   });
 });
