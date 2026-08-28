@@ -180,4 +180,27 @@ describe("the toolbar", () => {
     (el.renderRoot.querySelector("button.keep-ratio") as HTMLButtonElement).click();
     expect(seen).toBe(3);
   });
+
+  it("shows both tools for an image, with resize active by default", async () => {
+    const el = await mount(imageItem, 0);
+    expect(el.renderRoot.querySelectorAll(".tools button.tool")).toHaveLength(2);
+    expect(
+      (el.renderRoot.querySelector("button.tool.resize") as HTMLElement).classList.contains("on"),
+    ).toBe(true);
+  });
+
+  it("emits the tool the user pressed", async () => {
+    const el = await mount(imageItem, 0);
+    let seen: string | undefined;
+    el.addEventListener("tool-changed", (ev) => {
+      seen = (ev as CustomEvent<{ tool: string }>).detail.tool;
+    });
+    (el.renderRoot.querySelector("button.tool.distort") as HTMLButtonElement).click();
+    expect(seen).toBe("distort");
+  });
+
+  it("shows no tool picker for an item with no corners", async () => {
+    const el = await mount(badgeItem, 0);
+    expect(el.renderRoot.querySelectorAll(".tools button.tool")).toHaveLength(0);
+  });
 });

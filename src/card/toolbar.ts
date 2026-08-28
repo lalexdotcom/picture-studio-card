@@ -4,6 +4,7 @@ import { ratioIsForced } from "../image-box";
 import { ANCHOR_OFFSETS, type Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant } from "../types";
+import type { ToolId } from "./tools/tool";
 
 /**
  * The editor's toolbar, docked between the card heading and the picture.
@@ -21,11 +22,13 @@ export class PictureStudioToolbar extends LitElement {
     hass: { attribute: false },
     item: { attribute: false },
     index: { attribute: false },
+    tool: { attribute: false },
   };
 
   declare hass?: HomeAssistant;
   declare item?: PictureItem;
   declare index?: number;
+  declare tool?: ToolId;
 
   /** Tools apply to an image element and to nothing else, for now. */
   private get _hasTools(): boolean {
@@ -142,15 +145,43 @@ export class PictureStudioToolbar extends LitElement {
   };
 
   private _renderTools() {
-    return html`<button
-      type="button"
-      class="keep-ratio"
-      ?disabled=${!this._canRestoreRatio}
-      title=${localizeOwn(this.hass, "keep_ratio_restore")}
-      @click=${this._emitRestore}
-    >
-      <ha-icon icon="mdi:lock-reset"></ha-icon>
-    </button>`;
+    return html`
+      <button
+        type="button"
+        class=${`tool resize${!this.tool || this.tool === "resize" ? " on" : ""}`}
+        title=${localizeOwn(this.hass, "tool_resize")}
+        @click=${() => this._emitTool("resize")}
+      >
+        <ha-icon icon="mdi:resize"></ha-icon>
+      </button>
+      <button
+        type="button"
+        class=${`tool distort${this.tool === "distort" ? " on" : ""}`}
+        title=${localizeOwn(this.hass, "tool_distort")}
+        @click=${() => this._emitTool("distort")}
+      >
+        <ha-icon icon="mdi:vector-square-edit"></ha-icon>
+      </button>
+      <button
+        type="button"
+        class="keep-ratio"
+        ?disabled=${!this._canRestoreRatio}
+        title=${localizeOwn(this.hass, "keep_ratio_restore")}
+        @click=${this._emitRestore}
+      >
+        <ha-icon icon="mdi:lock-reset"></ha-icon>
+      </button>
+    `;
+  }
+
+  private _emitTool(tool: ToolId): void {
+    this.dispatchEvent(
+      new CustomEvent("tool-changed", {
+        detail: { tool },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   /**

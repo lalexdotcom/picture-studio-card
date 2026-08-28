@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "@rstest/core";
+import { createDistortTool } from "../../../card/tools/distort-tool";
 import type { ResizeToolOptions } from "../../../card/tools/resize-tool";
 import { createResizeTool } from "../../../card/tools/resize-tool";
 
@@ -134,5 +135,39 @@ describe("createResizeTool", () => {
     const handle = wrapperA.querySelector(".handle-bottom-right") as HTMLElement;
     expect(tool.hit(handle)?.corner).toBe("bottom-right");
     expect(tool.hit(wrapperA)).toBeUndefined();
+  });
+
+  describe("createDistortTool", () => {
+    let commits: unknown[][];
+
+    beforeEach(() => {
+      commits = [];
+      options = {
+        ...options,
+        onCommit: (...args) => {
+          commits.push(args);
+        },
+      };
+    });
+
+    it("draws nothing, hits nothing, and commits nothing", async () => {
+      const tool = createDistortTool();
+      tool.render({ element: wrapperA, index: 0 });
+      expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
+      expect(tool.hit(wrapperA)).toBeUndefined();
+      tool.attach(root);
+      root.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      expect(commits).toHaveLength(0);
+    });
+
+    it("takes the handles away when it becomes active, and gives them back", async () => {
+      const resize = createResizeTool(options);
+      const distort = createDistortTool();
+      resize.render({ element: wrapperA, index: 0 });
+      expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
+      resize.detach();
+      distort.render({ element: wrapperA, index: 0 });
+      expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
+    });
   });
 });

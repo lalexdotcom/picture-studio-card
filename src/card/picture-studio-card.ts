@@ -37,6 +37,7 @@ import type {
   LovelaceGridOptions,
 } from "../types";
 import { createDragController } from "./drag-layer";
+import { createDistortTool } from "./tools/distort-tool";
 import { createResizeTool } from "./tools/resize-tool";
 import { DEFAULT_TOOL, type Tool, type ToolId, type ToolTarget } from "./tools/tool";
 
@@ -159,28 +160,35 @@ export class PictureStudioCard extends LitElement {
     onSelect: (index) => activeEditor()?.select(index, "picture"),
   });
 
-  private _activeTool: Tool = createResizeTool({
-    getSurface: () => this.renderRoot.querySelector(".layer"),
-    getAnchor: (index) => {
-      const item = this._config?.items[index];
-      if (!item || item.type === "unknown") return "auto";
-      return item.anchor ?? "auto";
-    },
-    getPosition: (index) => {
-      const item = this._config?.items[index];
-      return item && item.type !== "unknown" ? item.position : { ...DEFAULT_POSITION };
-    },
-    getConfig: (index) => {
-      const item = this._config?.items[index];
-      if (!item || item.type !== "element" || item.config.type !== "image") return undefined;
-      return item.config;
-    },
-    onCommit: (index, box, position) => activeEditor()?.patchBox(index, box, position),
-    onStretch: (index, stretched) => {
-      const child = this._elements[index] as (HTMLElement & { stretch?: boolean }) | undefined;
-      if (child) child.stretch = stretched;
-    },
-  });
+  private _tools: Record<ToolId, Tool> = {
+    resize: createResizeTool({
+      getSurface: () => this.renderRoot.querySelector(".layer"),
+      getAnchor: (index) => {
+        const item = this._config?.items[index];
+        if (!item || item.type === "unknown") return "auto";
+        return item.anchor ?? "auto";
+      },
+      getPosition: (index) => {
+        const item = this._config?.items[index];
+        return item && item.type !== "unknown" ? item.position : { ...DEFAULT_POSITION };
+      },
+      getConfig: (index) => {
+        const item = this._config?.items[index];
+        if (!item || item.type !== "element" || item.config.type !== "image") return undefined;
+        return item.config;
+      },
+      onCommit: (index, box, position) => activeEditor()?.patchBox(index, box, position),
+      onStretch: (index, stretched) => {
+        const child = this._elements[index] as (HTMLElement & { stretch?: boolean }) | undefined;
+        if (child) child.stretch = stretched;
+      },
+    }),
+    distort: createDistortTool(),
+  };
+
+  private get _activeTool(): Tool {
+    return this._tools[this.tool];
+  }
 
   constructor() {
     super();
@@ -438,6 +446,20 @@ export class PictureStudioCard extends LitElement {
       // the selection, now announced when a drag is released — arrives while the
       // config still holds the pre-drag position. See _applyMarks.
       this._applyMarks(this._config?.items ?? []);
+    }
+
+    // When the active tool changes, detach the outgoing tool before attaching
+    // the incoming one: detaching unmounts the outgoing tool's handles, so
+    // attaching first would leave a frame with two tools listening on the same root.
+    if (changed.has("tool")) {
+      const oldToolId = changed.get("tool") as ToolId | undefined;
+      if (oldToolId) {
+        this._tools[oldToolId].detach();
+      }
+      const root = this.renderRoot.querySelector(".root");
+      if (this.editing && root instanceof HTMLElement) {
+        this._activeTool.attach(root);
+      }
     }
 
     // Re-render the active tool's handles whenever the selection or the active
@@ -984,6 +1006,7 @@ export class PictureStudioCard extends LitElement {
                   .hass=${this.hass}
                   .item=${this.selected === undefined ? undefined : this._config.items[this.selected]}
                   .index=${this.selected}
+                  .tool=${this.tool}
                   @anchor-changed=${(ev: CustomEvent<{ anchor: Anchor }>) => {
                     const index = this.selected;
                     if (index === undefined) return;
@@ -996,6 +1019,9 @@ export class PictureStudioCard extends LitElement {
                     // the mode, and `"height" in config` is what every reader asks.
                     const { height: _dropped, ...box } = normalizeImageBox(item.config);
                     activeEditor()?.patchBox(ev.detail.index, box);
+                  }}
+                  @tool-changed=${(ev: CustomEvent<{ tool: ToolId }>) => {
+                    activeEditor()?.setTool(ev.detail.tool);
                   }}
                 ></picture-studio-toolbar>
               `

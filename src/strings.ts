@@ -64,6 +64,8 @@ const STRINGS = {
     items_warning: "Some items need attention",
     aspect_ratio_hint: "16:9, 16x9, 1.78 or 56.25% — decimals use a point.",
     keep_ratio_restore: "Restore the image's proportions",
+    tool_resize: "Resize",
+    tool_distort: "Distort",
   },
   fr: {
     items: "Items",
@@ -121,6 +123,8 @@ const STRINGS = {
     items_warning: "Des items demandent attention",
     aspect_ratio_hint: "16:9, 16x9, 1.78 ou 56.25% — les décimales s'écrivent avec un point.",
     keep_ratio_restore: "Rétablir les proportions de l'image",
+    tool_resize: "Redimensionner",
+    tool_distort: "Distordre",
   },
 } as const;
 
