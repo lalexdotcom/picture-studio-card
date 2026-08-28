@@ -122,6 +122,8 @@ describe("a real change", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => selected,
+      tool: () => "resize",
+      setTool: () => {},
     };
     card.preview = true;
     releaseEditor = registerEditor(editor);
@@ -141,6 +143,49 @@ describe("a real change", () => {
     expect(
       background(card).setConfigCalls + badges(card).reduce((sum, b) => sum + b.setConfigCalls, 0),
     ).toBe(before);
+  });
+});
+
+describe("the active tool survives a card rebuild", () => {
+  // Home Assistant destroys and recreates the card element on every config
+  // change. This test models that: the original card is removed and a fresh
+  // element is mounted against the same registered editor. The tool must read
+  // back from the editor's channel, not from anything the card remembered.
+  it("a fresh card element reads the tool from the editor, not from itself", async () => {
+    let currentTool = "resize";
+    const editor: EditorChannel = {
+      patchPosition: () => {},
+      patchBox: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+      tool: () => currentTool as "resize" | "distort",
+      setTool: (t) => {
+        currentTool = t;
+        notifyEditors();
+      },
+    };
+    releaseEditor = registerEditor(editor);
+
+    const first = await mountCard(CONFIG_3);
+    first.preview = true;
+    notifyEditors();
+    await first.updateComplete;
+    expect((first as unknown as { tool: string }).tool).toBe("resize");
+
+    editor.setTool("distort");
+    await first.updateComplete;
+    expect((first as unknown as { tool: string }).tool).toBe("distort");
+
+    // Destroy the first card — modelling what Home Assistant does on commit.
+    first.remove();
+
+    // Mount a fresh card against the same editor (tool is still "distort").
+    const second = await mountCard(CONFIG_3);
+    second.preview = true;
+    notifyEditors();
+    await second.updateComplete;
+    expect((second as unknown as { tool: string }).tool).toBe("distort");
   });
 });
 
@@ -250,6 +295,8 @@ describe("visibility probes", () => {
     patchAnchor: () => {},
     select: () => {},
     selectedIndex: () => undefined,
+    tool: () => "resize",
+    setTool: () => {},
   };
 
   it("creates one probe, for the conditional item only", async () => {
@@ -371,6 +418,8 @@ describe("the condition marker", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
     });
     await flush();
   };
@@ -462,6 +511,8 @@ describe("editing flag on element rebuild", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
     });
     await flush();
 
@@ -617,6 +668,8 @@ describe("hui-error-badge display in editing mode", () => {
         patchAnchor: () => {},
         select: () => {},
         selectedIndex: () => undefined,
+        tool: () => "resize",
+        setTool: () => {},
       });
     }
     document.body.append(card);
@@ -1152,6 +1205,8 @@ describe("the toolbar", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
     });
     await flush();
   };
@@ -1188,6 +1243,8 @@ describe("the toolbar", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
     });
     card.preview = true;
     await flush();
@@ -1250,6 +1307,8 @@ describe("the preview reserves the height of the one it replaces", () => {
     patchAnchor: () => {},
     select: () => {},
     selectedIndex: () => undefined,
+    tool: () => "resize",
+    setTool: () => {},
   });
 
   it("pins the outgoing height on its successor, then lets go", async () => {
@@ -1511,6 +1570,8 @@ describe("resize handles", () => {
         notifyEditors();
       },
       selectedIndex: () => selected,
+      tool: () => "resize",
+      setTool: () => {},
     });
     (card as unknown as { preview: boolean }).preview = true;
     notifyEditors();

@@ -606,16 +606,32 @@ const mountEditor = async (config: unknown): Promise<PictureStudioEditor> => {
 };
 
 describe("the active tool", () => {
-  it("keeps the active tool across a commit, and resets it when the selection moves", async () => {
+  it("round-trips through setTool / tool()", async () => {
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    expect(editor.tool()).toBe("resize");
+    editor.setTool("distort");
+    expect(editor.tool()).toBe("distort");
+  });
+
+  it("resets to resize when the selection moves to a different index", async () => {
     const editor = await mountEditor(CONFIG);
     editor.select(0, "list");
     editor.setTool("distort");
-    expect(editor.tool()).toBe("distort");
-    // A commit rebuilds the card element; the editor is what survives it.
-    editor.patchPosition(0, { left: 10, top: 10 });
-    expect(editor.tool()).toBe("distort");
     editor.select(1, "list");
     expect(editor.tool()).toBe("resize");
+  });
+
+  it("does not reset when select() is called with the already-selected index", async () => {
+    // drag-layer calls onSelect(hit.index) at the end of every gesture,
+    // including one that merely moved the already-selected item. The reset
+    // must sit after the early-return guard, or every drag silently clears
+    // the active tool.
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    editor.setTool("distort");
+    editor.select(0, "picture");
+    expect(editor.tool()).toBe("distort");
   });
 });
 
