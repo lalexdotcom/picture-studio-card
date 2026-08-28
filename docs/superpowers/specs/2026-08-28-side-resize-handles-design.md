@@ -165,6 +165,39 @@ the item's size were deferred by the amendment memo and stay deferred: the floor
 of decision 7 keeps them grabbable, which is the correctness question, and the
 rest is comfort.
 
+### 10. A gesture that ends where it began commits nothing — keep-ratio included
+
+Resize decision 7 already says *"no commit when nothing changed"*, and its test
+is `box.width !== storedWidth || box.height !== storedHeight`. **A side handle
+breaks it**, in the direction that costs the most: releasing an E/W handle back
+at its starting point produces the frozen height of decision 5, `storedHeight` is
+absent, and a number is not `undefined` — so the gesture commits, and an image
+the user did nothing to leaves keep-ratio.
+
+The test compares to the wrong thing. It should ask *has the box changed since
+`pointerdown`*, and the config is only one of the two ways to answer that:
+
+```
+height₀ = storedHeight ?? percentOfContainer(y.size0, surface.height)
+changed = width !== storedWidth || (height !== undefined && height !== height₀)
+```
+
+**The stored number where there is one, the measured pixel size where there is
+not.** Both are the box as it stood when the pointer went down, expressed in the
+units it will be stored in — which is what decision 7's own sentence asks for
+and what its implementation approximated while an absent height could only mean
+an unchanged one.
+
+Unreachable with a mouse in practice, and worth the line anyway: it is the
+difference between a gesture that can be abandoned and one that always charges
+for having been started. It also fixes the same case on a corner — grab, hold
+SHIFT, wander, come back, release: nothing moved, so nothing is written, and the
+item stays the kind of thing it was.
+
+**A height still absent from the candidate is never a change.** The only path
+that drops a height an item had is the forced ratio, which commits
+`storedHeight × scale` on its own branch and does not reach this test.
+
 ## The gesture, in order
 
 Unchanged from the resize spec except where an axis is inert. At `pointerdown`,
@@ -201,7 +234,10 @@ What must discriminate:
 - **the floor**, met on the active axis, and *not* met on the inert one — an
   inert axis below the floor must survive the gesture untouched rather than be
   pushed up to it;
-- **`ratioIsForced` renders four handles, not eight.**
+- **`ratioIsForced` renders four handles, not eight;**
+- **an E/W gesture released back at its starting point on a keep-ratio image
+  commits nothing at all** — decision 10, and the assertion is the absence of a
+  `patchBox` call, not a `height` equal to the old one.
 
 The browser lane takes the one question happy-dom cannot answer: that an E/W
 drag on a keep-ratio image leaves the drawn height where it was — happy-dom has
