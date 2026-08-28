@@ -3,6 +3,7 @@ import { PictureStudioImage } from "../../card/image-element";
 import { PictureStudioCard } from "../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../card/state-icon-element";
 import { PictureStudioStateLabel } from "../../card/state-label-element";
+import { DEFAULT_TOOL, type ToolId } from "../../card/tools/tool";
 import { CARD_TAG, ICON_TAG, IMAGE_TAG, LABEL_TAG } from "../../config";
 import type { ImageBox } from "../../image-box";
 import type { Anchor, Position } from "../../position";
@@ -313,6 +314,9 @@ export interface EditorSpy {
   selections: (number | undefined)[];
   anchors: { index: number; anchor: Anchor }[];
   release(): void;
+  // The active tool mirrors what the real editor holds. The card reads it on
+  // every _syncEditing call; without it the card throws on entering edit mode.
+  activeTool: ToolId;
 }
 
 /**
@@ -327,6 +331,7 @@ export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> 
     selections: [],
     anchors: [],
     release: () => undefined,
+    activeTool: DEFAULT_TOOL,
   };
   let selected: number | undefined;
   const off = registerEditor({
@@ -339,6 +344,10 @@ export const enterEditing = async (card: PictureStudioCard): Promise<EditorSpy> 
       notifyEditors();
     },
     selectedIndex: () => selected,
+    tool: () => spy.activeTool,
+    setTool: (tool) => {
+      spy.activeTool = tool;
+    },
   });
   spy.release = off;
   releases.push(off);
