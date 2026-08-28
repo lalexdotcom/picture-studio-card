@@ -30,7 +30,6 @@ export class PictureStudioToolbar extends LitElement {
     return item?.type === "element" && item.config.type === "image";
   }
 
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: used by Tasks 3, 5, 8 when buttons get real logic
   private get _disabled(): boolean {
     return this.item === undefined || this.index === undefined || this.item.type === "unknown";
   }
@@ -50,22 +49,32 @@ export class PictureStudioToolbar extends LitElement {
 
   private _renderAnchorGroup() {
     return html`
-      <button type="button" class="auto" ?disabled=${true}></button>
-      <button type="button" class="anchored" ?disabled=${true}></button>
+      <button type="button" class="auto" ?disabled=${this._disabled}></button>
+      <button type="button" class="anchored" ?disabled=${this._disabled}></button>
     `;
   }
 
   private _renderTools() {
-    return html`<button type="button" class="keep-ratio" ?disabled=${true}></button>`;
+    return html`<button type="button" class="keep-ratio" ?disabled=${this._disabled}></button>`;
   }
 
   static styles = css`
     :host {
       display: block;
     }
+    /* --psc-toolbar-height is provisional — it will be measured against real
+       button content in a browser in Task 10. What matters here is that the bar
+       declares its own height rather than deriving it from whichever group
+       happens to be tallest at render time: a badge selection (anchor group
+       only) and an image selection (anchor group + tools) would otherwise
+       produce different heights, shifting the picture vertically at the exact
+       moment the user is aiming at something. --ha-space-8 is 32px on HA's 4px
+       base scale; 32px comfortably clears the buttons that Tasks 3, 5 and 8
+       will fill in. */
     .bar {
       display: flex;
       align-items: center;
+      min-height: var(--psc-toolbar-height, var(--ha-space-8, 32px));
       /* --ha-space-1 is 4px on HA's 4px base scale; 4px vertical keeps the bar
          compact while still giving the buttons breathing room above and below.
          Horizontal padding borrows ha-card's own content padding so the bar
@@ -73,6 +82,22 @@ export class PictureStudioToolbar extends LitElement {
       padding: var(--ha-space-1, 4px)
         var(--ha-card-content-padding, var(--card-content-padding, 16px));
       gap: var(--ha-space-2, 8px);
+    }
+    /* Fixed box for every button, so a taller glyph added by a later task
+       cannot outgrow its sibling group and break the bar's declared height.
+       --psc-toolbar-button-size matches --psc-toolbar-height minus the vertical
+       padding so the buttons sit flush without overflow. */
+    button {
+      box-sizing: border-box;
+      width: var(--psc-toolbar-button-size, var(--ha-space-6, 24px));
+      height: var(--psc-toolbar-button-size, var(--ha-space-6, 24px));
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+    button:disabled {
+      cursor: not-allowed;
     }
     /* The separator is a full-height hairline ruled between the anchor group and
        the tools group. It uses the same token chain as the anchor-input grid
