@@ -9,6 +9,7 @@ import {
   enterEditing,
   flush,
   installHaTokens,
+  layer,
   mountCard,
   root,
   wrappers,
@@ -47,30 +48,6 @@ const ONE_IMAGE = (): unknown => ({
   ],
 });
 
-/**
- * One state-icon element at 20%/20%.
- *
- * The icon's size is `clamp(24px, 8cqw, 48px)`, which resolves against
- * `.root`'s inline size. At the harness's LAYER.width of 400 px, 8 cqw = 32 px.
- * Any change to `.root`'s effective inline size would shift this measurement —
- * which is exactly what the container-left-alone claim protects against.
- */
-const ONE_ICON = (): unknown => ({
-  type: "custom:picture-studio",
-  image: "/local/plan.png",
-  items: [
-    {
-      type: "element",
-      position: { top: "20%", left: "20%" },
-      config: {
-        type: "state-icon",
-        entity: "light.a",
-        size: { mode: "adaptive", ratio: 8, min: 24, max: 48 },
-      },
-    },
-  ],
-});
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -96,21 +73,6 @@ const selectItem = async (card: PictureStudioCard, index: number): Promise<void>
   wrapper.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, button: 0, bubbles: true }));
   await card.updateComplete;
   await flush();
-};
-
-/**
- * Returns the computed pixel width of item `index`'s wrapper.
- *
- * For a state-icon whose size CSS is `clamp(min, ratio·cqw, max)`, the wrapper
- * (width: max-content) stretches to exactly the icon's cqw-resolved width.
- * The number changes if and only if the container's inline size changes.
- */
-const clampedWidth = (card: PictureStudioCard, index: number): number =>
-  (wrappers(card)[index] as HTMLElement).getBoundingClientRect().width;
-
-/** Enters editing mode, making the toolbar visible. */
-const showToolbar = async (card: PictureStudioCard): Promise<void> => {
-  await enterEditing(card);
 };
 
 /**
@@ -156,11 +118,20 @@ const countClicksOn = (card: PictureStudioCard, selector: string): number => {
   return clickRegistry.get(el) ?? 0;
 };
 
-/** Returns whether the toolbar's `<dialog>` anchor picker is currently open. */
+/**
+ * Returns whether the toolbar's anchor picker is currently open.
+ *
+ * `showModal()` sets `dialog.open`; `showPopover()` instead sets the
+ * `:popover-open` state without touching `dialog.open`. Checking both makes
+ * the helper sensitive to either API so the popover deliberate-break
+ * (assertion 2 of test 3) reports as "picker visually open → dismissed by
+ * click → click went through" rather than "picker was never open at all".
+ */
 const pickerOpen = (card: PictureStudioCard): boolean => {
   const toolbar = root(card).querySelector("picture-studio-toolbar") as HTMLElement;
   const dialog = toolbar?.shadowRoot?.querySelector("dialog") as HTMLDialogElement | null;
-  return dialog?.open ?? false;
+  if (!dialog) return false;
+  return dialog.open || dialog.matches(":popover-open");
 };
 
 // ---------------------------------------------------------------------------
@@ -169,8 +140,8 @@ const pickerOpen = (card: PictureStudioCard): boolean => {
 
 /**
  * RED verification: each test below was run against a targeted break to confirm
- * it fails without the mechanism it guards. Done 2026-08-28; see
- * task-9-report.md for the exact failure output of each.
+ * it fails without the mechanism it guards. Done 2026-08-28 (fix round 1);
+ * see task-9-report.md for the exact failure output of each.
  */
 
 it("keeps the card the same height whether or not something is selected", async () => {
@@ -191,30 +162,32 @@ it("keeps the card the same height whether or not something is selected", async 
   expect(cardHeight(card)).toBe(idle);
 });
 
-it("leaves the size container alone", async () => {
-  // The toolbar is a sibling of .root. If it ever became a child, the
-  // container's effective inline size could change — every cqw-resolved width
-  // would silently mean something different.
-  installHaTokens();
-  const card = await mountCard(ONE_ICON());
-
-  // Measure before editing: the icon's cqw-resolved width at LAYER.width = 400 px
-  // (8 cqw = 32 px, clamped to [24, 48]).
-  const before = clampedWidth(card, 0);
-
-  // Entering editing mode inserts the toolbar as a sibling of .root.
-  await showToolbar(card);
-
-  // The container's inline size must be unchanged.
-  expect(clampedWidth(card, 0)).toBe(before);
+/**
+ * The toolbar is a sibling of `.root`, not a child. `.layer` is
+ * `position: absolute; inset: 0` inside `.root`, so its height matches
+ * `.root`'s, which the background image alone determines. Were the toolbar a
+ * child of `.root` instead, `.root` would grow by the toolbar's height,
+ * `.layer` would stretch to fill that taller box, and every item's `top`
+ * percentage would resolve against the wrong denominator — an item at
+ * `top: 50%` would land below the mid-point of the picture.
+ */
+it("the toolbar sits outside .root, keeping .layer flush with the background", async () => {
+  const card = await mountCard(ONE_IMAGE());
+  // Entering editing mode renders the toolbar; without it there is nothing to
+  // misplace and the break has no effect.
+  await enterEditing(card);
+  const layerH = layer(card).getBoundingClientRect().height;
+  const bgH = (root(card).querySelector(".background") as HTMLElement).getBoundingClientRect()
+    .height;
+  expect(layerH).toBe(bgH);
 });
 
 it("dismisses the anchor picker without letting the click through", async () => {
-  // The picker is a <dialog> opened with showModal(), not a popover.
-  // popover's light-dismiss closes it AND lets the outside click land on
-  // whatever is beneath — exactly the behaviour that loses a user's intent.
-  // showModal() puts the dialog in the top layer: its ::backdrop absorbs the
-  // click so nothing behind it receives it.
+  // The picker is a <dialog> opened with showModal(). A popover would also
+  // dismiss on an outside click (light-dismiss), but that click goes through
+  // to whatever is beneath — exactly the behaviour that loses a user's intent.
+  // showModal() places the dialog in the top layer: its ::backdrop absorbs the
+  // outside click, so nothing behind it receives it.
   installHaTokens();
   const card = await mountCard(ONE_IMAGE());
   await enterEditing(card);
