@@ -16,17 +16,20 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
-import { effectiveBox, imageBoxStyle, normalizeImageBox } from "../image-box";
+import { effectiveBox, type ImageBox, imageBoxStyle } from "../image-box";
 import "./card-heading";
 import "./toolbar";
 import {
   type Anchor,
+  axisOffset,
   DEFAULT_POSITION,
   type MarkerCorner,
   markerCorner,
   type Position,
   positionStyle,
   reanchor,
+  toPercent,
+  toPx,
 } from "../position";
 
 import type {
@@ -973,6 +976,78 @@ export class PictureStudioCard extends LitElement {
     return rect.height > 0 ? rect.top : undefined;
   }
 
+  /**
+   * The item's coordinates re-expressed so its top-left stays put when its box
+   * changes.
+   *
+   * The same shape as `reanchor`, with the other variable moving: there the
+   * anchor changes and the size holds; here the size changes and the anchor
+   * holds. Both go through `toPx` / `toPercent`, the pair that converts between
+   * a stored coordinate and the pixel offset of the item's leading edge — and
+   * which already resolves `auto`, where the coordinate IS the translate
+   * fraction, so no edge stays put on its own and the item drifts on any size
+   * change.
+   *
+   * **Holding the top-left rather than the anchor point is deliberate**, and it
+   * is the resize gesture's rule rather than a new one: without ALT, a corner
+   * drag holds the corner opposite the grabbed one and ignores the anchor
+   * entirely (resize spec decision 4). Restoring the ratio is the same kind of
+   * change, so it answers the same way.
+   *
+   * **One forced reflow**, the price the resize gesture already pays on every
+   * pointermove in keep-ratio mode: the height a box without one resolves to is
+   * a function of the width, and only the layout engine knows it. The candidate
+   * style is written, read back, and the previous inline values restored; the
+   * commit that follows is what makes it permanent.
+   *
+   * Undefined when it cannot measure — the item is gone, or the card has not
+   * laid out — exactly as `reanchor` and `measureImageHeight` answer, and the
+   * caller then commits the box alone.
+   */
+  private _refit(index: number, box: ImageBox): Position | undefined {
+    const item = this._config?.items[index];
+    const wrapper = this._wrappers[index];
+    const layer = this._layer;
+    if (!item || item.type === "unknown" || !wrapper || !layer) return undefined;
+
+    const container = layer.getBoundingClientRect();
+    if (container.width === 0 || container.height === 0) return undefined;
+
+    const before = wrapper.getBoundingClientRect();
+    const anchor = item.anchor ?? "auto";
+    const leftPx = toPx(item.position.left, container.width, before.width, axisOffset(anchor, "x"));
+    const topPx = toPx(item.position.top, container.height, before.height, axisOffset(anchor, "y"));
+
+    const style = imageBoxStyle(box);
+    const saved = {
+      width: wrapper.style.width,
+      height: wrapper.style.height,
+      maxHeight: wrapper.style.maxHeight,
+    };
+    wrapper.style.width = style.width;
+    wrapper.style.height = style.height;
+    wrapper.style.maxHeight = style.maxHeight;
+    const after = wrapper.getBoundingClientRect();
+    wrapper.style.width = saved.width;
+    wrapper.style.height = saved.height;
+    wrapper.style.maxHeight = saved.maxHeight;
+    if (after.width === 0 || after.height === 0) return undefined;
+
+    // Only the axis whose size actually moved is rewritten. The round trip
+    // through toPx/toPercent rounds to two decimals, so recomputing an axis
+    // that did not change would nudge a coordinate the user chose, for nothing.
+    return {
+      left:
+        after.width === before.width
+          ? item.position.left
+          : toPercent(leftPx, container.width, after.width, axisOffset(anchor, "x")),
+      top:
+        after.height === before.height
+          ? item.position.top
+          : toPercent(topPx, container.height, after.height, axisOffset(anchor, "y")),
+    };
+  }
+
   measureImageHeight(index: number): number | undefined {
     const wrapper = this._wrappers[index];
     const layer = this._layer;
@@ -1015,10 +1090,23 @@ export class PictureStudioCard extends LitElement {
                   @keep-ratio-restore=${(ev: CustomEvent<{ index: number }>) => {
                     const item = this._config?.items[ev.detail.index];
                     if (item?.type !== "element" || item.config.type !== "image") return;
-                    // The key is omitted, never set to undefined: its presence IS
-                    // the mode, and `"height" in config` is what every reader asks.
-                    const { height: _dropped, ...box } = normalizeImageBox(item.config);
-                    activeEditor()?.patchBox(ev.detail.index, box);
+                    // The key is never constructed, rather than constructed and
+                    // deleted: its presence IS the mode, and `"height" in config`
+                    // is what every reader asks. The width can be read straight
+                    // off the config because `normalizeImageBox` already ran on
+                    // it at load — config.ts spreads it into every image element.
+                    const box: ImageBox = { width: item.config.width };
+                    // Dropping the height changes it, so the item would move
+                    // under any anchor whose vertical offset is not zero — and
+                    // under `auto` it moves whatever the coordinate is. `_refit`
+                    // holds the top-left, and box and position travel in one
+                    // write for the reason `patchBox` states: two commits would
+                    // render the new box against the old coordinates for a frame.
+                    activeEditor()?.patchBox(
+                      ev.detail.index,
+                      box,
+                      this._refit(ev.detail.index, box),
+                    );
                   }}
                   @tool-changed=${(ev: CustomEvent<{ tool: ToolId }>) => {
                     activeEditor()?.setTool(ev.detail.tool);
