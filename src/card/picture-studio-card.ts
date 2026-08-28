@@ -39,6 +39,7 @@ import type {
 } from "../types";
 import { createDragController } from "./drag-layer";
 import { createResizeController, type ResizeHit } from "./resize-layer";
+import { DEFAULT_TOOL, type ToolId } from "./tools/tool";
 
 /**
  * The slice of `hui-card` a probe uses. Declared rather than imported: it is
@@ -101,6 +102,10 @@ export class PictureStudioCard extends LitElement {
     editing: { state: true },
     // The badge whose form is open in the editor, mirrored here to mark it.
     selected: { state: true },
+    // The active corner-drag tool, mirrored from the editor for the same reason
+    // selected is: the card is rebuilt on every commit, so the editor is the
+    // one place that outlives it.
+    tool: { state: true },
     // hui-card assigns this from the view's layout: isPanel = layout === "panel".
     // Only CSS reads it, hence reflected — and under the name Home Assistant's
     // own container cards already use, ispanel. See the :host([ispanel]) rule.
@@ -112,6 +117,7 @@ export class PictureStudioCard extends LitElement {
   declare isPanel: boolean;
   declare editing: boolean;
   declare selected: number | undefined;
+  declare tool: ToolId;
   declare _config?: PictureStudioConfig;
 
   private _hass?: HomeAssistant;
@@ -185,6 +191,7 @@ export class PictureStudioCard extends LitElement {
     super();
     this.preview = false;
     this.editing = false;
+    this.tool = DEFAULT_TOOL;
   }
 
   set hass(hass: HomeAssistant) {
@@ -265,6 +272,8 @@ export class PictureStudioCard extends LitElement {
     // read from the channel rather than round-tripped through Home Assistant.
     const selected = editing ? editor?.selectedIndex() : undefined;
     if (selected !== this.selected) this.selected = selected;
+    const tool = editing ? (editor?.tool() ?? DEFAULT_TOOL) : DEFAULT_TOOL;
+    if (tool !== this.tool) this.tool = tool;
     if (editing === this.editing) return;
     this.editing = editing;
   }

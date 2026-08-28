@@ -1,3 +1,4 @@
+import type { ToolId } from "./card/tools/tool";
 import type { ImageBox } from "./image-box";
 import type { Anchor, Position } from "./position";
 
@@ -45,6 +46,16 @@ export interface EditorChannel {
   select(index: number | undefined, origin: SelectOrigin): void;
   /** The badge whose form is open, if any. */
   selectedIndex(): number | undefined;
+  /**
+   * The active tool, and where it lives.
+   *
+   * It is editor state, beside the selection, for the same reason: Home
+   * Assistant rebuilds the card element on every config change, so a tool
+   * remembered on the card would be lost after every resize and every move —
+   * exactly when it is in use.
+   */
+  tool(): ToolId;
+  setTool(tool: ToolId): void;
 }
 
 /**

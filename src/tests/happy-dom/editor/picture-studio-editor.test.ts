@@ -605,6 +605,20 @@ const mountEditor = async (config: unknown): Promise<PictureStudioEditor> => {
   return el;
 };
 
+describe("the active tool", () => {
+  it("keeps the active tool across a commit, and resets it when the selection moves", async () => {
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    editor.setTool("distort");
+    expect(editor.tool()).toBe("distort");
+    // A commit rebuilds the card element; the editor is what survives it.
+    editor.patchPosition(0, { left: 10, top: 10 });
+    expect(editor.tool()).toBe("distort");
+    editor.select(1, "list");
+    expect(editor.tool()).toBe("resize");
+  });
+});
+
 describe("the five sections", () => {
   it("renders them in order, Background open", async () => {
     const el = await mountEditor({ type: CARD_TYPE, items: [] });
