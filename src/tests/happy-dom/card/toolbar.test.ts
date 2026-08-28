@@ -122,13 +122,16 @@ describe("the toolbar", () => {
     el.addEventListener("anchor-changed", (ev) => {
       seen = (ev as CustomEvent<{ anchor: string }>).detail.anchor;
     });
-    el.renderRoot.querySelector("picture-studio-anchor-input")?.dispatchEvent(
-      new CustomEvent("anchor-changed", {
-        detail: { anchor: "bottom-left" },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const input = el.renderRoot.querySelector(
+      "picture-studio-anchor-input",
+    ) as PictureStudioAnchorInput;
+    await input.updateComplete;
+    // Click a real cell so the test drives the production path: the anchor-input
+    // dispatches the event itself with the flags the picker depends on, rather
+    // than the test supplying them and effectively asserting its own dispatch.
+    (
+      input.renderRoot.querySelector('button[aria-label="bottom-left"]') as HTMLButtonElement
+    ).click();
     await el.updateComplete;
     expect(seen).toBe("bottom-left");
     expect((el.renderRoot.querySelector("dialog") as HTMLDialogElement).open).toBe(false);
