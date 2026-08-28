@@ -51,10 +51,9 @@ afterEach(() => {
 });
 
 /**
- * `auto` is a mode, not a point, so the grid has nothing to mark while it is on.
- * The cells stay live all the same: clicking one is how you leave the mode, and
- * disabling them would make the switch the only way out of a state the grid is
- * meant to replace.
+ * The switch is the picker's own control — it owns the `auto` mode; the anchor
+ * input handles specific points. These two tests cover the switch's two
+ * transitions: off (falls back to `center`) and back on (returns to `auto`).
  */
 describe("the automatic mode", () => {
   it("falls back to center when the switch is turned off", async () => {

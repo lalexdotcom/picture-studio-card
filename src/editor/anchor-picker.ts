@@ -4,20 +4,13 @@ import { localizeOwn } from "../strings";
 import type { HomeAssistant } from "../types";
 
 /**
- * Picks the anchor: a 3x3 grid for the nine fixed values, and a switch for
- * `auto`, which has no place on the grid because it is not a point.
+ * The form row that pairs the `auto` switch with the anchor input. Turning the
+ * switch off leaves the user on `center`; clicking a cell in the input selects a
+ * specific point and implicitly exits `auto`.
  *
- * The cells stay live while `auto` is on, with none of them marked:
- * clicking one is how you leave that mode, so disabling them would make the
- * switch the only way out of a state the grid is meant to replace.
- *
- * The grid is hand-built rather than an ha-control-select: that component lives
- * in a lazily loaded chunk of the frontend, so a custom card cannot rely on the
- * tag being defined. The tokens below are HA's, so it still follows the theme.
- *
- * Nine cells and no nine labels — which is the reason this is a grid and not a
- * select, since Home Assistant has no translation key for an anchor name and
- * every string we invent is one we have to maintain in every language.
+ * The two halves sit side-by-side rather than stacked because both controls are
+ * compact enough that the row reads at a glance — the switch says "is this
+ * automatic?" and the grid says "if not, where?".
  */
 export class PictureStudioAnchorPicker extends LitElement {
   static properties = {

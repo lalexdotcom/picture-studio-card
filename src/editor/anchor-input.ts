@@ -14,6 +14,18 @@ const CELLS = Object.keys(ANCHOR_OFFSETS) as Exclude<Anchor, "auto">[];
  * row needs HA's own label styling, which is what `ha-formfield` gives by
  * construction rather than by copying values out of HA's CSS; the modal is
  * opened by a button that already says what it is.
+ *
+ * The cells stay live while `auto` is on, with none of them marked: clicking one
+ * is how the user leaves that mode, so disabling them would make the switch the
+ * only way out of a state the grid is meant to replace.
+ *
+ * The grid is hand-built rather than an ha-control-select: that component lives
+ * in a lazily loaded chunk of the frontend, so a custom card cannot rely on the
+ * tag being defined. The tokens are HA's, so it still follows the theme.
+ *
+ * Nine cells and no nine labels — which is the reason this is a grid and not a
+ * select, since Home Assistant has no translation key for an anchor name and
+ * every string we invent is one we have to maintain in every language.
  */
 export class PictureStudioAnchorInput extends LitElement {
   static properties = {
