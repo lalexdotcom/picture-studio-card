@@ -3,45 +3,59 @@ import { createDistortTool } from "../../../card/tools/distort-tool";
 import type { ResizeToolOptions } from "../../../card/tools/resize-tool";
 import { createResizeTool } from "../../../card/tools/resize-tool";
 
+/**
+ * Creates the DOM scaffolding and base options both tool suites need.
+ * Each suite calls this in its own beforeEach so the fixtures are fresh
+ * and independent.
+ */
+function makeBaseFixtures() {
+  const root = document.createElement("div");
+  const surface = document.createElement("div");
+  const wrapperA = document.createElement("div");
+  wrapperA.className = "item";
+  wrapperA.dataset.index = "0";
+  const wrapperB = document.createElement("div");
+  wrapperB.className = "item";
+  wrapperB.dataset.index = "1";
+  root.append(surface, wrapperA, wrapperB);
+  document.body.append(root);
+
+  surface.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 300,
+      right: 400,
+      bottom: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  const options: ResizeToolOptions = {
+    getSurface: () => surface,
+    getAnchor: () => "top-left",
+    getPosition: () => ({ left: 10, top: 10 }),
+    getConfig: (index) => (index === 0 || index === 1 ? { width: 20 } : undefined),
+    onCommit: () => {},
+  };
+
+  return { root, surface, wrapperA, wrapperB, options };
+}
+
 describe("createResizeTool", () => {
   let root: HTMLElement;
-  let surface: HTMLElement;
   let wrapperA: HTMLElement;
   let wrapperB: HTMLElement;
   let options: ResizeToolOptions;
 
   beforeEach(() => {
-    root = document.createElement("div");
-    surface = document.createElement("div");
-    wrapperA = document.createElement("div");
-    wrapperA.className = "item";
-    wrapperA.dataset.index = "0";
-    wrapperB = document.createElement("div");
-    wrapperB.className = "item";
-    wrapperB.dataset.index = "1";
-    root.append(surface, wrapperA, wrapperB);
-    document.body.append(root);
-
-    surface.getBoundingClientRect = () =>
-      ({
-        left: 0,
-        top: 0,
-        width: 400,
-        height: 300,
-        right: 400,
-        bottom: 300,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
-
-    options = {
-      getSurface: () => surface,
-      getAnchor: () => "top-left",
-      getPosition: () => ({ left: 10, top: 10 }),
-      getConfig: (index) => (index === 0 || index === 1 ? { width: 20 } : undefined),
-      onCommit: () => {},
-    };
+    const f = makeBaseFixtures();
+    root = f.root;
+    wrapperA = f.wrapperA;
+    wrapperB = f.wrapperB;
+    options = f.options;
   });
 
   afterEach(() => document.body.replaceChildren());
@@ -136,38 +150,51 @@ describe("createResizeTool", () => {
     expect(tool.hit(handle)?.corner).toBe("bottom-right");
     expect(tool.hit(wrapperA)).toBeUndefined();
   });
+});
 
-  describe("createDistortTool", () => {
-    let commits: unknown[][];
+describe("createDistortTool", () => {
+  let root: HTMLElement;
+  let wrapperA: HTMLElement;
+  let options: ResizeToolOptions;
+  let commits: unknown[][];
 
-    beforeEach(() => {
-      commits = [];
-      options = {
-        ...options,
-        onCommit: (...args) => {
-          commits.push(args);
-        },
-      };
-    });
+  beforeEach(() => {
+    const f = makeBaseFixtures();
+    root = f.root;
+    wrapperA = f.wrapperA;
+    commits = [];
+    options = {
+      ...f.options,
+      onCommit: (...args) => {
+        commits.push(args);
+      },
+    };
+  });
 
-    it("draws nothing, hits nothing, and commits nothing", async () => {
-      const tool = createDistortTool();
-      tool.render({ element: wrapperA, index: 0 });
-      expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
-      expect(tool.hit(wrapperA)).toBeUndefined();
-      tool.attach(root);
-      root.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-      expect(commits).toHaveLength(0);
-    });
+  afterEach(() => document.body.replaceChildren());
 
-    it("takes the handles away when it becomes active, and gives them back", async () => {
-      const resize = createResizeTool(options);
-      const distort = createDistortTool();
-      resize.render({ element: wrapperA, index: 0 });
-      expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
-      resize.detach();
-      distort.render({ element: wrapperA, index: 0 });
-      expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
-    });
+  it("draws nothing, hits nothing, and commits nothing", async () => {
+    const tool = createDistortTool();
+    tool.render({ element: wrapperA, index: 0 });
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
+    expect(tool.hit(wrapperA)).toBeUndefined();
+    tool.attach(root);
+    root.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(commits).toHaveLength(0);
+  });
+
+  it("takes the handles away when it becomes active, and gives them back", async () => {
+    const resize = createResizeTool(options);
+    const distort = createDistortTool();
+    resize.render({ element: wrapperA, index: 0 });
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
+    resize.detach();
+    distort.render({ element: wrapperA, index: 0 });
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
+    // Prove the return path: detach distort, re-attach and re-render resize.
+    distort.detach();
+    resize.attach(root);
+    resize.render({ element: wrapperA, index: 0 });
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
   });
 });

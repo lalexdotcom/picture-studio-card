@@ -107,7 +107,6 @@ export class PictureStudioToolbar extends LitElement {
     );
   }
 
-  /** Placeholder — Task 4 will open the anchor picker popover. */
   /**
    * A modal <dialog>, not a popover.
    *
