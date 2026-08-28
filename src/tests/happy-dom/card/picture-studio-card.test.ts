@@ -1238,7 +1238,7 @@ describe("the toolbar", () => {
     releaseEditor = registerEditor({
       patchPosition: () => {},
       patchBox: (index, box) => {
-        recorded = { index, box: box as Record<string, unknown> };
+        recorded = { index, box: box as unknown as Record<string, unknown> };
       },
       patchAnchor: () => {},
       select: () => {},

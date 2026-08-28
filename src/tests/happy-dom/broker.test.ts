@@ -2,18 +2,22 @@ import { describe, expect, it } from "@rstest/core";
 import {
   activeCard,
   activeEditor,
+  type EditorChannel,
   notifyEditors,
   registerCard,
   registerEditor,
   subscribeEditors,
 } from "../../broker";
+import { DEFAULT_TOOL } from "../../card/tools/tool";
 
-const channel = () => ({
+const channel = (): EditorChannel => ({
   patchPosition: () => undefined,
   patchBox: () => undefined,
   patchAnchor: () => undefined,
   select: () => undefined,
   selectedIndex: () => undefined,
+  tool: () => DEFAULT_TOOL,
+  setTool: () => undefined,
 });
 
 const card = () => ({
