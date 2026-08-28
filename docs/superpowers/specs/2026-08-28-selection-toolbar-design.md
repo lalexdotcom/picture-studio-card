@@ -25,11 +25,23 @@ never reaches the config at all (decision 13).
 ### 1. Docked between the heading and `.root`, never floating
 
 The card renders `ha-card` → `picture-studio-heading` (optional) → `.root` →
-`.background` + `.layer`. The toolbar is a **sibling of `.root`**, so it is
-outside the size container: `.root` declares `container-type: inline-size` and
-every element's clamp is written in `cqw` against it. A toolbar inside it would
-change what a percentage means. Outside it, `cqw`, `.layer`'s geometry and
-`measureImageHeight` are all untouched.
+`.background` + `.layer`. The toolbar is a **sibling of `.root`**.
+
+**Corrected 2026-08-28, by measurement, after this decision first gave the wrong
+reason.** It claimed the sibling placement protects the `cqw` clamps, since
+`.root` declares `container-type: inline-size`. That is false, and a deliberate
+break proved it: `cqw` resolves against the container's **own inline size**,
+which its external constraints set, and a block child feeds nothing back into
+it. Moving the toolbar inside `.root` changed no width at all.
+
+What the placement actually protects is the **vertical** geometry. `.layer` is
+`position: absolute; inset: 0` inside `.root`, so a toolbar child would make
+`.root` — and with it the layer — taller than the picture by the bar's height.
+Two things break together: every item's `top` percentage resolves against the
+layer, so an item at `top: 100%` lands below the picture instead of on its
+bottom edge; and `measureImageHeight` divides a wrapper's height by the layer's,
+so the editor's own readings go wrong. That is what the browser lane asserts,
+and it is the break that reddens it.
 
 Two arrangements were weighed and refused:
 
