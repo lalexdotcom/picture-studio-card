@@ -55,7 +55,7 @@ dialog's own preview (`_inEditPreview`). No viewer ever pays for these pixels.
 
 ```
 ┌────────────────────────────────────────────────┐
-│ [✦ auto] [⊞ anchored] │ (picker)  [↺ keep-ratio]│
+│ [✦ auto] [⊞ anchored] │ (picker)  [🔓 keep-ratio]│
 └────────────────────────────────────────────────┘
 ```
 
@@ -245,8 +245,10 @@ decision 12's reset falls out of `select()` for free.
 
 ### 14. "Restore keep-ratio" is a button on the model, and there is no ratio padlock
 
-One button, enabled when a `height` exists and the ratio is not forced. It calls
-`patchBox(index, box)` **with the `height` key omitted** — the channel's contract
+One button, `mdi:lock-reset`, enabled when a `height` exists and the ratio is
+not forced. The glyph is the one thing in the bar that says the item is going
+back to a state rather than into one. It calls `patchBox(index, box)` **with the
+`height` key omitted** — the channel's contract
 is explicit and the trap is one word wide: *"`box` carries `height` by its
 presence… this must never write `height: undefined`"*.
 
