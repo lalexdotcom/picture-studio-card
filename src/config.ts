@@ -29,6 +29,7 @@ export const EDITOR_TAG = "picture-studio-editor";
 export const LIST_TAG = "picture-studio-badge-list";
 export const FORM_TAG = "picture-studio-badge-form";
 export const PICKER_TAG = "picture-studio-anchor-picker";
+export const ANCHOR_INPUT_TAG = "picture-studio-anchor-input";
 export const ICON_TAG = "picture-studio-state-icon";
 export const LABEL_TAG = "picture-studio-state-label";
 export const IMAGE_TAG = "picture-studio-image";

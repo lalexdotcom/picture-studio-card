@@ -5,6 +5,7 @@ import { PictureStudioStateIcon } from "./card/state-icon-element";
 import { PictureStudioStateLabel } from "./card/state-label-element";
 import { PictureStudioVisibilityProbe } from "./card/visibility-probe";
 import {
+  ANCHOR_INPUT_TAG,
   CARD_TAG,
   EDITOR_TAG,
   ELEMENT_FORM_TAG,
@@ -20,6 +21,7 @@ import {
   SECTION_TAG,
   VISIBILITY_SECTION_TAG,
 } from "./config";
+import { PictureStudioAnchorInput } from "./editor/anchor-input";
 import { PictureStudioAnchorPicker } from "./editor/anchor-picker";
 import { PictureStudioBadgeForm } from "./editor/badge-form";
 import { PictureStudioBadgeList } from "./editor/badge-list";
@@ -52,6 +54,10 @@ if (!customElements.get(FORM_TAG)) {
 
 if (!customElements.get(PICKER_TAG)) {
   customElements.define(PICKER_TAG, PictureStudioAnchorPicker);
+}
+
+if (!customElements.get(ANCHOR_INPUT_TAG)) {
+  customElements.define(ANCHOR_INPUT_TAG, PictureStudioAnchorInput);
 }
 
 if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudioStateIcon);
