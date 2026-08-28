@@ -132,9 +132,16 @@ family it does not belong to. The contrast is the point: an input, against a
 miniature that only displays.
 
 The picker then becomes what it describes — switch, separator, input — and emits
-the same `anchor-changed` event from the same place. **The three forms
-(badge, image, state-label) change in no way**, which their existing tests prove
-by passing unchanged.
+the same `anchor-changed` event from the same place, so the three forms (badge,
+image, state-label) change in no way.
+
+**What that costs in tests, stated because it is easy to promise otherwise:**
+the picker's own tests reach into its shadow root for `.grid` and `button.cell`,
+which after the extraction sit one boundary lower. Five of the seven are about
+the grid and **move** to the input's file; the two about the switch stay. No form
+test asserts anything about the anchor today, so there is no existing suite that
+proves the forms did not move — a composition test is owed instead, proving
+`anchor-changed` still crosses two shadow boundaries out of the picker.
 
 ### 7. The picker opens in a modal `<dialog>`, not in a `popover`
 
@@ -170,6 +177,16 @@ interface Tool {
 `resize-tool` wraps the shipped controller and **takes over creating the
 handles**, today done in `_createChild` — along with the size guard in
 `resize-box.ts`, which is a property of the resize gesture and not of the card.
+
+**This overturns a documented choice, so it is argued rather than assumed.**
+`_createChild` builds the handles once per resizable item and lets CSS show them
+on the selected one, with the reason written beside it: *"DOM churn under the
+pointer is how a gesture loses its target."* Mounting them per selection is safe
+here for two reasons that must both hold: `render` is inert during the tool's own
+gesture (decision 10), and a selection only ever changes at `pointerup` —
+`drag-layer` holds its `onSelect` to the drop deliberately. Whoever moves this
+code **replaces that comment** rather than leaving it to describe a strategy the
+file no longer follows.
 `distort-tool` implements the four methods as no-ops.
 
 **The inertness of a tool that does nothing is structural, not coded.** Nothing
@@ -350,9 +367,11 @@ rather than writing `undefined`.
 - **`distort` selected on an image that has handles under `resize`** — the no-op
   is only meaningful against a tool that draws.
 
-**Non-regression of the extraction**: the existing `picture-studio-anchor-picker`
-tests pass **unchanged**. That is the proof the three forms did not move, and it
-costs nothing because it already exists.
+**The extraction moves tests rather than preserving them**: the picker's five
+grid tests become the input's, its two switch tests stay, and a new composition
+test proves `anchor-changed` still leaves the picker after crossing two shadow
+boundaries. Claiming an unchanged suite here would be false — the existing tests
+query a shadow root the grid has left.
 
 **The browser lane takes what happy-dom cannot see** — it has no layout, which is
 exactly what let an inoperative fix through on this line:
