@@ -10,6 +10,7 @@ import {
   LABEL_TAG,
   PROBE_TAG,
   PROBE_TYPE,
+  TOOLBAR_TAG,
 } from "../../../config";
 
 import type { HomeAssistant } from "../../../types";
@@ -121,6 +122,8 @@ describe("a real change", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => selected,
+      tool: () => "resize",
+      setTool: () => {},
     };
     card.preview = true;
     releaseEditor = registerEditor(editor);
@@ -140,6 +143,49 @@ describe("a real change", () => {
     expect(
       background(card).setConfigCalls + badges(card).reduce((sum, b) => sum + b.setConfigCalls, 0),
     ).toBe(before);
+  });
+});
+
+describe("the active tool survives a card rebuild", () => {
+  // Home Assistant destroys and recreates the card element on every config
+  // change. This test models that: the original card is removed and a fresh
+  // element is mounted against the same registered editor. The tool must read
+  // back from the editor's channel, not from anything the card remembered.
+  it("a fresh card element reads the tool from the editor, not from itself", async () => {
+    let currentTool = "resize";
+    const editor: EditorChannel = {
+      patchPosition: () => {},
+      patchBox: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+      tool: () => currentTool as "resize" | "distort",
+      setTool: (t) => {
+        currentTool = t;
+        notifyEditors();
+      },
+    };
+    releaseEditor = registerEditor(editor);
+
+    const first = await mountCard(CONFIG_3);
+    first.preview = true;
+    notifyEditors();
+    await first.updateComplete;
+    expect((first as unknown as { tool: string }).tool).toBe("resize");
+
+    editor.setTool("distort");
+    await first.updateComplete;
+    expect((first as unknown as { tool: string }).tool).toBe("distort");
+
+    // Destroy the first card — modelling what Home Assistant does on commit.
+    first.remove();
+
+    // Mount a fresh card against the same editor (tool is still "distort").
+    const second = await mountCard(CONFIG_3);
+    second.preview = true;
+    notifyEditors();
+    await second.updateComplete;
+    expect((second as unknown as { tool: string }).tool).toBe("distort");
   });
 });
 
@@ -249,6 +295,8 @@ describe("visibility probes", () => {
     patchAnchor: () => {},
     select: () => {},
     selectedIndex: () => undefined,
+    tool: () => "resize",
+    setTool: () => {},
   };
 
   it("creates one probe, for the conditional item only", async () => {
@@ -370,6 +418,8 @@ describe("the condition marker", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
     });
     await flush();
   };
@@ -461,6 +511,8 @@ describe("editing flag on element rebuild", () => {
       patchAnchor: () => {},
       select: () => {},
       selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
     });
     await flush();
 
@@ -616,6 +668,8 @@ describe("hui-error-badge display in editing mode", () => {
         patchAnchor: () => {},
         select: () => {},
         selectedIndex: () => undefined,
+        tool: () => "resize",
+        setTool: () => {},
       });
     }
     document.body.append(card);
@@ -1139,6 +1193,78 @@ describe("a native badge type outside CORE_BADGES", () => {
   });
 });
 
+describe("the toolbar", () => {
+  // editing is derived, never assigned: it comes from `preview` plus a
+  // registered editor. releaseEditor and its afterEach already live at the top
+  // of this file.
+  const edit = async (card: PictureStudioCard): Promise<void> => {
+    card.preview = true;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchBox: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
+    });
+    await flush();
+  };
+
+  it("renders no toolbar on a dashboard", async () => {
+    const card = await mountCard({ type: CARD_TYPE, items: [] });
+    expect(card.renderRoot.querySelector(TOOLBAR_TAG)).toBeNull();
+  });
+
+  it("renders the toolbar while editing", async () => {
+    const card = await mountCard({ type: CARD_TYPE, items: [] });
+    await edit(card);
+    expect(card.renderRoot.querySelector(TOOLBAR_TAG)).not.toBeNull();
+  });
+
+  it("keep-ratio-restore omits the height key, never sets it to undefined", async () => {
+    const card = await mountCard({
+      type: CARD_TYPE,
+      image: "/bg.png",
+      items: [
+        {
+          type: "element",
+          position: { top: 50, left: 50 },
+          config: { type: "image", image: "/a.png", width: 40, height: 25 },
+        },
+      ],
+    });
+    let recorded: { index: number; box: Record<string, unknown> } | undefined;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchBox: (index, box) => {
+        recorded = { index, box: box as unknown as Record<string, unknown> };
+      },
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+      tool: () => "resize",
+      setTool: () => {},
+    });
+    card.preview = true;
+    await flush();
+    const toolbar = card.renderRoot.querySelector(TOOLBAR_TAG) as HTMLElement;
+    toolbar.dispatchEvent(
+      new CustomEvent("keep-ratio-restore", {
+        detail: { index: 0 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(recorded).toBeDefined();
+    if (recorded === undefined) return; // narrow so the assertions below need no !
+    expect(recorded.index).toBe(0);
+    // The key must be absent — `"height" in box` is the predicate every reader
+    // uses. `{ height: undefined }` would pass the value check and break the mode.
+    expect("height" in recorded.box).toBe(false);
+  });
+});
+
 describe("the header", () => {
   it("is absent when the heading holds nothing", async () => {
     const card = await mountCard({ type: CARD_TYPE, items: [] });
@@ -1181,6 +1307,8 @@ describe("the preview reserves the height of the one it replaces", () => {
     patchAnchor: () => {},
     select: () => {},
     selectedIndex: () => undefined,
+    tool: () => "resize",
+    setTool: () => {},
   });
 
   it("pins the outgoing height on its successor, then lets go", async () => {
@@ -1442,6 +1570,8 @@ describe("resize handles", () => {
         notifyEditors();
       },
       selectedIndex: () => selected,
+      tool: () => "resize",
+      setTool: () => {},
     });
     (card as unknown as { preview: boolean }).preview = true;
     notifyEditors();
@@ -1465,14 +1595,14 @@ describe("resize handles", () => {
     expect(corners).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
   });
 
-  it("shows them only on the selected item", async () => {
-    // The rule is CSS, so assert the rule rather than a computed style —
-    // happy-dom does no layout and `cssRules` is what this file already uses to
-    // check a declaration exists.
-    await editing();
-    expect(
-      cssRules(PictureStudioCard.styles).get(".editing .item.selected > .handle"),
-    ).toBeTruthy();
+  it("shows them only on the selected item: mounted by JS, not CSS display-toggle", async () => {
+    // Old strategy: .handle { display:none } toggled to display:block via
+    // .editing .item.selected > .handle. New strategy: the tool mounts nodes
+    // only on the selected wrapper, so the CSS neither hides nor shows them —
+    // position:absolute is what keeps mounting one from shifting the wrapper's box.
+    const rules = cssRules(PictureStudioCard.styles);
+    expect(rules.get(".handle")).toMatch("position: absolute");
+    expect(rules.get(".editing .item.selected > .handle")).toBeUndefined();
   });
 
   it("does not clear the selection when a handle is pressed", async () => {

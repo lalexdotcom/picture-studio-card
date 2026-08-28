@@ -7,6 +7,7 @@ import {
   registerEditor,
   type SelectOrigin,
 } from "../broker";
+import { DEFAULT_TOOL, type ToolId } from "../card/tools/tool";
 import {
   type BadgeItem,
   CARD_TYPE,
@@ -120,6 +121,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _applying = false;
   /** Where the last selection came from. See `updated`, which scrolls on it. */
   private _selectOrigin: SelectOrigin = "list";
+  private _tool: ToolId = DEFAULT_TOOL;
   /** Stops the running hold, if any. Set by `_holdPreview`, cleared on exit. */
   private _holdRelease?: () => void;
   constructor() {
@@ -398,6 +400,7 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
     // dragging an item that was already selected must not disturb the hold the
     // commit just started. That is what `b55388c` fixed.
     if (this._editingIndex === index) return;
+    this._tool = DEFAULT_TOOL;
     this._selectOrigin = origin;
     // A picture selection changes the form's height with no config change, so
     // nothing else is going to start a hold — except when a commit already did,
@@ -431,6 +434,19 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   selectedIndex(): number | undefined {
     return this._editingIndex;
+  }
+
+  tool(): ToolId {
+    return this._tool;
+  }
+
+  setTool(tool: ToolId): void {
+    this._tool = tool;
+    // Cards derive `tool` from the editor's channel through the broker
+    // subscription. `notifyEditors()` is what prompts them to re-read it —
+    // the same mechanism `select()` uses for the selection. `requestUpdate()`
+    // alone only re-renders the editor itself and never reaches the card.
+    notifyEditors();
   }
 
   private _backgroundChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {

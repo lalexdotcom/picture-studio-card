@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, rstest } from "@rstest/core";
-import { registerCard } from "../../../broker";
+import { registerCard, subscribeEditors } from "../../../broker";
 import {
   CARD_TYPE,
   EDITOR_TAG,
@@ -604,6 +604,51 @@ const mountEditor = async (config: unknown): Promise<PictureStudioEditor> => {
   await el.updateComplete;
   return el;
 };
+
+describe("the active tool", () => {
+  it("round-trips through setTool / tool()", async () => {
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    expect(editor.tool()).toBe("resize");
+    editor.setTool("distort");
+    expect(editor.tool()).toBe("distort");
+  });
+
+  it("resets to resize when the selection moves to a different index", async () => {
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    editor.setTool("distort");
+    editor.select(1, "list");
+    expect(editor.tool()).toBe("resize");
+  });
+
+  it("notifies broker subscribers when the tool changes", async () => {
+    // The card learns about tool changes only through the broker subscription —
+    // setTool() must call notifyEditors(), not just requestUpdate().
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    let notified = 0;
+    const unsubscribe = subscribeEditors(() => {
+      notified++;
+    });
+    const baseline = notified; // subscribeEditors fires once on subscribe
+    editor.setTool("distort");
+    expect(notified).toBe(baseline + 1);
+    unsubscribe();
+  });
+
+  it("does not reset when select() is called with the already-selected index", async () => {
+    // drag-layer calls onSelect(hit.index) at the end of every gesture,
+    // including one that merely moved the already-selected item. The reset
+    // must sit after the early-return guard, or every drag silently clears
+    // the active tool.
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    editor.setTool("distort");
+    editor.select(0, "picture");
+    expect(editor.tool()).toBe("distort");
+  });
+});
 
 describe("the five sections", () => {
   it("renders them in order, Background open", async () => {

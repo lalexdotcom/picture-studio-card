@@ -16,19 +16,22 @@ import {
   PROBE_TYPE,
   stubConfig,
 } from "../config";
-import { effectiveBox, imageBoxStyle } from "../image-box";
+import { effectiveBox, type ImageBox, imageBoxStyle } from "../image-box";
 import "./card-heading";
-import { isResizableKind } from "../element-kinds";
+import "./toolbar";
 import {
   type Anchor,
+  axisOffset,
   DEFAULT_POSITION,
   type MarkerCorner,
   markerCorner,
   type Position,
   positionStyle,
   reanchor,
+  toPercent,
+  toPx,
 } from "../position";
-import type { Corner } from "../resize-box";
+
 import type {
   BadgeConfig,
   HomeAssistant,
@@ -37,7 +40,9 @@ import type {
   LovelaceGridOptions,
 } from "../types";
 import { createDragController } from "./drag-layer";
-import { createResizeController, type ResizeHit } from "./resize-layer";
+import { createDistortTool } from "./tools/distort-tool";
+import { createResizeTool } from "./tools/resize-tool";
+import { DEFAULT_TOOL, type Tool, type ToolId, type ToolTarget } from "./tools/tool";
 
 /**
  * The slice of `hui-card` a probe uses. Declared rather than imported: it is
@@ -51,9 +56,6 @@ type ProbeElement = HTMLElement & {
 };
 
 const MARKER_CORNERS: MarkerCorner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
-
-/** The four corners a handle sits on, in DOM order. */
-const HANDLE_CORNERS: Corner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 /** Home Assistant's own error badge, the one its detail dialog dumps origConfig from. */
 const ERROR_BADGE_TAG = "hui-error-badge";
@@ -100,6 +102,10 @@ export class PictureStudioCard extends LitElement {
     editing: { state: true },
     // The badge whose form is open in the editor, mirrored here to mark it.
     selected: { state: true },
+    // The active corner-drag tool, mirrored from the editor for the same reason
+    // selected is: the card is rebuilt on every commit, so the editor is the
+    // one place that outlives it.
+    tool: { state: true },
     // hui-card assigns this from the view's layout: isPanel = layout === "panel".
     // Only CSS reads it, hence reflected — and under the name Home Assistant's
     // own container cards already use, ispanel. See the :host([ispanel]) rule.
@@ -111,6 +117,7 @@ export class PictureStudioCard extends LitElement {
   declare isPanel: boolean;
   declare editing: boolean;
   declare selected: number | undefined;
+  declare tool: ToolId;
   declare _config?: PictureStudioConfig;
 
   private _hass?: HomeAssistant;
@@ -129,7 +136,7 @@ export class PictureStudioCard extends LitElement {
   private _unsubscribe?: () => void;
 
   private _drag = createDragController({
-    isHandle: (target) => this._hitHandle(target) !== undefined,
+    isHandle: (target) => this._activeTool.hit(target) !== undefined,
     getIndexedWrapper: (target) => {
       const wrapper = (target as HTMLElement | null)?.closest?.(".item") as HTMLElement | null;
       const index = wrapper?.dataset.index;
@@ -156,34 +163,41 @@ export class PictureStudioCard extends LitElement {
     onSelect: (index) => activeEditor()?.select(index, "picture"),
   });
 
-  private _resize = createResizeController({
-    getHandle: (target) => this._hitHandle(target),
-    getSurface: () => this.renderRoot.querySelector(".layer"),
-    getAnchor: (index) => {
-      const item = this._config?.items[index];
-      if (!item || item.type === "unknown") return "auto";
-      return item.anchor ?? "auto";
-    },
-    getPosition: (index) => {
-      const item = this._config?.items[index];
-      return item && item.type !== "unknown" ? item.position : { ...DEFAULT_POSITION };
-    },
-    getConfig: (index) => {
-      const item = this._config?.items[index];
-      if (!item || item.type !== "element" || item.config.type !== "image") return undefined;
-      return item.config;
-    },
-    onCommit: (index, box, position) => activeEditor()?.patchBox(index, box, position),
-    onStretch: (index, stretched) => {
-      const child = this._elements[index] as (HTMLElement & { stretch?: boolean }) | undefined;
-      if (child) child.stretch = stretched;
-    },
-  });
+  private _tools: Record<ToolId, Tool> = {
+    resize: createResizeTool({
+      getSurface: () => this.renderRoot.querySelector(".layer"),
+      getAnchor: (index) => {
+        const item = this._config?.items[index];
+        if (!item || item.type === "unknown") return "auto";
+        return item.anchor ?? "auto";
+      },
+      getPosition: (index) => {
+        const item = this._config?.items[index];
+        return item && item.type !== "unknown" ? item.position : { ...DEFAULT_POSITION };
+      },
+      getConfig: (index) => {
+        const item = this._config?.items[index];
+        if (!item || item.type !== "element" || item.config.type !== "image") return undefined;
+        return item.config;
+      },
+      onCommit: (index, box, position) => activeEditor()?.patchBox(index, box, position),
+      onStretch: (index, stretched) => {
+        const child = this._elements[index] as (HTMLElement & { stretch?: boolean }) | undefined;
+        if (child) child.stretch = stretched;
+      },
+    }),
+    distort: createDistortTool(),
+  };
+
+  private get _activeTool(): Tool {
+    return this._tools[this.tool];
+  }
 
   constructor() {
     super();
     this.preview = false;
     this.editing = false;
+    this.tool = DEFAULT_TOOL;
   }
 
   set hass(hass: HomeAssistant) {
@@ -264,6 +278,8 @@ export class PictureStudioCard extends LitElement {
     // read from the channel rather than round-tripped through Home Assistant.
     const selected = editing ? editor?.selectedIndex() : undefined;
     if (selected !== this.selected) this.selected = selected;
+    const tool = editing ? (editor?.tool() ?? DEFAULT_TOOL) : DEFAULT_TOOL;
+    if (tool !== this.tool) this.tool = tool;
     if (editing === this.editing) return;
     this.editing = editing;
   }
@@ -323,10 +339,10 @@ export class PictureStudioCard extends LitElement {
     const root = this.hasUpdated ? this.renderRoot.querySelector(".root") : null;
     if (this.editing && root instanceof HTMLElement) {
       this._drag.attach(root);
-      this._resize.attach(root);
+      this._activeTool.attach(root);
     } else {
       this._drag.detach();
-      this._resize.detach();
+      this._activeTool.detach();
     }
 
     // Registered on the same condition the drag is armed on, so the editor only
@@ -373,13 +389,13 @@ export class PictureStudioCard extends LitElement {
     this._unregisterCard?.();
     this._unregisterCard = undefined;
     this._drag.detach();
-    // Must detach the resize controller explicitly: its pointer listeners live on
+    // Must detach the active tool explicitly: its pointer listeners live on
     // `.root` (which dies with the shadow root) but `keydown`/`keyup` are
     // registered on `window`, which does not. Home Assistant rebuilds the card
     // element on every config commit, so without this call an edit session
     // accumulates two orphaned window listeners per commit, each holding a
     // reference to a dead element's state.
-    this._resize.detach();
+    this._activeTool.detach();
   }
 
   protected updated(changed: PropertyValues): void {
@@ -423,6 +439,7 @@ export class PictureStudioCard extends LitElement {
     if (configChanged) {
       void this._syncBackground();
       // _syncItems ends with _applyPositions, so it is not called again here.
+      // _syncItems also calls _activeTool.render() after rebuilding wrappers.
       void this._syncItems();
       // `preview` is in the gate because the condition marker keys on it: a
       // dashboard entering or leaving edit mode changes nothing else here, and
@@ -432,6 +449,32 @@ export class PictureStudioCard extends LitElement {
       // the selection, now announced when a drag is released — arrives while the
       // config still holds the pre-drag position. See _applyMarks.
       this._applyMarks(this._config?.items ?? []);
+    }
+
+    // When the active tool changes, detach the outgoing tool before attaching
+    // the incoming one: detaching unmounts the outgoing tool's handles, so
+    // attaching first would leave a frame with two tools listening on the same root.
+    if (changed.has("tool")) {
+      const oldToolId = changed.get("tool") as ToolId | undefined;
+      if (oldToolId) {
+        this._tools[oldToolId].detach();
+      }
+      const root = this.renderRoot.querySelector(".root");
+      if (this.editing && root instanceof HTMLElement) {
+        this._activeTool.attach(root);
+      }
+    }
+
+    // Re-render the active tool's handles whenever the selection or the active
+    // tool changes. The config case is handled inside _syncItems, which rebuilds
+    // wrappers asynchronously before calling render there.
+    if (changed.has("selected") || changed.has("tool")) {
+      const sel = this.selected;
+      const wrapper = sel !== undefined ? this._wrappers[sel] : undefined;
+      const target: ToolTarget | undefined = wrapper
+        ? { element: wrapper, index: sel as number }
+        : undefined;
+      this._activeTool.render(target);
     }
   }
 
@@ -556,19 +599,6 @@ export class PictureStudioCard extends LitElement {
         if (this._hass) child.hass = this._hass;
         wrapper.append(child as unknown as HTMLElement);
 
-        // Built once and shown by CSS on the selected item, rather than added
-        // and removed as the selection moves: the wrapper's box is what the
-        // gesture measures, and DOM churn under the pointer is how a gesture
-        // loses its target.
-        if (item.type === "element" && isResizableKind(item.config.type)) {
-          for (const corner of HANDLE_CORNERS) {
-            const handle = document.createElement("div");
-            handle.className = `handle handle-${corner}`;
-            handle.dataset.corner = corner;
-            wrapper.append(handle);
-          }
-        }
-
         const probe = this._createProbe(item);
         if (probe) layer.append(probe);
         layer.append(wrapper);
@@ -599,6 +629,11 @@ export class PictureStudioCard extends LitElement {
     }
 
     this._applyPositions(items);
+    // Render after wrappers are settled: if the shape changed, the above rebuilt
+    // the DOM asynchronously and updated() ran before the new wrappers existed.
+    const sel = this.selected;
+    const wrapper = sel !== undefined ? this._wrappers[sel] : undefined;
+    this._activeTool.render(wrapper ? { element: wrapper, index: sel as number } : undefined);
   }
 
   private _createChild(
@@ -897,23 +932,6 @@ export class PictureStudioCard extends LitElement {
   }
 
   /**
-   * What a pointer landed on: a resize handle, an item, or the picture.
-   *
-   * One owner, consulted by both gesture controllers. Two copies of this — one
-   * per controller — is the shape that eventually disagrees, and the
-   * disagreement would be invisible because each is correct on its own.
-   */
-  private _hitHandle(target: EventTarget | null): ResizeHit | undefined {
-    const handle = (target as HTMLElement | null)?.closest?.(".handle") as HTMLElement | null;
-    const corner = handle?.dataset.corner as Corner | undefined;
-    const wrapper = handle?.closest(".item") as HTMLElement | null;
-    const index = wrapper?.dataset.index;
-    return handle && corner && wrapper && index !== undefined
-      ? { element: wrapper, index: Number(index), corner }
-      : undefined;
-  }
-
-  /**
    * The item under a live gesture, whichever gesture it is.
    *
    * `_applyPositions` must leave that wrapper alone: its styles are raw pixels
@@ -921,7 +939,7 @@ export class PictureStudioCard extends LitElement {
    * the item back on every hass tick. One question, not one flag per controller.
    */
   private _gestureIndex(): number | undefined {
-    return this._drag.draggingIndex() ?? this._resize.resizingIndex();
+    return this._drag.draggingIndex() ?? this._activeTool.gestureIndex();
   }
 
   /**
@@ -958,6 +976,78 @@ export class PictureStudioCard extends LitElement {
     return rect.height > 0 ? rect.top : undefined;
   }
 
+  /**
+   * The item's coordinates re-expressed so its top-left stays put when its box
+   * changes.
+   *
+   * The same shape as `reanchor`, with the other variable moving: there the
+   * anchor changes and the size holds; here the size changes and the anchor
+   * holds. Both go through `toPx` / `toPercent`, the pair that converts between
+   * a stored coordinate and the pixel offset of the item's leading edge — and
+   * which already resolves `auto`, where the coordinate IS the translate
+   * fraction, so no edge stays put on its own and the item drifts on any size
+   * change.
+   *
+   * **Holding the top-left rather than the anchor point is deliberate**, and it
+   * is the resize gesture's rule rather than a new one: without ALT, a corner
+   * drag holds the corner opposite the grabbed one and ignores the anchor
+   * entirely (resize spec decision 4). Restoring the ratio is the same kind of
+   * change, so it answers the same way.
+   *
+   * **One forced reflow**, the price the resize gesture already pays on every
+   * pointermove in keep-ratio mode: the height a box without one resolves to is
+   * a function of the width, and only the layout engine knows it. The candidate
+   * style is written, read back, and the previous inline values restored; the
+   * commit that follows is what makes it permanent.
+   *
+   * Undefined when it cannot measure — the item is gone, or the card has not
+   * laid out — exactly as `reanchor` and `measureImageHeight` answer, and the
+   * caller then commits the box alone.
+   */
+  private _refit(index: number, box: ImageBox): Position | undefined {
+    const item = this._config?.items[index];
+    const wrapper = this._wrappers[index];
+    const layer = this._layer;
+    if (!item || item.type === "unknown" || !wrapper || !layer) return undefined;
+
+    const container = layer.getBoundingClientRect();
+    if (container.width === 0 || container.height === 0) return undefined;
+
+    const before = wrapper.getBoundingClientRect();
+    const anchor = item.anchor ?? "auto";
+    const leftPx = toPx(item.position.left, container.width, before.width, axisOffset(anchor, "x"));
+    const topPx = toPx(item.position.top, container.height, before.height, axisOffset(anchor, "y"));
+
+    const style = imageBoxStyle(box);
+    const saved = {
+      width: wrapper.style.width,
+      height: wrapper.style.height,
+      maxHeight: wrapper.style.maxHeight,
+    };
+    wrapper.style.width = style.width;
+    wrapper.style.height = style.height;
+    wrapper.style.maxHeight = style.maxHeight;
+    const after = wrapper.getBoundingClientRect();
+    wrapper.style.width = saved.width;
+    wrapper.style.height = saved.height;
+    wrapper.style.maxHeight = saved.maxHeight;
+    if (after.width === 0 || after.height === 0) return undefined;
+
+    // Only the axis whose size actually moved is rewritten. The round trip
+    // through toPx/toPercent rounds to two decimals, so recomputing an axis
+    // that did not change would nudge a coordinate the user chose, for nothing.
+    return {
+      left:
+        after.width === before.width
+          ? item.position.left
+          : toPercent(leftPx, container.width, after.width, axisOffset(anchor, "x")),
+      top:
+        after.height === before.height
+          ? item.position.top
+          : toPercent(topPx, container.height, after.height, axisOffset(anchor, "y")),
+    };
+  }
+
   measureImageHeight(index: number): number | undefined {
     const wrapper = this._wrappers[index];
     const layer = this._layer;
@@ -981,6 +1071,47 @@ export class PictureStudioCard extends LitElement {
                   .heading=${this._config.heading}
                   .preview=${this.preview}
                 ></picture-studio-heading>
+              `
+            : nothing
+        }
+        ${
+          this.editing
+            ? html`
+                <picture-studio-toolbar
+                  .hass=${this.hass}
+                  .item=${this.selected === undefined ? undefined : this._config.items[this.selected]}
+                  .index=${this.selected}
+                  .tool=${this.tool}
+                  @anchor-changed=${(ev: CustomEvent<{ anchor: Anchor }>) => {
+                    const index = this.selected;
+                    if (index === undefined) return;
+                    activeEditor()?.patchAnchor(index, ev.detail.anchor);
+                  }}
+                  @keep-ratio-restore=${(ev: CustomEvent<{ index: number }>) => {
+                    const item = this._config?.items[ev.detail.index];
+                    if (item?.type !== "element" || item.config.type !== "image") return;
+                    // The key is never constructed, rather than constructed and
+                    // deleted: its presence IS the mode, and `"height" in config`
+                    // is what every reader asks. The width can be read straight
+                    // off the config because `normalizeImageBox` already ran on
+                    // it at load — config.ts spreads it into every image element.
+                    const box: ImageBox = { width: item.config.width };
+                    // Dropping the height changes it, so the item would move
+                    // under any anchor whose vertical offset is not zero — and
+                    // under `auto` it moves whatever the coordinate is. `_refit`
+                    // holds the top-left, and box and position travel in one
+                    // write for the reason `patchBox` states: two commits would
+                    // render the new box against the old coordinates for a frame.
+                    activeEditor()?.patchBox(
+                      ev.detail.index,
+                      box,
+                      this._refit(ev.detail.index, box),
+                    );
+                  }}
+                  @tool-changed=${(ev: CustomEvent<{ tool: ToolId }>) => {
+                    activeEditor()?.setTool(ev.detail.tool);
+                  }}
+                ></picture-studio-toolbar>
               `
             : nothing
         }
@@ -1013,6 +1144,13 @@ export class PictureStudioCard extends LitElement {
       height: 100%;
       overflow-x: hidden;
       overflow-y: auto;
+    }
+    /* The toolbar docks between the card heading and the picture. It is a
+       sibling of .root, not a child: .root is the size container every
+       element's cqw resolves against, and a child would change what a
+       percentage means. */
+    picture-studio-toolbar {
+      display: block;
     }
     /* .root holds only the background element in normal flow, so the drag
        surface matches the image's aspect ratio exactly.
@@ -1213,16 +1351,12 @@ export class PictureStudioCard extends LitElement {
     .editing .item > * {
       pointer-events: none;
     }
-    /* The handles exist on every resizable item and are shown only on the
-       selected one. Absolutely positioned, so they add nothing to the wrapper's
-       box — getBoundingClientRect is what both gestures measure, and the
-       condition marker's comment above makes the same point for the same
-       reason. */
+    /* Handles are mounted by JS on the selected wrapper only, so the old
+       display:none / display:block pair collapses into a single rule.
+       position:absolute is load-bearing: an out-of-flow child cannot shift the
+       wrapper's getBoundingClientRect, which is what both gesture controllers
+       read. */
     .handle {
-      display: none;
-    }
-    .editing .item.selected > .handle {
-      display: block;
       position: absolute;
       width: var(--psc-handle-size, 10px);
       height: var(--psc-handle-size, 10px);
@@ -1230,27 +1364,32 @@ export class PictureStudioCard extends LitElement {
       background: var(--card-background-color, #fff);
       border: 2px solid var(--primary-color);
       border-radius: 2px;
-      /* Beats \`.editing .item > *\`, which mutes the real children so a badge
-         never sees a click. A handle is the exception: it is the target. */
-      pointer-events: auto;
       touch-action: none;
     }
-    .editing .item.selected > .handle-top-left {
+    /* Overrides .editing .item > *, which mutes children so a badge never
+       sees a click. A handle is the exception: it is the target. The handle
+       rule carries one more class (0,3,0 vs 0,2,0), so specificity wins. */
+    .editing .item > .handle {
+      pointer-events: auto;
+    }
+    /* Handles exist only where mounted, so the .editing .item.selected >
+       prefix is now redundant. */
+    .handle-top-left {
       top: calc(var(--psc-handle-size, 10px) / -2);
       left: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nwse-resize;
     }
-    .editing .item.selected > .handle-top-right {
+    .handle-top-right {
       top: calc(var(--psc-handle-size, 10px) / -2);
       right: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nesw-resize;
     }
-    .editing .item.selected > .handle-bottom-left {
+    .handle-bottom-left {
       bottom: calc(var(--psc-handle-size, 10px) / -2);
       left: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nesw-resize;
     }
-    .editing .item.selected > .handle-bottom-right {
+    .handle-bottom-right {
       bottom: calc(var(--psc-handle-size, 10px) / -2);
       right: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nwse-resize;
