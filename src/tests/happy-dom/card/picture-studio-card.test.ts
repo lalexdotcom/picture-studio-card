@@ -10,6 +10,7 @@ import {
   LABEL_TAG,
   PROBE_TAG,
   PROBE_TYPE,
+  TOOLBAR_TAG,
 } from "../../../config";
 
 import type { HomeAssistant } from "../../../types";
@@ -1136,6 +1137,34 @@ describe("a native badge type outside CORE_BADGES", () => {
     await flush();
     // The card must NOT have substituted its own error badge.
     expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+  });
+});
+
+describe("the toolbar", () => {
+  // editing is derived, never assigned: it comes from `preview` plus a
+  // registered editor. releaseEditor and its afterEach already live at the top
+  // of this file.
+  const edit = async (card: PictureStudioCard): Promise<void> => {
+    card.preview = true;
+    releaseEditor = registerEditor({
+      patchPosition: () => {},
+      patchBox: () => {},
+      patchAnchor: () => {},
+      select: () => {},
+      selectedIndex: () => undefined,
+    });
+    await flush();
+  };
+
+  it("renders no toolbar on a dashboard", async () => {
+    const card = await mountCard({ type: CARD_TYPE, items: [] });
+    expect(card.renderRoot.querySelector(TOOLBAR_TAG)).toBeNull();
+  });
+
+  it("renders the toolbar while editing", async () => {
+    const card = await mountCard({ type: CARD_TYPE, items: [] });
+    await edit(card);
+    expect(card.renderRoot.querySelector(TOOLBAR_TAG)).not.toBeNull();
   });
 });
 

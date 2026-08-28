@@ -3,6 +3,7 @@ import { PictureStudioImage } from "./card/image-element";
 import { PictureStudioCard } from "./card/picture-studio-card";
 import { PictureStudioStateIcon } from "./card/state-icon-element";
 import { PictureStudioStateLabel } from "./card/state-label-element";
+import { PictureStudioToolbar } from "./card/toolbar";
 import { PictureStudioVisibilityProbe } from "./card/visibility-probe";
 import {
   ANCHOR_INPUT_TAG,
@@ -19,6 +20,7 @@ import {
   PICKER_TAG,
   PROBE_TAG,
   SECTION_TAG,
+  TOOLBAR_TAG,
   VISIBILITY_SECTION_TAG,
 } from "./config";
 import { PictureStudioAnchorInput } from "./editor/anchor-input";
@@ -58,6 +60,10 @@ if (!customElements.get(PICKER_TAG)) {
 
 if (!customElements.get(ANCHOR_INPUT_TAG)) {
   customElements.define(ANCHOR_INPUT_TAG, PictureStudioAnchorInput);
+}
+
+if (!customElements.get(TOOLBAR_TAG)) {
+  customElements.define(TOOLBAR_TAG, PictureStudioToolbar);
 }
 
 if (!customElements.get(ICON_TAG)) customElements.define(ICON_TAG, PictureStudioStateIcon);

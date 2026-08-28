@@ -18,6 +18,7 @@ import {
 } from "../config";
 import { effectiveBox, imageBoxStyle } from "../image-box";
 import "./card-heading";
+import "./toolbar";
 import { isResizableKind } from "../element-kinds";
 import {
   type Anchor,
@@ -984,6 +985,17 @@ export class PictureStudioCard extends LitElement {
               `
             : nothing
         }
+        ${
+          this.editing
+            ? html`
+                <picture-studio-toolbar
+                  .hass=${this.hass}
+                  .item=${this.selected === undefined ? undefined : this._config.items[this.selected]}
+                  .index=${this.selected}
+                ></picture-studio-toolbar>
+              `
+            : nothing
+        }
         <div class="root ${this.editing ? "editing" : ""} ${this.preview ? "previewing" : ""}">
           <div class="layer"></div>
         </div>
@@ -1013,6 +1025,13 @@ export class PictureStudioCard extends LitElement {
       height: 100%;
       overflow-x: hidden;
       overflow-y: auto;
+    }
+    /* The toolbar docks between the card heading and the picture. It is a
+       sibling of .root, not a child: .root is the size container every
+       element's cqw resolves against, and a child would change what a
+       percentage means. */
+    picture-studio-toolbar {
+      display: block;
     }
     /* .root holds only the background element in normal flow, so the drag
        surface matches the image's aspect ratio exactly.
