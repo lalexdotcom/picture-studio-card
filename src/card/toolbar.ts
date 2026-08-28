@@ -1,5 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { PictureItem } from "../config";
+import { ANCHOR_OFFSETS, type Anchor } from "../position";
+import { localizeOwn } from "../strings";
 import type { HomeAssistant } from "../types";
 
 /**
@@ -48,10 +50,53 @@ export class PictureStudioToolbar extends LitElement {
   }
 
   private _renderAnchorGroup() {
+    const anchor = this.item?.type === "unknown" ? undefined : this.item?.anchor;
+    const disabled = this._disabled;
+    // ANCHOR_OFFSETS is the single declaration of the nine valid fixed points and
+    // their row-major order. Reading the keys here keeps the miniature in lockstep
+    // with the anchor-input's grid without importing anything from the editor layer.
+    const cells = Object.keys(ANCHOR_OFFSETS) as Array<Exclude<Anchor, "auto">>;
     return html`
-      <button type="button" class="auto" ?disabled=${this._disabled}></button>
-      <button type="button" class="anchored" ?disabled=${this._disabled}></button>
+      <button
+        type="button"
+        class=${anchor === "auto" ? "auto on" : "auto"}
+        ?disabled=${disabled}
+        title=${localizeOwn(this.hass, "anchor_auto")}
+        @click=${() => this._emitAnchor("auto")}
+      >
+        <ha-icon icon="mdi:auto-fix"></ha-icon>
+      </button>
+      <button
+        type="button"
+        class=${anchor !== undefined && anchor !== "auto" ? "anchored on" : "anchored"}
+        ?disabled=${disabled}
+        title=${localizeOwn(this.hass, "anchor_anchored")}
+        @click=${this._openPicker}
+      >
+        <span class="mini">
+          ${cells.map(
+            (cell) => html`<span class=${cell === anchor ? "on" : ""} data-cell=${cell}></span>`,
+          )}
+        </span>
+      </button>
     `;
+  }
+
+  /** Emits the anchor-changed event. Deliberately the same event the
+   *  anchor-input emits so the card can wire a single listener for both. */
+  private _emitAnchor(anchor: Anchor) {
+    this.dispatchEvent(
+      new CustomEvent("anchor-changed", {
+        detail: { anchor },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** Placeholder — Task 4 will open the anchor picker popover. */
+  private _openPicker() {
+    // no-op until Task 4
   }
 
   private _renderTools() {
@@ -108,6 +153,26 @@ export class PictureStudioToolbar extends LitElement {
       border-left: 1px solid
         var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, var(--divider-color)));
       margin: 0;
+    }
+    /* The miniature is a 3×3 grid that must fit inside the button's declared box.
+       It is display-only: the nine spans visualise the current fixed anchor point
+       but carry no interaction of their own — the button is the click target. */
+    .mini {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      width: 100%;
+      height: 100%;
+      gap: 1px;
+    }
+    .mini span {
+      background: var(--ha-color-text-disabled, var(--disabled-text-color, currentColor));
+      opacity: 0.3;
+      border-radius: 1px;
+    }
+    .mini span.on {
+      background: var(--primary-color);
+      opacity: 1;
     }
   `;
 }

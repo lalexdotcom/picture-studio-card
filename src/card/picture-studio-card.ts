@@ -992,6 +992,11 @@ export class PictureStudioCard extends LitElement {
                   .hass=${this.hass}
                   .item=${this.selected === undefined ? undefined : this._config.items[this.selected]}
                   .index=${this.selected}
+                  @anchor-changed=${(ev: CustomEvent<{ anchor: Anchor }>) => {
+                    const index = this.selected;
+                    if (index === undefined) return;
+                    activeEditor()?.patchAnchor(index, ev.detail.anchor);
+                  }}
                 ></picture-studio-toolbar>
               `
             : nothing
