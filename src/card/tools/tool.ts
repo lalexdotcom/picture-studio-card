@@ -13,9 +13,9 @@ export interface ToolTarget {
 /**
  * A gesture tool: owns its handles, its hit test and its controller.
  *
- * `gestureIndex` is added here because the card's `_gestureIndex` needs to
- * know which item is being gestured on to skip overwriting its live pixels.
- * Task 8 (tool registry) may refine or generalise this once more tools exist.
+ * `gestureIndex` is here because both the drag controller and the card ask
+ * which item is under the live gesture on every event, to skip overwriting
+ * its live pixels. A tool with no active gesture answers undefined.
  */
 export interface Tool {
   readonly id: ToolId;

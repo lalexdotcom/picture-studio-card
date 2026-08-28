@@ -1036,6 +1036,9 @@ export class PictureStudioCard extends LitElement {
     // Only the axis whose size actually moved is rewritten. The round trip
     // through toPx/toPercent rounds to two decimals, so recomputing an axis
     // that did not change would nudge a coordinate the user chose, for nothing.
+    // Only the axis whose size actually moved is rewritten. The round trip
+    // through toPx/toPercent rounds to two decimals, so recomputing an axis
+    // that did not change would nudge a coordinate the user chose, for nothing.
     return {
       left:
         after.width === before.width
@@ -1366,9 +1369,9 @@ export class PictureStudioCard extends LitElement {
       border-radius: 2px;
       touch-action: none;
     }
-    /* Overrides \`.editing .item > *\`, which mutes children so a badge never
-       sees a click. A handle is the exception: it is the target. Same
-       specificity as that rule, source order wins. */
+    /* Overrides .editing .item > *, which mutes children so a badge never
+       sees a click. A handle is the exception: it is the target. The handle
+       rule carries one more class (0,3,0 vs 0,2,0), so specificity wins. */
     .editing .item > .handle {
       pointer-events: auto;
     }

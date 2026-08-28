@@ -11,6 +11,7 @@ import {
   installHaTokens,
   layer,
   mountCard,
+  rectInLayer,
   root,
   wrappers,
 } from "./harness";
@@ -227,4 +228,81 @@ it("dismisses the anchor picker without letting the click through", async () => 
 
   expect(pickerOpen(card)).toBe(false);
   expect(countClicksOn(card, ".root")).toBe(clicksBefore);
+});
+
+/**
+ * _refit's promise: restoring proportions keeps the image's top-left corner
+ * where it was. A center anchor is deliberate: with a top-left anchor the
+ * position coordinate is unchanged by any height shift (offset is zero on
+ * both axes), so a broken _refit that skips the recomputation would still
+ * pass. Center forces _refit to produce a new top coordinate — and that
+ * coordinate will be wrong under a broken implementation.
+ *
+ * Both halves of the assertion matter: without the height check the test
+ * would pass against a restore-button that did nothing at all.
+ */
+it("restoring proportions holds the top-left corner of the wrapper", async () => {
+  installHaTokens();
+  // Stretched image: width 20 % (80 px on a 400-wide layer), height 20 %
+  // (60 px on a 300-tall layer). A 2:1 image at 80 px wide sits naturally at
+  // 40 px tall; the explicit height stretches it to 60 px.
+  // With center anchor the top-left corner is at layer pixel (160, 120).
+  const card = await mountCard({
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "element",
+        position: { top: "50%", left: "50%" },
+        anchor: "center",
+        config: { type: "image", image: "/wide-2x1.png", width: 20, height: 20 },
+      },
+    ],
+  });
+  const spy = await enterEditing(card);
+  await selectItem(card, 0);
+
+  const before = rectInLayer(card, wrappers(card)[0] as Element);
+
+  // button.keep-ratio lives in the toolbar shadow root and is only rendered
+  // while the resize tool is active, which is the default after selection.
+  const toolbar = root(card).querySelector("picture-studio-toolbar") as HTMLElement;
+  const button = toolbar?.shadowRoot?.querySelector(
+    "button.keep-ratio",
+  ) as HTMLButtonElement | null;
+  if (!button) throw new Error("keep-ratio button not found in toolbar shadow root");
+  button.click();
+  await card.updateComplete;
+  await flush();
+
+  // patchBox carries the new box (width only, no height key) and the position
+  // _refit computed to keep the top-left corner at the same pixel.
+  expect(spy.boxes).toHaveLength(1);
+  const commit = spy.boxes[0];
+  if (!commit) throw new Error("patchBox was not called");
+
+  // Simulate the editor applying the committed box and position — the card
+  // re-renders and the wrapper takes its new natural height from the ratio.
+  (card as unknown as { setConfig(c: unknown): void }).setConfig({
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "element",
+        position: commit.position ?? { top: "50%", left: "50%" },
+        anchor: "center",
+        config: { type: "image", image: "/wide-2x1.png", ...commit.box },
+      },
+    ],
+  });
+  await card.updateComplete;
+  await flush();
+
+  const after = rectInLayer(card, wrappers(card)[0] as Element);
+
+  // The top-left corner must stay where it was.
+  expect(after.top).toBeCloseTo(before.top, 1);
+  expect(after.left).toBeCloseTo(before.left, 1);
+  // The height must change: the explicit height was dropped.
+  expect(after.height).not.toBeCloseTo(before.height, 1);
 });
