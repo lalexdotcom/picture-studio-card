@@ -180,13 +180,30 @@ handles**, today done in `_createChild` — along with the size guard in
 
 **This overturns a documented choice, so it is argued rather than assumed.**
 `_createChild` builds the handles once per resizable item and lets CSS show them
-on the selected one, with the reason written beside it: *"DOM churn under the
-pointer is how a gesture loses its target."* Mounting them per selection is safe
-here for two reasons that must both hold: `render` is inert during the tool's own
-gesture (decision 10), and a selection only ever changes at `pointerup` —
-`drag-layer` holds its `onSelect` to the drop deliberately. Whoever moves this
-code **replaces that comment** rather than leaving it to describe a strategy the
-file no longer follows.
+on the selected one, with two reasons written beside it: *"the wrapper's box is
+what the gesture measures, and DOM churn under the pointer is how a gesture loses
+its target."* Both name real hazards. **Neither reaches this code**, and the two
+facts that disarm them are structural rather than circumstantial:
+
+- **The handles are `position: absolute`**, which the CSS comment states in as
+  many words — *"they add nothing to the wrapper's box"*. An out-of-flow child
+  does not participate in its parent's layout, so mounting or unmounting one
+  cannot move the `getBoundingClientRect()` both controllers read.
+- **Pointer capture is on the wrapper, never on the handle.** Both controllers
+  call `hit.element.setPointerCapture(...)`, and `ResizeHit.element` is
+  `handle.closest(".item")`. Removing a handle therefore never touches the node
+  holding the capture — and the hit is resolved once at `pointerdown` and kept in
+  the gesture's state, so nothing re-queries the DOM afterwards.
+
+Decision 10's guard stays, but as a belt and not as the argument: it covers the
+one case the structure does not, which is a selection changing *during* a gesture
+— two fingers, one dragging on the picture while the other taps a row in the
+editor's list. A first draft of this decision rested on that guard plus the fact
+that `drag-layer` holds `onSelect` to the drop. That reasoning is true and
+conditional, where the two facts above are neither.
+
+Whoever moves this code **replaces the `_createChild` comment** rather than
+leaving it to describe a strategy the file no longer follows.
 `distort-tool` implements the four methods as no-ops.
 
 **The inertness of a tool that does nothing is structural, not coded.** Nothing
