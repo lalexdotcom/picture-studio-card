@@ -1,10 +1,10 @@
 import { css, html, LitElement, nothing } from "lit";
-import type { PictureItem } from "../config";
+import { assertNever, type PictureItem } from "../config";
 import { ratioIsForced } from "../image-box";
 import { ANCHOR_OFFSETS, type Anchor } from "../position";
 import { localizeOwn } from "../strings";
 import type { HomeAssistant } from "../types";
-import type { ToolId } from "./tools/tool";
+import { DEFAULT_TOOL, type ToolId } from "./tools/tool";
 
 /**
  * The editor's toolbar, docked between the card heading and the picture.
@@ -73,6 +73,7 @@ export class PictureStudioToolbar extends LitElement {
       <button
         type="button"
         class=${anchor === "auto" ? "auto on" : "auto"}
+        aria-pressed=${anchor === "auto"}
         ?disabled=${disabled}
         title=${localizeOwn(this.hass, "anchor_auto")}
         @click=${() => this._emitAnchor("auto")}
@@ -82,6 +83,7 @@ export class PictureStudioToolbar extends LitElement {
       <button
         type="button"
         class=${anchor !== undefined && anchor !== "auto" ? "anchored on" : "anchored"}
+        aria-pressed=${anchor !== undefined && anchor !== "auto"}
         ?disabled=${disabled}
         title=${localizeOwn(this.hass, "anchor_anchored")}
         @click=${this._openPicker}
@@ -144,10 +146,16 @@ export class PictureStudioToolbar extends LitElement {
   };
 
   private _renderTools() {
+    // Two things, not one row of three. The picker is a segmented control whose
+    // members are alternatives — exactly one is active — while restoring the
+    // ratio is an action that happens and is over. Soldering them into one group
+    // would say they are the same kind of control.
     return html`
-      <button
+      <div class="tool-picker">
+        <button
         type="button"
         class=${`tool resize${!this.tool || this.tool === "resize" ? " on" : ""}`}
+        aria-pressed=${!this.tool || this.tool === "resize"}
         title=${localizeOwn(this.hass, "tool_resize")}
         @click=${() => this._emitTool("resize")}
       >
@@ -156,21 +164,52 @@ export class PictureStudioToolbar extends LitElement {
       <button
         type="button"
         class=${`tool distort${this.tool === "distort" ? " on" : ""}`}
+        aria-pressed=${this.tool === "distort"}
         title=${localizeOwn(this.hass, "tool_distort")}
         @click=${() => this._emitTool("distort")}
       >
         <ha-icon icon="mdi:vector-square-edit"></ha-icon>
-      </button>
-      <button
-        type="button"
-        class="keep-ratio"
-        ?disabled=${!this._canRestoreRatio}
-        title=${localizeOwn(this.hass, "keep_ratio_restore")}
-        @click=${this._emitRestore}
-      >
-        <ha-icon icon="mdi:lock-reset"></ha-icon>
-      </button>
+        </button>
+      </div>
+      ${this._renderSubTools()}
     `;
+  }
+
+  /**
+   * The controls a tool owns, shown after a separator when that tool is active.
+   *
+   * Restoring the ratio is not a companion of the picker, it is a control *of*
+   * the resize tool — it undoes what a corner drag wrote. Saying so in the
+   * structure is what makes the rule general: a tool with no sub-tools shows
+   * neither the separator nor anything after it, so the bar stays as short as
+   * the current tool needs and no rule has to name the empty case.
+   *
+   * A switch rather than a lookup, on the `assertNever` precedent config.ts
+   * already sets: the day a third tool lands, this fails to compile until
+   * someone decides what it owns. A default branch would silently give it none.
+   */
+  private _renderSubTools() {
+    const tool = this.tool ?? DEFAULT_TOOL;
+    switch (tool) {
+      case "resize":
+        return html`
+          <hr class="sep" />
+          <div class="sub-tools">
+            <button
+              type="button"
+              class="keep-ratio"
+              ?disabled=${!this._canRestoreRatio}
+              title=${localizeOwn(this.hass, "keep_ratio_restore")}
+              @click=${this._emitRestore}
+            >
+              <ha-icon icon="mdi:lock-reset"></ha-icon>
+            </button>
+          </div>
+        `;
+      case "distort":
+        return nothing;
+    }
+    return assertNever(tool, "tool");
   }
 
   private _emitTool(tool: ToolId): void {
@@ -210,48 +249,118 @@ export class PictureStudioToolbar extends LitElement {
     :host {
       display: block;
     }
-    /* --psc-toolbar-height governs the bar's declared height (measured at 40px
-       in a live browser: 32px min-height + 4px vertical padding on each side).
-       The bar declaring its own height — not deriving it from whichever group
-       happens to be tallest — is what prevents a vertical jump when the anchor
-       group alone (badge selection) gains the separator + tools group (image
-       selection) at the exact moment the user is aiming at something.
-       --ha-space-8 is 32px on HA's 4px base scale.
-       Touch target: HA's guideline is 48px; this bar lands at 40px. The gap is
-       accepted because the toolbar is editor chrome that lives in the dialog
-       preview, where the primary gesture is dragging items on the picture, not
-       tapping toolbar buttons. Bumping to 48px (--ha-space-12) would shrink
-       the visible picture by 8px for 8px of touch improvement on an already
-       secondary surface. Tablets that need it can set --psc-toolbar-height via
-       a theme token. */
+    /* The bar's height is derived, not declared twice.
+       Every size below is one arithmetic chain from the icon:
+         button = icon + 2×button-padding + 2×border
+         bar    = button + 2×bar-padding
+       Written as calc() rather than as a comment, because the previous version
+       stated the algebra in prose and asked the next reader to preserve it by
+       hand. A bar whose height is derived cannot drift from its buttons, and
+       that is what stops the picture jumping vertically when a badge selection
+       (anchor group alone) becomes an image selection (separator + tools) at
+       the exact moment the user is aiming at something.
+       At the defaults: 18 + 2 + 2 = 22px buttons, 22 + 8 = 30px bar.
+       Touch target: far below HA's 48px guideline, deliberately. This is editor
+       chrome in the dialog preview, where the gesture that matters is dragging
+       on the picture; every pixel the bar takes is a pixel of subject lost.
+       A tablet that needs more sets --psc-toolbar-icon-size. */
     .bar {
       display: flex;
       align-items: center;
-      min-height: var(--psc-toolbar-height, var(--ha-space-8, 32px));
-      /* --ha-space-1 is 4px on HA's 4px base scale; 4px vertical keeps the bar
-         compact while still giving the buttons breathing room above and below.
-         Horizontal padding borrows ha-card's own content padding so the bar
-         aligns with whatever the heading and picture already use. */
-      padding: var(--ha-space-1, 4px)
-        var(--ha-card-content-padding, var(--card-content-padding, 16px));
+      padding: var(--psc-toolbar-padding-block, 4px) var(--psc-toolbar-padding-inline, 10px);
       gap: var(--ha-space-2, 8px);
+      min-height: calc(
+        var(--psc-toolbar-icon-size, 18px) + 2 * var(--psc-toolbar-button-padding, 1px) + 2 *
+          var(--psc-toolbar-border-width, 1px) + 2 * var(--psc-toolbar-padding-block, 4px)
+      );
     }
-    /* Fixed 24×24px box for every button (--ha-space-6). A fixed size prevents
-       a taller glyph from outgrowing its sibling group and breaking the bar's
-       declared height. The invariant is: button-size = toolbar-height − 2×padding
-       (24 = 32 − 2×4). Any custom --psc-toolbar-height must keep that algebra
-       or the buttons will overflow their group. */
+    /* Buttons read as buttons: they borrow Home Assistant's badge surface — the
+       card background over a hairline border — which is the same recipe a badge
+       uses to stay legible on a photograph. Without it they were bare glyphs,
+       and nothing said which one was active. */
     button {
       box-sizing: border-box;
-      width: var(--psc-toolbar-button-size, var(--ha-space-6, 24px));
-      height: var(--psc-toolbar-button-size, var(--ha-space-6, 24px));
-      padding: 0;
-      border: none;
-      background: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: calc(
+        var(--psc-toolbar-icon-size, 18px) + 2 * var(--psc-toolbar-button-padding, 1px) + 2 *
+          var(--psc-toolbar-border-width, 1px)
+      );
+      height: calc(
+        var(--psc-toolbar-icon-size, 18px) + 2 * var(--psc-toolbar-button-padding, 1px) + 2 *
+          var(--psc-toolbar-border-width, 1px)
+      );
+      padding: var(--psc-toolbar-button-padding, 1px);
+      border: var(--psc-toolbar-border-width, 1px) solid
+        var(--ha-card-border-color, var(--ha-color-border-neutral-normal, var(--divider-color)));
+      border-radius: var(--psc-toolbar-radius, 2px);
+      background: var(--ha-card-background, var(--card-background-color));
+      color: var(--primary-text-color);
       cursor: pointer;
+    }
+    /* The groups are flex, and that is load-bearing rather than cosmetic: as
+       block containers their buttons were inline-level, so they sat on a text
+       baseline — misaligned against each other — and the newline between two
+       button tags in the template rendered as a space, which pushed the
+       segments apart and defeated the shared-hairline rule below. */
+    .anchor-group,
+    .tools,
+    .tool-picker,
+    .sub-tools {
+      display: flex;
+      align-items: center;
+    }
+    /* The tools row holds two things, not three: the picker, which is one
+       segmented control, and the restore button, which is an action of its own.
+       The gap is what says so. */
+    .tools {
+      gap: var(--ha-space-2, 8px);
+    }
+    /* Adjacent segments share one hairline instead of drawing two side by side. */
+    .anchor-group button + button,
+    .tool-picker button + button {
+      margin-inline-start: calc(-1 * var(--psc-toolbar-border-width, 1px));
+    }
+    /* Every button is rounded; a segment then gives back the corners that face
+       its neighbours, so a group is rounded only at its two ends and a button
+       standing alone — the restore one — keeps all four. */
+    .anchor-group button:not(:first-child),
+    .tool-picker button:not(:first-child) {
+      border-start-start-radius: 0;
+      border-end-start-radius: 0;
+    }
+    .anchor-group button:not(:last-child),
+    .tool-picker button:not(:last-child) {
+      border-start-end-radius: 0;
+      border-end-end-radius: 0;
+    }
+    /* The pressed state, which the bar had no way of showing before: the active
+       segment takes the accent as its fill and inverts its content. It is
+       lifted above its neighbours so the shared hairline does not cut across
+       the coloured edge. */
+    button.on {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+      position: relative;
+      z-index: 1;
     }
     button:disabled {
       cursor: not-allowed;
+      opacity: 0.4;
+    }
+    /* The box is pinned as well as the glyph. ha-icon sizes its own svg from
+       --mdc-icon-size but keeps a 24px box of its own, so setting the variable
+       alone left a 24px element inside an 18px content box — the icon drew
+       off-centre and the button looked misaligned against the miniature, which
+       is sized exactly. (No backticks in here: this is a css template literal,
+       and one would end it.) */
+    ha-icon {
+      display: flex;
+      width: var(--psc-toolbar-icon-size, 18px);
+      height: var(--psc-toolbar-icon-size, 18px);
+      --mdc-icon-size: var(--psc-toolbar-icon-size, 18px);
     }
     /* The separator is a full-height hairline ruled between the anchor group and
        the tools group. It uses the same token chain as the anchor-input grid
@@ -263,24 +372,30 @@ export class PictureStudioToolbar extends LitElement {
         var(--ha-switch-border-color, var(--ha-color-border-neutral-normal, var(--divider-color)));
       margin: 0;
     }
-    /* The miniature is a 3×3 grid that must fit inside the button's declared box.
-       It is display-only: the nine spans visualise the current fixed anchor point
-       but carry no interaction of their own — the button is the click target. */
+    /* The miniature is a 3×3 grid occupying exactly the box an icon would, so
+       the two buttons of the anchor group are the same size whatever is in them.
+       The cells are not given a size: three columns of 1fr with a 1px gap divide
+       the icon's own box, so cell = (icon − 2) ÷ 3 — 5.33px at 18, 4.67px at 16 —
+       and the sum is exact at any icon size without arithmetic of ours.
+       Display-only: the nine spans visualise the current fixed anchor and carry
+       no interaction; the button is the click target. */
     .mini {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       grid-template-rows: repeat(3, 1fr);
-      width: 100%;
-      height: 100%;
+      width: var(--psc-toolbar-icon-size, 18px);
+      height: var(--psc-toolbar-icon-size, 18px);
       gap: 1px;
     }
+    /* currentColor, so the miniature inverts with the button: on the accent fill
+       the button's colour is already the contrasting one, and the lit cell stays
+       legible without a second rule naming a second pair of colours. */
     .mini span {
-      background: var(--ha-color-text-disabled, var(--disabled-text-color, currentColor));
+      background: currentColor;
       opacity: 0.3;
       border-radius: 1px;
     }
     .mini span.on {
-      background: var(--primary-color);
       opacity: 1;
     }
     /* position: fixed keeps the dialog against the button regardless of scroll;

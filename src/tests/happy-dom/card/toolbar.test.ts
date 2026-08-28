@@ -203,4 +203,28 @@ describe("the toolbar", () => {
     const el = await mount(badgeItem, 0);
     expect(el.renderRoot.querySelectorAll(".tools button.tool")).toHaveLength(0);
   });
+
+  /**
+   * Restoring the ratio belongs to the resize tool — it undoes what a corner
+   * drag wrote — so it is shown as that tool's sub-tool, behind its own
+   * separator, and a tool that owns nothing shows neither.
+   *
+   * The pair is what discriminates: asserting only the distort case would pass
+   * against a toolbar that never rendered the button at all.
+   */
+  it("shows the resize tool's sub-tools behind a second separator", async () => {
+    const el = await mount(stretched, 0);
+    el.tool = "resize";
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector(".sub-tools button.keep-ratio")).not.toBeNull();
+    expect(el.renderRoot.querySelectorAll(".sep")).toHaveLength(2);
+  });
+
+  it("shows neither, for a tool that owns no sub-tools", async () => {
+    const el = await mount(stretched, 0);
+    el.tool = "distort";
+    await el.updateComplete;
+    expect(el.renderRoot.querySelector("button.keep-ratio")).toBeNull();
+    expect(el.renderRoot.querySelectorAll(".sep")).toHaveLength(1);
+  });
 });
