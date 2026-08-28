@@ -1036,9 +1036,6 @@ export class PictureStudioCard extends LitElement {
     // Only the axis whose size actually moved is rewritten. The round trip
     // through toPx/toPercent rounds to two decimals, so recomputing an axis
     // that did not change would nudge a coordinate the user chose, for nothing.
-    // Only the axis whose size actually moved is rewritten. The round trip
-    // through toPx/toPercent rounds to two decimals, so recomputing an axis
-    // that did not change would nudge a coordinate the user chose, for nothing.
     return {
       left:
         after.width === before.width
