@@ -442,7 +442,11 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
 
   setTool(tool: ToolId): void {
     this._tool = tool;
-    this.requestUpdate();
+    // Cards derive `tool` from the editor's channel through the broker
+    // subscription. `notifyEditors()` is what prompts them to re-read it —
+    // the same mechanism `select()` uses for the selection. `requestUpdate()`
+    // alone only re-renders the editor itself and never reaches the card.
+    notifyEditors();
   }
 
   private _backgroundChanged = (ev: CustomEvent<{ value: Record<string, unknown> }>): void => {

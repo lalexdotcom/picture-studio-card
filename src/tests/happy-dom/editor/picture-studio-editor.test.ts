@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, rstest } from "@rstest/core";
-import { registerCard } from "../../../broker";
+import { registerCard, subscribeEditors } from "../../../broker";
 import {
   CARD_TYPE,
   EDITOR_TAG,
@@ -620,6 +620,21 @@ describe("the active tool", () => {
     editor.setTool("distort");
     editor.select(1, "list");
     expect(editor.tool()).toBe("resize");
+  });
+
+  it("notifies broker subscribers when the tool changes", async () => {
+    // The card learns about tool changes only through the broker subscription —
+    // setTool() must call notifyEditors(), not just requestUpdate().
+    const editor = await mountEditor(CONFIG);
+    editor.select(0, "list");
+    let notified = 0;
+    const unsubscribe = subscribeEditors(() => {
+      notified++;
+    });
+    const baseline = notified; // subscribeEditors fires once on subscribe
+    editor.setTool("distort");
+    expect(notified).toBe(baseline + 1);
+    unsubscribe();
   });
 
   it("does not reset when select() is called with the already-selected index", async () => {
