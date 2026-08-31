@@ -1,4 +1,5 @@
 import { css, html, LitElement, nothing, type PropertyValues } from "lit";
+import { keyed } from "lit/directives/keyed.js";
 import { type ImageElementConfig, imagePath } from "../config";
 import { IMAGE_KIND, withDefaultActions } from "../element-kinds";
 import { hassRenderChanged } from "../has-changed";
@@ -268,7 +269,31 @@ export class PictureStudioImage extends LitElement {
       return this.editing ? html`<div class="placeholder"></div>` : nothing;
     }
 
-    return html`
+    // **Keyed on whether the view is Live, so that crossing that boundary
+    // replaces the node rather than updating it.** `undefined` and `"auto"`
+    // both mean the still image and share a node: rebuilding between them would
+    // restart the camera for a distinction hui-image does not make either. Two things break on a `hui-image` asked to leave Live,
+    // and both were measured in a real Home Assistant (see
+    // `mem:picture-studio/1.6.0-handoff`):
+    //
+    // 1. Its still-image poller is started from `connectedCallback` — and only
+    //    while `cameraView !== "live"` at that instant — from `willUpdate` on a
+    //    **`hass`** change, and from the intersection observer those two create.
+    //    Nothing watches `cameraView`, so an element built as a stream keeps
+    //    `_cameraImageSrc === undefined`, renders no `<img>` at all and sits on
+    //    its spinner.
+    // 2. `aspectRatio` is written onto the node by `applyLiveCameraRatio`,
+    //    behind this binding's back. Lit only assigns a property whose committed
+    //    value changed, so a render going `undefined` → `undefined` cannot take
+    //    it back, and the camera's shape outlives Live.
+    //
+    // Rebuilding is the only re-entry `hui-image` offers for the first, and it
+    // settles the second on the way. **Removing this key brings both back.**
+    // Nothing else keys it: a fresh node reconnects the camera, far too much to
+    // pay for a width being typed into the form.
+    return keyed(
+      config.camera_view === "live",
+      html`
       <hui-image
         .hass=${this._hass}
         .image=${src}
@@ -283,7 +308,8 @@ export class PictureStudioImage extends LitElement {
         .fitMode=${(this.stretch ?? effectiveBox(config).height !== undefined) ? "fill" : "contain"}
         .aspectRatio=${this._ratioHint}
       ></hui-image>
-    `;
+    `,
+    );
   }
 
   /**
@@ -291,10 +317,23 @@ export class PictureStudioImage extends LitElement {
    * render, which is the only moment at which it can reach `hui-image`'s first
    * paint. Taken in `updated` it would arrive one frame after the frame it
    * exists to fill.
+   *
+   * **Only in keep-ratio mode**, and that is not a refinement — it is the same
+   * rule that makes `aspect_ratio` the one background key an image element must
+   * not take. A ratio, remembered or configured, makes `hui-image` build its
+   * `.ratio` container — `height: 0` plus a padding box — which defeats the
+   * height the card imposes. Measured in a real Home Assistant: a camera item
+   * at width 39 / height 14 opened with the remembered `"375x257"` and drew its
+   * picture 241 px tall inside a 145 px frame. A forced ratio (a live camera)
+   * has no height to defeat, which is why the question is asked of
+   * `effectiveBox` and not of the stored config.
    */
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("_config") && this._config) {
-      this._ratioHint = recallRatio(pictureKey(this._config));
+      this._ratioHint =
+        effectiveBox(this._config).height === undefined
+          ? recallRatio(pictureKey(this._config))
+          : undefined;
     }
   }
 

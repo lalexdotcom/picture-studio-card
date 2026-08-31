@@ -58,6 +58,15 @@
   an item anchored anywhere but its top-left slid by half of that change. They
   now hold the item's top-left, the way dragging a resize handle already did.
   Typing a width or a height still grows the item around its anchor.
+- Switching a camera away from **Live** left its picture behind. The item's
+  frame took its new size while the image kept the camera's proportions, and the
+  still picture that should have replaced the stream never appeared in its
+  place — only reloading the page put things right. Both now follow the setting
+  as soon as it changes.
+- An image given a height of its own was sometimes drawn at the picture's own
+  proportions instead of at the size you set — after changing a camera's view,
+  or after adding another item to the card. It now keeps the size you gave it,
+  and only an image left on **Keep proportions** follows the picture's shape.
 
 ## 1.5.3 — 2026-08-23
 
