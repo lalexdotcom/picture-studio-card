@@ -82,7 +82,8 @@ describe("release-notes.sh", () => {
   it("refuses an empty section", () => {
     const repo = makeRepo({
       version: "1.6.2",
-      changelog: "# Changelog\n\n## 1.6.2 — 2026-10-05\n\n## 1.6.1 — 2026-09-25\n\n### Fixed\n\n- One.\n",
+      changelog:
+        "# Changelog\n\n## 1.6.2 — 2026-10-05\n\n## 1.6.1 — 2026-09-25\n\n### Fixed\n\n- One.\n",
     });
 
     const result = repo.run("release-notes.sh", "1.6.2");
