@@ -57,12 +57,12 @@ jobs:
             echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # The pre-release equivalent of the `unreleased` catch below, and it exists
-      # for the same reason: a property of the pipeline rather than a habit
-      # anyone has to remember. Forgetting the `-beta.N` suffix while publishing
-      # from `next` would otherwise send a feature build to every user of the
-      # card as a stable release, which is the one mistake here that cannot be
-      # taken back.
+      # The pre-release equivalent of the `unreleased` catch in
+      # scripts/release-notes.sh, and it exists for the same reason: a property
+      # of the pipeline rather than a habit anyone has to remember. Forgetting
+      # the `-beta.N` suffix while publishing from `next` would otherwise send a
+      # feature build to every user of the card as a stable release, which is
+      # the one mistake here that cannot be taken back.
       #
       # It runs *after* the gate deliberately. `next` is recreated from `main`
       # after every minor, so it spends a moment carrying the stable version that
@@ -122,8 +122,9 @@ jobs:
       # silent. `next` holds `1.6.0-beta.3`; someone opens `1.6.0` on `main`
       # believing they are taking the next minor; `main` then publishes a stable
       # `1.6.0` containing none of the features the testers were testing, under
-      # exactly the number they were waiting for. The inverted changelog catch
-      # will stop `next` publishing afterwards — correctly, and far too late.
+      # exactly the number they were waiting for. `A pre-release of a version
+      # already out is a stale next` will stop `next` publishing afterwards —
+      # correctly, and far too late.
       #
       # The invariant that closes it: a stable may ship a version `next` still
       # claims only once `next` has actually been merged into it.
