@@ -1,5 +1,5 @@
 import { PictureStudioImage } from "../../../card/image-element";
-import { PictureStudioCard } from "../../../card/picture-studio-card";
+import { PictureStudioCard, resetAdoptionStash } from "../../../card/picture-studio-card";
 import { PictureStudioStateIcon } from "../../../card/state-icon-element";
 import { PictureStudioStateLabel } from "../../../card/state-label-element";
 import { CARD_TAG, ICON_TAG, IMAGE_TAG, LABEL_TAG } from "../../../config";
@@ -63,6 +63,9 @@ export const flush = async (): Promise<void> => {
 
 export const mountCard = async (config: unknown): Promise<PictureStudioCard> => {
   installHelpers();
+  // The adoption slot outlives an element on purpose; a card left over from the
+  // previous test must not hand its nodes to this one.
+  resetAdoptionStash();
   const card = document.createElement(CARD_TAG) as PictureStudioCard;
   card.setConfig(config);
   document.body.append(card);

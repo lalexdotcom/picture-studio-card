@@ -1,0 +1,195 @@
+# adopting the previous card's rendered nodes — design
+
+Date: 2026-08-31 · Target release: 1.6.0 (pre-release line `next`)
+
+## Goal
+
+Stop the card's pictures disappearing for two frames every time a config change
+is committed while the card is being edited.
+
+## The defect, measured rather than reasoned
+
+Captured with a CDP screencast of a real mouse drag, correlated with a
+`requestAnimationFrame` DOM probe on the same clock. At the two blank painted
+frames the DOM says: background present, layer at its full 549 px, `<img>` with
+its `src` **and** `naturalWidth: 1500`.
+
+**The layout is correct, the image is loaded, and the screen is empty.** The
+browser composites a frame before it has rasterised the subtree it has just been
+handed.
+
+**Two cheaper remedies were tried first and both are dead**, recorded so they are
+not spent again:
+
+- a detached, already-decoded `new Image()` held per URL — 3 blank frames
+  instead of 2;
+- forcing `decoding="sync"` on every `<img>` as it is inserted, through a
+  MutationObserver crossing the shadow roots — still 2.
+
+Neither could work: both act on decoding, and decoding is not the problem.
+
+**And a probe that mattered exposed a trap:** `img.complete` is `true` for an
+`<img>` with no `src` at all. An earlier reading concluded "the image is loaded"
+from it and moved on. Only `naturalWidth` answers that question.
+
+## Why the card is rebuilt at all
+
+`hui-card.update()`, read from frontend build `20260729.6`, chunk `79381`:
+
+```js
+this.config?.type !== previous?.type || this.preview
+  ? this._loadElement(this.config)    // createCardElement: a new element
+  : this._updateElement(this.config); // setConfig on the existing one
+```
+
+So a card is rebuilt when its **type** changes, or whenever **`preview`** is set.
+Measured against a live dashboard: `preview` is false there, a config change of
+the same type leaves the same node in place, and only a type change replaces it.
+
+`PictureStudioCard._inEditPreview` is the authority on what `preview` means —
+it is set on **every card of a dashboard in edit mode**, not only on the dialog's
+preview. Nothing here restates it.
+
+**The upstream fix exists and is not this.** `_updateElement` is
+`this._element.setConfig(t)` with no error handling, while `_loadElement` wraps
+`createCardElement` in a try/catch that falls back to an error card — which is
+almost certainly why a preview is rebuilt rather than updated: a config being
+typed is invalid half the time. Giving `_updateElement` the same fallback would
+let a preview reuse its element, and would fix this for every custom card with a
+picture in it. Worth filing; it does not help anyone before it ships.
+
+## Decisions
+
+### 1. The card adopts its predecessor's rendered nodes
+
+A rebuilt card re-attaches the nodes the previous one had already rendered
+instead of building new ones. **Their rasterisation survives**, which is the
+measurement the whole design rests on: detached for 400 ms and re-attached into
+a **fresh shadow root on a fresh host** — the faithful shape of a successor
+adopting them — the first painted frame, 9 ms later, is complete. Run twice,
+once within the same shadow root and once across; same answer. The probe is
+`.scratchpad/reattach.mjs` and it touches no production code.
+
+### 2. AMENDED — the holder is a single slot, reserved to the dialog's preview
+
+**Two keys were designed and both were disproved by measurement.** They are kept
+here because the reasoning is the design, and because each was refuted by a fact
+worth knowing.
+
+**First: no key at all**, on the premise that a preview holds one card. Wrong —
+`preview` is set on **every card of a dashboard in edit mode**, which
+`PictureStudioCard._inEditPreview` has documented all along.
+
+**Second: the `hui-card` ancestor**, on the premise that it survives the rebuild
+because it is what calls `createCardElement`. Also wrong. Measured in the dialog:
+across a commit, `picture-studio`, `hui-card` **and** the `div.card` around them
+are all new. The first surviving ancestor is the section's `div.container` —
+which on a dashboard holds every card of that section and so identifies nothing.
+**The dialog rebuilds its whole preview subtree, not just the card element.**
+
+**What is true is narrower and sufficient: the dialog previews exactly one card
+at a time** — the fact `activeCard()` already rests on. So a single module slot
+is safe, *provided only that preview ever writes or reads it*. The test is
+`this.preview && this._inEditPreview()`, and both halves are load-bearing:
+`_inEditPreview` alone is true of a dashboard nobody is editing and of the
+card-picker gallery, `preview` alone is true of every card in edit mode.
+
+**A dashboard in edit mode is therefore not covered.** Nothing there is rebuilt
+by a change to another card, and the card being edited is edited through the
+dialog.
+
+### 3. The verdict is captured on connect, never on disconnect
+
+`disconnectedCallback` runs **after** removal, so `_inEditPreview()` — which
+walks ancestors — cannot answer there. The verdict is taken at
+`connectedCallback` and held.
+
+**And the adoption is attempted from `connectedCallback` too, not only from
+`updated`.** Home Assistant calls `setConfig` before inserting the element, so
+Lit's first update runs while the card has no ancestors at all: an adoption tried
+only from `updated` finds nothing and never runs again. That version passed every
+unit test, because happy-dom mounts before configuring and Home Assistant does
+the opposite.
+
+**The early call must not consume the slot.** Returning before the render root
+exists — rather than taking the stash and discarding it — is what lets the real
+attempt, a moment later, still find it.
+
+### 4. The stash carries the parallel state, not only the nodes
+
+`_syncItems` rebuilds children whenever the shape of the item list changed and
+otherwise pushes config into the instances in place. Handing it nodes without
+the arrays it indexes by would make it rebuild them anyway, and the adoption
+would buy nothing.
+
+So the stash holds `_bgElement`, the item wrappers, `_elements`, `_probes`, and
+**the shape token `_syncItems` already computes**. On adoption the arrays are
+restored and the existing sync runs unchanged — which is, precisely, the
+`setConfig` `hui-card` refuses to give a preview.
+
+### 5. Adoption is refused when the shape token differs
+
+A stash from a differently-shaped item list is discarded and the card builds
+normally. `_syncItems` would rebuild the children in that case anyway; refusing
+early keeps one rule in one place rather than two that must agree.
+
+**This is necessary and may not be sufficient**, and that is the open risk of
+this design: two configs of the same shape but different items would adopt the
+same nodes. The existing sync then pushes the right config into them, so it
+should converge — **and a test that fails without the adoption is what settles
+it, not this paragraph.**
+
+**That test was NOT written, and the branch merged without it.** It is hard to
+reach in happy-dom, where the helpers mock hands back one stub for every kind, so
+"item B's config reached the adopted element" has nothing to assert against. What
+would close it: mount a shape, rebuild with the same shape and a different
+entity, and assert the adopted child was given the second config. Recorded as
+owed rather than forgiven.
+
+### 6. The live camera is the trap this design cannot yet price
+
+A detached `hui-image` receives its own `disconnectedCallback`. If it stops a
+camera stream there and restarts it on reconnection, adoption buys back the
+reload it exists to avoid.
+
+**Not measured, and the branch closed anyway — the user's call, 2026-08-31.**
+The dashboard's camera has no working stream, so the fixture this line has cannot
+answer the question at all; holding the branch would have meant building a
+fixture for a risk nobody has seen.
+
+**What to do if it turns out real:** exclude a live camera from adoption rather
+than bending the design around it. `ratioIsForced` already names that item, and
+the stash would simply not be written for a card that holds one. The symptom to
+watch for is a live camera reloading on every commit while the rest of the card
+no longer flickers — the opposite of the pattern this branch fixes, and so
+recognisable at a glance.
+
+## Testing and verification
+
+happy-dom carries the wiring: that a successor adopts, that it refuses a stash
+whose shape token differs, that the arrays are restored so `_syncItems` does not
+rebuild, and that a card with no stash builds normally.
+
+**Every new test is run against the current code and seen to fail.** On this line
+that rule has caught four tests that could not vary, two of them in the last two
+days.
+
+**The browser lane cannot answer the question this branch exists for.** Whether
+the pictures are painted is settled by the CDP screencast of a real mouse drag —
+`.scratchpad/screencast.mjs` — and by nothing else. Synthetic pointer events do
+not drive the drag layer at all, and a programmatic `patchPosition` rebuilds the
+card without reproducing the flicker. **Only trusted input does.** The branch is
+not done until that capture shows the pictures present in every painted frame.
+
+## Out of scope
+
+- **The upstream `_updateElement` fallback.** Worth filing, not this branch.
+- **Adoption on a dashboard that is not being edited.** Nothing is rebuilt there;
+  there is nothing to adopt.
+
+## Versioning
+
+`1.6.0`, on the `next` line. No bump unless asked. The `CHANGELOG` entry extends
+the one this line already carries about the picture jumping, which currently ends
+by saying the picture can still take a moment to appear — that sentence is what
+this branch removes.

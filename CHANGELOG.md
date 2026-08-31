@@ -50,8 +50,9 @@
   from scratch, and for one frame the background was laid out at 16:9 rather than
   at its own proportions — which shrank the card and carried every item on it to a
   different place. The card now keeps the shape of a picture it has already
-  displayed, so its size stays put while you work. The picture itself can still
-  take a moment to appear after a change; only the jump is gone.
+  displayed, so its size stays put while you work — and it keeps the pictures it
+  has already drawn, instead of drawing them again, so nothing disappears while
+  the change is applied.
 - Switching a camera between **Live** and **Auto**, or ticking **Keep
   proportions**, moved the item. Both change the size the item is drawn at, and
   an item anchored anywhere but its top-left slid by half of that change. They

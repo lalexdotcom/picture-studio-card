@@ -95,6 +95,74 @@ let lastPreviewHeight = 0;
  * would notice. */
 const RESERVE_FRAMES = 3;
 
+/**
+ * The item shapes `_syncItems` reconciles against: the family, the kind, and
+ * whether conditions are carried — a probe is a sibling in the layer, so its
+ * appearing changes the DOM we build and not just the config we push.
+ *
+ * At module scope because the adoption below has to ask the same question
+ * `_syncItems` asks, and two copies of it would eventually disagree.
+ */
+const shapesOf = (list: readonly PictureItem[]): string[] =>
+  list.map((item) =>
+    item.type === "unknown"
+      ? `unknown::`
+      : `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
+  );
+
+/** Everything a successor needs to carry on instead of starting over. */
+interface AdoptionStash {
+  bgElement?: LovelaceElementElement;
+  /** The layer's children, in order: probes and wrappers interleaved. */
+  nodes: Node[];
+  elements: (LovelaceBadgeElement | undefined)[];
+  wrappers: (HTMLElement | undefined)[];
+  probes: (ProbeElement | undefined)[];
+  renderedTypes: string[];
+}
+
+/**
+ * The nodes a destroyed card leaves for the one that replaces it.
+ *
+ * **A single slot, and reserved to the edit dialog's preview — measured, not
+ * assumed.** Two keys were tried and both were wrong: an unkeyed slot, on the
+ * false premise that `preview` means the dialog; then the `hui-card` ancestor,
+ * on the false premise that it survives. It does not — in the dialog the whole
+ * subtree is rebuilt, and the first surviving ancestor is the section's
+ * `div.container`, which on a dashboard holds every card of that section and so
+ * identifies nothing.
+ *
+ * What is true is narrower and enough: **the dialog previews exactly one card at
+ * a time**, which is what `activeCard()` already rests on. So the slot needs no
+ * key, provided only the dialog's preview ever writes or reads it —
+ * `_inEditPreview()` is that test, and the card already owns it.
+ *
+ * Home Assistant rebuilds the card element on every config change **while the
+ * card is being edited** — `hui-card` calls `createCardElement` whenever its
+ * `preview` is set; see `CardChannel` in `broker.ts`. The successor then hands
+ * the browser a subtree it has never rasterised, and it composites one or two
+ * frames without the pictures: measured, the layout already correct and the
+ * `<img>` already reporting its `naturalWidth`.
+ *
+ * Re-attaching nodes that were already rasterised paints immediately —
+ * measured across a fresh shadow root on a fresh host after 400 ms detached,
+ * first painted frame complete.
+ *
+ * **The slot is never cleared other than by an adoption.** A dialog closed
+ * without a successor leaves one subtree referenced until the next edit takes
+ * it — bounded, since the next dialog either adopts it or replaces it, and the
+ * alternative is a lifetime rule that has to guess when a rebuild is coming.
+ */
+let adoptionStash: AdoptionStash | undefined;
+
+/**
+ * Forgets the slot. **Tests only** — it deliberately outlives an element, so
+ * without this one test's nodes would be adopted by the next test's card.
+ */
+export const resetAdoptionStash = (): void => {
+  adoptionStash = undefined;
+};
+
 export class PictureStudioCard extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -125,6 +193,20 @@ export class PictureStudioCard extends LitElement {
 
   private _hass?: HomeAssistant;
   private _bgElement?: LovelaceElementElement;
+
+  /**
+   * Whether this card is the edit dialog's own preview, decided while it is
+   * still in the document.
+   *
+   * Captured on connect and not at the disconnect, where the answer cannot be
+   * had: `_inEditPreview` walks ancestors and `disconnectedCallback` runs after
+   * removal.
+   */
+  private _wasEditPreview = false;
+
+  /** Adoption is a once-per-element event; a second attempt is a no-op. */
+  private _adoptionDone = false;
+
   /** Indexed like `items`; a hole where the item is unreadable. */
   private _elements: (LovelaceBadgeElement | undefined)[] = [];
   /** Indexed like `items`; a hole where the item is unreadable. */
@@ -368,9 +450,27 @@ export class PictureStudioCard extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    // BOTH halves. `_inEditPreview` answers "no edit chrome above me", which is
+    // also true of a card on a dashboard nobody is editing and of one in the
+    // card-picker gallery; `preview` alone is true of every card on a dashboard
+    // in edit mode. Their conjunction is the dialog's preview, which is the one
+    // place a single slot is safe.
+    this._wasEditPreview = this.preview && this._inEditPreview();
+    // Now that the ancestors can be read. On a rebuild this is the call that
+    // does the work: Home Assistant configures the element before inserting it,
+    // so Lit's first update ran with no ancestors to consult.
+    this._adoptFromPredecessor();
     // Only in the edit dialog: an editor is mounted there and nowhere else, and
     // a dashboard card must never be pinned to a height it did not choose.
-    if (lastPreviewHeight > 0 && activeEditor() !== undefined) {
+    //
+    // **And not at all when nodes are about to be adopted.** The reservation
+    // exists for a successor with no height yet; one that takes over its
+    // predecessor's nodes has its height on its first frame, and reserving
+    // anyway is visible:
+    // `Math.ceil` rounds the outgoing height up, so the card was drawn one pixel
+    // taller for the reserved frames and snapped back — measured, 650 against
+    // 649.4, for exactly the frames the reservation covers.
+    if (!this._willAdopt() && lastPreviewHeight > 0 && activeEditor() !== undefined) {
       this.style.minHeight = `${lastPreviewHeight}px`;
       let frames = 0;
       const release = (): void => {
@@ -387,6 +487,7 @@ export class PictureStudioCard extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._stashForSuccessor();
     this._unsubscribe?.();
     this._unsubscribe = undefined;
     this._unregisterCard?.();
@@ -440,6 +541,8 @@ export class PictureStudioCard extends LitElement {
     }
 
     if (configChanged) {
+      // Before both syncs: they must find instances rather than an empty layer.
+      this._adoptFromPredecessor();
       void this._syncBackground();
       // _syncItems ends with _applyPositions, so it is not called again here.
       // _syncItems also calls _activeTool.render() after rebuilding wrappers.
@@ -520,6 +623,118 @@ export class PictureStudioCard extends LitElement {
   }
 
   /**
+   * Leave the rendered nodes for the card that replaces this one.
+   *
+   * Detached from our own tree on the way out rather than merely referenced:
+   * holding a wrapper keeps its whole ancestor chain alive, so a stash that was
+   * never adopted would pin this element, its shadow root and its `ha-card`
+   * until the `hui-card` itself died.
+   */
+  private _stashForSuccessor(): void {
+    const layer = this._layer;
+    if (!this._wasEditPreview || !layer || this._renderedTypes.length === 0) return;
+
+    const nodes = [...layer.childNodes];
+    layer.replaceChildren();
+    this._bgElement?.remove();
+
+    adoptionStash = {
+      bgElement: this._bgElement,
+      nodes,
+      elements: this._elements,
+      wrappers: this._wrappers,
+      probes: this._probes,
+      renderedTypes: this._renderedTypes,
+    };
+  }
+
+  /**
+   * Whether the stash on offer fits this card's item list.
+   *
+   * Asked twice on purpose: once by the reservation, which has to decide before
+   * the first render, and once by the adoption itself, which happens after it.
+   */
+  private _stashFits(stash: AdoptionStash): boolean {
+    const types = shapesOf(this._config?.items ?? []);
+    return (
+      types.length === stash.renderedTypes.length &&
+      types.every((t, i) => t === stash.renderedTypes[i])
+    );
+  }
+
+  /**
+   * Whether this card is going to take over its predecessor's nodes.
+   *
+   * A peek, never a consume. The adoption itself cannot run at
+   * `connectedCallback` — there is no render root yet — but the height
+   * reservation has to be decided there, before the first paint. So it asks
+   * what is about to happen rather than what has happened.
+   *
+   * **The two answers can disagree, in one narrow window.** A second `setConfig`
+   * landing between this call and the adoption would let the shapes match here
+   * and not there: the stash is then consumed and refused, and the card rebuilds
+   * with no reservation. The cost is the height blip that commit, not a missing
+   * picture — small enough to name rather than guard.
+   */
+  private _willAdopt(): boolean {
+    const stash = adoptionStash;
+    if (!this._wasEditPreview || this._adoptionDone || !stash) return false;
+    return this._stashFits(stash);
+  }
+
+  /**
+   * Take over the nodes the previous card left, if they still fit.
+   *
+   * Called before the two syncs, on the first update where the layer exists, so
+   * that what follows finds instances rather than an empty layer — which is
+   * exactly the `setConfig` `hui-card` refuses to give a preview.
+   *
+   * **Refused when the item shapes differ.** `_syncItems` would rebuild the
+   * children in that case anyway; refusing here keeps the rule in one place.
+   * The stash is consumed either way: a shape that no longer fits will not fit
+   * any better later, and leaving it would let a third card adopt it.
+   */
+  private _adoptFromPredecessor(): void {
+    if (this._adoptionDone) return;
+    // Only the dialog's preview, which is what makes one slot enough. The
+    // verdict is taken at connect: Home Assistant configures the element before
+    // inserting it, so Lit's first update runs with no ancestors to walk, and
+    // `connectedCallback` is what calls this again.
+    if (!this._wasEditPreview) return;
+    // Nothing rendered yet, so nothing to attach to. Returning WITHOUT touching
+    // the stash is the point: an early attempt that consumed it would leave the
+    // real one, a moment later, with nothing to adopt — which is exactly the
+    // bug this shape replaces.
+    if (!this.hasUpdated) return;
+    const root = this.renderRoot.querySelector(".root");
+    const layer = this._layer;
+    if (!root || !layer) return;
+
+    const stash = adoptionStash;
+    if (!stash) return;
+    adoptionStash = undefined;
+    this._adoptionDone = true;
+
+    if (!this._stashFits(stash)) return;
+
+    // Whatever this element built before the host appeared is discarded here:
+    // the adoption can arrive after a first sync has already populated the
+    // layer, and two sets of children is worse than either one.
+    layer.replaceChildren();
+    this._bgElement?.remove();
+
+    if (stash.bgElement) {
+      root.insertBefore(stash.bgElement, layer);
+      this._bgElement = stash.bgElement;
+    }
+    layer.append(...stash.nodes);
+    this._elements = stash.elements;
+    this._wrappers = stash.wrappers;
+    this._probes = stash.probes;
+    this._renderedTypes = stash.renderedTypes;
+  }
+
+  /**
    * Create the background hui-image-element once and reuse it thereafter.
    * Recreating on every update would restart camera streams and lose image state.
    */
@@ -591,16 +806,6 @@ export class PictureStudioCard extends LitElement {
   private async _syncItems(): Promise<void> {
     const layer = this._layer;
     if (!layer) return;
-
-    // The family, the kind, and whether the item carries conditions. The last
-    // one belongs here because a probe is a sibling in the layer: it appearing
-    // or disappearing changes the DOM we build, not just the config we push.
-    const shapesOf = (list: readonly PictureItem[]): string[] =>
-      list.map((item) =>
-        item.type === "unknown"
-          ? `unknown::`
-          : `${item.type}:${String(item.config.type ?? "")}:${hasVisibility(item) ? "v" : ""}`,
-      );
 
     let items = this._config?.items ?? [];
     let types = shapesOf(items);
