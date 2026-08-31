@@ -1385,6 +1385,15 @@ export class PictureStudioCard extends LitElement {
     :host {
       display: block;
       height: 100%;
+      /* The selection ring's geometry, and the one place it is written. An
+         outline is painted OUTSIDE the border box, so the line the eye follows
+         runs offset + width / 2 away from it — a handle centred on the box
+         sits that much INSIDE the ring, which is what it did: 2 px on a 10 px
+         handle, measured in Chromium. The handles subtract this rather than
+         repeat the numbers, so changing the ring moves all eight with it. */
+      --psc-ring-width: 2px;
+      --psc-ring-offset: 1px;
+      --psc-ring-centre: calc(var(--psc-ring-offset) + var(--psc-ring-width) / 2);
       /* mdi:eye, inlined once as a mask source. Named here rather than at the
          call site so the glyph is one edit away from being another one. The
          open eye, not the crossed-out one: the mark says the item has
@@ -1508,8 +1517,8 @@ export class PictureStudioCard extends LitElement {
        module — the comment is the link between them. */
     .editing .item.selected,
     .editing .item.dragging {
-      outline: 2px solid var(--primary-color);
-      outline-offset: 1px;
+      outline: var(--psc-ring-width) solid var(--primary-color);
+      outline-offset: var(--psc-ring-offset);
     }
     /* The item being edited comes to the front. This is the one exception to
        "no z-index": it is an editor affordance, it never reaches the config,
@@ -1609,6 +1618,11 @@ export class PictureStudioCard extends LitElement {
        read. */
     .handle {
       position: absolute;
+      /* Half the handle, plus the distance the ring stands off the box: the
+         handle's centre then lands ON the ring instead of on the edge the ring
+         surrounds. Derived here, on the handle itself, so an overridden
+         --psc-handle-size in scope is honoured. */
+      --psc-handle-outset: calc(var(--psc-handle-size, 10px) / -2 - var(--psc-ring-centre));
       width: var(--psc-handle-size, 10px);
       height: var(--psc-handle-size, 10px);
       box-sizing: border-box;
@@ -1626,23 +1640,23 @@ export class PictureStudioCard extends LitElement {
     /* Handles exist only where mounted, so the .editing .item.selected >
        prefix is now redundant. */
     .handle-top-left {
-      top: calc(var(--psc-handle-size, 10px) / -2);
-      left: calc(var(--psc-handle-size, 10px) / -2);
+      top: var(--psc-handle-outset);
+      left: var(--psc-handle-outset);
       cursor: nwse-resize;
     }
     .handle-top-right {
-      top: calc(var(--psc-handle-size, 10px) / -2);
-      right: calc(var(--psc-handle-size, 10px) / -2);
+      top: var(--psc-handle-outset);
+      right: var(--psc-handle-outset);
       cursor: nesw-resize;
     }
     .handle-bottom-left {
-      bottom: calc(var(--psc-handle-size, 10px) / -2);
-      left: calc(var(--psc-handle-size, 10px) / -2);
+      bottom: var(--psc-handle-outset);
+      left: var(--psc-handle-outset);
       cursor: nesw-resize;
     }
     .handle-bottom-right {
-      bottom: calc(var(--psc-handle-size, 10px) / -2);
-      right: calc(var(--psc-handle-size, 10px) / -2);
+      bottom: var(--psc-handle-outset);
+      right: var(--psc-handle-outset);
       cursor: nwse-resize;
     }
     /* A side handle is the same square as a corner — decided over a longer
@@ -1660,16 +1674,16 @@ export class PictureStudioCard extends LitElement {
       cursor: ew-resize;
     }
     .handle-top {
-      top: calc(var(--psc-handle-size, 10px) / -2);
+      top: var(--psc-handle-outset);
     }
     .handle-bottom {
-      bottom: calc(var(--psc-handle-size, 10px) / -2);
+      bottom: var(--psc-handle-outset);
     }
     .handle-left {
-      left: calc(var(--psc-handle-size, 10px) / -2);
+      left: var(--psc-handle-outset);
     }
     .handle-right {
-      right: calc(var(--psc-handle-size, 10px) / -2);
+      right: var(--psc-handle-outset);
     }
   `;
 }

@@ -63,6 +63,9 @@
   still picture that should have replaced the stream never appeared in its
   place — only reloading the page put things right. Both now follow the setting
   as soon as it changes.
+- The eight resize handles sat slightly inside the outline drawn around the
+  selected item instead of straddling it. The line now runs through their
+  middle.
 - An image given a height of its own was sometimes drawn at the picture's own
   proportions instead of at the size you set — after changing a camera's view,
   or after adding another item to the card. It now keeps the size you gave it,
