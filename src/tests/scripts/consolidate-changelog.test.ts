@@ -65,6 +65,9 @@ describe("consolidate-changelog.sh", () => {
     ]) {
       expect(out).toContain(entry);
     }
+    // Exactly one blank line between a subsection heading and its first entry.
+    expect(out).toContain("### Added\n\n- An image item.");
+    expect(out).toContain("### Fixed\n\n- A camera left Live");
   });
 
   it("writes package.json to the highest rather than trusting the merge", () => {
@@ -124,6 +127,35 @@ describe("consolidate-changelog.sh", () => {
     expect(repo.read("CHANGELOG.md")).toContain("## 1.6.0-rc.1 — unreleased");
   });
 
+  it("consolidates correctly when pre-release headings carry no date", () => {
+    const repo = makeRepo({
+      version: "1.6.0-beta.2",
+      changelog: `# Changelog
+
+## 1.6.0-beta.2
+
+### Fixed
+
+- Second.
+
+## 1.6.0-beta.1
+
+### Added
+
+- First.
+`,
+    });
+
+    const result = repo.run("consolidate-changelog.sh");
+    expect(result.status).toBe(0);
+    const out = repo.read("CHANGELOG.md");
+    expect(out).toContain("## 1.6.0-beta.2 — unreleased");
+    expect(out).not.toContain("## 1.6.0-beta.1");
+    // Neither entry was silently dropped.
+    expect(out).toContain("First.");
+    expect(out).toContain("Second.");
+  });
+
   it("refuses when there is nothing to consolidate", () => {
     const repo = makeRepo({
       version: "1.5.3",
@@ -161,7 +193,9 @@ describe("consolidate-changelog.sh", () => {
 
   it("refuses off main, and refuses a dirty tree", () => {
     const onNext = makeRepo({ branch: "next", version: "1.6.0-beta.3", changelog: threeBetas });
-    expect(onNext.run("consolidate-changelog.sh").stderr).toContain("from main");
+    const onNextResult = onNext.run("consolidate-changelog.sh");
+    expect(onNextResult.status).not.toBe(0);
+    expect(onNextResult.stderr).toContain("from main");
 
     const dirty = makeRepo({ version: "1.6.0-beta.3", changelog: threeBetas, dirty: true });
     const result = dirty.run("consolidate-changelog.sh");

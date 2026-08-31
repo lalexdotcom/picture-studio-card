@@ -57,10 +57,12 @@ trap 'rm -rf "$work"' EXIT
 # Oldest first: the entries read in the order the work happened.
 for version in "${members[@]}"; do
 	awk -v ver="$version" -v out="$work" '
-		index($0, "## " ver " ") == 1 { insec = 1; next }
+		/^## / && $2 == ver { insec = 1; next }
 		insec && /^## / { insec = 0 }
 		!insec { next }
-		/^### / { type = substr($0, 5); next }
+		/^### / { type = substr($0, 5); skipblank = 1; next }
+		skipblank && /^$/ { skipblank = 0; next }
+		skipblank { skipblank = 0 }
 		type != "" { print >> (out "/" type) }
 	' CHANGELOG.md
 done
