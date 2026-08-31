@@ -69,14 +69,24 @@ steps and the least practice:
    reconciliation step in `release.yml` asks whether `next` is an *ancestor*
    of the released commit; a squash establishes no ancestry and the release
    is refused with a message that reads as though nothing was merged.
-4. **Close the version, and only when the user asks for it**: strip the suffix in
-   `package.json` — `1.6.0-beta.7` becomes `1.6.0` — and replace `unreleased`
-   with the date in the `## 1.6.0` heading. The section itself needs no work; it
-   has been written all along, which is what one section per minor buys.
-5. **The user pushes `main`.** `prerelease` is false, the reconciliation step
+4. **Consolidate the line's sections into one, and only when the user asks for
+   it**: `scripts/consolidate-changelog.sh` merges every `## 1.6.0-<pre>`
+   section into one headed by the highest of them, still `unreleased`, and
+   writes `package.json` to that same version rather than trusting how the merge
+   resolved it.
+5. **Prune it.** Those sections were written for testers. An entry that fixes
+   something this same version *added* describes a bug no user of a stable
+   release ever met, and does not belong in `1.6.0`'s notes. The `ship-version`
+   skill does this pass and proposes every cut with its reason; nothing is cut
+   without the user's approval.
+6. **Close the version**: `scripts/close-version.sh` drops the suffix from
+   `package.json` and dates the heading — `## 1.6.0 — 2026-09-30`. **Until that
+   heading exists the stable cannot be published**, which is what makes the
+   pruning a gate rather than a good intention.
+7. **The user pushes `main`.** `prerelease` is false, the reconciliation step
    finds `next` already inside the commit, HACS moves `latest` and every user is
    offered `1.6.0` — beta testers included, for whom it reads as an upgrade.
-6. **Delete `next`.** Until it is gone it still claims a version that has
+8. **Delete `next`.** Until it is gone it still claims a version that has
    shipped, and the release workflow rightly refuses any further beta of it.
    `scripts/open-prerelease.sh` will say so and will not delete it for you.
 
@@ -234,35 +244,44 @@ Run the project's linter/formatter after every modification if one is configured
    ## 1.6.0 — unreleased
    ```
 
-   Everything delivered from then on is written under that heading — there is
-   never a separate `## unreleased` section alongside a numbered one. Replacing
+   Everything delivered from then on is written under that heading. Replacing
    `unreleased` with a real date is the act that releases the version, and it is
    the last thing done, not the first.
 
-   On `next` the number carries a SemVer pre-release suffix — `1.6.0-beta.1`,
-   then `-beta.2` — but **only in `package.json`. The heading does not move**: it
-   reads `## 1.6.0 — unreleased` from the day the version opens to the day it
-   ships. A pre-release publishes the notes of its base version, so
-   `1.6.0-beta.3` is released from the `## 1.6.0` section. One section per minor
-   is what keeps the changelog readable by a user; a section per beta would not
-   be, and the final one would then have to be rewritten as the union of them
-   all. Each beta is therefore a bump of `package.json` alone — and still only
-   when the user asks, by rule 4.
+   **Every published artefact has its own section, pre-releases included** —
+   `## 1.6.0-beta.2 — 2026-09-05` sits above `## 1.6.0-beta.1 — 2026-09-01` —
+   so the notes of a beta say what changed since the build its testers are
+   running, and nothing else. The rule is the same on both lines; only the
+   suffix differs.
+
+   **A published section is frozen.** Work that changes what an earlier
+   pre-release described gets a new entry in the current section, never an edit
+   to the old one: the release notes GitHub has published cannot be rewritten,
+   and a file that disagrees with them is worse than a repetition.
+
+   **The next section opens at the first delivery that follows a publication**,
+   with `scripts/bump-prerelease.sh <identifier>` — the identifier is a
+   decision, not an increment: `beta.8` and `rc.1` are both legitimate successors
+   of `beta.7`, and only at the delivery is it known which is meant. The trap this avoids
+   is silent: an entry written into the dated section of a published beta,
+   pushed without a bump, gives a green CI and **no release at all**. The
+   release job finds the tag already there, reports "nothing to release", and
+   succeeds.
 7. **The date is the safety catch, and the release workflow enforces it.** Its
-   changelog step refuses to publish while the heading for the version in
+   changelog step refuses to publish while the section for the version in
    `package.json` still says `unreleased`, and refuses just as flatly when that
    version has no section at all. So an in-progress version cannot be shipped by
    an accidental push, and the catch is a property of the pipeline rather than a
-   habit anyone has to remember.
+   habit anyone has to remember. One rule, both branches: the section is matched
+   on the **exact** version, suffix included.
 
-   For a pre-release the catch **inverts** and guards the other direction: it is
-   refused when the base heading no longer says `unreleased`, because a dated
-   `## 1.6.0` means the stable already shipped and a `beta.N` of it can only be a
-   `next` that was never recreated from `main`. A third check pairs the branch
-   with the version — a suffixed version cannot be published from `main`, an
-   unsuffixed one cannot be published from `next`. That last one exists because
-   forgetting the `-beta` suffix is the only mistake here that cannot be taken
-   back: it sends a feature build to every user as a stable release.
+   Two guards stand beside it. A suffixed version cannot be published from
+   `main` and an unsuffixed one cannot be published from `next` — that one
+   exists because forgetting the `-beta` suffix is the only mistake here that
+   cannot be taken back, since it sends a feature build to every user as a
+   stable release. And a pre-release of a version that is **already released**
+   is refused outright: it can only come from a `next` that was never recreated
+   after its line shipped.
 
 ## Tooling — Serena (symbol-aware MCP)
 

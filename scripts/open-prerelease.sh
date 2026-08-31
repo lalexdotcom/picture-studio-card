@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Open a pre-release line: create `next` from `main`, carrying <minor>-beta.1.
+# Open a pre-release line: create `next` from `main`, carrying <minor>-<identifier>.
 #
-#   scripts/open-prerelease.sh 1.6
+#   scripts/open-prerelease.sh 1.6           # opens 1.6.0-beta.1
+#   scripts/open-prerelease.sh 1.6 rc.1      # opens 1.6.0-rc.1
 #
 # **It refuses; it never repairs.** Every check below stands for a way this has
 # gone, or would go, wrong — and each of those ends in a release that cannot be
@@ -20,11 +21,23 @@ die() {
 	exit 1
 }
 
-[ $# -eq 1 ] || die "usage: ${0##*/} <minor>   e.g. ${0##*/} 1.6"
+[ $# -ge 1 ] && [ $# -le 2 ] ||
+	die "usage: ${0##*/} <minor> [identifier]   e.g. ${0##*/} 1.6   or   ${0##*/} 1.6 rc.1"
 
 cd "$(git rev-parse --show-toplevel)"
 
 arg="$1"
+
+# The identifier is the caller's, because a line does not have to open on a
+# beta. It defaults to beta.1: unlike a *successor*, which nobody can guess,
+# the first pre-release of a line has a conventional name.
+identifier="${2-beta.1}"
+case "$identifier" in
+"" | -* | *[!A-Za-z0-9.-]*) die "not pre-release text: '$identifier' — try beta.1 or rc.1" ;;
+[!A-Za-z]*) die "not pre-release text: '$identifier' — try beta.1 or rc.1" ;;
+*.*) ;;
+*) die "not pre-release text: '$identifier' — try beta.1 or rc.1" ;;
+esac
 
 # The `v` belongs to the git tag and to nothing else. Left in package.json it
 # yields a `vv1.6.0-beta.1` tag and a base version of `v1.6.0`, which matches no
@@ -41,7 +54,7 @@ else
 	die "expected a minor version, got '$arg' — 1.6 or 1.6.0, never 1.6.5: a line opens at .0"
 fi
 
-version="$base-beta.1"
+version="$base-$identifier"
 
 # Nothing in flight is moved, stashed or discarded. This script switches
 # branches and rewrites two files; a dirty tree is a refusal, never a stash.
@@ -152,8 +165,8 @@ mv package.json.opening package.json
 	die "package.json was not rewritten as expected — check it by hand"
 
 # Opening a version is both files or neither. `package.json` alone fails CI at
-# the first push with "no section for $base", which is late and puzzling.
-awk -v heading="## $base — unreleased" '
+# the first push with "CHANGELOG.md has no section for $version", which is late and puzzling.
+awk -v heading="## $version — unreleased" '
 	!inserted && /^## / { print heading; print ""; inserted = 1 }
 	{ print }
 	END { if (!inserted) { print heading; print "" } }
@@ -168,11 +181,16 @@ cat <<EOF
 Opened $version on next, cut from main.
 
   package.json   $main_version -> $version
-  CHANGELOG.md   ## $base — unreleased
+  CHANGELOG.md   ## $version — unreleased
   branch target  main
 
 Pushing next publishes a pre-release, offered only to HACS users who turned on
-"Show beta versions". Every beta from now on is a bump of package.json alone:
-the heading keeps saying "unreleased" until $base ships as a stable from main,
-and the release workflow refuses a beta of a heading that carries a date.
+"Show beta versions". Everything delivered from now on is written under
+## $version, and replacing "unreleased" with a date is what publishes it.
+
+The NEXT pre-release opens at the first delivery that follows a publication,
+with the identifier you choose:
+
+  scripts/bump-prerelease.sh beta.2
+  scripts/bump-prerelease.sh rc.1
 EOF

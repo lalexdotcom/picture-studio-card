@@ -83,11 +83,12 @@ recomputed after the fact.
 
 ### Five things about the two-branch chain that are not obvious
 
-1. **The changelog heading never carries the beta suffix.** `package.json` reads
-   `1.6.0-beta.3`, the heading still reads `## 1.6.0 — unreleased`, and the
-   workflow releases the beta from the base version's section. Writing a
-   `## 1.6.0-beta.3` heading would fail the release *and* make the changelog
-   unreadable — one section per minor is the whole point.
+1. **The changelog heading carries the full version, suffix included.** Each
+   published artefact — `1.6.0-beta.3`, `1.6.0-rc.1`, `1.6.0` — gets its own
+   `## <version>` section, and `release-notes.sh` matches the version exactly
+   with its suffix. See § "One changelog section per published artefact" for
+   the scripts, the silent failure they prevent, and the guarantees that rest
+   on keeping `consolidate-changelog.sh` and `close-version.sh` separate.
 2. **`next` sits briefly on the stable version, and that must stay green.** Right
    after it is recreated from `main` it carries the version that was just
    published — already tagged, so the run is a no-op. The branch/version guard is
@@ -170,6 +171,40 @@ the point it would have landed. **The pattern is the project's oldest lesson: a
 review finding can be right about the mechanism and wrong about the remedy.
 Measure the remedy, not just the diagnosis.**
 
+## One changelog section per published artefact — 2026-08-31
+
+Spec: `docs/superpowers/specs/2026-08-31-changelog-per-prerelease-design.md`.
+`AGENTS.md` § Changelog rules 6-7 are the contract; this is what would bite.
+
+**`release.yml` runs from the default branch.** A `workflow_run` job always
+executes the copy of the workflow on `main`, whatever branch CI ran on. A
+release change that sits only on `next` does nothing at all — verified against
+GitHub's documentation, and the reason this work landed on `main` first.
+
+**The silent failure the scripts exist to prevent:** an entry written into the
+dated section of a published pre-release, pushed without a bump, gives a green
+CI and no release. The gate finds the tag already there, reports "nothing to
+release", and succeeds. Nothing says the work was never published.
+
+**Consolidating and closing are two commands on purpose.** Between them, the
+`## 1.6.0` heading does not exist, and that absence is what forbids the stable
+release while the pruning is read. Merging them into one script throws the
+guarantee away — see spec decision 7 before touching either.
+
+**`sort -V` is the ordering authority** in two of the scripts —
+`bump-prerelease.sh` and `consolidate-changelog.sh`: `beta.10` follows
+`beta.9`, which a string comparison gets backwards, and `rc` follows `beta`.
+`close-version.sh` handles a single version and `release-notes.sh` matches
+exactly, so neither needs ordering.
+
+**The pruning has a verifiable question**, which is what keeps it from being a
+matter of taste: does the entry's subject appear in this same version's
+`Added`? If yes, the feature never shipped, so no user of a stable release met
+the bug. On the six `Fixed` entries in `next`'s `CHANGELOG.md` as of
+2026-08-31 (`git show next:CHANGELOG.md`), that question decided all six
+correctly. If `next` no longer exists, those six entries were the pre-release
+fixes accumulated on the 1.6 line before it shipped.
+
 ## The green baseline — refresh it whenever you run the whole suite
 
 **This is the one place figures are recorded, and only because deriving them is
@@ -191,13 +226,13 @@ run does not report every file, it is not a baseline.** Scoped runs are the
 normal way to work; the full run belongs to a delivery's verification, which is
 the same moment this file gets updated anyway.
 
-**Measured 2026-08-23, after the two-container scroll fix:**
+**Measured 2026-08-31, after the one-changelog-section-per-artefact scripts:**
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — both lanes, **this is the baseline** | 41 | 876 |
+| `pnpm test` — three projects, **this is the baseline** | 46 | 908 |
 
-`pnpm build`: **216.3 kB / 51.2 kB gzip**. The per-lane figures were not measured
+`pnpm build`: **216.3 kB / 51.2 kB gzip**. The per-project figures were not measured
 this round; run them if you need them rather than trusting a derivation. No scoped variant — a build is always
 the whole thing. `pnpm typecheck` is expected clean; no number to carry.
 
