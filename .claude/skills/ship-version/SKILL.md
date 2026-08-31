@@ -11,7 +11,8 @@ description: >
 
 # Ship a version
 
-The four steps below are steps 4 to 6 of `AGENTS.md` § Branches, and they run
+Steps 1 to 3 below implement steps 4 to 6 of `AGENTS.md` § Branches; step 4 is
+the hand-off. They all run
 **after** the back-merge, the whole-branch review and the merge of `next` into
 `main`. If any of those three has not happened, say so and stop.
 

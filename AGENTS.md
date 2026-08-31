@@ -260,9 +260,9 @@ Run the project's linter/formatter after every modification if one is configured
    and a file that disagrees with them is worse than a repetition.
 
    **The next section opens at the first delivery that follows a publication**,
-   with `scripts/bump-prerelease.sh <identifier>` — and only then: the
-   identifier is a decision, not an increment, because only then is it known
-   whether the next pre-release is a `beta.8` or an `rc.1`. The trap this avoids
+   with `scripts/bump-prerelease.sh <identifier>` — the identifier is a
+   decision, not an increment: `beta.8` and `rc.1` are both legitimate successors
+   of `beta.7`, and only at the delivery is it known which is meant. The trap this avoids
    is silent: an entry written into the dated section of a published beta,
    pushed without a bump, gives a green CI and **no release at all**. The
    release job finds the tag already there, reports "nothing to release", and
