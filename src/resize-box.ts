@@ -19,7 +19,16 @@ import { type AxisBounds, OPEN_BOUNDS } from "./position";
  */
 
 /** Which corner the pointer grabbed. */
-export type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+/** Which handle the pointer grabbed: a corner, or the midpoint of an edge. */
+export type Grip =
+  | "top-left"
+  | "top"
+  | "top-right"
+  | "left"
+  | "right"
+  | "bottom-left"
+  | "bottom"
+  | "bottom-right";
 
 /**
  * The smallest box a gesture may produce, in pixels.
@@ -34,10 +43,36 @@ export const RESIZE_FLOOR_PX = 24;
 const EPSILON = 1e-6;
 
 /** A corner read as a pair of per-axis edges. */
-export const cornerGrabs = (corner: Corner): { x: boolean; y: boolean } => ({
-  x: corner === "top-right" || corner === "bottom-right",
-  y: corner === "bottom-left" || corner === "bottom-right",
-});
+/**
+ * A grip read as a pair of per-axis edges.
+ *
+ * `true` / `false` says which edge of that axis the grip sits on — the whole
+ * meaning the corner-only predecessor carried. **`undefined` is an inert
+ * axis**: a side grip has nothing to say about the axis it does not straddle,
+ * and the gesture leaves that axis exactly where `pointerdown` found it.
+ *
+ * A `Record<Grip, …>` rather than string arithmetic: adding a ninth grip then
+ * fails to compile here, which is where the answer has to be decided.
+ */
+const GRIP_AXES: Record<Grip, { x: boolean | undefined; y: boolean | undefined }> = {
+  "top-left": { x: false, y: false },
+  top: { x: undefined, y: false },
+  "top-right": { x: true, y: false },
+  left: { x: false, y: undefined },
+  right: { x: true, y: undefined },
+  "bottom-left": { x: false, y: true },
+  bottom: { x: undefined, y: true },
+  "bottom-right": { x: true, y: true },
+};
+
+export const gripAxes = (grip: Grip): { x: boolean | undefined; y: boolean | undefined } =>
+  GRIP_AXES[grip];
+
+/** True for the four midpoints. Read off `gripAxes`, so there is one table. */
+export const isSideGrip = (grip: Grip): boolean => {
+  const axes = gripAxes(grip);
+  return axes.x === undefined || axes.y === undefined;
+};
 
 /** The point this axis holds still for the whole gesture. */
 export const fixedPoint = (

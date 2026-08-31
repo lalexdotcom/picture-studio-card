@@ -10,11 +10,11 @@ import {
   toPercent,
 } from "../position";
 import {
-  type Corner,
-  cornerGrabs,
   edgeAt,
   edgeSlopes,
   fixedPoint,
+  type Grip,
+  gripAxes,
   intersect,
   lockedScale,
   percentOfContainer,
@@ -26,7 +26,8 @@ import {
 export interface ResizeHit {
   element: HTMLElement;
   index: number;
-  corner: Corner;
+  /** Which handle the pointer landed on. */
+  grip: Grip;
 }
 
 export interface ResizeOptions {
@@ -158,7 +159,7 @@ export const createResizeController = (options: ResizeOptions) => {
 
     const surfaceBox = surface.getBoundingClientRect();
     const box = hit.element.getBoundingClientRect();
-    const grabs = cornerGrabs(hit.corner);
+    const grabs = gripAxes(hit.grip);
     const anchor = options.getAnchor(hit.index);
     const position = options.getPosition(hit.index);
 
@@ -169,14 +170,14 @@ export const createResizeController = (options: ResizeOptions) => {
         box.left - surfaceBox.left,
         box.width,
         surfaceBox.width,
-        grabs.x,
+        grabs.x ?? false,
         fractionOf(anchor, position, "x"),
       ),
       y: axis(
         box.top - surfaceBox.top,
         box.height,
         surfaceBox.height,
-        grabs.y,
+        grabs.y ?? false,
         fractionOf(anchor, position, "y"),
       ),
       anchor,

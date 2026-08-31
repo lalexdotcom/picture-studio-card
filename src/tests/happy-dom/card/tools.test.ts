@@ -147,7 +147,7 @@ describe("createResizeTool", () => {
     tool.attach(root);
     tool.render({ element: wrapperA, index: 0 });
     const handle = wrapperA.querySelector(".handle-bottom-right") as HTMLElement;
-    expect(tool.hit(handle)?.corner).toBe("bottom-right");
+    expect(tool.hit(handle)?.grip).toBe("bottom-right");
     expect(tool.hit(wrapperA)).toBeUndefined();
   });
 });

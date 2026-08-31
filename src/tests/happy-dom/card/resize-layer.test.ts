@@ -75,7 +75,7 @@ const setup = (options?: {
 
   const controller = createResizeController({
     getHandle: (target) =>
-      target === handle ? { element: wrapper, index: 0, corner: "bottom-right" } : undefined,
+      target === handle ? { element: wrapper, index: 0, grip: "bottom-right" } : undefined,
     getSurface: () => surface,
     getAnchor: () => options?.anchor ?? "top-left",
     getPosition: () => options?.position ?? { left: 10, top: 10 },

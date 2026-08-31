@@ -1587,10 +1587,10 @@ describe("resize handles", () => {
     expect(icon?.querySelectorAll(".handle")).toHaveLength(0);
   });
 
-  it("names each handle's corner, which is what the hit test reads", async () => {
+  it("names each handle's grip, which is what the hit test reads", async () => {
     const { card } = await editing();
     const corners = [...(wrappers(card)[0]?.querySelectorAll(".handle") ?? [])].map(
-      (h) => (h as HTMLElement).dataset.corner,
+      (h) => (h as HTMLElement).dataset.grip,
     );
     expect(corners).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
   });

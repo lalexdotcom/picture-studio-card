@@ -1,9 +1,9 @@
-import type { Corner } from "../../resize-box";
+import type { Grip } from "../../resize-box";
 import { createResizeController, type ResizeHit, type ResizeOptions } from "../resize-layer";
 import type { Tool, ToolTarget } from "./tool";
 
 /** The four corners a handle sits on, in DOM order. */
-const HANDLE_CORNERS: Corner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+const CORNER_GRIPS: Grip[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 /**
  * `getHandle` is NOT part of what the card hands over: the tool owns the hit
@@ -23,11 +23,11 @@ export type ResizeToolOptions = Omit<ResizeOptions, "getHandle">;
  */
 const hit = (target: EventTarget | null): ResizeHit | undefined => {
   const handle = (target as HTMLElement | null)?.closest?.(".handle") as HTMLElement | null;
-  const corner = handle?.dataset.corner as Corner | undefined;
+  const grip = handle?.dataset.grip as Grip | undefined;
   const wrapper = handle?.closest(".item") as HTMLElement | null;
   const index = wrapper?.dataset.index;
-  return handle && corner && wrapper && index !== undefined
-    ? { element: wrapper, index: Number(index), corner }
+  return handle && grip && wrapper && index !== undefined
+    ? { element: wrapper, index: Number(index), grip }
     : undefined;
 };
 
@@ -68,10 +68,10 @@ export const createResizeTool = (options: ResizeToolOptions): Tool => {
       if (mounted === target?.element) return;
       unmount();
       if (!target || !options.getConfig(target.index)) return;
-      for (const corner of HANDLE_CORNERS) {
+      for (const grip of CORNER_GRIPS) {
         const handle = document.createElement("div");
-        handle.className = `handle handle-${corner}`;
-        handle.dataset.corner = corner;
+        handle.className = `handle handle-${grip}`;
+        handle.dataset.grip = grip;
         target.element.append(handle);
       }
       mounted = target.element;
