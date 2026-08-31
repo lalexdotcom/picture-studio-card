@@ -479,8 +479,8 @@ describe("createResizeController", () => {
     const h = setup({ grip: "bottom" });
     h.send("pointerdown", 80, 70);
     // 300 px tall surface, so 0.03 px is a hundredth of a percent.
-    h.send("pointermove", 80, 70.04);
-    h.send("pointerup", 80, 70.04);
+    h.send("pointermove", 80, 70.03);
+    h.send("pointerup", 80, 70.03);
 
     expect(h.commits).toHaveLength(1);
   });
