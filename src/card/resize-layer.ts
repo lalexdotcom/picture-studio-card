@@ -10,12 +10,13 @@ import {
   toPercent,
 } from "../position";
 import {
-  type Corner,
-  cornerGrabs,
   edgeAt,
   edgeSlopes,
   fixedPoint,
+  type Grip,
+  gripAxes,
   intersect,
+  isSideGrip,
   lockedScale,
   percentOfContainer,
   RESIZE_FLOOR_PX,
@@ -26,7 +27,8 @@ import {
 export interface ResizeHit {
   element: HTMLElement;
   index: number;
-  corner: Corner;
+  /** Which handle the pointer landed on. */
+  grip: Grip;
 }
 
 export interface ResizeOptions {
@@ -47,8 +49,16 @@ interface AxisState {
   size0: number;
   /** The surface's extent. */
   container: number;
-  /** True when the grabbed corner is this axis' trailing edge. */
-  trailing: boolean;
+  /**
+   * Which edge of this axis the grip sits on — or `undefined` when the grip
+   * does not straddle this axis at all.
+   *
+   * An inert axis asks for nothing, ratchets nothing and bounds nothing: its
+   * `size` and `lead` keep their `pointerdown` values for the whole gesture,
+   * which is what makes a side handle the same gesture with one axis off
+   * rather than a second gesture.
+   */
+  trailing: boolean | undefined;
   /** The anchor's share of the box, for the ALT mode. */
   anchorFraction: number;
   /** The ratcheted interval each edge may sit in; closed in on every move. */
@@ -121,7 +131,7 @@ export const createResizeController = (options: ResizeOptions) => {
     origin: number,
     size: number,
     container: number,
-    trailing: boolean,
+    trailing: boolean | undefined,
     fraction: number,
   ): AxisState => ({
     origin,
@@ -158,7 +168,7 @@ export const createResizeController = (options: ResizeOptions) => {
 
     const surfaceBox = surface.getBoundingClientRect();
     const box = hit.element.getBoundingClientRect();
-    const grabs = cornerGrabs(hit.corner);
+    const grabs = gripAxes(hit.grip);
     const anchor = options.getAnchor(hit.index);
     const position = options.getPosition(hit.index);
 
@@ -210,7 +220,11 @@ export const createResizeController = (options: ResizeOptions) => {
     hit.element.style.top = `${state.y.origin}px`;
     hit.element.style.transform = "none";
     hit.element.style.width = `${state.x.size0}px`;
-    if (state.hadHeight && !state.forced) {
+    // An inert axis is written out in pixels so that nothing can move it. On x
+    // that is what already happened; on y it is the freeze a side handle needs
+    // — without it the height would follow the width through the image's own
+    // ratio and an east/west drag would be indistinguishable from a corner.
+    if ((state.hadHeight || state.y.trailing === undefined) && !state.forced) {
       hit.element.style.height = `${state.y.size0}px`;
     } else {
       hit.element.style.height = "";
@@ -227,6 +241,7 @@ export const createResizeController = (options: ResizeOptions) => {
 
   /** The admissible sizes on one axis, given the mode and the ratchet. */
   const sizeBounds = (a: AxisState, fraction: number | null): AxisBounds => {
+    if (a.trailing === undefined) return OPEN_BOUNDS;
     const fixed = fixedPoint(a.origin, a.size0, a.trailing, fraction);
     const slopes = edgeSlopes(a.trailing, fraction);
     return intersect(
@@ -240,6 +255,7 @@ export const createResizeController = (options: ResizeOptions) => {
 
   /** Close the ratchet around where each edge is *now*, per the drag's rule. */
   const ratchet = (a: AxisState, fraction: number | null): void => {
+    if (a.trailing === undefined) return;
     const fixed = fixedPoint(a.origin, a.size0, a.trailing, fraction);
     const now = edgeAt(fixed, a.size, a.trailing, fraction);
     // `element = 0` bounds an EDGE rather than a leading corner of fixed size:
@@ -265,7 +281,14 @@ export const createResizeController = (options: ResizeOptions) => {
     state.clientX = clientX;
     state.clientY = clientY;
 
-    const free = shift && !state.forced;
+    const activeX = state.x.trailing !== undefined;
+    const activeY = state.y.trailing !== undefined;
+
+    // A side grip is free with no clause of its own: there is one degree of
+    // freedom already, so there is no ratio left to lock and SHIFT has nothing
+    // to free. `lockedScale` is therefore unreachable from a side grip by
+    // structure rather than by a guard.
+    const free = isSideGrip(state.hit.grip) || (shift && !state.forced);
     state.lastFree = free;
     const fx = alt ? state.x.anchorFraction : null;
     const fy = alt ? state.y.anchorFraction : null;
@@ -273,23 +296,34 @@ export const createResizeController = (options: ResizeOptions) => {
     ratchet(state.x, fx);
     ratchet(state.y, fy);
 
-    const fixedX = fixedPoint(state.x.origin, state.x.size0, state.x.trailing, fx);
-    const fixedY = fixedPoint(state.y.origin, state.y.size0, state.y.trailing, fy);
     const px = clientX - surfaceBox.left;
     const py = clientY - surfaceBox.top;
+    const fixedX = activeX
+      ? fixedPoint(state.x.origin, state.x.size0, state.x.trailing as boolean, fx)
+      : undefined;
+    const fixedY = activeY
+      ? fixedPoint(state.y.origin, state.y.size0, state.y.trailing as boolean, fy)
+      : undefined;
 
     const wanted = {
-      x: requestedSize(px, fixedX, state.x.trailing, fx),
-      y: requestedSize(py, fixedY, state.y.trailing, fy),
+      x:
+        fixedX === undefined
+          ? undefined
+          : requestedSize(px, fixedX, state.x.trailing as boolean, fx),
+      y:
+        fixedY === undefined
+          ? undefined
+          : requestedSize(py, fixedY, state.y.trailing as boolean, fy),
     };
     const boundsX = sizeBounds(state.x, fx);
     const boundsY = sizeBounds(state.y, fy);
     const clamp = (v: number, b: AxisBounds): number => Math.min(Math.max(v, b.lo), b.hi);
 
     if (free) {
-      // Two degrees of freedom, two independent clamps — exactly the drag.
-      state.x.size = clamp(wanted.x ?? state.x.size, boundsX);
-      state.y.size = clamp(wanted.y ?? state.y.size, boundsY);
+      // Two degrees of freedom, two independent clamps — exactly the drag. An
+      // inert axis simply is not one of them.
+      if (activeX) state.x.size = clamp(wanted.x ?? state.x.size, boundsX);
+      if (activeY) state.y.size = clamp(wanted.y ?? state.y.size, boundsY);
     } else {
       // One degree of freedom, so both axes' bounds become bounds on the SAME
       // scale factor before anything is applied. Clamping them separately is
@@ -328,10 +362,14 @@ export const createResizeController = (options: ResizeOptions) => {
     const live = el.getBoundingClientRect();
     state.y.size = stretched ? state.y.size : live.height;
 
-    state.x.lead = edgeAt(fixedX, state.x.size, state.x.trailing, fx).leading;
-    state.y.lead = edgeAt(fixedY, state.y.size, state.y.trailing, fy).leading;
-    el.style.left = `${state.x.lead}px`;
-    el.style.top = `${state.y.lead}px`;
+    if (fixedX !== undefined) {
+      state.x.lead = edgeAt(fixedX, state.x.size, state.x.trailing as boolean, fx).leading;
+      el.style.left = `${state.x.lead}px`;
+    }
+    if (fixedY !== undefined) {
+      state.y.lead = edgeAt(fixedY, state.y.size, state.y.trailing as boolean, fy).leading;
+      el.style.top = `${state.y.lead}px`;
+    }
 
     if (stretched !== state.stretched) {
       state.stretched = stretched;
@@ -363,6 +401,54 @@ export const createResizeController = (options: ResizeOptions) => {
     apply(state.clientX, state.clientY, ev.shiftKey, ev.altKey);
   };
 
+  /**
+   * The height the box had at `pointerdown`, in the units it will be stored in:
+   * the stored number where there is one, the measured pixel size where there is
+   * not.
+   *
+   * Two callers, and they are not a coincidence. An inert axis commits *what it
+   * had*, and the gesture's no-change test asks whether the box has moved *since
+   * pointerdown* — the same quantity, said twice. One function keeps the identity
+   * visible instead of leaving two copies to drift apart.
+   */
+  const heightAtPointerDown = (s: ResizeState, surfaceHeight: number): number =>
+    s.storedHeight ?? percentOfContainer(s.y.size0, surfaceHeight);
+
+  /**
+   * The height to commit, or `undefined` to leave the key out.
+   *
+   * Four cases, and the order matters: the inert one comes before the keep-ratio
+   * one, because an east/west grip on a stretched item must NOT scale the stored
+   * height — its axis did not move.
+   */
+  const committedHeight = (
+    s: ResizeState,
+    surfaceHeight: number,
+    stretched: boolean,
+    scale: number,
+  ): number | undefined => {
+    // A forced ratio never renders a height, so the DOM cannot carry one. Scaled
+    // by the width's own factor so the dormant box keeps its shape.
+    if (!stretched) {
+      return s.forced && s.storedHeight !== undefined
+        ? Math.round(s.storedHeight * scale * 100) / 100
+        : undefined;
+    }
+    // The vertical axis never moved: recommit what it had, or — when it had
+    // nothing stored — the pixel height the gesture froze at pointerdown.
+    if (s.y.trailing === undefined) {
+      return heightAtPointerDown(s, surfaceHeight);
+    }
+    // Keep-ratio with a pre-existing height: both stored percentages multiply by
+    // the same factor. The pixel computation agrees in a real browser and
+    // diverges when the stored height and the rendered one are out of sync,
+    // which the suite deliberately provokes, so this formula is the canonical one.
+    if (s.hadHeight && !s.lastFree && s.storedHeight !== undefined) {
+      return Math.round(s.storedHeight * scale * 100) / 100;
+    }
+    return percentOfContainer(s.y.size, surfaceHeight);
+  };
+
   const endGesture = (ev: PointerEvent, cancelled: boolean): void => {
     if (!state || ev.pointerId !== state.pointerId) return;
     const s = state;
@@ -390,24 +476,10 @@ export const createResizeController = (options: ResizeOptions) => {
     }
 
     const stretched = s.forced ? false : s.hadHeight || s.stretched;
-    const width = percentOfContainer(s.x.size, surfaceBox.width);
     const scale = s.x.size / s.x.size0;
-    const height = stretched
-      ? s.hadHeight && !s.lastFree && s.storedHeight !== undefined
-        ? // The user resized in keep-ratio mode with a pre-existing height.
-          // "Scaling both numbers" means both STORED PERCENTAGES multiply by the
-          // same factor k = x.size/x.size0. Pixel computation (percentOfContainer)
-          // would give the right answer in a real browser — where y.size0 is the
-          // rendered height — but diverges when the stored height and the actual
-          // pixel height disagree, so this formula is the canonical one.
-          Math.round(s.storedHeight * scale * 100) / 100
-        : percentOfContainer(s.y.size, surfaceBox.height)
-      : s.forced && s.storedHeight !== undefined
-        ? // A forced ratio keeps the stored height dormant, so the DOM cannot
-          // carry it. Scaled by the width's own factor, so the box the user
-          // gets back when they leave Live has the shape it had before.
-          Math.round(s.storedHeight * scale * 100) / 100
-        : undefined;
+    const width =
+      s.x.trailing === undefined ? s.storedWidth : percentOfContainer(s.x.size, surfaceBox.width);
+    const height = committedHeight(s, surfaceBox.height, stretched, scale);
 
     const box: ImageBox = height === undefined ? { width } : { width, height };
 
@@ -418,12 +490,33 @@ export const createResizeController = (options: ResizeOptions) => {
     // `toPercent` with a null offset is the exact inverse of the `auto` anchor's
     // self-reference: the stored coordinate IS the translate fraction, so
     // `100·px / (W − w)` is the closed form the spec names, already written.
+    //
+    // An inert axis' coordinate is recommitted as the same number, not
+    // recomputed: `toPercent` would answer within a hundredth of it and make
+    // `moved` say yes to a gesture that moved nothing on that axis.
     const position: Position = {
-      left: toPercent(s.x.lead, surfaceBox.width, s.x.size, axisOffset(s.anchor, "x")),
-      top: toPercent(s.y.lead, surfaceBox.height, s.y.size, axisOffset(s.anchor, "y")),
+      left:
+        s.x.trailing === undefined
+          ? s.position0.left
+          : toPercent(s.x.lead, surfaceBox.width, s.x.size, axisOffset(s.anchor, "x")),
+      top:
+        s.y.trailing === undefined
+          ? s.position0.top
+          : toPercent(s.y.lead, surfaceBox.height, s.y.size, axisOffset(s.anchor, "y")),
     };
 
-    const boxChanged = box.width !== s.storedWidth || box.height !== s.storedHeight;
+    // The box as it stood at pointerdown, in the units it will be stored in:
+    // the stored number where there is one, the measured pixel size where there
+    // is not. Comparing to the CONFIG instead — which is what this line used to
+    // do — makes a frozen height face an absent `storedHeight`, and a number is
+    // not `undefined`, so a side gesture released on the spot would commit and
+    // take the image out of keep-ratio.
+    //
+    // A candidate with no height is never a change: the only path that drops a
+    // height an item had is the forced ratio, which commits on its own branch.
+    const height0 = heightAtPointerDown(s, surfaceBox.height);
+    const boxChanged =
+      box.width !== s.storedWidth || (box.height !== undefined && box.height !== height0);
     const moved = position.left !== s.position0.left || position.top !== s.position0.top;
 
     if (!boxChanged && !moved) {

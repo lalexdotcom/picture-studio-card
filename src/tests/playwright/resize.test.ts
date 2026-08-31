@@ -14,9 +14,11 @@ import {
 afterEach(cleanup);
 
 /**
- * RED verification: each of the four tests below was run against a targeted
- * break to confirm it would fail without the mechanism it guards. Done
- * 2026-08-26; see final-fix-report.md for the exact failure output of each.
+ * RED verification: each of the five tests below was run against a targeted
+ * break to confirm it would fail without the mechanism it guards. The first
+ * four were done 2026-08-26; the fifth (east/west height freeze) was verified
+ * 2026-08-31 by removing `|| free` from the `stretched` calculation in
+ * `apply()` inside resize-layer.ts — see task-6-report.md for the output.
  */
 
 /**
@@ -116,4 +118,40 @@ it("stops at the background without distorting on the way", async () => {
   const rect = rectInLayer(card, wrapper);
   expect(rect.width).toBeLessThanOrEqual(LAYER.width + 0.5);
   expect(rect.height).toBeCloseTo(rect.width / 2, 1);
+});
+
+/**
+ * The one claim happy-dom cannot make: it has no layout, so the frozen height
+ * there is the stub's stored number rather than the image's own. Only a real
+ * engine can prove that an east/west drag leaves the *drawn* height where it
+ * was while the width moves — which is the whole reason a side handle exists.
+ *
+ * Targeted break: removing `|| free` from `const stretched = state.forced ?
+ * false : state.hadHeight || free` in `apply()` clears the height for side
+ * handles with no stored height (stretched → false → height=""), letting the
+ * browser let it track the ratio as the width grows. Measured RED: height went
+ * from 80px to 110px (the 2:1 ratio applied to the new width). 2026-08-31.
+ */
+it("an east/west drag keeps the drawn height while the width changes", async () => {
+  // 40% of 400px = 160px wide; 2:1 ratio -> 80px tall; no stored height (keep-ratio).
+  const { card, wrapper } = await armed(imageCard("/wide-2x1.png", 40));
+  const before = rectInLayer(card, wrapper);
+
+  const handle = wrapper.querySelector(".handle-right") as HTMLElement;
+  // Press at the right edge, vertically centred.
+  await press(card, handle, { x: before.left + before.width, y: before.top + before.height / 2 });
+  // Move 60px further right — well past the ">50px wider" threshold.
+  await move(card, handle, {
+    x: before.left + before.width + 60,
+    y: before.top + before.height / 2,
+  });
+
+  const during = rectInLayer(card, wrapper);
+  expect(during.width).toBeGreaterThan(before.width + 50);
+  expect(during.height).toBeCloseTo(before.height, 1);
+
+  await release(card, handle, {
+    x: before.left + before.width + 60,
+    y: before.top + before.height / 2,
+  });
 });

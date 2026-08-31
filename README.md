@@ -291,10 +291,13 @@ filters. `aspect_ratio` is the one background setting an Image item does not tak
 because it has a size of its own: `width` (a percentage of the card's background)
 and, optionally, `height` (also a percentage). When `height` is absent the image
 keeps its natural proportions; set both to stretch it to an arbitrary shape.
-Both can be set by dragging any corner of the image in the card editor; drag
-without **Shift** and only `width` is saved — the same as leaving `height` out,
-which keeps the picture's own proportions. Hold **Alt** to resize around the
-item's anchor instead of holding the opposite corner fixed.
+Both can be set by dragging the image's handles in the card editor. Dragging a
+**corner** saves `width` alone — the same as leaving `height` out, which keeps
+the picture's own proportions; hold **Shift** to save both and stretch it. The
+handle at the **middle of an edge** changes one dimension on its own and always
+saves both, so it is the other way to stretch the picture. Hold **Alt** to resize
+around the item's anchor instead of holding the opposite edge fixed. A live
+camera shows its corners only: its proportions are not yours to set.
 
 ```yaml
   - type: element

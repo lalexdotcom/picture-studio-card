@@ -1,11 +1,13 @@
 import { describe, expect, it } from "@rstest/core";
 import { OPEN_BOUNDS } from "../../position";
 import {
-  cornerGrabs,
   edgeAt,
   edgeSlopes,
   fixedPoint,
+  type Grip,
+  gripAxes,
   intersect,
+  isSideGrip,
   lockedScale,
   percentOfContainer,
   RESIZE_FLOOR_PX,
@@ -13,12 +15,21 @@ import {
   sizeRange,
 } from "../../resize-box";
 
-describe("cornerGrabs", () => {
+describe("gripAxes", () => {
   it("reads each corner as a pair of per-axis edges", () => {
-    expect(cornerGrabs("bottom-right")).toEqual({ x: true, y: true });
-    expect(cornerGrabs("top-left")).toEqual({ x: false, y: false });
-    expect(cornerGrabs("top-right")).toEqual({ x: true, y: false });
-    expect(cornerGrabs("bottom-left")).toEqual({ x: false, y: true });
+    expect(gripAxes("bottom-right")).toEqual({ x: true, y: true });
+    expect(gripAxes("top-left")).toEqual({ x: false, y: false });
+    expect(gripAxes("top-right")).toEqual({ x: true, y: false });
+    expect(gripAxes("bottom-left")).toEqual({ x: false, y: true });
+  });
+
+  it("reports the axis a side grip does not straddle as inert", () => {
+    // `undefined` is not `false`: an axis that is not asked which of its edges
+    // was grabbed is an axis the gesture must leave exactly where it found it.
+    expect(gripAxes("top")).toEqual({ x: undefined, y: false });
+    expect(gripAxes("bottom")).toEqual({ x: undefined, y: true });
+    expect(gripAxes("left")).toEqual({ x: false, y: undefined });
+    expect(gripAxes("right")).toEqual({ x: true, y: undefined });
   });
 });
 
@@ -59,6 +70,20 @@ describe("requestedSize", () => {
     // the pointer cannot say anything about the size on this axis.
     expect(requestedSize(180, 140, true, 1)).toBeUndefined();
     expect(requestedSize(80, 100, false, 0)).toBeUndefined();
+  });
+});
+
+describe("isSideGrip", () => {
+  it("is true for the four midpoints and false for the four corners", () => {
+    expect(["top", "right", "bottom", "left"].map((g) => isSideGrip(g as Grip))).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(
+      ["top-left", "top-right", "bottom-left", "bottom-right"].map((g) => isSideGrip(g as Grip)),
+    ).toEqual([false, false, false, false]);
   });
 });
 

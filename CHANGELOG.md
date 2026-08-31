@@ -5,11 +5,14 @@
 ### Added
 
 - Images can be resized directly on the picture: select one and drag any of its
-  four corners. The proportions are kept as you drag — hold **Shift** to set the
-  width and the height independently, and **Alt** to resize around the item's
-  anchor instead of its opposite corner. Breaking the proportions is what makes
-  the picture stretch to fill its box; while they are kept, it keeps its own
-  shape.
+  eight handles. The four **corners** keep the proportions as you drag — hold
+  **Shift** to set the width and the height independently, and **Alt** to resize
+  around the item's anchor instead of the opposite corner. The four handles at
+  the **middle of each edge** change one dimension on its own, which is the other
+  way to break the proportions; **Shift** does nothing there, since the gesture
+  is already free. Breaking the proportions is what makes the picture stretch to
+  fill its box; while they are kept, it keeps its own shape. A live camera keeps
+  its proportions whatever you do, so it shows its four corners only.
 - A new item type, **Image**: a picture placed on the picture. It takes an image
   file, a different one for dark themes, a camera or an image entity, images that
   change with an entity's state, and CSS filters — the same choices the card's
