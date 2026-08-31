@@ -1772,3 +1772,90 @@ describe("resize handles", () => {
     expect(wrapper.style.height).toBe(heightAfterGestureStart);
   });
 });
+
+describe("a rebuilt card takes over its predecessor's nodes", () => {
+  /**
+   * Mounts a card inside a `hui-card`, the way Home Assistant does. The host is
+   * what survives a rebuild — it is the thing that builds the replacement and
+   * appends it to itself — so it is what the stash is keyed by.
+   */
+  const mountIn = async (host: HTMLElement, config: unknown): Promise<PictureStudioCard> => {
+    installHelpers();
+    const card = document.createElement(CARD_TAG) as PictureStudioCard;
+    card.setConfig(config);
+    // Both halves of the gate: only the edit dialog's preview stashes or adopts.
+    (card as unknown as { preview: boolean }).preview = true;
+    host.append(card);
+    await card.updateComplete;
+    await flush();
+    return card;
+  };
+
+  /** What Home Assistant does on a config change while the card is previewed. */
+  const rebuild = async (
+    host: HTMLElement,
+    card: PictureStudioCard,
+    config: unknown,
+  ): Promise<PictureStudioCard> => {
+    card.remove();
+    return mountIn(host, config);
+  };
+
+  it("re-attaches the very same wrappers, so nothing is rasterised twice", async () => {
+    // The point is node IDENTITY, not equality: a rebuilt subtree the browser
+    // has never rasterised is composited without its pictures for a frame or
+    // two, and re-attaching one it has already drawn is the only remedy that
+    // measured.
+    const host = document.createElement("hui-card");
+    document.body.append(host);
+    const first = await mountIn(host, CONFIG_3);
+    const kept = wrappers(first);
+    expect(kept.length).toBeGreaterThan(0);
+
+    const second = await rebuild(host, first, CONFIG_3);
+
+    // `toBe`, node by node. `toEqual` compares structure, and two freshly built
+    // wrappers are structurally identical — it would pass against a card that
+    // rebuilt everything, which is the whole thing under test.
+    const now = wrappers(second);
+    expect(now).toHaveLength(kept.length);
+    now.forEach((w, i) => {
+      expect(w).toBe(kept[i]);
+    });
+  });
+
+  it("builds fresh when the item shapes no longer fit", async () => {
+    // `_syncItems` would rebuild the children anyway; refusing here keeps the
+    // rule in one place rather than two that have to agree.
+    const host = document.createElement("hui-card");
+    document.body.append(host);
+    const first = await mountIn(host, CONFIG_3);
+    const kept = wrappers(first);
+
+    const fewer = { ...CONFIG_3, items: (CONFIG_3 as { items: unknown[] }).items.slice(0, 1) };
+    const second = await rebuild(host, first, fewer);
+
+    expect(wrappers(second)).toHaveLength(1);
+    expect(wrappers(second)[0]).not.toBe(kept[0]);
+  });
+
+  it("leaves a card that is not the dialog's preview out of it", async () => {
+    // `preview` false is a dashboard being looked at. It is never rebuilt, so it
+    // has nothing to leave and nothing to take — and taking would be worse than
+    // useless, since the slot holds whatever the dialog last had.
+    const host = document.createElement("hui-card");
+    document.body.append(host);
+    const first = await mountIn(host, CONFIG_3);
+    const kept = wrappers(first);
+    first.remove();
+
+    installHelpers();
+    const plain = document.createElement(CARD_TAG) as PictureStudioCard;
+    plain.setConfig(CONFIG_3);
+    host.append(plain);
+    await plain.updateComplete;
+    await flush();
+
+    expect(wrappers(plain)[0]).not.toBe(kept[0]);
+  });
+});

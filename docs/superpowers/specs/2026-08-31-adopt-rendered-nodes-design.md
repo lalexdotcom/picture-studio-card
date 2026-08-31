@@ -70,29 +70,50 @@ adopting them — the first painted frame, 9 ms later, is complete. Run twice,
 once within the same shadow root and once across; same answer. The probe is
 `.scratchpad/reattach.mjs` and it touches no production code.
 
-### 2. The holder is keyed by the `hui-card` ancestor
+### 2. AMENDED — the holder is a single slot, reserved to the dialog's preview
 
-A `WeakMap<Element, Stash>` at module level.
+**Two keys were designed and both were disproved by measurement.** They are kept
+here because the reasoning is the design, and because each was refuted by a fact
+worth knowing.
 
-**`hui-card` survives the rebuild** — it is what calls `createCardElement` and
-appends the result to itself — and our element is its **direct child**, because
-`hui-card` renders in light DOM (`createRenderRoot(){return this}`). So it is an
-exact identity across the rebuild, with nothing to compute and nothing to guard.
+**First: no key at all**, on the premise that a preview holds one card. Wrong —
+`preview` is set on **every card of a dashboard in edit mode**, which
+`PictureStudioCard._inEditPreview` has documented all along.
 
-**A single unkeyed slot was the first design and it was wrong**, on the premise
-that a preview holds one card. `preview` is set on every card of a dashboard in
-edit mode, so several picture-studio cards can be in that state at once. The
-correction hands over a better key than the one it cost: what a config-derived
-token would have had to approximate, the DOM already states.
+**Second: the `hui-card` ancestor**, on the premise that it survives the rebuild
+because it is what calls `createCardElement`. Also wrong. Measured in the dialog:
+across a commit, `picture-studio`, `hui-card` **and** the `div.card` around them
+are all new. The first surviving ancestor is the section's `div.container` —
+which on a dashboard holds every card of that section and so identifies nothing.
+**The dialog rebuilds its whole preview subtree, not just the card element.**
 
-**`WeakMap`, so eviction is free.** When the `hui-card` goes, its stash goes with
-it. There is no policy to write and none to get wrong.
+**What is true is narrower and sufficient: the dialog previews exactly one card
+at a time** — the fact `activeCard()` already rests on. So a single module slot
+is safe, *provided only that preview ever writes or reads it*. The test is
+`this.preview && this._inEditPreview()`, and both halves are load-bearing:
+`_inEditPreview` alone is true of a dashboard nobody is editing and of the
+card-picker gallery, `preview` alone is true of every card in edit mode.
 
-### 3. The key is captured on connect, never on disconnect
+**A dashboard in edit mode is therefore not covered.** Nothing there is rebuilt
+by a change to another card, and the card being edited is edited through the
+dialog.
 
-`disconnectedCallback` runs **after** removal, so `parentElement` is already
-`null` there. The `hui-card` ancestor is found and held at `connectedCallback`,
-and the stash is written under it at `disconnectedCallback`.
+### 3. The verdict is captured on connect, never on disconnect
+
+`disconnectedCallback` runs **after** removal, so `_inEditPreview()` — which
+walks ancestors — cannot answer there. The verdict is taken at
+`connectedCallback` and held.
+
+**And the adoption is attempted from `connectedCallback` too, not only from
+`updated`.** Home Assistant calls `setConfig` before inserting the element, so
+Lit's first update runs while the card has no ancestors at all: an adoption tried
+only from `updated` finds nothing and never runs again. That version passed every
+unit test, because happy-dom mounts before configuring and Home Assistant does
+the opposite.
+
+**The early call must not consume the slot.** Returning before the render root
+exists — rather than taking the stash and discarding it — is what lets the real
+attempt, a moment later, still find it.
 
 ### 4. The stash carries the parallel state, not only the nodes
 
