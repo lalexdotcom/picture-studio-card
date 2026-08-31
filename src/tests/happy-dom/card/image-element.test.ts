@@ -6,6 +6,7 @@ import {
   PictureStudioImage,
 } from "../../../card/image-element";
 import { IMAGE_TAG, type ImageElementConfig } from "../../../config";
+import { captureRatio, resetRatioMemory } from "../../../picture-ratio";
 import type { HomeAssistant } from "../../../types";
 
 if (!customElements.get(IMAGE_TAG)) customElements.define(IMAGE_TAG, PictureStudioImage);
@@ -94,6 +95,7 @@ const mount = async (config: ImageElementConfig, h = hass(), editing = false) =>
 afterEach(() => {
   document.body.replaceChildren();
   liveCameraRatioCache.clear();
+  resetRatioMemory();
   imageLoadCount = 0;
 });
 
@@ -531,5 +533,49 @@ describe("live camera ratio correction", () => {
     await new Promise<void>((r) => queueMicrotask(r));
     // Second element hit the cache — no new Image() was created.
     expect(imageLoadCount).toBe(0);
+  });
+});
+
+describe("the remembered ratio reaches the first render", () => {
+  /** A settled hui-image, the way one looks once its picture has loaded. */
+  const settled = (w: number, h: number): Element => {
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const img = document.createElement("img");
+    Object.defineProperty(img, "naturalWidth", { value: w });
+    Object.defineProperty(img, "naturalHeight", { value: h });
+    shadow.append(img);
+    return host;
+  };
+
+  test("a rebuilt element opens at the remembered shape, not at 16:9", async () => {
+    // Home Assistant rebuilds the card on every config change, so this is the
+    // state of EVERY element after a commit. Without the memo it renders its
+    // 16:9 placeholder for a frame; the assertion is that it never does.
+    resetRatioMemory();
+    captureRatio("file:/local/plan.png", settled(1500, 1761));
+
+    const el = await mount({ type: "image", image: "/local/plan.png", width: 30 });
+    // Asserted through what the stub models rather than by reading the property
+    // back: hui-image exposes `aspectRatio` as a setter only, exactly as the
+    // real one does, so the padding box IS the observable.
+    const container = el.renderRoot
+      .querySelector("hui-image")
+      ?.shadowRoot?.querySelector(".container") as HTMLElement;
+
+    // 1761/1500 = 117.4 %, and emphatically not the 56.25 % placeholder.
+    expect(container.style.paddingBottom).toBe("117.4%");
+  });
+
+  test("opens at nothing when the shape was never seen", async () => {
+    // A genuinely cold page has nothing to remember, and inventing a ratio
+    // would be worse than the placeholder it replaces.
+    resetRatioMemory();
+    const el = await mount({ type: "image", image: "/local/unseen.png", width: 30 });
+    const container = el.renderRoot
+      .querySelector("hui-image")
+      ?.shadowRoot?.querySelector(".container") as HTMLElement;
+
+    expect(container.style.paddingBottom).toBe("56.25%");
   });
 });

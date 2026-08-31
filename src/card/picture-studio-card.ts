@@ -17,6 +17,7 @@ import {
   stubConfig,
 } from "../config";
 import { effectiveBox, type ImageBox, imageBoxStyle } from "../image-box";
+import { captureRatio, pictureKey, recallRatio } from "../picture-ratio";
 import "./card-heading";
 import "./toolbar";
 import {
@@ -497,6 +498,15 @@ export class PictureStudioCard extends LitElement {
       const value = config[key];
       if (value !== undefined) out[key] = value;
     }
+    // The remembered shape, for the very first render of a rebuilt background.
+    // A fresh hui-image renders its 16:9 placeholder until its own picture
+    // loads; measured on this line, that frame collapsed a 549 px layer to 263
+    // and moved every item with it, since a position is a percentage of the
+    // layer. The user's own key always wins: this only fills an absence.
+    if (out.aspect_ratio === undefined) {
+      const remembered = recallRatio(pictureKey(config));
+      if (remembered !== undefined) out.aspect_ratio = remembered;
+    }
     // hui-image-element unwraps a media selector value for `image` only; it hands
     // `dark_mode_image` to hui-image untouched, where an object is not a path.
     // Unwrap both here so the two behave alike.
@@ -535,6 +545,40 @@ export class PictureStudioCard extends LitElement {
     const config = this._config;
     if (config) this._bgElement.setConfig(this._bgConfig(config));
     if (this._hass) this._bgElement.hass = this._hass;
+
+    void this._rememberBackgroundRatio();
+  }
+
+  /**
+   * Remembers the shape this background actually loaded, for the next rebuild.
+   *
+   * **Deliberately late, and that is the asymmetry to understand here.** The
+   * ratio is *supplied* in `_bgConfig`, before the first render, because that is
+   * the frame it exists to fill. It is *learned* here, after the picture has
+   * loaded, because a freshly built element has nothing to tell yet — reading it
+   * in the same turn as its creation only ever finds `naturalWidth === 0`, which
+   * is how the first attempt at this silently remembered nothing at all.
+   *
+   * Read off the `<img>`'s natural size, never the rendered container: with a
+   * ratio imposed the container is a padding box and would hand back the value
+   * we supplied, so the memo could never correct itself.
+   */
+  private async _rememberBackgroundRatio(): Promise<void> {
+    const config = this._config;
+    const element = this._bgElement;
+    if (!config || !element) return;
+    const key = pictureKey(config);
+    if (key === undefined) return;
+
+    await (element as unknown as { updateComplete?: Promise<unknown> }).updateComplete;
+    const huiImage = element.shadowRoot?.querySelector("hui-image") ?? null;
+    captureRatio(key, huiImage);
+    if (recallRatio(key) !== undefined) return;
+
+    // Not loaded yet. One shot, because the element outlives nothing here: a
+    // rebuild throws this listener away with the node it is on.
+    const img = huiImage?.shadowRoot?.querySelector("img");
+    img?.addEventListener("load", () => captureRatio(key, huiImage), { once: true });
   }
 
   /**

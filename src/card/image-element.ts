@@ -3,6 +3,7 @@ import { type ImageElementConfig, imagePath } from "../config";
 import { IMAGE_KIND, withDefaultActions } from "../element-kinds";
 import { hassRenderChanged } from "../has-changed";
 import { effectiveBox, ratioIsForced } from "../image-box";
+import { captureRatio, pictureKey, recallRatio } from "../picture-ratio";
 import type { HomeAssistant } from "../types";
 import { bindActions, isClickable, relayActions } from "./item-actions";
 import { interactionStyles } from "./item-styles";
@@ -177,6 +178,7 @@ export class PictureStudioImage extends LitElement {
     _hass: { state: true },
     editing: { type: Boolean },
     stretch: { type: Boolean },
+    _ratioHint: { state: true },
   };
 
   declare _config?: ImageElementConfig;
@@ -193,6 +195,22 @@ export class PictureStudioImage extends LitElement {
    * every moment outside a gesture.
    */
   declare stretch: boolean | undefined;
+
+  /**
+   * The remembered shape of this picture, handed to `hui-image` for its first
+   * render and **dropped the moment it has measured the picture itself**.
+   *
+   * A fresh `hui-image` renders its 16:9 placeholder until its own image loads,
+   * which costs a frame at the wrong height on every card rebuild — and Home
+   * Assistant rebuilds on every config change. The hint fills exactly that gap.
+   *
+   * Dropped rather than kept, and that is the whole reason it is a field instead
+   * of a value read at render time: an imposed ratio makes `hui-image` keep its
+   * padding box **for good** and never measure, so a remembered shape that
+   * turned out wrong would draw the picture wrong for the element's whole life
+   * rather than for one frame.
+   */
+  declare _ratioHint: string | undefined;
 
   constructor() {
     super();
@@ -261,8 +279,21 @@ export class PictureStudioImage extends LitElement {
         .filter=${config.filter}
         .darkModeFilter=${config.dark_mode_filter}
         .fitMode=${(this.stretch ?? effectiveBox(config).height !== undefined) ? "fill" : "contain"}
+        .aspectRatio=${this._ratioHint}
       ></hui-image>
     `;
+  }
+
+  /**
+   * The hint is taken here and nowhere else: `willUpdate` runs **before** the
+   * render, which is the only moment at which it can reach `hui-image`'s first
+   * paint. Taken in `updated` it would arrive one frame after the frame it
+   * exists to fill.
+   */
+  protected willUpdate(changed: PropertyValues): void {
+    if (changed.has("_config") && this._config) {
+      this._ratioHint = recallRatio(pictureKey(this._config));
+    }
   }
 
   protected updated(changed: PropertyValues): void {
@@ -275,9 +306,16 @@ export class PictureStudioImage extends LitElement {
       this.toggleAttribute("clickable", isClickable(config));
       bindActions(this, config);
     }
-    if (this._hass) {
-      const huiImage = this.renderRoot.querySelector("hui-image");
-      if (huiImage) void applyLiveCameraRatio(config, this._hass, huiImage);
+    const huiImage = this.renderRoot.querySelector("hui-image");
+    if (this._hass && huiImage) void applyLiveCameraRatio(config, this._hass, huiImage);
+
+    const key = pictureKey(config);
+    captureRatio(key, huiImage);
+    // Measured for real now, so the hint has done its job and must go: leaving
+    // it would keep `hui-image` on its padding box for good.
+    if (this._ratioHint !== undefined && recallRatio(key) !== undefined && huiImage) {
+      const img = huiImage.shadowRoot?.querySelector("img");
+      if (img && img.naturalWidth > 0) this._ratioHint = undefined;
     }
   }
 
