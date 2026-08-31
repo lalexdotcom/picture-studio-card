@@ -33,6 +33,7 @@ export const replaceConfig = (
   items: PictureItem[],
   index: number,
   config: BadgeConfig | ElementConfig,
+  position?: Position,
 ): PictureItem[] =>
   index < 0 || index >= items.length
     ? items
@@ -46,7 +47,12 @@ export const replaceConfig = (
         // known index today, so this is safe by convention; the guard makes it
         // safe by construction, as `setAnchor` and `setVisibility` already are.
         if (item.type === "unknown") return item;
-        return { ...item, config } as PictureItem;
+        // The coordinates travel with the config, in one write, when the caller
+        // could work out where the item has to sit to stay put — the same
+        // arrangement `setAnchor` makes, and for the same reason `patchBox`
+        // states: two commits would render the new box against the old
+        // coordinates for a frame.
+        return { ...item, ...(position ? { position } : {}), config } as PictureItem;
       });
 
 /**

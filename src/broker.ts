@@ -91,6 +91,18 @@ export interface CardChannel {
    * zero-height layer — exactly as `reanchor` and `viewportTop` do.
    */
   measureImageHeight(index: number): number | undefined;
+  /**
+   * The item's coordinates re-expressed so that `box` does not move its
+   * top-left, for an edit that changed the drawn box without asking for that
+   * size — see `mustHoldTopLeft`. Undefined when it cannot measure, exactly as
+   * `reanchor` and `measureImageHeight` answer, and the caller then keeps the
+   * coordinates it has.
+   *
+   * The box is the **effective** one, what `effectiveBox` draws rather than
+   * what the config stores: a live camera's height is dropped for rendering
+   * only, which is precisely the case this exists for.
+   */
+  refit(index: number, box: ImageBox): Position | undefined;
 }
 
 const editors = new Set<EditorChannel>();

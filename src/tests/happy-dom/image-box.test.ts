@@ -3,6 +3,7 @@ import {
   DEFAULT_IMAGE_WIDTH,
   effectiveBox,
   imageBoxStyle,
+  mustHoldTopLeft,
   normalizeImageBox,
   ratioIsForced,
 } from "../../image-box";
@@ -84,5 +85,52 @@ describe("a live camera forces the ratio", () => {
   test("anything else is its own box", () => {
     const config = { width: 40, height: 20 };
     expect(effectiveBox(config)).toEqual(config);
+  });
+});
+
+describe("mustHoldTopLeft", () => {
+  const live = { camera_image: "camera.front", camera_view: "live" } as const;
+
+  test("a camera leaving Live gives back a dormant height, and the box moves under the item", () => {
+    // Nothing stored changes — the height was never written while Live forced
+    // the ratio — but `effectiveBox` stops dropping it, so the rendered box
+    // grows and a centred item slides.
+    expect(
+      mustHoldTopLeft(
+        { ...live, width: 40, height: 40 },
+        { ...live, camera_view: "auto", width: 40, height: 40 },
+      ),
+    ).toBe(true);
+    expect(
+      mustHoldTopLeft(
+        { ...live, camera_view: "auto", width: 40, height: 40 },
+        { ...live, width: 40, height: 40 },
+      ),
+    ).toBe(true);
+  });
+
+  test("the keep-ratio checkbox adds or removes the height, and that counts", () => {
+    // The height FIELD is hidden while keep-ratio is ticked, so a key that
+    // appears or disappears can only be the checkbox.
+    expect(mustHoldTopLeft({ width: 40, height: 25 }, { width: 40 })).toBe(true);
+    expect(mustHoldTopLeft({ width: 40 }, { width: 40, height: 25 })).toBe(true);
+  });
+
+  test("a size the user typed is a size the user asked for", () => {
+    // The width and height fields keep growing the box around the anchor, which
+    // is the keyboard's equivalent of ALT on a corner handle and the only one.
+    expect(mustHoldTopLeft({ width: 40 }, { width: 60 })).toBe(false);
+    expect(mustHoldTopLeft({ width: 40, height: 25 }, { width: 40, height: 30 })).toBe(false);
+    expect(mustHoldTopLeft({ width: 40, height: 25 }, { width: 60, height: 30 })).toBe(false);
+  });
+
+  test("an edit that leaves the drawn box alone holds nothing", () => {
+    // Editing a tap action, a filter or an entity must not rewrite a coordinate.
+    expect(mustHoldTopLeft({ width: 40, height: 25 }, { width: 40, height: 25 })).toBe(false);
+    // And a camera switching view with no stored height draws the same box
+    // either way, so there is nothing to hold.
+    expect(
+      mustHoldTopLeft({ ...live, width: 40 }, { ...live, camera_view: "auto", width: 40 }),
+    ).toBe(false);
   });
 });

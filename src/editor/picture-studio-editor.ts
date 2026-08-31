@@ -21,7 +21,7 @@ import {
   type PictureStudioConfig,
   storedConfig,
 } from "../config";
-import type { ImageBox } from "../image-box";
+import { effectiveBox, type ImageBox, mustHoldTopLeft } from "../image-box";
 import type { Anchor, Position } from "../position";
 import { localizeOwn } from "../strings";
 import type { BadgeConfig, HomeAssistant, VisibilityCondition } from "../types";
@@ -546,10 +546,31 @@ export class PictureStudioEditor extends LitElement implements EditorChannel {
   private _elementChanged = (ev: CustomEvent<{ element: ElementConfig }>): void => {
     ev.stopPropagation();
     const config = this._config;
-    if (!config || this._editingIndex === undefined) return;
+    const index = this._editingIndex;
+    if (!config || index === undefined) return;
+    const next = ev.detail.element;
+    const previous = config.items[index];
+
+    // An edit that resized the item without asking for that size has to hold
+    // its top-left — the rule the resize gesture already follows, since without
+    // ALT a corner drag holds the corner opposite the grabbed one and ignores
+    // the anchor. `mustHoldTopLeft` is what tells that apart from a width the
+    // user typed, which keeps growing the box around the anchor.
+    //
+    // Asked *before* writing, for the reason `patchAnchor` states: Home
+    // Assistant rebuilds the card element on every config change, so after the
+    // commit there is no "before" left anywhere to measure against.
+    const position =
+      previous?.type === "element" &&
+      previous.config.type === "image" &&
+      next.type === "image" &&
+      mustHoldTopLeft(previous.config, next)
+        ? activeCard()?.refit(index, effectiveBox(next))
+        : undefined;
+
     this._commit({
       ...config,
-      items: replaceConfig(config.items, this._editingIndex, ev.detail.element),
+      items: replaceConfig(config.items, index, next, position),
     });
   };
 

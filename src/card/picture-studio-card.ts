@@ -1004,7 +1004,7 @@ export class PictureStudioCard extends LitElement {
    * laid out — exactly as `reanchor` and `measureImageHeight` answer, and the
    * caller then commits the box alone.
    */
-  private _refit(index: number, box: ImageBox): Position | undefined {
+  refit(index: number, box: ImageBox): Position | undefined {
     const item = this._config?.items[index];
     const wrapper = this._wrappers[index];
     const layer = this._layer;
@@ -1098,14 +1098,14 @@ export class PictureStudioCard extends LitElement {
                     const box: ImageBox = { width: item.config.width };
                     // Dropping the height changes it, so the item would move
                     // under any anchor whose vertical offset is not zero — and
-                    // under `auto` it moves whatever the coordinate is. `_refit`
+                    // under `auto` it moves whatever the coordinate is. `refit`
                     // holds the top-left, and box and position travel in one
                     // write for the reason `patchBox` states: two commits would
                     // render the new box against the old coordinates for a frame.
                     activeEditor()?.patchBox(
                       ev.detail.index,
                       box,
-                      this._refit(ev.detail.index, box),
+                      this.refit(ev.detail.index, box),
                     );
                   }}
                   @tool-changed=${(ev: CustomEvent<{ tool: ToolId }>) => {
