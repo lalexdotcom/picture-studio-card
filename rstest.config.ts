@@ -27,5 +27,14 @@ export default defineConfig({
         headless: true,
       },
     },
+    {
+      // The release scripts are bash, and what they guarantee is a set of
+      // refusals. Each test builds a throwaway git repository, runs the real
+      // script against it and asserts on its exit status and on the files it
+      // leaves — which is spec decision 12's "throwaway clone", automated so it
+      // runs on every push rather than when someone remembers.
+      name: "scripts",
+      include: ["src/tests/scripts/**/*.test.ts"],
+    },
   ],
 });
