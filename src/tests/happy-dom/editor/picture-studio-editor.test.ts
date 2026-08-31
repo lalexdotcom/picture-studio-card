@@ -1563,6 +1563,10 @@ describe("an edit that resizes the item without asking", () => {
       height: 40,
     });
 
+    // Asserted as well as the position: without it the test would pass against
+    // an implementation that never asks at all, which is the state this fix
+    // replaces. "We measured and could not act" is the path under test.
+    expect(h.asked).toHaveLength(1);
     expect(itemOf(h.commits[0])?.position).toEqual({ top: "50%", left: "50%", anchor: "center" });
     h.cleanup();
   });
