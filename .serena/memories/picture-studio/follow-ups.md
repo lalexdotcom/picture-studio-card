@@ -992,3 +992,30 @@ is fetched for a given version, rather than inferring it from behaviour — the
 same habit that pays everywhere else here. Failing that, the first release where
 the floors genuinely differ is the natural experiment, and it should be a beta,
 not a stable.
+
+## 18. The version-opening commits carry no attribution trailer — OPEN, one line each
+
+`scripts/open-prerelease.sh:177` ends with `git commit --quiet -m "chore: open
+$version"` and nothing else, so the commit that opens a version is attributed to
+the user alone even when an agent ran the script. Every other agent-written
+commit in this repository carries `Co-Authored-By: Claude Opus 5
+<noreply@anthropic.com>`. Confirmed on 2026-08-24 against `ee13acc`, the commit
+that opened `1.6.0-beta.1`, and it is still true.
+
+**`scripts/bump-prerelease.sh` has the same shape** — it was written on
+2026-08-31 following the older script's idiom, and it will commit nothing at all
+today because it leaves the two files staged for the caller. Check both before
+deciding what the fix is.
+
+**Why it sat unwritten until now.** It was found while a session was on a branch
+targeting `next`, and `.githooks/pre-commit` refuses this file from the feature
+line — the guard working, not a defect. It lived in the agent's own memory as
+`prerelease-opening-commit-has-no-trailer` until a session was on `main` and
+could write it down here.
+
+**What would close it:** decide whether a script should attribute at all. The
+argument for: consistency, and a reader of `git log` can tell who wrote what.
+The argument against: the script is run by a human as often as by an agent, and
+a trailer naming an agent that did not run it is worse than none. If the answer
+is yes, it is one `-m` flag; if no, this entry is struck through with that
+reasoning, which is itself worth recording.
