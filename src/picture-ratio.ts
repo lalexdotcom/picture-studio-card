@@ -3,9 +3,11 @@ import { type ImageSource, imagePath } from "./config";
 /**
  * A picture's shape, remembered across card rebuilds.
  *
- * Home Assistant rebuilds the card element on every config change — `hui-card`
- * calls `createCardElement`, not `setConfig` — so every `hui-image` on the card
- * is built from nothing, and a fresh one has not measured its picture yet. It
+ * Home Assistant rebuilds the card element on every config change **while the
+ * card is being edited** — `hui-card` calls `createCardElement` rather than
+ * `setConfig` whenever its `preview` is set, see `CardChannel` in `broker.ts`
+ * for the condition and where it was read. So every `hui-image` on the card is
+ * built from nothing, and a fresh one has not measured its picture yet. It
  * therefore renders its hard-coded **16:9 placeholder** for a frame: a 468 px
  * wide box comes out 263 px tall instead of 549, and since every item's position
  * is a percentage of the layer, one wrong layer height moves all of them at once.

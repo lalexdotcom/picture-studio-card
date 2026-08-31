@@ -59,10 +59,27 @@ export interface EditorChannel {
 }
 
 /**
- * The editor → card hop, and the only one. Home Assistant rebuilds the card
- * element on every config change — `hui-card` calls `createCardElement` rather
- * than `setConfig` — so nothing a card remembers survives a commit. Anything the
- * editor needs from the live preview has to be asked for *before* it writes.
+ * The editor → card hop, and the only one. Nothing a card remembers survives a
+ * commit made from the editor, so anything the editor needs from the live
+ * preview has to be asked for *before* it writes.
+ *
+ * **The rebuild is conditional, and the condition is `preview`** — read out of
+ * `hui-card` on frontend build `20260729.6` and measured against a live
+ * dashboard. Its `update()` reduces to:
+ *
+ * ```js
+ * this.config?.type !== previous?.type || this.preview
+ *   ? this._loadElement(this.config)    // createCardElement: a new element
+ *   : this._updateElement(this.config); // setConfig on the existing one
+ * ```
+ *
+ * So a card on a **dashboard** keeps its element across a config change of the
+ * same type — measured: same node before and after, replaced only when the type
+ * changes. A card in the **edit dialog's preview** is rebuilt every time, which
+ * is the only place this channel is ever used, so the rule above holds wherever
+ * it is applied. Earlier comments on this line stated the rebuild
+ * unconditionally; that was the preview generalised too far, and it is why the
+ * editing flicker never showed up on a dashboard.
  */
 export interface CardChannel {
   /**

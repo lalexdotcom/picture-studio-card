@@ -202,7 +202,9 @@ export class PictureStudioImage extends LitElement {
    *
    * A fresh `hui-image` renders its 16:9 placeholder until its own image loads,
    * which costs a frame at the wrong height on every card rebuild — and Home
-   * Assistant rebuilds on every config change. The hint fills exactly that gap.
+   * Assistant rebuilds on every config change **made from the editor**, where
+   * `hui-card` sets `preview` (see `CardChannel` in `broker.ts`). The hint fills
+   * exactly that gap.
    *
    * Dropped rather than kept, and that is the whole reason it is a field instead
    * of a value read at render time: an imposed ratio makes `hui-image` keep its
