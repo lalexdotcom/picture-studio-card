@@ -29,13 +29,24 @@ describe("open-prerelease.sh", () => {
     expect(result.stderr).toContain("drop the leading v");
   });
 
-  it("takes at most two arguments", () => {
+  it("the two-argument form is accepted by the usage guard", () => {
     const repo = makeRepo({
       version: "1.5.3",
       changelog: "# Changelog\n\n## 1.5.3 — 2026-08-23\n\n### Fixed\n\n- A thing.\n",
     });
 
-    expect(repo.run("open-prerelease.sh", "1.6", "beta.1", "extra").status).not.toBe(0);
-    expect(repo.run("open-prerelease.sh").status).not.toBe(0);
+    const tooMany = repo.run("open-prerelease.sh", "1.6", "beta.1", "extra");
+    expect(tooMany.status).not.toBe(0);
+    expect(tooMany.stderr).toContain("usage:");
+
+    const none = repo.run("open-prerelease.sh");
+    expect(none.status).not.toBe(0);
+    expect(none.stderr).toContain("usage:");
+
+    // The valid two-argument form must get past the usage guard — it reaches
+    // the remote checks and fails there, not on the guard itself.
+    const valid = repo.run("open-prerelease.sh", "1.6", "beta.1");
+    expect(valid.stderr).not.toContain("usage:");
+    expect(valid.stderr).toContain("'origin' does not appear to be a git repository");
   });
 });

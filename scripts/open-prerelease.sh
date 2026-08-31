@@ -165,7 +165,7 @@ mv package.json.opening package.json
 	die "package.json was not rewritten as expected — check it by hand"
 
 # Opening a version is both files or neither. `package.json` alone fails CI at
-# the first push with "no section for $base", which is late and puzzling.
+# the first push with "CHANGELOG.md has no section for $version", which is late and puzzling.
 awk -v heading="## $version — unreleased" '
 	!inserted && /^## / { print heading; print ""; inserted = 1 }
 	{ print }
