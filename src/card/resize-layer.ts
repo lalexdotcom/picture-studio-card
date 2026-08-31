@@ -16,6 +16,7 @@ import {
   type Grip,
   gripAxes,
   intersect,
+  isSideGrip,
   lockedScale,
   percentOfContainer,
   RESIZE_FLOOR_PX,
@@ -48,8 +49,16 @@ interface AxisState {
   size0: number;
   /** The surface's extent. */
   container: number;
-  /** True when the grabbed corner is this axis' trailing edge. */
-  trailing: boolean;
+  /**
+   * Which edge of this axis the grip sits on — or `undefined` when the grip
+   * does not straddle this axis at all.
+   *
+   * An inert axis asks for nothing, ratchets nothing and bounds nothing: its
+   * `size` and `lead` keep their `pointerdown` values for the whole gesture,
+   * which is what makes a side handle the same gesture with one axis off
+   * rather than a second gesture.
+   */
+  trailing: boolean | undefined;
   /** The anchor's share of the box, for the ALT mode. */
   anchorFraction: number;
   /** The ratcheted interval each edge may sit in; closed in on every move. */
@@ -122,7 +131,7 @@ export const createResizeController = (options: ResizeOptions) => {
     origin: number,
     size: number,
     container: number,
-    trailing: boolean,
+    trailing: boolean | undefined,
     fraction: number,
   ): AxisState => ({
     origin,
@@ -170,20 +179,14 @@ export const createResizeController = (options: ResizeOptions) => {
         box.left - surfaceBox.left,
         box.width,
         surfaceBox.width,
-        // `gripAxes` returns `undefined` for an axis a side grip does not straddle,
-        // but only corner grips are mounted today so `undefined` is unreachable here.
-        // When `AxisState.trailing` becomes tri-state — `boolean | undefined` meaning
-        // "inert axis, do not resize" — these coalescings are removed, not kept as
-        // a default; they must not survive that change or an inert axis silently
-        // becomes "leading edge grabbed" and resizes when it must not.
-        grabs.x ?? false,
+        grabs.x,
         fractionOf(anchor, position, "x"),
       ),
       y: axis(
         box.top - surfaceBox.top,
         box.height,
         surfaceBox.height,
-        grabs.y ?? false,
+        grabs.y,
         fractionOf(anchor, position, "y"),
       ),
       anchor,
@@ -217,7 +220,11 @@ export const createResizeController = (options: ResizeOptions) => {
     hit.element.style.top = `${state.y.origin}px`;
     hit.element.style.transform = "none";
     hit.element.style.width = `${state.x.size0}px`;
-    if (state.hadHeight && !state.forced) {
+    // An inert axis is written out in pixels so that nothing can move it. On x
+    // that is what already happened; on y it is the freeze a side handle needs
+    // — without it the height would follow the width through the image's own
+    // ratio and an east/west drag would be indistinguishable from a corner.
+    if ((state.hadHeight || state.y.trailing === undefined) && !state.forced) {
       hit.element.style.height = `${state.y.size0}px`;
     } else {
       hit.element.style.height = "";
@@ -234,6 +241,7 @@ export const createResizeController = (options: ResizeOptions) => {
 
   /** The admissible sizes on one axis, given the mode and the ratchet. */
   const sizeBounds = (a: AxisState, fraction: number | null): AxisBounds => {
+    if (a.trailing === undefined) return OPEN_BOUNDS;
     const fixed = fixedPoint(a.origin, a.size0, a.trailing, fraction);
     const slopes = edgeSlopes(a.trailing, fraction);
     return intersect(
@@ -247,6 +255,7 @@ export const createResizeController = (options: ResizeOptions) => {
 
   /** Close the ratchet around where each edge is *now*, per the drag's rule. */
   const ratchet = (a: AxisState, fraction: number | null): void => {
+    if (a.trailing === undefined) return;
     const fixed = fixedPoint(a.origin, a.size0, a.trailing, fraction);
     const now = edgeAt(fixed, a.size, a.trailing, fraction);
     // `element = 0` bounds an EDGE rather than a leading corner of fixed size:
@@ -272,7 +281,14 @@ export const createResizeController = (options: ResizeOptions) => {
     state.clientX = clientX;
     state.clientY = clientY;
 
-    const free = shift && !state.forced;
+    const activeX = state.x.trailing !== undefined;
+    const activeY = state.y.trailing !== undefined;
+
+    // A side grip is free with no clause of its own: there is one degree of
+    // freedom already, so there is no ratio left to lock and SHIFT has nothing
+    // to free. `lockedScale` is therefore unreachable from a side grip by
+    // structure rather than by a guard.
+    const free = isSideGrip(state.hit.grip) || (shift && !state.forced);
     state.lastFree = free;
     const fx = alt ? state.x.anchorFraction : null;
     const fy = alt ? state.y.anchorFraction : null;
@@ -280,23 +296,34 @@ export const createResizeController = (options: ResizeOptions) => {
     ratchet(state.x, fx);
     ratchet(state.y, fy);
 
-    const fixedX = fixedPoint(state.x.origin, state.x.size0, state.x.trailing, fx);
-    const fixedY = fixedPoint(state.y.origin, state.y.size0, state.y.trailing, fy);
     const px = clientX - surfaceBox.left;
     const py = clientY - surfaceBox.top;
+    const fixedX = activeX
+      ? fixedPoint(state.x.origin, state.x.size0, state.x.trailing as boolean, fx)
+      : undefined;
+    const fixedY = activeY
+      ? fixedPoint(state.y.origin, state.y.size0, state.y.trailing as boolean, fy)
+      : undefined;
 
     const wanted = {
-      x: requestedSize(px, fixedX, state.x.trailing, fx),
-      y: requestedSize(py, fixedY, state.y.trailing, fy),
+      x:
+        fixedX === undefined
+          ? undefined
+          : requestedSize(px, fixedX, state.x.trailing as boolean, fx),
+      y:
+        fixedY === undefined
+          ? undefined
+          : requestedSize(py, fixedY, state.y.trailing as boolean, fy),
     };
     const boundsX = sizeBounds(state.x, fx);
     const boundsY = sizeBounds(state.y, fy);
     const clamp = (v: number, b: AxisBounds): number => Math.min(Math.max(v, b.lo), b.hi);
 
     if (free) {
-      // Two degrees of freedom, two independent clamps — exactly the drag.
-      state.x.size = clamp(wanted.x ?? state.x.size, boundsX);
-      state.y.size = clamp(wanted.y ?? state.y.size, boundsY);
+      // Two degrees of freedom, two independent clamps — exactly the drag. An
+      // inert axis simply is not one of them.
+      if (activeX) state.x.size = clamp(wanted.x ?? state.x.size, boundsX);
+      if (activeY) state.y.size = clamp(wanted.y ?? state.y.size, boundsY);
     } else {
       // One degree of freedom, so both axes' bounds become bounds on the SAME
       // scale factor before anything is applied. Clamping them separately is
@@ -335,10 +362,14 @@ export const createResizeController = (options: ResizeOptions) => {
     const live = el.getBoundingClientRect();
     state.y.size = stretched ? state.y.size : live.height;
 
-    state.x.lead = edgeAt(fixedX, state.x.size, state.x.trailing, fx).leading;
-    state.y.lead = edgeAt(fixedY, state.y.size, state.y.trailing, fy).leading;
-    el.style.left = `${state.x.lead}px`;
-    el.style.top = `${state.y.lead}px`;
+    if (fixedX !== undefined) {
+      state.x.lead = edgeAt(fixedX, state.x.size, state.x.trailing as boolean, fx).leading;
+      el.style.left = `${state.x.lead}px`;
+    }
+    if (fixedY !== undefined) {
+      state.y.lead = edgeAt(fixedY, state.y.size, state.y.trailing as boolean, fy).leading;
+      el.style.top = `${state.y.lead}px`;
+    }
 
     if (stretched !== state.stretched) {
       state.stretched = stretched;

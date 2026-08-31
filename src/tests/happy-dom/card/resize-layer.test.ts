@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "@rstest/core";
 import { createResizeController } from "../../../card/resize-layer";
 import type { ImageBox, LiveCameraKeys } from "../../../image-box";
 import type { Anchor, Position } from "../../../position";
+import type { Grip } from "../../../resize-box";
 
 /**
  * happy-dom performs no layout, so the wrapper's box is stubbed — and here the
@@ -20,6 +21,7 @@ const setup = (options?: {
   config?: ImageBox & LiveCameraKeys;
   anchor?: Anchor;
   position?: Position;
+  grip?: Grip;
 }) => {
   const box = options?.box ?? { x: 40, y: 30, width: 80, height: 40 };
   const intrinsic = options?.intrinsic ?? 2; // width / height
@@ -75,7 +77,9 @@ const setup = (options?: {
 
   const controller = createResizeController({
     getHandle: (target) =>
-      target === handle ? { element: wrapper, index: 0, grip: "bottom-right" } : undefined,
+      target === handle
+        ? { element: wrapper, index: 0, grip: options?.grip ?? "bottom-right" }
+        : undefined,
     getSurface: () => surface,
     getAnchor: () => options?.anchor ?? "top-left",
     getPosition: () => options?.position ?? { left: 10, top: 10 },
@@ -337,6 +341,81 @@ describe("createResizeController", () => {
       new PointerEvent("pointerdown", { pointerId: 2, clientX: 300, clientY: 300, bubbles: true }),
     );
     expect(h.wrapper.style.width).toBe(width);
+  });
+
+  it("a north/south grip writes a height and leaves the width and the left edge alone", () => {
+    // Box 80x40 at (40,30) on a 400x300 surface, stored width 20 %. The pointer
+    // drags the bottom edge from y=70 down to y=130: the height must follow and
+    // NOTHING horizontal may move — not the drawn width, not the committed one,
+    // not the position.
+    const h = setup({ grip: "bottom" });
+    h.send("pointerdown", 80, 70);
+    h.send("pointermove", 200, 130);
+
+    expect(h.wrapper.style.width).toBe("80px");
+    expect(h.wrapper.style.left).toBe("40px");
+    expect(h.wrapper.style.height).toBe("100px");
+
+    h.send("pointerup", 200, 130);
+    expect(h.commits).toHaveLength(1);
+    // 100 px of a 300 px surface.
+    expect(h.commits[0]?.box).toEqual({ width: 20, height: 33.33 });
+  });
+
+  it("an east/west grip freezes the height an item did not have", () => {
+    // Stored config is keep-ratio (no height), and the stub resolves height from
+    // width at a 2:1 intrinsic ratio. Dragging the right edge must NOT let the
+    // height follow: 40 px is what the box had, 40 px is what it keeps.
+    const h = setup({ grip: "right" });
+    h.send("pointerdown", 120, 50);
+    h.send("pointermove", 200, 50);
+
+    expect(h.wrapper.style.width).toBe("160px");
+    expect(h.wrapper.style.height).toBe("40px");
+    expect(h.wrapper.getBoundingClientRect().height).toBe(40);
+
+    h.send("pointerup", 200, 50);
+    // 160 px of 400 wide, 40 px of 300 tall.
+    expect(h.commits[0]?.box).toEqual({ width: 40, height: 13.33 });
+  });
+
+  it("ignores SHIFT on a side grip: the gesture is already free", () => {
+    const h = setup({ grip: "right" });
+    h.send("pointerdown", 120, 50);
+    h.send("pointermove", 200, 50, { shiftKey: true });
+    h.send("pointerup", 200, 50, { shiftKey: true });
+
+    const held = setup({ grip: "right" });
+    held.send("pointerdown", 120, 50);
+    held.send("pointermove", 200, 50);
+    held.send("pointerup", 200, 50);
+
+    expect(h.commits[0]?.box).toEqual(held.commits[0]?.box);
+  });
+
+  it("resizes a side from the anchor under ALT, on the active axis only", () => {
+    // Centre anchor: the box grows both ways on x, and y does not move at all.
+    const h = setup({ grip: "right", anchor: "center", position: { left: 20, top: 20 } });
+    h.send("pointerdown", 120, 50);
+    h.send("pointermove", 160, 50, { altKey: true });
+
+    // Fixed point is the box's own centre, x = 80. The pointer at 160 asks for a
+    // half-width of 80, so the box is 160 wide and its left edge is at 0.
+    expect(h.wrapper.style.width).toBe("160px");
+    expect(h.wrapper.style.left).toBe("0px");
+    expect(h.wrapper.style.top).toBe("30px");
+  });
+
+  it("stops the active axis at the floor and never pushes the inert one to it", () => {
+    // A box 80 wide by 40 tall; the floor is 24. Dragging the bottom edge up past
+    // the top must stop the HEIGHT at 24 and leave the width at 80 — the floor
+    // belongs to the axis that moves.
+    const h = setup({ grip: "bottom" });
+    h.send("pointerdown", 80, 70);
+    h.send("pointermove", 80, -100);
+
+    expect(h.wrapper.style.height).toBe("24px");
+    expect(h.wrapper.style.width).toBe("80px");
   });
 });
 
