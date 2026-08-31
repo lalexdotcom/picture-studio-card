@@ -447,6 +447,43 @@ describe("createResizeController", () => {
 
     expect(h.commits[0]?.box).toEqual({ width: 40, height: 13.34 });
   });
+
+  it("commits nothing when a side gesture is released where it began", () => {
+    // The image is in keep-ratio (no stored height). Pressing an east/west handle
+    // freezes a pixel height; releasing without moving must NOT commit it, or an
+    // image nobody resized silently leaves keep-ratio.
+    const h = setup({ grip: "right" });
+    h.send("pointerdown", 120, 50);
+    h.send("pointermove", 120, 50);
+    h.send("pointerup", 120, 50);
+
+    expect(h.commits).toHaveLength(0);
+    // And the wrapper is back to the declarations pointerdown overwrote.
+    expect(h.wrapper.style.height).toBe("");
+  });
+
+  it("commits nothing when a corner returns to its starting point under SHIFT", () => {
+    const h = setup();
+    h.send("pointerdown", 120, 70);
+    h.send("pointermove", 200, 120, { shiftKey: true });
+    h.send("pointermove", 120, 70, { shiftKey: true });
+    h.send("pointerup", 120, 70, { shiftKey: true });
+
+    expect(h.commits).toHaveLength(0);
+    expect(h.wrapper.style.height).toBe("");
+  });
+
+  it("still commits a side gesture that moved by a single stored hundredth", () => {
+    // The guard must not become a threshold: anything that changes the number
+    // actually stored is a change.
+    const h = setup({ grip: "bottom" });
+    h.send("pointerdown", 80, 70);
+    // 300 px tall surface, so 0.03 px is a hundredth of a percent.
+    h.send("pointermove", 80, 70.04);
+    h.send("pointerup", 80, 70.04);
+
+    expect(h.commits).toHaveLength(1);
+  });
 });
 
 describe("the ALT mode", () => {

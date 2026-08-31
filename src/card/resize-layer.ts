@@ -505,7 +505,18 @@ export const createResizeController = (options: ResizeOptions) => {
           : toPercent(s.y.lead, surfaceBox.height, s.y.size, axisOffset(s.anchor, "y")),
     };
 
-    const boxChanged = box.width !== s.storedWidth || box.height !== s.storedHeight;
+    // The box as it stood at pointerdown, in the units it will be stored in:
+    // the stored number where there is one, the measured pixel size where there
+    // is not. Comparing to the CONFIG instead — which is what this line used to
+    // do — makes a frozen height face an absent `storedHeight`, and a number is
+    // not `undefined`, so a side gesture released on the spot would commit and
+    // take the image out of keep-ratio.
+    //
+    // A candidate with no height is never a change: the only path that drops a
+    // height an item had is the forced ratio, which commits on its own branch.
+    const height0 = heightAtPointerDown(s, surfaceBox.height);
+    const boxChanged =
+      box.width !== s.storedWidth || (box.height !== undefined && box.height !== height0);
     const moved = position.left !== s.position0.left || position.top !== s.position0.top;
 
     if (!boxChanged && !moved) {
