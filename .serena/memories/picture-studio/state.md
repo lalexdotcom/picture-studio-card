@@ -230,7 +230,7 @@ the same moment this file gets updated anyway.
 
 | Run | `testFiles` | tests |
 | --- | --- | --- |
-| `pnpm test` — three projects, **this is the baseline** | 46 | 906 |
+| `pnpm test` — three projects, **this is the baseline** | 46 | 908 |
 
 `pnpm build`: **216.3 kB / 51.2 kB gzip**. The per-project figures were not measured
 this round; run them if you need them rather than trusting a derivation. No scoped variant — a build is always
