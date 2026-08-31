@@ -1589,10 +1589,10 @@ describe("resize handles", () => {
 
   it("names each handle's grip, which is what the hit test reads", async () => {
     const { card } = await editing();
-    const corners = [...(wrappers(card)[0]?.querySelectorAll(".handle") ?? [])].map(
+    const grips = [...(wrappers(card)[0]?.querySelectorAll(".handle") ?? [])].map(
       (h) => (h as HTMLElement).dataset.grip,
     );
-    expect(corners).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
+    expect(grips).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
   });
 
   it("shows them only on the selected item: mounted by JS, not CSS display-toggle", async () => {

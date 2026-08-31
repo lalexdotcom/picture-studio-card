@@ -170,6 +170,12 @@ export const createResizeController = (options: ResizeOptions) => {
         box.left - surfaceBox.left,
         box.width,
         surfaceBox.width,
+        // `gripAxes` returns `undefined` for an axis a side grip does not straddle,
+        // but only corner grips are mounted today so `undefined` is unreachable here.
+        // When `AxisState.trailing` becomes tri-state — `boolean | undefined` meaning
+        // "inert axis, do not resize" — these coalescings are removed, not kept as
+        // a default; they must not survive that change or an inert axis silently
+        // becomes "leading edge grabbed" and resizes when it must not.
         grabs.x ?? false,
         fractionOf(anchor, position, "x"),
       ),
