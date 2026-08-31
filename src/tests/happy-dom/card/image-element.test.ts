@@ -551,6 +551,129 @@ describe("live camera ratio correction", () => {
   });
 });
 
+describe("leaving Live needs a hui-image of its own", () => {
+  /**
+   * Two things break on a `hui-image` asked to stop being a stream, and both
+   * were measured in a real Home Assistant — see
+   * `mem:picture-studio/1.6.0-handoff`, which also carries the recipe for
+   * driving it from Playwright.
+   *
+   * Its still-image poller starts in `connectedCallback` (only while
+   * `cameraView !== "live"` at that instant), on a **`hass`** change, and from
+   * the intersection observer those two create. **Nothing watches
+   * `cameraView`**: an element built as a stream keeps `_cameraImageSrc`
+   * undefined, renders no `<img>` at all and shows its spinner. And the
+   * `aspectRatio` written onto the node by `applyLiveCameraRatio` cannot be
+   * taken back by this element's binding, whose committed value never moved.
+   *
+   * Both were invisible while every config change rebuilt the card's children.
+   * They stopped being invisible when the card started adopting its
+   * predecessor's rendered nodes: the same `hui-image` now survives a config
+   * change, and this is the one change it cannot survive.
+   */
+  test("switching the camera view builds a new hui-image", async () => {
+    const h = hass({
+      "camera.hallG": {
+        entity_id: "camera.hallG",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.hallG?token=t" },
+      },
+    });
+    const live: ImageElementConfig = {
+      type: "image",
+      camera_image: "camera.hallG",
+      camera_view: "live",
+      width: 20,
+    };
+    const el = await mount(live, h);
+    const before = el.renderRoot.querySelector("hui-image");
+
+    el.setConfig({ ...live, camera_view: "auto" });
+    await el.updateComplete;
+
+    // Not "a hui-image is still there" — a different one. Lit reuses a node
+    // whose template is unchanged, and reuse is precisely what cannot work.
+    expect(el.renderRoot.querySelector("hui-image")).not.toBe(before);
+  });
+
+  test("Auto and no camera view at all are the same node", async () => {
+    // The boundary hui-image cannot cross is Live, not every value of the
+    // setting: `undefined` and `auto` both mean "the still image", and
+    // rebuilding between them would restart the camera for nothing.
+    const h = hass({
+      "camera.hallI": {
+        entity_id: "camera.hallI",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.hallI?token=t" },
+      },
+    });
+    const el = await mount({ type: "image", camera_image: "camera.hallI", width: 20 }, h);
+    const before = el.renderRoot.querySelector("hui-image");
+
+    el.setConfig({ type: "image", camera_image: "camera.hallI", camera_view: "auto", width: 20 });
+    await el.updateComplete;
+
+    expect(el.renderRoot.querySelector("hui-image")).toBe(before);
+  });
+
+  test("an ordinary update keeps the same hui-image", async () => {
+    // The counterpart, and the reason the identity is keyed on `camera_view`
+    // alone: rebuilding on anything else would restart the camera — and, for a
+    // stream, drop the connection — on every keystroke in the editor.
+    const el = await mount({ type: "image", image: "/local/plan.png", width: 30 });
+    const before = el.renderRoot.querySelector("hui-image");
+
+    el.setConfig({ type: "image", image: "/local/plan.png", width: 40 });
+    await el.updateComplete;
+
+    expect(el.renderRoot.querySelector("hui-image")).toBe(before);
+  });
+
+  test("the ratio the stream imposed does not outlive Live", async () => {
+    // The symptom that was reported: the item's frame took the height the
+    // config asks for while the picture stayed at the camera's proportions,
+    // inside a padding box nobody could clear. Measured on the real thing at
+    // 351×145 for the frame and 351×240 for the picture.
+    mockImageDimensions.width = 600;
+    mockImageDimensions.height = 410;
+    const h = hass({
+      "camera.hallF": {
+        entity_id: "camera.hallF",
+        state: "idle",
+        attributes: { entity_picture: "/api/camera_proxy/camera.hallF?token=t" },
+      },
+    });
+    const live: ImageElementConfig = {
+      type: "image",
+      camera_image: "camera.hallF",
+      camera_view: "live",
+      width: 20,
+      height: 10,
+    };
+    const el = await mount(live, h);
+    await new Promise<void>((r) => queueMicrotask(r));
+
+    // Re-queried at each step rather than held: leaving Live replaces the node,
+    // and a reference taken before the switch would report the shape of a node
+    // that is no longer on screen — which is exactly the mistake the card was
+    // making.
+    const padding = (): string | undefined =>
+      (
+        el.renderRoot.querySelector("hui-image")?.shadowRoot?.querySelector(".container") as
+          | HTMLElement
+          | undefined
+      )?.style.paddingBottom;
+    expect(padding()).toBe(`${(100 * 410) / 600}%`);
+
+    el.setConfig({ ...live, camera_view: "auto" });
+    await el.updateComplete;
+
+    // hui-image's own answer again, so the picture fills the box the config
+    // asks for instead of the shape the stream had.
+    expect(padding()).toBe("56.25%");
+  });
+});
+
 describe("the remembered ratio reaches the first render", () => {
   /** A settled hui-image, the way one looks once its picture has loaded. */
   const settled = (w: number, h: number): Element => {
@@ -605,6 +728,33 @@ describe("the remembered ratio reaches the first render", () => {
     await el.updateComplete;
 
     // Back to hui-image's own answer: nothing of ours is imposed any more.
+    expect(container.style.paddingBottom).toBe("56.25%");
+  });
+
+  test("a stretched item gets no hint at all", async () => {
+    // The hint imposes a ratio, and an imposed ratio makes hui-image build its
+    // `.ratio` container — `height: 0` plus a padding box, which defeats the
+    // height the card imposes. That is the very reason `aspect_ratio` is the one
+    // background key an image element must not take, and it applies to a
+    // remembered shape exactly as it applies to a configured one.
+    //
+    // Measured in a real Home Assistant: a camera item at width 39 / height 14
+    // opened with `aspectRatio: "375x257"` — the shape of the thumbnail HA had
+    // served — and drew its picture 241 px tall inside a 145 px frame.
+    resetRatioMemory();
+    captureRatio("camera:camera.hallH", settled(375, 257));
+
+    const el = await mount({
+      type: "image",
+      camera_image: "camera.hallH",
+      width: 39,
+      height: 14,
+    });
+    const container = el.renderRoot
+      .querySelector("hui-image")
+      ?.shadowRoot?.querySelector(".container") as HTMLElement;
+
+    // hui-image's own answer, so the height the card imposes is what decides.
     expect(container.style.paddingBottom).toBe("56.25%");
   });
 

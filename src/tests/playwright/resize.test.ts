@@ -155,3 +155,45 @@ it("an east/west drag keeps the drawn height while the width changes", async () 
     y: before.top + before.height / 2,
   });
 });
+
+/**
+ * The alignment claim, which only a real layout can make: a handle must sit on
+ * the line the eye follows, and that line is not the item's box.
+ *
+ * The selection ring is an `outline` with an offset, and an outline is painted
+ * OUTSIDE the border box: its centre line runs `outline-offset +
+ * outline-width / 2` away from it. A handle placed at `-size / 2` is centred on
+ * the border box instead. Measured in Chromium before the fix: every handle sat
+ * 2 px inside the ring — a fifth of a 10 px handle, and visible.
+ *
+ * The ring's own numbers are read from the computed style rather than written
+ * here, so this asserts that the two agree and not that either is 2px.
+ */
+it("centres every handle on the selection ring, not on the box it surrounds", async () => {
+  const { card, wrapper } = await armed(imageCard("/wide-2x1.png", 20, 10));
+  // Home Assistant always defines it; the harness does not, and without it the
+  // whole `outline` shorthand is invalid at computed-value time and falls back
+  // to `medium` (3px) with no style at all. Reading a ring nobody paints would
+  // have made this test assert against 2.5px of nothing.
+  card.style.setProperty("--primary-color", "#03a9f4");
+  const ring = getComputedStyle(wrapper);
+  if (ring.outlineStyle === "none") throw new Error("the selection ring is not painted");
+  const out = parseFloat(ring.outlineOffset) + parseFloat(ring.outlineWidth) / 2;
+  const box = wrapper.getBoundingClientRect();
+  const centre = (grip: string): { x: number; y: number } => {
+    const r = (wrapper.querySelector(`.handle-${grip}`) as HTMLElement).getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  };
+
+  expect(centre("top").y).toBeCloseTo(box.top - out, 1);
+  expect(centre("bottom").y).toBeCloseTo(box.bottom + out, 1);
+  expect(centre("left").x).toBeCloseTo(box.left - out, 1);
+  expect(centre("right").x).toBeCloseTo(box.right + out, 1);
+
+  const corner = centre("top-left");
+  expect(corner.x).toBeCloseTo(box.left - out, 1);
+  expect(corner.y).toBeCloseTo(box.top - out, 1);
+  const far = centre("bottom-right");
+  expect(far.x).toBeCloseTo(box.right + out, 1);
+  expect(far.y).toBeCloseTo(box.bottom + out, 1);
+});
