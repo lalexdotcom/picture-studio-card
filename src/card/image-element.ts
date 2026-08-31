@@ -312,8 +312,17 @@ export class PictureStudioImage extends LitElement {
     const key = pictureKey(config);
     captureRatio(key, huiImage);
     // Measured for real now, so the hint has done its job and must go: leaving
-    // it would keep `hui-image` on its padding box for good.
-    if (this._ratioHint !== undefined && recallRatio(key) !== undefined && huiImage) {
+    // it would keep `hui-image` on its padding box for good, and a remembered
+    // shape that turned out wrong would then be drawn for the element's life.
+    //
+    // `naturalWidth` is the whole test. A memo lookup here would add nothing:
+    // the hint can only have come from the memo in the first place.
+    //
+    // **This runs on any update, which for a file-backed item means the next
+    // `hass` push and nothing sooner.** Home Assistant pushes state constantly
+    // so the hint clears within a second in practice; it is worth knowing that
+    // nothing here schedules that update itself.
+    if (this._ratioHint !== undefined && huiImage) {
       const img = huiImage.shadowRoot?.querySelector("img");
       if (img && img.naturalWidth > 0) this._ratioHint = undefined;
     }
