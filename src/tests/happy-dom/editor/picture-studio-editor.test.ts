@@ -120,6 +120,7 @@ describe("a position commit must not move the view", () => {
       reanchor: () => undefined,
       viewportTop: () => (present ? previewTop - top : undefined),
       measureImageHeight: () => undefined,
+      refit: () => undefined,
     };
     let release = registerCard(channel);
 
@@ -1456,5 +1457,134 @@ describe("patchBox", () => {
     const before = h.emitted.length;
     h.el.patchBox(0, { width: 42 });
     expect(h.emitted.length).toBe(before);
+  });
+});
+
+describe("an edit that resizes the item without asking", () => {
+  /**
+   * One camera image item, stretched and centred — the case where the shift is
+   * most visible, and the one the user reported.
+   */
+  const CAMERA_CONFIG = {
+    type: "custom:picture-studio",
+    image: "/local/plan.png",
+    items: [
+      {
+        type: "element",
+        anchor: "center",
+        position: { top: 50, left: 50 },
+        config: {
+          type: "image",
+          camera_image: "camera.front",
+          camera_view: "live",
+          width: 40,
+          height: 40,
+        },
+      },
+    ],
+  };
+
+  /** Opens the element form on item 0 and returns what the editor commits. */
+  const openForm = async (refit: (index: number, box: unknown) => unknown) => {
+    const el = document.createElement(EDITOR_TAG) as PictureStudioEditor;
+    el.setConfig(CAMERA_CONFIG as never);
+    el.hass = { localize: () => "", states: {} } as never;
+    document.body.append(el);
+    await el.updateComplete;
+    el.select(0, "list");
+    await el.updateComplete;
+
+    const commits: unknown[] = [];
+    el.addEventListener("config-changed", (ev) => {
+      commits.push((ev as CustomEvent).detail.config);
+    });
+    const asked: unknown[] = [];
+    const release = registerCard({
+      reanchor: () => undefined,
+      viewportTop: () => undefined,
+      measureImageHeight: () => undefined,
+      refit: (index: number, box: unknown) => {
+        asked.push({ index, box });
+        return refit(index, box);
+      },
+    } as never);
+
+    const form = el.renderRoot.querySelector("picture-studio-element-form");
+    if (!form) throw new Error("the element form did not render");
+    const change = (config: unknown) => {
+      form.dispatchEvent(
+        new CustomEvent("element-changed", {
+          detail: { element: config },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    };
+    return { el, commits, asked, change, cleanup: () => release() };
+  };
+
+  const itemOf = (config: unknown) =>
+    (config as { items: { position: unknown; config: unknown }[] }).items[0];
+
+  it("asks the card where the item goes and commits it with the config", async () => {
+    const h = await openForm(() => ({ left: 61.2, top: 33.4 }));
+    h.change({
+      type: "image",
+      camera_image: "camera.front",
+      camera_view: "auto",
+      width: 40,
+      height: 40,
+    });
+
+    // `effectiveBox` returns the config itself when the ratio is not forced, so
+    // the box carries the other keys too — what matters is the geometry it
+    // names, which is the height the item gets back on leaving Live.
+    expect(h.asked).toHaveLength(1);
+    expect(h.asked[0]).toMatchObject({ index: 0, box: { width: 40, height: 40 } });
+    // The committed shape is the stored one — percent strings, anchor inside —
+    // because that is what lands in the user's YAML.
+    expect(itemOf(h.commits[0])?.position).toEqual({
+      top: "33.4%",
+      left: "61.2%",
+      anchor: "center",
+    });
+    h.cleanup();
+  });
+
+  it("keeps the coordinates it has when the card cannot measure", async () => {
+    // Undefined is not a failure: Home Assistant destroys the card element on
+    // every config change, and during that gap there is no preview at all.
+    const h = await openForm(() => undefined);
+    h.change({
+      type: "image",
+      camera_image: "camera.front",
+      camera_view: "auto",
+      width: 40,
+      height: 40,
+    });
+
+    // Asserted as well as the position: without it the test would pass against
+    // an implementation that never asks at all, which is the state this fix
+    // replaces. "We measured and could not act" is the path under test.
+    expect(h.asked).toHaveLength(1);
+    expect(itemOf(h.commits[0])?.position).toEqual({ top: "50%", left: "50%", anchor: "center" });
+    h.cleanup();
+  });
+
+  it("does not ask when the user typed a width", async () => {
+    // Typing a size grows the box around the anchor, which is the keyboard's
+    // only equivalent of ALT on a corner handle.
+    const h = await openForm(() => ({ left: 61.2, top: 33.4 }));
+    h.change({
+      type: "image",
+      camera_image: "camera.front",
+      camera_view: "live",
+      width: 60,
+      height: 40,
+    });
+
+    expect(h.asked).toEqual([]);
+    expect(itemOf(h.commits[0])?.position).toEqual({ top: "50%", left: "50%", anchor: "center" });
+    h.cleanup();
   });
 });

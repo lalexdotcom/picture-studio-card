@@ -24,6 +24,7 @@ const card = () => ({
   reanchor: () => undefined,
   viewportTop: () => undefined,
   measureImageHeight: () => undefined,
+  refit: () => undefined,
 });
 
 describe("broker", () => {

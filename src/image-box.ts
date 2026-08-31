@@ -105,3 +105,39 @@ export const ratioIsForced = (config: LiveCameraKeys): boolean =>
  */
 export const effectiveBox = (config: ImageBox & LiveCameraKeys): ImageBox =>
   ratioIsForced(config) ? { width: config.width } : config;
+
+/**
+ * Whether an edit has to hold the item's top-left, because it changed the drawn
+ * box **without anyone asking for that size**.
+ *
+ * The rule the card follows everywhere else is that a change to an item's box
+ * holds its top-left, not its anchor point — the resize gesture's rule, since
+ * without ALT a corner drag holds the corner opposite the grabbed one and
+ * ignores the anchor. Two edits in the form break it today: switching a camera
+ * in or out of Live, where `effectiveBox` starts or stops dropping the height
+ * and nothing stored changes at all; and the keep-ratio checkbox, which deletes
+ * the height and returns.
+ *
+ * **The width and height fields are deliberately NOT in that set.** Typing a
+ * size grows the box around the anchor, which is the keyboard's equivalent of
+ * holding ALT on a corner handle — and the only one there is, since a form has
+ * no modifiers. Making them hold the top-left too would be one rule instead of
+ * two, and would take that away.
+ *
+ * Telling the two apart needs nothing but the two configs, because the form
+ * **hides** the height field while keep-ratio is ticked: a height key that
+ * appears or disappears can only be the checkbox, and a height that moves from
+ * one number to another can only be the field.
+ */
+export const mustHoldTopLeft = (
+  prev: ImageBox & LiveCameraKeys,
+  next: ImageBox & LiveCameraKeys,
+): boolean => {
+  if (next.width !== prev.width) return false;
+  if (prev.height !== undefined && next.height !== undefined && next.height !== prev.height) {
+    return false;
+  }
+  const before = effectiveBox(prev);
+  const after = effectiveBox(next);
+  return before.width !== after.width || before.height !== after.height;
+};
