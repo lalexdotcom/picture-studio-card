@@ -102,7 +102,12 @@ describe("bump-prerelease.sh", () => {
       changelog: published("1.6.0-beta.1"),
     });
 
-    expect(repo.run("bump-prerelease.sh", "1.7.0").status).not.toBe(0);
-    expect(repo.run("bump-prerelease.sh", "beta 2").status).not.toBe(0);
+    const version = repo.run("bump-prerelease.sh", "1.7.0");
+    expect(version.status).not.toBe(0);
+    expect(version.stderr).toContain("not pre-release text");
+
+    const space = repo.run("bump-prerelease.sh", "beta 2");
+    expect(space.status).not.toBe(0);
+    expect(space.stderr).toContain("not pre-release text");
   });
 });

@@ -15,6 +15,9 @@
 # release at all** — the release job finds the tag already there, reports
 # "nothing to release", and succeeds. Nothing anywhere says the work was never
 # published.
+#
+# Requires `sort -V` (GNU coreutils) for SemVer ordering — the devcontainer
+# and CI both supply it.
 
 set -euo pipefail
 
@@ -30,8 +33,12 @@ cd "$(git rev-parse --show-toplevel)"
 identifier="$1"
 # SemVer pre-release text: dot-separated alphanumerics and hyphens. Rejecting
 # anything else here keeps a typo from becoming a tag nobody can delete.
+# The first character must be a letter: a version-shaped identifier such as
+# `1.7.0` would otherwise be admitted here and refused later by the ordering
+# check, which would then report the wrong reason.
 case "$identifier" in
 "" | -* | *[!A-Za-z0-9.-]*) die "not pre-release text: '$identifier' — try beta.2 or rc.1" ;;
+[!A-Za-z]*) die "not pre-release text: '$identifier' — try beta.2 or rc.1" ;;
 *.*) ;;
 *) die "not pre-release text: '$identifier' — try beta.2 or rc.1" ;;
 esac
