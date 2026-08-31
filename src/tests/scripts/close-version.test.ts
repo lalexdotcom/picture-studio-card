@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "@rstest/core";
 import { cleanupRepos, makeRepo } from "./harness";
 
@@ -19,7 +20,10 @@ const consolidated = `# Changelog
 - An old thing.
 `;
 
-const today = new Date().toISOString().slice(0, 10);
+// Run through the same command the script uses so test and script share one
+// clock and one timezone — new Date().toISOString() is UTC and diverges in any
+// zone east or west of it.
+const today = execFileSync("date", ["+%F"], { encoding: "utf8" }).trim();
 
 describe("close-version.sh", () => {
   it("strips the suffix and dates the heading — the two acts that publish", () => {
@@ -57,6 +61,7 @@ describe("close-version.sh", () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("consolidate-changelog.sh");
     expect(repo.read("package.json")).toContain('"version": "1.6.0-beta.3"');
+    expect(repo.read("CHANGELOG.md")).toContain("unreleased");
   });
 
   it("refuses when the top section is not the version package.json is on", () => {
@@ -66,6 +71,8 @@ describe("close-version.sh", () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("consolidate-changelog.sh");
+    expect(repo.read("package.json")).toContain('"version": "1.6.0-beta.2"');
+    expect(repo.read("CHANGELOG.md")).toContain("unreleased");
   });
 
   it("refuses a version that carries no suffix — there is nothing to close", () => {
@@ -82,12 +89,15 @@ describe("close-version.sh", () => {
 
   it("refuses off main, and refuses a dirty tree", () => {
     const onNext = makeRepo({ branch: "next", version: "1.6.0-beta.3", changelog: consolidated });
-    expect(onNext.run("close-version.sh").stderr).toContain("from main");
+    const onNextResult = onNext.run("close-version.sh");
+    expect(onNextResult.status).not.toBe(0);
+    expect(onNextResult.stderr).toContain("from main");
 
     const dirty = makeRepo({ version: "1.6.0-beta.3", changelog: consolidated, dirty: true });
     const result = dirty.run("close-version.sh");
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("not clean");
     expect(dirty.read("CHANGELOG.md")).toContain("unreleased");
+    expect(dirty.read("package.json")).toContain('"version": "1.6.0-beta.3"');
   });
 });
