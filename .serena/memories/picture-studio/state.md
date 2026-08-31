@@ -83,11 +83,12 @@ recomputed after the fact.
 
 ### Five things about the two-branch chain that are not obvious
 
-1. **The changelog heading never carries the beta suffix.** `package.json` reads
-   `1.6.0-beta.3`, the heading still reads `## 1.6.0 — unreleased`, and the
-   workflow releases the beta from the base version's section. Writing a
-   `## 1.6.0-beta.3` heading would fail the release *and* make the changelog
-   unreadable — one section per minor is the whole point.
+1. **The changelog heading carries the full version, suffix included.** Each
+   published artefact — `1.6.0-beta.3`, `1.6.0-rc.1`, `1.6.0` — gets its own
+   `## <version>` section, and `release-notes.sh` matches the version exactly
+   with its suffix. See § "One changelog section per published artefact" for
+   the scripts, the silent failure they prevent, and the guarantees that rest
+   on keeping `consolidate-changelog.sh` and `close-version.sh` separate.
 2. **`next` sits briefly on the stable version, and that must stay green.** Right
    after it is recreated from `main` it carries the version that was just
    published — already tagged, so the run is a no-op. The branch/version guard is
@@ -190,14 +191,19 @@ release", and succeeds. Nothing says the work was never published.
 release while the pruning is read. Merging them into one script throws the
 guarantee away — see spec decision 7 before touching either.
 
-**`sort -V` is the ordering authority** in all three scripts: `beta.10` follows
+**`sort -V` is the ordering authority** in two of the scripts —
+`bump-prerelease.sh` and `consolidate-changelog.sh`: `beta.10` follows
 `beta.9`, which a string comparison gets backwards, and `rc` follows `beta`.
+`close-version.sh` handles a single version and `release-notes.sh` matches
+exactly, so neither needs ordering.
 
 **The pruning has a verifiable question**, which is what keeps it from being a
 matter of taste: does the entry's subject appear in this same version's
 `Added`? If yes, the feature never shipped, so no user of a stable release met
-the bug. On the six `Fixed` entries of `1.6.0` as they stood on 2026-08-31, that
-question decided all six correctly.
+the bug. On the six `Fixed` entries in `next`'s `CHANGELOG.md` as of
+2026-08-31 (`git show next:CHANGELOG.md`), that question decided all six
+correctly. If `next` no longer exists, those six entries were the pre-release
+fixes accumulated on the 1.6 line before it shipped.
 
 ## The green baseline — refresh it whenever you run the whole suite
 
