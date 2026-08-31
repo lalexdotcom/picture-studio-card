@@ -1394,5 +1394,31 @@ export class PictureStudioCard extends LitElement {
       right: calc(var(--psc-handle-size, 10px) / -2);
       cursor: nwse-resize;
     }
+    /* A side handle is the same square as a corner — decided over a longer
+       pill shape, so that eight handles read as one family. Centred on its
+       edge like the corners, which is also why the floor did not have to move:
+       the clearance bound is W >= 2 * handle size either way. */
+    .handle-top,
+    .handle-bottom {
+      left: calc(50% - var(--psc-handle-size, 10px) / 2);
+      cursor: ns-resize;
+    }
+    .handle-left,
+    .handle-right {
+      top: calc(50% - var(--psc-handle-size, 10px) / 2);
+      cursor: ew-resize;
+    }
+    .handle-top {
+      top: calc(var(--psc-handle-size, 10px) / -2);
+    }
+    .handle-bottom {
+      bottom: calc(var(--psc-handle-size, 10px) / -2);
+    }
+    .handle-left {
+      left: calc(var(--psc-handle-size, 10px) / -2);
+    }
+    .handle-right {
+      right: calc(var(--psc-handle-size, 10px) / -2);
+    }
   `;
 }

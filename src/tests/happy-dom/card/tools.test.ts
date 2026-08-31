@@ -96,10 +96,10 @@ describe("createResizeTool", () => {
     const tool = createResizeTool(options);
     tool.attach(root);
     tool.render({ element: wrapperA, index: 0 });
-    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(8);
     tool.render({ element: wrapperB, index: 1 });
     expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
-    expect(wrapperB.querySelectorAll(".handle")).toHaveLength(4);
+    expect(wrapperB.querySelectorAll(".handle")).toHaveLength(8);
   });
 
   it("mounts nothing when there is no selection", async () => {
@@ -150,6 +150,63 @@ describe("createResizeTool", () => {
     expect(tool.hit(handle)?.grip).toBe("bottom-right");
     expect(tool.hit(wrapperA)).toBeUndefined();
   });
+
+  it("mounts eight handles: four corners and four edge midpoints", () => {
+    const tool = createResizeTool(options);
+    tool.attach(root);
+    tool.render({ element: wrapperA, index: 0 });
+
+    expect(
+      [...wrapperA.querySelectorAll(".handle")].map((n) => (n as HTMLElement).dataset.grip),
+    ).toEqual([
+      "top-left",
+      "top-right",
+      "bottom-left",
+      "bottom-right",
+      "top",
+      "right",
+      "bottom",
+      "left",
+    ]);
+  });
+
+  it("mounts the corners alone when the ratio is forced", () => {
+    // A live camera cannot be stretched, so a side handle would be a control that
+    // cannot act — a claim the item does not honour.
+    const forced = {
+      ...options,
+      getConfig: () => ({ width: 20, camera_image: "camera.front", camera_view: "live" as const }),
+    };
+    const tool = createResizeTool(forced);
+    tool.attach(root);
+    tool.render({ element: wrapperA, index: 0 });
+
+    expect(
+      [...wrapperA.querySelectorAll(".handle")].map((n) => (n as HTMLElement).dataset.grip),
+    ).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
+  });
+
+  it("remounts when the same item stops forcing its ratio", () => {
+    // `render` short-circuits on an unchanged element, so the set of grips has to
+    // be part of what it compares — otherwise leaving Live never brings the side
+    // handles back.
+    let live = true;
+    const switching = {
+      ...options,
+      getConfig: () =>
+        live
+          ? { width: 20, camera_image: "camera.front", camera_view: "live" as const }
+          : { width: 20 },
+    };
+    const tool = createResizeTool(switching);
+    tool.attach(root);
+    tool.render({ element: wrapperA, index: 0 });
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
+
+    live = false;
+    tool.render({ element: wrapperA, index: 0 });
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(8);
+  });
 });
 
 describe("createDistortTool", () => {
@@ -187,7 +244,7 @@ describe("createDistortTool", () => {
     const resize = createResizeTool(options);
     const distort = createDistortTool();
     resize.render({ element: wrapperA, index: 0 });
-    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(8);
     resize.detach();
     distort.render({ element: wrapperA, index: 0 });
     expect(wrapperA.querySelectorAll(".handle")).toHaveLength(0);
@@ -195,6 +252,6 @@ describe("createDistortTool", () => {
     distort.detach();
     resize.attach(root);
     resize.render({ element: wrapperA, index: 0 });
-    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(4);
+    expect(wrapperA.querySelectorAll(".handle")).toHaveLength(8);
   });
 });

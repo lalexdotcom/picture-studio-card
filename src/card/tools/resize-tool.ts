@@ -1,9 +1,20 @@
+import { ratioIsForced } from "../../image-box";
 import type { Grip } from "../../resize-box";
 import { createResizeController, type ResizeHit, type ResizeOptions } from "../resize-layer";
 import type { Tool, ToolTarget } from "./tool";
 
-/** The four corners a handle sits on, in DOM order. */
+/** The four corners, in DOM order. */
 const CORNER_GRIPS: Grip[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+
+/**
+ * The four edge midpoints, which resize one axis freely.
+ *
+ * Absent under a forced ratio: SHIFT is already inert there, so a side handle
+ * would be a control that cannot act — a claim the item does not honour, and
+ * a picture has nowhere to put the explanation the form's disabled checkbox
+ * gets to carry.
+ */
+const SIDE_GRIPS: Grip[] = ["top", "right", "bottom", "left"];
 
 /**
  * `getHandle` is NOT part of what the card hands over: the tool owns the hit
@@ -52,12 +63,14 @@ const hit = (target: EventTarget | null): ResizeHit | undefined => {
 export const createResizeTool = (options: ResizeToolOptions): Tool => {
   const controller = createResizeController({ ...options, getHandle: (t) => hit(t) });
   let mounted: HTMLElement | undefined;
+  let mountedKey: string | undefined;
 
   const unmount = (): void => {
     mounted?.querySelectorAll(".handle").forEach((node) => {
       node.remove();
     });
     mounted = undefined;
+    mountedKey = undefined;
   };
 
   return {
@@ -65,16 +78,24 @@ export const createResizeTool = (options: ResizeToolOptions): Tool => {
 
     render(target: ToolTarget | undefined): void {
       if (controller.resizingIndex() !== undefined) return;
-      if (mounted === target?.element) return;
+      const config = target ? options.getConfig(target.index) : undefined;
+      const grips =
+        config && !ratioIsForced(config) ? [...CORNER_GRIPS, ...SIDE_GRIPS] : CORNER_GRIPS;
+      const key = grips.join(" ");
+      // The set of grips is part of what identifies what is mounted, not only
+      // the element: an item that stops forcing its ratio keeps the same
+      // wrapper, and comparing elements alone would never bring the sides back.
+      if (mounted === target?.element && mountedKey === key) return;
       unmount();
-      if (!target || !options.getConfig(target.index)) return;
-      for (const grip of CORNER_GRIPS) {
+      if (!target || !config) return;
+      for (const grip of grips) {
         const handle = document.createElement("div");
         handle.className = `handle handle-${grip}`;
         handle.dataset.grip = grip;
         target.element.append(handle);
       }
       mounted = target.element;
+      mountedKey = key;
     },
 
     attach: controller.attach,

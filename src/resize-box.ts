@@ -33,9 +33,13 @@ export type Grip =
 /**
  * The smallest box a gesture may produce, in pixels.
  *
- * Not an arbitrary guard: below roughly twice the handle's own size the four
- * handles overlap and there is nothing left to grab. The drag needs no
- * equivalent — it cannot make an item disappear.
+ * Not an arbitrary guard: below roughly twice the handle's own size the handles
+ * overlap and there is nothing left to grab. **Three handles now sit on each
+ * edge and the bound is unchanged**, because a handle is centred ON its edge
+ * rather than inset: two corners occupy `[-s/2, s/2]` and `[W-s/2, W+s/2]`, a
+ * midpoint occupies `[W/2-s/2, W/2+s/2]`, and they stay clear while `W >= 2s`.
+ *
+ * The drag needs no equivalent — it cannot make an item disappear.
  */
 export const RESIZE_FLOOR_PX = 24;
 

@@ -1580,10 +1580,10 @@ describe("resize handles", () => {
     return { card, boxes, selections };
   };
 
-  it("builds four handles on the image and none on the icon", async () => {
+  it("builds eight handles on the image and none on the icon", async () => {
     const { card } = await editing();
     const [image, icon] = wrappers(card);
-    expect(image?.querySelectorAll(".handle")).toHaveLength(4);
+    expect(image?.querySelectorAll(".handle")).toHaveLength(8);
     expect(icon?.querySelectorAll(".handle")).toHaveLength(0);
   });
 
@@ -1592,7 +1592,16 @@ describe("resize handles", () => {
     const grips = [...(wrappers(card)[0]?.querySelectorAll(".handle") ?? [])].map(
       (h) => (h as HTMLElement).dataset.grip,
     );
-    expect(grips).toEqual(["top-left", "top-right", "bottom-left", "bottom-right"]);
+    expect(grips).toEqual([
+      "top-left",
+      "top-right",
+      "bottom-left",
+      "bottom-right",
+      "top",
+      "right",
+      "bottom",
+      "left",
+    ]);
   });
 
   it("shows them only on the selected item: mounted by JS, not CSS display-toggle", async () => {
