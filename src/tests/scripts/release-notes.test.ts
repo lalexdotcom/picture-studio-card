@@ -47,6 +47,18 @@ describe("release-notes.sh", () => {
 
     expect(repo.run("release-notes.sh", "1.6.1").stdout).toContain("One.");
     expect(repo.run("release-notes.sh", "1.6.1").stdout).not.toContain("Ten.");
+    expect(repo.run("release-notes.sh", "1.6.1").stdout).not.toContain("Not out yet");
+  });
+
+  it("never mistakes 1.6.0 for 1.6.0-beta.1", () => {
+    const changelog =
+      "# Changelog\n\n## 1.6.0-beta.1 — 2026-09-01\n\n### Added\n\n- An image item.\n";
+    const repo = makeRepo({ version: "1.6.0", changelog });
+
+    const result = repo.run("release-notes.sh", "1.6.0");
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("no section");
   });
 
   it("refuses a section still marked unreleased", () => {
