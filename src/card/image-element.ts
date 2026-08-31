@@ -272,9 +272,10 @@ export class PictureStudioImage extends LitElement {
     // **Keyed on whether the view is Live, so that crossing that boundary
     // replaces the node rather than updating it.** `undefined` and `"auto"`
     // both mean the still image and share a node: rebuilding between them would
-    // restart the camera for a distinction hui-image does not make either. Two things break on a `hui-image` asked to leave Live,
-    // and both were measured in a real Home Assistant (see
-    // `mem:picture-studio/1.6.0-handoff`):
+    // restart the camera for a distinction hui-image does not make either.
+    //
+    // Two things break on a `hui-image` asked to leave Live, and both were
+    // measured in a real Home Assistant (see `mem:picture-studio/1.6.0-handoff`):
     //
     // 1. Its still-image poller is started from `connectedCallback` — and only
     //    while `cameraView !== "live"` at that instant — from `willUpdate` on a
