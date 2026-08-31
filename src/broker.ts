@@ -178,6 +178,13 @@ export const subscribeEditors = (listener: () => void): (() => void) => {
  * This also discriminates the card-picker gallery from the edit dialog: Home
  * Assistant sets `preview` in both, but only the dialog mounts an editor, so the
  * drag layer stays inert in the gallery with no extra signal.
+ *
+ * **`preview` never means "the edit dialog" and never means "there is one of
+ * me"** — `PictureStudioCard._inEditPreview` is the authority on why, and on the
+ * two traps that come with it. Nothing here restates it. What a card exposes is
+ * `editing`, which is `preview` **and** an editor **and** `_inEditPreview()`;
+ * reach for that, or for the registration `activeEditor()` and `activeCard()`
+ * rest on, and never for `preview` on its own.
  */
 export const activeEditor = (): EditorChannel | undefined =>
   editors.size === 1 ? [...editors][0] : undefined;

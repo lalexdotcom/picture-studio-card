@@ -83,8 +83,10 @@ const PRIMING_TYPE = "picture-studio-priming";
  * what is left. Reserving the outgoing height means nothing collapses and there
  * is nothing to clamp.
  *
- * A single value rather than a map: exactly one preview exists at a time, which
- * is what `activeCard()` already relies on.
+ * A single value rather than a map: exactly one card is *registered* at a time,
+ * which is what `activeCard()` already relies on. **Registered, not previewed** —
+ * see `_inEditPreview` below for the difference, and note that both the write
+ * and the read of this value are gated on registration for exactly that reason.
  */
 let lastPreviewHeight = 0;
 
