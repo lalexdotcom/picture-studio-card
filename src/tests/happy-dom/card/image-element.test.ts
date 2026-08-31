@@ -6,6 +6,7 @@ import {
   PictureStudioImage,
 } from "../../../card/image-element";
 import { IMAGE_TAG, type ImageElementConfig } from "../../../config";
+import { captureRatio, resetRatioMemory } from "../../../picture-ratio";
 import type { HomeAssistant } from "../../../types";
 
 if (!customElements.get(IMAGE_TAG)) customElements.define(IMAGE_TAG, PictureStudioImage);
@@ -32,6 +33,21 @@ class HuiImageStub extends HTMLElement {
     // 16:9 fallback: hui-image's hard-coded default before any ratio is derived.
     this.#container.style.paddingBottom = "56.25%";
     shadow.appendChild(this.#container);
+    // The real hui-image holds an <img> in the same shadow root. It reports 0
+    // until a picture loads, which is what `captureRatio` and the hint's
+    // clearing both key on; `settle()` is how a test says "it has loaded now".
+    this.#img = document.createElement("img");
+    Object.defineProperty(this.#img, "naturalWidth", { get: () => this.#natural.w });
+    Object.defineProperty(this.#img, "naturalHeight", { get: () => this.#natural.h });
+    shadow.appendChild(this.#img);
+  }
+
+  #img: HTMLImageElement;
+  #natural = { w: 0, h: 0 };
+
+  /** What a loaded picture reports. */
+  settle(w: number, h: number): void {
+    this.#natural = { w, h };
   }
 
   set aspectRatio(value: string | undefined) {
@@ -94,6 +110,7 @@ const mount = async (config: ImageElementConfig, h = hass(), editing = false) =>
 afterEach(() => {
   document.body.replaceChildren();
   liveCameraRatioCache.clear();
+  resetRatioMemory();
   imageLoadCount = 0;
 });
 
@@ -531,5 +548,75 @@ describe("live camera ratio correction", () => {
     await new Promise<void>((r) => queueMicrotask(r));
     // Second element hit the cache — no new Image() was created.
     expect(imageLoadCount).toBe(0);
+  });
+});
+
+describe("the remembered ratio reaches the first render", () => {
+  /** A settled hui-image, the way one looks once its picture has loaded. */
+  const settled = (w: number, h: number): Element => {
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const img = document.createElement("img");
+    Object.defineProperty(img, "naturalWidth", { value: w });
+    Object.defineProperty(img, "naturalHeight", { value: h });
+    shadow.append(img);
+    return host;
+  };
+
+  test("a rebuilt element opens at the remembered shape, not at 16:9", async () => {
+    // Home Assistant rebuilds the card on every config change, so this is the
+    // state of EVERY element after a commit. Without the memo it renders its
+    // 16:9 placeholder for a frame; the assertion is that it never does.
+    resetRatioMemory();
+    captureRatio("file:/local/plan.png", settled(1500, 1761));
+
+    const el = await mount({ type: "image", image: "/local/plan.png", width: 30 });
+    // Asserted through what the stub models rather than by reading the property
+    // back: hui-image exposes `aspectRatio` as a setter only, exactly as the
+    // real one does, so the padding box IS the observable.
+    const container = el.renderRoot
+      .querySelector("hui-image")
+      ?.shadowRoot?.querySelector(".container") as HTMLElement;
+
+    // 1761/1500 = 117.4 %, and emphatically not the 56.25 % placeholder.
+    expect(container.style.paddingBottom).toBe("117.4%");
+  });
+
+  test("drops the hint once hui-image has measured the picture itself", async () => {
+    // An imposed ratio makes hui-image keep its padding box FOR GOOD and never
+    // measure. So a hint that is not dropped would draw a remembered shape for
+    // the element's whole life — turning a one-frame defect into a permanent
+    // one, which is strictly worse than what it replaces.
+    resetRatioMemory();
+    captureRatio("file:/local/plan.png", settled(1500, 1761));
+
+    const el = await mount({ type: "image", image: "/local/plan.png", width: 30 });
+    const hui = el.renderRoot.querySelector("hui-image") as HuiImageStub;
+    const container = hui.shadowRoot?.querySelector(".container") as HTMLElement;
+    expect(container.style.paddingBottom).toBe("117.4%");
+
+    // The picture loads, and any later update is the one that notices.
+    hui.settle(1500, 1761);
+    el.hass = hass();
+    await el.updateComplete;
+    // Twice: clearing the hint happens in `updated`, which schedules the render
+    // that actually drops the property. One await settles the update that
+    // noticed; the second settles the one that acts on it.
+    await el.updateComplete;
+
+    // Back to hui-image's own answer: nothing of ours is imposed any more.
+    expect(container.style.paddingBottom).toBe("56.25%");
+  });
+
+  test("opens at nothing when the shape was never seen", async () => {
+    // A genuinely cold page has nothing to remember, and inventing a ratio
+    // would be worse than the placeholder it replaces.
+    resetRatioMemory();
+    const el = await mount({ type: "image", image: "/local/unseen.png", width: 30 });
+    const container = el.renderRoot
+      .querySelector("hui-image")
+      ?.shadowRoot?.querySelector(".container") as HTMLElement;
+
+    expect(container.style.paddingBottom).toBe("56.25%");
   });
 });
