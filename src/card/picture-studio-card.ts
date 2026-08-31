@@ -148,13 +148,10 @@ interface AdoptionStash {
  * measured across a fresh shadow root on a fresh host after 400 ms detached,
  * first painted frame complete.
  *
- * **Keyed by the `hui-card` ancestor**, which is what survives: it is the thing
- * that builds the replacement and appends it to itself, and our element is its
- * direct child because it renders in light DOM. An unkeyed slot was the first
- * design and it was wrong — `preview` is set on every card of a dashboard in
- * edit mode, so several of these can be live at once.
- *
- * A `WeakMap`, so there is no eviction policy to write and none to get wrong.
+ * **The slot is never cleared other than by an adoption.** A dialog closed
+ * without a successor leaves one subtree referenced until the next edit takes
+ * it — bounded, since the next dialog either adopts it or replaces it, and the
+ * alternative is a lifetime rule that has to guess when a rebuild is coming.
  */
 let adoptionStash: AdoptionStash | undefined;
 
@@ -652,18 +649,6 @@ export class PictureStudioCard extends LitElement {
   }
 
   /**
-   * Take over the nodes the previous card left, if they still fit.
-   *
-   * Called before the two syncs, on the first update where the layer exists, so
-   * that what follows finds instances rather than an empty layer — which is
-   * exactly the `setConfig` `hui-card` refuses to give a preview.
-   *
-   * **Refused when the item shapes differ.** `_syncItems` would rebuild the
-   * children in that case anyway; refusing here keeps the rule in one place.
-   * The stash is consumed either way: a shape that no longer fits will not fit
-   * any better later, and leaving it would let a third card adopt it.
-   */
-  /**
    * Whether the stash on offer fits this card's item list.
    *
    * Asked twice on purpose: once by the reservation, which has to decide before
@@ -684,6 +669,12 @@ export class PictureStudioCard extends LitElement {
    * `connectedCallback` — there is no render root yet — but the height
    * reservation has to be decided there, before the first paint. So it asks
    * what is about to happen rather than what has happened.
+   *
+   * **The two answers can disagree, in one narrow window.** A second `setConfig`
+   * landing between this call and the adoption would let the shapes match here
+   * and not there: the stash is then consumed and refused, and the card rebuilds
+   * with no reservation. The cost is the height blip that commit, not a missing
+   * picture — small enough to name rather than guard.
    */
   private _willAdopt(): boolean {
     const stash = adoptionStash;
@@ -691,6 +682,18 @@ export class PictureStudioCard extends LitElement {
     return this._stashFits(stash);
   }
 
+  /**
+   * Take over the nodes the previous card left, if they still fit.
+   *
+   * Called before the two syncs, on the first update where the layer exists, so
+   * that what follows finds instances rather than an empty layer — which is
+   * exactly the `setConfig` `hui-card` refuses to give a preview.
+   *
+   * **Refused when the item shapes differ.** `_syncItems` would rebuild the
+   * children in that case anyway; refusing here keeps the rule in one place.
+   * The stash is consumed either way: a shape that no longer fits will not fit
+   * any better later, and leaving it would let a third card adopt it.
+   */
   private _adoptFromPredecessor(): void {
     if (this._adoptionDone) return;
     // Only the dialog's preview, which is what makes one slot enough. The

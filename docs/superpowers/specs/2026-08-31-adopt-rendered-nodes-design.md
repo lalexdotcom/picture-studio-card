@@ -139,6 +139,13 @@ same nodes. The existing sync then pushes the right config into them, so it
 should converge — **and a test that fails without the adoption is what settles
 it, not this paragraph.**
 
+**That test was NOT written, and the branch merged without it.** It is hard to
+reach in happy-dom, where the helpers mock hands back one stub for every kind, so
+"item B's config reached the adopted element" has nothing to assert against. What
+would close it: mount a shape, rebuild with the same shape and a different
+entity, and assert the adopted child was given the second config. Recorded as
+owed rather than forgiven.
+
 ### 6. The live camera is the trap this design cannot yet price
 
 A detached `hui-image` receives its own `disconnectedCallback`. If it stops a
