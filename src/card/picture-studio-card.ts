@@ -209,6 +209,7 @@ export class PictureStudioCard extends LitElement {
 
   /** Adoption is a once-per-element event; a second attempt is a no-op. */
   private _adoptionDone = false;
+
   /** Indexed like `items`; a hole where the item is unreadable. */
   private _elements: (LovelaceBadgeElement | undefined)[] = [];
   /** Indexed like `items`; a hole where the item is unreadable. */
@@ -464,7 +465,15 @@ export class PictureStudioCard extends LitElement {
     this._adoptFromPredecessor();
     // Only in the edit dialog: an editor is mounted there and nowhere else, and
     // a dashboard card must never be pinned to a height it did not choose.
-    if (lastPreviewHeight > 0 && activeEditor() !== undefined) {
+    //
+    // **And not at all when nodes are about to be adopted.** The reservation
+    // exists for a successor with no height yet; one that takes over its
+    // predecessor's nodes has its height on its first frame, and reserving
+    // anyway is visible:
+    // `Math.ceil` rounds the outgoing height up, so the card was drawn one pixel
+    // taller for the reserved frames and snapped back — measured, 650 against
+    // 649.4, for exactly the frames the reservation covers.
+    if (!this._willAdopt() && lastPreviewHeight > 0 && activeEditor() !== undefined) {
       this.style.minHeight = `${lastPreviewHeight}px`;
       let frames = 0;
       const release = (): void => {
@@ -654,6 +663,34 @@ export class PictureStudioCard extends LitElement {
    * The stash is consumed either way: a shape that no longer fits will not fit
    * any better later, and leaving it would let a third card adopt it.
    */
+  /**
+   * Whether the stash on offer fits this card's item list.
+   *
+   * Asked twice on purpose: once by the reservation, which has to decide before
+   * the first render, and once by the adoption itself, which happens after it.
+   */
+  private _stashFits(stash: AdoptionStash): boolean {
+    const types = shapesOf(this._config?.items ?? []);
+    return (
+      types.length === stash.renderedTypes.length &&
+      types.every((t, i) => t === stash.renderedTypes[i])
+    );
+  }
+
+  /**
+   * Whether this card is going to take over its predecessor's nodes.
+   *
+   * A peek, never a consume. The adoption itself cannot run at
+   * `connectedCallback` — there is no render root yet — but the height
+   * reservation has to be decided there, before the first paint. So it asks
+   * what is about to happen rather than what has happened.
+   */
+  private _willAdopt(): boolean {
+    const stash = adoptionStash;
+    if (!this._wasEditPreview || this._adoptionDone || !stash) return false;
+    return this._stashFits(stash);
+  }
+
   private _adoptFromPredecessor(): void {
     if (this._adoptionDone) return;
     // Only the dialog's preview, which is what makes one slot enough. The
@@ -675,11 +712,7 @@ export class PictureStudioCard extends LitElement {
     adoptionStash = undefined;
     this._adoptionDone = true;
 
-    const types = shapesOf(this._config?.items ?? []);
-    const fits =
-      types.length === stash.renderedTypes.length &&
-      types.every((t, i) => t === stash.renderedTypes[i]);
-    if (!fits) return;
+    if (!this._stashFits(stash)) return;
 
     // Whatever this element built before the host appeared is discarded here:
     // the adoption can arrive after a first sync has already populated the
