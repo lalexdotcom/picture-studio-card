@@ -95,6 +95,21 @@ describe("bump-prerelease.sh", () => {
     expect(repo.read("package.json")).toContain('"version": "1.6.0-beta.1"');
   });
 
+  it("refuses when package.json carries no pre-release suffix", () => {
+    // The state next is in right after being recreated from main and before
+    // open-prerelease.sh has run: the version has no suffix yet.
+    const repo = makeRepo({
+      branch: "next",
+      version: "1.6.0",
+      changelog: published("1.5.3"),
+    });
+
+    const result = repo.run("bump-prerelease.sh", "beta.1");
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("carries no pre-release suffix");
+  });
+
   it("refuses an identifier that is not pre-release text", () => {
     const repo = makeRepo({
       branch: "next",

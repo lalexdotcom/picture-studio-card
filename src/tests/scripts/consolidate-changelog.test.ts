@@ -127,6 +127,39 @@ describe("consolidate-changelog.sh", () => {
     expect(repo.read("CHANGELOG.md")).toContain("## 1.6.0-rc.1 — unreleased");
   });
 
+  it("consolidates a line that shipped with only one beta", () => {
+    const repo = makeRepo({
+      version: "1.6.0-beta.1",
+      changelog: `# Changelog
+
+## 1.6.0-beta.1 — 2026-09-01
+
+### Added
+
+- An image item.
+
+## 1.5.3 — 2026-08-23
+
+### Fixed
+
+- An old thing.
+`,
+    });
+
+    const result = repo.run("consolidate-changelog.sh");
+    expect(result.status).toBe(0);
+
+    const out = repo.read("CHANGELOG.md");
+    // Single member: the heading stays, re-opened.
+    expect(out).toContain("## 1.6.0-beta.1 — unreleased");
+    // Entry preserved.
+    expect(out).toContain("An image item");
+    // Older section untouched.
+    expect(out).toContain("## 1.5.3 — 2026-08-23");
+    // package.json written to the sole member.
+    expect(repo.read("package.json")).toContain('"version": "1.6.0-beta.1"');
+  });
+
   it("consolidates correctly when pre-release headings carry no date", () => {
     const repo = makeRepo({
       version: "1.6.0-beta.2",

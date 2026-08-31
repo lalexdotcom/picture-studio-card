@@ -15,6 +15,9 @@
 # content, nothing was added since, and a new number would name a build that
 # never existed. The text under it, however, has never been published in this
 # form — hence `unreleased`.
+#
+# Requires `sort -V` (GNU coreutils) for SemVer ordering — the devcontainer
+# and CI both supply it.
 
 set -euo pipefail
 
