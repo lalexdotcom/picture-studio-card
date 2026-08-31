@@ -417,6 +417,36 @@ describe("createResizeController", () => {
     expect(h.wrapper.style.height).toBe("24px");
     expect(h.wrapper.style.width).toBe("80px");
   });
+
+  it("recommits an inert axis' stored numbers rather than a pixel round trip", () => {
+    // The stored width (20.01 %) and the stubbed pixel box (80 px = exactly 20 %)
+    // deliberately disagree: a round trip through percentOfContainer would answer
+    // 20 and silently rewrite the user's number. The inert axis must not be
+    // recomputed at all.
+    const h = setup({ grip: "bottom", config: { width: 20.01 } });
+    h.send("pointerdown", 80, 70);
+    h.send("pointermove", 80, 130);
+    h.send("pointerup", 80, 130);
+
+    expect(h.commits[0]?.box.width).toBe(20.01);
+    // Nothing horizontal moved, so no position is committed at all.
+    expect(h.commits[0]?.position).toBeUndefined();
+  });
+
+  it("keeps a stored height unscaled when the vertical axis is inert", () => {
+    // A stretched item (height present) dragged by its RIGHT edge. The stored
+    // height (13.34 %) and the stubbed pixel height (40 px of 300 = 13.33 %)
+    // are made to disagree on purpose — a fixture where they agree cannot tell
+    // "recommit the stored number" from "round-trip through pixels". The corner
+    // path would scale the stored height by the width's own factor; a side grip
+    // must leave it exactly as it is, because the axis did not move.
+    const h = setup({ grip: "right", config: { width: 20, height: 13.34 } });
+    h.send("pointerdown", 120, 50);
+    h.send("pointermove", 200, 50);
+    h.send("pointerup", 200, 50);
+
+    expect(h.commits[0]?.box).toEqual({ width: 40, height: 13.34 });
+  });
 });
 
 describe("the ALT mode", () => {

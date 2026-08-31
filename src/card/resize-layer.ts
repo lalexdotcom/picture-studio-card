@@ -401,6 +401,54 @@ export const createResizeController = (options: ResizeOptions) => {
     apply(state.clientX, state.clientY, ev.shiftKey, ev.altKey);
   };
 
+  /**
+   * The height the box had at `pointerdown`, in the units it will be stored in:
+   * the stored number where there is one, the measured pixel size where there is
+   * not.
+   *
+   * Two callers, and they are not a coincidence. An inert axis commits *what it
+   * had*, and the gesture's no-change test asks whether the box has moved *since
+   * pointerdown* — the same quantity, said twice. One function keeps the identity
+   * visible instead of leaving two copies to drift apart.
+   */
+  const heightAtPointerDown = (s: ResizeState, surfaceHeight: number): number =>
+    s.storedHeight ?? percentOfContainer(s.y.size0, surfaceHeight);
+
+  /**
+   * The height to commit, or `undefined` to leave the key out.
+   *
+   * Four cases, and the order matters: the inert one comes before the keep-ratio
+   * one, because an east/west grip on a stretched item must NOT scale the stored
+   * height — its axis did not move.
+   */
+  const committedHeight = (
+    s: ResizeState,
+    surfaceHeight: number,
+    stretched: boolean,
+    scale: number,
+  ): number | undefined => {
+    // A forced ratio never renders a height, so the DOM cannot carry one. Scaled
+    // by the width's own factor so the dormant box keeps its shape.
+    if (!stretched) {
+      return s.forced && s.storedHeight !== undefined
+        ? Math.round(s.storedHeight * scale * 100) / 100
+        : undefined;
+    }
+    // The vertical axis never moved: recommit what it had, or — when it had
+    // nothing stored — the pixel height the gesture froze at pointerdown.
+    if (s.y.trailing === undefined) {
+      return heightAtPointerDown(s, surfaceHeight);
+    }
+    // Keep-ratio with a pre-existing height: both stored percentages multiply by
+    // the same factor. The pixel computation agrees in a real browser and
+    // diverges when the stored height and the rendered one are out of sync,
+    // which the suite deliberately provokes, so this formula is the canonical one.
+    if (s.hadHeight && !s.lastFree && s.storedHeight !== undefined) {
+      return Math.round(s.storedHeight * scale * 100) / 100;
+    }
+    return percentOfContainer(s.y.size, surfaceHeight);
+  };
+
   const endGesture = (ev: PointerEvent, cancelled: boolean): void => {
     if (!state || ev.pointerId !== state.pointerId) return;
     const s = state;
@@ -428,24 +476,10 @@ export const createResizeController = (options: ResizeOptions) => {
     }
 
     const stretched = s.forced ? false : s.hadHeight || s.stretched;
-    const width = percentOfContainer(s.x.size, surfaceBox.width);
     const scale = s.x.size / s.x.size0;
-    const height = stretched
-      ? s.hadHeight && !s.lastFree && s.storedHeight !== undefined
-        ? // The user resized in keep-ratio mode with a pre-existing height.
-          // "Scaling both numbers" means both STORED PERCENTAGES multiply by the
-          // same factor k = x.size/x.size0. Pixel computation (percentOfContainer)
-          // would give the right answer in a real browser — where y.size0 is the
-          // rendered height — but diverges when the stored height and the actual
-          // pixel height disagree, so this formula is the canonical one.
-          Math.round(s.storedHeight * scale * 100) / 100
-        : percentOfContainer(s.y.size, surfaceBox.height)
-      : s.forced && s.storedHeight !== undefined
-        ? // A forced ratio keeps the stored height dormant, so the DOM cannot
-          // carry it. Scaled by the width's own factor, so the box the user
-          // gets back when they leave Live has the shape it had before.
-          Math.round(s.storedHeight * scale * 100) / 100
-        : undefined;
+    const width =
+      s.x.trailing === undefined ? s.storedWidth : percentOfContainer(s.x.size, surfaceBox.width);
+    const height = committedHeight(s, surfaceBox.height, stretched, scale);
 
     const box: ImageBox = height === undefined ? { width } : { width, height };
 
@@ -456,9 +490,19 @@ export const createResizeController = (options: ResizeOptions) => {
     // `toPercent` with a null offset is the exact inverse of the `auto` anchor's
     // self-reference: the stored coordinate IS the translate fraction, so
     // `100·px / (W − w)` is the closed form the spec names, already written.
+    //
+    // An inert axis' coordinate is recommitted as the same number, not
+    // recomputed: `toPercent` would answer within a hundredth of it and make
+    // `moved` say yes to a gesture that moved nothing on that axis.
     const position: Position = {
-      left: toPercent(s.x.lead, surfaceBox.width, s.x.size, axisOffset(s.anchor, "x")),
-      top: toPercent(s.y.lead, surfaceBox.height, s.y.size, axisOffset(s.anchor, "y")),
+      left:
+        s.x.trailing === undefined
+          ? s.position0.left
+          : toPercent(s.x.lead, surfaceBox.width, s.x.size, axisOffset(s.anchor, "x")),
+      top:
+        s.y.trailing === undefined
+          ? s.position0.top
+          : toPercent(s.y.lead, surfaceBox.height, s.y.size, axisOffset(s.anchor, "y")),
     };
 
     const boxChanged = box.width !== s.storedWidth || box.height !== s.storedHeight;
