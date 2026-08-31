@@ -145,10 +145,17 @@ A detached `hui-image` receives its own `disconnectedCallback`. If it stops a
 camera stream there and restarts it on reconnection, adoption buys back the
 reload it exists to avoid.
 
-**Not measured**: the dashboard's camera has no working stream, so the fixture
-this line has cannot answer it. It must be checked against a real stream before
-the branch closes, and if the stream does restart, a live camera is excluded
-from adoption rather than the design being bent around it.
+**Not measured, and the branch closed anyway — the user's call, 2026-08-31.**
+The dashboard's camera has no working stream, so the fixture this line has cannot
+answer the question at all; holding the branch would have meant building a
+fixture for a risk nobody has seen.
+
+**What to do if it turns out real:** exclude a live camera from adoption rather
+than bending the design around it. `ratioIsForced` already names that item, and
+the stash would simply not be written for a card that holds one. The symptom to
+watch for is a live camera reloading on every commit while the rest of the card
+no longer flickers — the opposite of the pattern this branch fixes, and so
+recognisable at a glance.
 
 ## Testing and verification
 
