@@ -824,10 +824,17 @@ repository would break it. A rename is handled (`renamed_repositories`).
   `async_get_info_file_contents` hardcodes the README. It used to mean "render
   README.md rather than info.md"; today it restates the default.
 
-### `gh` in the container, declined — but the token route is proven
+### `gh` in the container — wired on 2026-10-30, from claude-scaffold
 
-The user judged the `gh` setup not worth it on 2026-08-22. It turned out not to
-matter: everything needed that day was done with `curl` and the same token,
+`.devcontainer/post-attach.sh` now logs `gh` in at every attach with the token
+`git credential fill` returns for the clone's GitHub account, which
+`initializeCommand` copies from the host's `includeIf` into `.git/config`
+together with `user.name`/`user.email`. It is the template's mechanism, ported
+as is. A token rotated mid-session leaves `gh` stale until the next attach; a
+rebuild or a window reload refreshes it.
+
+What follows is the history of the first, declined attempt. The user judged the
+`gh` setup not worth it on 2026-08-22. It turned out not to matter: everything needed that day was done with `curl` and the same token,
 including reading a failed run's log, setting the topics and re-running a
 workflow. **No personal access token is needed.** `git` reaches GitHub from the container through a credential helper
 VS Code proxies to the host, and
