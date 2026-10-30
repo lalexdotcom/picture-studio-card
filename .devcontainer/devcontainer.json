@@ -38,7 +38,9 @@
 	"containerEnv": {
 		"CLAUDE_CONFIG_DIR": "/ai-tools/.claude",
 		"MEMPALACE_PALACE_PATH": "/ai-tools/.mempalace",
-		"SERENA_HOME": "/ai-tools/.serena"
+		"SERENA_HOME": "/ai-tools/.serena",
+		// The generic opt-out (consoledonottrack.com): Claude Code reads it as DISABLE_TELEMETRY.
+		"DO_NOT_TRACK": "1"
 	},
 	// uv installs tools, serena-hooks included, in ~/.local/bin, off the image's
 	// PATH. remoteEnv, not containerEnv: `${containerEnv:PATH}` only resolves
