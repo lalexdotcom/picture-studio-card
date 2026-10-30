@@ -1,6 +1,9 @@
 {
-	"name": "Scaffold",
+	"name": "${localWorkspaceFolderBasename}",
 	"image": "mcr.microsoft.com/devcontainers/typescript-node:4-24-trixie",
+	// OrbStack lists containers by their Docker name; "name" above only labels
+	// the VS Code window. The folder name keeps two clones from colliding.
+	"runArgs": ["--name", "${localWorkspaceFolderBasename}"],
 	"features": {
 		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		"ghcr.io/devcontainers/features/docker-in-docker:3.0.0": {
