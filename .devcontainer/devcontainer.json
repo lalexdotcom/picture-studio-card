@@ -1,12 +1,19 @@
 {
-	"name": "Scaffold",
+	"name": "${localWorkspaceFolderBasename}",
 	"image": "mcr.microsoft.com/devcontainers/typescript-node:4-24-trixie",
+	// OrbStack lists containers by their Docker name; "name" above only labels
+	// the VS Code window. The folder name keeps two clones from colliding.
+	"runArgs": ["--name", "${localWorkspaceFolderBasename}"],
 	"features": {
 		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
 		"ghcr.io/devcontainers/features/docker-in-docker:3.0.0": {
 			"moby": false
 		},
 		"ghcr.io/devcontainers-extra/features/apt-get-packages:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {
+			"installDirectlyFromGitHubRelease": true,
+			"version": "latest"
+		},
 		"ghcr.io/devcontainers-extra/features/pnpm:2": {
 			"version": "latest"
 		},
@@ -34,7 +41,16 @@
 	"containerEnv": {
 		"CLAUDE_CONFIG_DIR": "/ai-tools/.claude",
 		"MEMPALACE_PALACE_PATH": "/ai-tools/.mempalace",
-		"SERENA_HOME": "/ai-tools/.serena"
+		"SERENA_HOME": "/ai-tools/.serena",
+		// The generic opt-out (consoledonottrack.com): Claude Code reads it as DISABLE_TELEMETRY.
+		"DO_NOT_TRACK": "1"
+	},
+	// uv installs tools, serena-hooks included, in ~/.local/bin, off the image's
+	// PATH. remoteEnv, not containerEnv: `${containerEnv:PATH}` only resolves
+	// here; anywhere else the literal breaks PATH and the entrypoint dies on
+	// `cat: not found`. Lifecycle scripts don't get it and export it themselves.
+	"remoteEnv": {
+		"PATH": "/home/node/.local/bin:${containerEnv:PATH}"
 	},
 	"customizations": {
 		"vscode": {
@@ -65,5 +81,13 @@
 			}
 		}
 	},
-	"postCreateCommand": ".devcontainer/post-create.sh"
+	// Runs on the host, where includeIf picks the identity and GitHub account for
+	// this directory; .git/config carries them into the container, where the
+	// includeIf paths do not match. POSIX shell only: a Windows host runs it
+	// under cmd.exe, where the loop is a syntax error that aborts the build.
+	"initializeCommand": "for k in user.name user.email credential.https://github.com.username; do v=$(git config --get \"$k\") && git config --local \"$k\" \"$v\"; done; true",
+	// Agent tooling in on-create.sh, project setup in post-create.sh.
+	"onCreateCommand": ".devcontainer/on-create.sh",
+	"postCreateCommand": ".devcontainer/post-create.sh",
+	"postAttachCommand": ".devcontainer/post-attach.sh"
 }

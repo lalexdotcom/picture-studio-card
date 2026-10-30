@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
+# postCreateCommand: project setup. Agent tooling goes in on-create.sh.
 set -euo pipefail
 
-sudo chown -R node:node /ai-tools
+# remoteEnv does not reach lifecycle scripts (see devcontainer.json).
+export PATH="$HOME/.local/bin:$PATH"
 
-uv tool install -p 3.13 "serena-agent==1.7.0" --prerelease=allow
-uv tool install mempalace
-
-claude plugin marketplace add anthropics/claude-plugins-official
-claude plugin install superpowers@claude-plugins-official --scope user
-
-claude plugin marketplace add MemPalace/mempalace
-claude plugin install mempalace@mempalace --scope user
-
-claude mcp remove serena --scope user 2>/dev/null || true
-claude mcp add serena --scope user -- serena start-mcp-server --context=claude-code --project-from-cwd
-
-serena index --project-root "$PWD" 2>/dev/null || true
+# There is no top-level `serena index` and no `--project-root` flag. When it
+# creates .serena/project.yml, `project index` asks about each extra language it
+# detects; the n's decline them. A bare `yes n` would die of SIGPIPE, which
+# pipefail turns into a failure.
+printf 'n\n%.0s' {1..100} | serena project index "$PWD"
 
 # Hooks are not versioned by git and not shared by a clone, so the repository
 # keeps them in `.githooks/` and points git at them here. See that directory for
